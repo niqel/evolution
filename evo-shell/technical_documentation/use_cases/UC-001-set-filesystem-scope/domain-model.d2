@@ -1,0 +1,33 @@
+direction: right
+
+requested_path: "requested path" {
+  shape: rectangle
+}
+
+borrowed_path: "Entrada prestada\n&Path" {
+  shape: rectangle
+}
+
+resolver: "filesystem_scope::resolve" {
+  shape: rectangle
+}
+
+filesystem_scope: "FilesystemScope\n\n- path: PathBuf" {
+  shape: rectangle
+}
+
+external_filesystem: "filesystem real\nSistema operativo" {
+  shape: cylinder
+}
+
+access: "std::fs / provider" {
+  shape: rectangle
+}
+
+requested_path -> borrowed_path: "borrowed as"
+borrowed_path -> resolver: "entrada"
+resolver -> filesystem_scope: "crea/devuelve"
+filesystem_scope -> filesystem_scope: "owns PathBuf"
+filesystem_scope -> external_filesystem: "NO posee ni duplica"
+access -> external_filesystem: "accede como recurso externo"
+resolver -> access: "consulta capacidad externa"

@@ -1,0 +1,58 @@
+direction: down
+
+usuario: "Usuario" {
+  shape: person
+}
+
+evo_shell: "Evo Shell" {
+  shape: rectangle
+}
+
+agent: "scope_setter::set" {
+  shape: rectangle
+}
+
+resolver: "filesystem_scope::resolve" {
+  shape: rectangle
+}
+
+contract: "contract is_directory::provide" {
+  shape: rectangle
+}
+
+provider: "provider is_directory::provide" {
+  shape: rectangle
+}
+
+std_fs: "std::fs" {
+  shape: rectangle
+}
+
+scope: "FilesystemScope" {
+  shape: rectangle
+}
+
+usuario -> evo_shell: "1. scope fs \"<path>\""
+evo_shell -> agent: "2. scope_setter::set(path)"
+agent -> resolver: "3. filesystem_scope::resolve(path)"
+resolver -> contract: "4. is_directory::provide(path)"
+contract -> provider: "5. is_directory::provide(path)"
+provider -> std_fs: "6. usa"
+std_fs -> provider: "7. resultado del filesystem"
+provider -> contract: "resultado"
+contract -> resolver: "resultado"
+resolver -> scope: "8-9. path utilizable; crea/devuelve nuevo scope"
+scope -> resolver: "FilesystemScope válido"
+resolver -> agent: "10. nuevo scope"
+agent -> evo_shell: "10. nuevo scope"
+evo_shell -> scope: "11. reemplaza el scope activo anterior"
+scope -> evo_shell: "12. el scope anterior deja de existir"
+
+error_flow: "Flujo de error" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+resolver -> error_flow: "si la ubicación no puede resolverse"
+error_flow -> evo_shell: "error; no nace un nuevo FilesystemScope válido"
+evo_shell -> error_flow: "conserva el scope activo anterior"

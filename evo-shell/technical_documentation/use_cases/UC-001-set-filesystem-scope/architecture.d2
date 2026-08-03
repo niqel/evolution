@@ -1,0 +1,56 @@
+direction: down
+
+definitions: "definitions" {
+  style.fill: "#edf4ff"
+
+  use_case: "Use case\n\ndefinitions/use_cases/set_filesystem_scope.rs\nfunción definida: set" {
+    shape: rectangle
+  }
+
+  contract: "Contract\n\ndefinitions/contracts/is_directory.rs\nfunction pointer/capacidad: provide" {
+    shape: rectangle
+  }
+
+  domain_entity: "Domain entity\n\ndefinitions/domain/entities/filesystem_scope.rs\nFilesystemScope" {
+    shape: rectangle
+  }
+}
+
+agents: "agents" {
+  style.fill: "#eefaf1"
+
+  scope_setter: "Agent\n\nagents/scope_setter.rs\nfunción: set" {
+    shape: rectangle
+  }
+}
+
+resolvers: "resolvers" {
+  style.fill: "#fff7e6"
+
+  filesystem_scope: "Resolver\n\nresolvers/filesystem_scope.rs\nfunción: resolve" {
+    shape: rectangle
+  }
+}
+
+providers: "providers" {
+  style.fill: "#f7edff"
+
+  is_directory_provider: "Provider\n\nproviders/is_directory.rs\nfunción: provide" {
+    shape: rectangle
+  }
+}
+
+infrastructure: "infrastructure" {
+  style.fill: "#f2f2f2"
+
+  std_fs: "std::fs" {
+    shape: rectangle
+  }
+}
+
+definitions.use_case -> agents.scope_setter: "implementado por"
+agents.scope_setter -> resolvers.filesystem_scope: "coordina"
+resolvers.filesystem_scope -> definitions.contract: "consume"
+definitions.contract -> providers.is_directory_provider: "implementado por"
+providers.is_directory_provider -> infrastructure.std_fs: "usa"
+resolvers.filesystem_scope -> definitions.domain_entity: "crea/devuelve cuando la ubicación puede utilizarse"

@@ -63,3 +63,9 @@ Evo Shell informa que el scope solicitado no pudo establecerse.
 ## Relación con la historia de usuario
 
 [US-001 — Establecer un scope de sistema de archivos](../../../functional_documentation/user_stories/US-001-set-filesystem-scope.md)
+
+## Diseño técnico
+
+- [architecture.d2](architecture.d2)
+- [sequence.d2](sequence.d2)
+- [domain-model.d2](domain-model.d2)
