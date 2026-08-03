@@ -1,7 +1,7 @@
-# Documentacion tecnica
+# Documentación técnica
 
-Esta carpeta contiene el diseno tecnico derivado de la documentacion funcional.
+Esta carpeta contiene el diseño técnico derivado de la documentación funcional.
 
-Aqui podran vivir diagramas de casos de uso, diagramas de arquitectura, diagramas de secuencia, modelo tecnico del dominio y diagramas o documentacion de definitions, borrowed, entities y firmas importantes cuando sea necesario.
+Aquí podrán vivir diagramas de casos de uso, diagramas de arquitectura, diagramas de secuencia, modelo técnico del dominio y diagramas o documentación de definitions, borrowed, entities y firmas importantes cuando sea necesario.
 
-Los diagramas se mantendran preferentemente como codigo D2 (`.d2`) y podran acompanarse de SVG renderizados para visualizacion en GitHub.
+Los diagramas se mantendrán preferentemente como código D2 (`.d2`) y podrán acompañarse de SVG renderizados para visualización en GitHub.
