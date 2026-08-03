@@ -1,0 +1,49 @@
+direction: right
+
+filesystem_scope: "FilesystemScope\n\nscope válido de UC-001\nrecibido como &FilesystemScope\nno se modifica" {
+  shape: rectangle
+}
+
+read_dir: "std::fs::ReadDir\n\nestado externo de iteración" {
+  shape: rectangle
+}
+
+filesystem_iteration: "FilesystemIteration\n\nposee el estado necesario\npara continuar la iteración lazy\n\nconceptualmente contiene ReadDir\nNO contiene Vec\nNO materializa todo el directorio" {
+  shape: rectangle
+}
+
+mutable_iteration: "&mut FilesystemIteration\n\nmutabilidad localizada\nsolo avanza el cursor interno" {
+  shape: rectangle
+}
+
+dir_entry: "std::fs::DirEntry\n\nelemento de infraestructura" {
+  shape: rectangle
+}
+
+filesystem_entry: "FilesystemEntry\n\nname\npath\nkind" {
+  shape: rectangle
+}
+
+external_filesystem: "filesystem real\nSistema operativo" {
+  shape: cylinder
+}
+
+std_fs: "std::fs\nread_dir / ReadDir::next" {
+  shape: rectangle
+}
+
+filesystem_scope -> filesystem_iteration: "se presta para iniciar iter"
+std_fs -> external_filesystem: "accede a recurso externo"
+std_fs -> read_dir: "crea ReadDir"
+read_dir -> filesystem_iteration: "estado poseído"
+filesystem_iteration -> mutable_iteration: "borrowed as"
+mutable_iteration -> dir_entry: "siguiente elemento / fin / error"
+dir_entry -> filesystem_entry: "filesystem_entry::resolve"
+filesystem_entry -> filesystem_entry: "datos estructurados mínimos"
+
+immutability_rule: "Regla\n\nPreferir inmutabilidad por defecto.\nAceptar mutabilidad localizada cuando representa\nel estado inherentemente mutable de un recurso." {
+  shape: rectangle
+  style.fill: "#edf4ff"
+}
+
+mutable_iteration -> immutability_rule: "justificación"

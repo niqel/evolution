@@ -1,0 +1,95 @@
+direction: down
+
+definitions: "definitions" {
+  style.fill: "#edf4ff"
+
+  use_case: "Use case\n\ndefinitions/use_cases/iter.rs\nfunction pointer del caso de uso" {
+    shape: rectangle
+  }
+
+  read_directory_contract: "Contract\n\ndefinitions/contracts/read_directory.rs\nfunction pointer/capacidad: provide" {
+    shape: rectangle
+  }
+
+  next_directory_entry_contract: "Contract\n\ndefinitions/contracts/next_directory_entry.rs\nfunction pointer/capacidad: provide" {
+    shape: rectangle
+  }
+
+  filesystem_iteration_entity: "Domain entity\n\ndefinitions/domain/entities/filesystem_iteration.rs\nFilesystemIteration\n\nposee estado lazy\nconceptualmente ReadDir\nno contiene Vec" {
+    shape: rectangle
+  }
+
+  filesystem_entry_entity: "Domain entity\n\ndefinitions/domain/entities/filesystem_entry.rs\nFilesystemEntry\n\nname\npath\nkind" {
+    shape: rectangle
+  }
+}
+
+agents: "agents" {
+  style.fill: "#eefaf1"
+
+  iterator: "Agent\n\nagents/iterator.rs\nfunción: iter" {
+    shape: rectangle
+  }
+}
+
+resolvers: "resolvers" {
+  style.fill: "#fff7e6"
+
+  filesystem_iteration: "Resolver\n\nresolvers/filesystem_iteration.rs\nfunción: resolve\n\ninicia la iteración\nno enumera todo" {
+    shape: rectangle
+  }
+
+  filesystem_entry: "Resolver\n\nresolvers/filesystem_entry.rs\nfunción: resolve\n\nDirEntry -> FilesystemEntry" {
+    shape: rectangle
+  }
+}
+
+providers: "providers" {
+  style.fill: "#f7edff"
+
+  read_directory_provider: "Provider\n\nproviders/read_directory.rs\nfunción: provide" {
+    shape: rectangle
+  }
+
+  next_directory_entry_provider: "Provider\n\nproviders/next_directory_entry.rs\nfunción: provide" {
+    shape: rectangle
+  }
+}
+
+infrastructure: "infrastructure" {
+  style.fill: "#f2f2f2"
+
+  read_dir: "std::fs::read_dir" {
+    shape: rectangle
+  }
+
+  read_dir_state: "std::fs::ReadDir" {
+    shape: rectangle
+  }
+
+  dir_entry: "std::fs::DirEntry" {
+    shape: rectangle
+  }
+}
+
+scope: "FilesystemScope válido\nrecibido como &FilesystemScope\ninvariante establecida por UC-001" {
+  shape: rectangle
+}
+
+definitions.use_case -> agents.iterator: "implementado por"
+scope -> agents.iterator: "entrada prestada"
+agents.iterator -> resolvers.filesystem_iteration: "coordina inicio"
+resolvers.filesystem_iteration -> definitions.read_directory_contract: "consume"
+definitions.read_directory_contract -> providers.read_directory_provider: "implementado por"
+providers.read_directory_provider -> infrastructure.read_dir: "usa"
+infrastructure.read_dir -> infrastructure.read_dir_state: "devuelve"
+resolvers.filesystem_iteration -> definitions.filesystem_iteration_entity: "crea/devuelve"
+definitions.filesystem_iteration_entity -> infrastructure.read_dir_state: "posee estado de infraestructura"
+
+agents.iterator -> resolvers.filesystem_entry: "coordina consumo incremental"
+definitions.filesystem_iteration_entity -> providers.next_directory_entry_provider: "préstamo mutable para avanzar"
+resolvers.filesystem_entry -> definitions.next_directory_entry_contract: "consume"
+definitions.next_directory_entry_contract -> providers.next_directory_entry_provider: "implementado por"
+providers.next_directory_entry_provider -> infrastructure.read_dir_state: "ReadDir::next"
+infrastructure.read_dir_state -> infrastructure.dir_entry: "siguiente elemento / fin / error"
+resolvers.filesystem_entry -> definitions.filesystem_entry_entity: "materializa un elemento"

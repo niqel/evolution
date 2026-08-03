@@ -125,3 +125,9 @@ Importante:
 - `FilesystemScope` ya representa esa garantía establecida por UC-001.
 - UC-002 recibe el `FilesystemScope` mediante préstamo.
 - UC-002 no modifica el `FilesystemScope`.
+
+## Diseño técnico
+
+- [architecture.d2](architecture.d2)
+- [sequence.d2](sequence.d2)
+- [domain-model.d2](domain-model.d2)

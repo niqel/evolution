@@ -1,0 +1,100 @@
+direction: down
+
+usuario: "Usuario" {
+  shape: person
+}
+
+evo_shell: "Evo Shell" {
+  shape: rectangle
+}
+
+agent: "iterator::iter" {
+  shape: rectangle
+}
+
+scope: "&FilesystemScope" {
+  shape: rectangle
+}
+
+iteration_resolver: "filesystem_iteration::resolve" {
+  shape: rectangle
+}
+
+read_directory_contract: "contract read_directory::provide" {
+  shape: rectangle
+}
+
+read_directory_provider: "provider read_directory::provide" {
+  shape: rectangle
+}
+
+std_read_dir: "std::fs::read_dir" {
+  shape: rectangle
+}
+
+read_dir: "ReadDir" {
+  shape: rectangle
+}
+
+iteration: "FilesystemIteration" {
+  shape: rectangle
+}
+
+next_provider: "provider next_directory_entry::provide" {
+  shape: rectangle
+}
+
+entry_resolver: "filesystem_entry::resolve" {
+  shape: rectangle
+}
+
+entry: "FilesystemEntry" {
+  shape: rectangle
+}
+
+consumer: "consumidor" {
+  shape: rectangle
+}
+
+usuario -> evo_shell: "1. iter"
+evo_shell -> agent: "2. iterator::iter(&FilesystemScope)"
+scope -> agent: "scope válido prestado"
+agent -> iteration_resolver: "3. filesystem_iteration::resolve"
+iteration_resolver -> read_directory_contract: "4. read_directory::provide"
+read_directory_contract -> read_directory_provider: "5. delega capacidad"
+read_directory_provider -> std_read_dir: "6. std::fs::read_dir"
+std_read_dir -> read_dir: "7. ReadDir"
+read_dir -> iteration_resolver: "8. estado de infraestructura"
+iteration_resolver -> iteration: "9. FilesystemIteration"
+iteration -> agent: "10. iteración activa lazy"
+agent -> evo_shell: "11. devuelve FilesystemIteration"
+
+lazy_flow: "Consumo lazy elemento por elemento" {
+  shape: rectangle
+  style.fill: "#eefaf1"
+}
+
+evo_shell -> lazy_flow: "consume incrementalmente"
+lazy_flow -> iteration: "&mut FilesystemIteration"
+iteration -> next_provider: "avanza cursor"
+next_provider -> read_dir: "ReadDir::next"
+read_dir -> next_provider: "DirEntry / fin / error"
+next_provider -> entry_resolver: "siguiente DirEntry"
+entry_resolver -> entry: "FilesystemEntry"
+entry -> consumer: "elemento estructurado"
+
+repeat: "Repetir hasta fin de iteración\nsin acumular resultados" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+consumer -> repeat: "puede solicitar siguiente"
+repeat -> iteration: "&mut FilesystemIteration"
+
+error_flow: "Flujo de error\noperación no resuelta\nscope activo sin cambios" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+read_directory_provider -> error_flow: "error al abrir"
+next_provider -> error_flow: "error al avanzar"
