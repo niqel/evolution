@@ -99,3 +99,29 @@ Evo Shell informa que `iter` no pudo completarse.
 ## Relación con la historia de usuario
 
 [US-002 — Iterar los elementos del scope activo](../../../functional_documentation/user_stories/US-002-iterate-active-scope.md)
+
+## Relación con UC-001
+
+[UC-001 — Establecer un filesystem scope](../UC-001-set-filesystem-scope/README.md)
+
+UC-001 produce un `FilesystemScope` válido.
+
+UC-002 consume ese scope mediante préstamo y no vuelve a validar la invariancia ya establecida por UC-001.
+
+La relación conceptual es:
+
+UC-001:
+&Path
+→ resuelve
+→ FilesystemScope válido
+
+UC-002:
+&FilesystemScope
+→ iter
+
+Importante:
+
+- UC-002 no vuelve a comprobar si el path es un directorio.
+- `FilesystemScope` ya representa esa garantía establecida por UC-001.
+- UC-002 recibe el `FilesystemScope` mediante préstamo.
+- UC-002 no modifica el `FilesystemScope`.
