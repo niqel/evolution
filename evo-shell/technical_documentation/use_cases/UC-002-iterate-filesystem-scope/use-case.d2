@@ -1,0 +1,35 @@
+direction: right
+
+usuario: "Usuario" {
+  shape: person
+}
+
+evo_shell: "Evo Shell" {
+  shape: rectangle
+
+  iterar_scope: "Iterar filesystem scope" {
+    shape: oval
+  }
+}
+
+entrada: "Entrada conceptual\niter\nFilesystemScope válido" {
+  shape: rectangle
+}
+
+resultado_exitoso: "resultado estructurado\nnombre\nruta\ntipo de recurso" {
+  shape: rectangle
+}
+
+resultado_alternativo: "iter no completado\nscope activo sin cambios" {
+  shape: rectangle
+}
+
+presentacion: "representación visual\nseparada" {
+  shape: rectangle
+}
+
+usuario -> evo_shell.iterar_scope: "ejecuta iter"
+entrada -> evo_shell.iterar_scope: "scope activo"
+evo_shell.iterar_scope -> resultado_exitoso: "resultado exitoso"
+evo_shell.iterar_scope -> resultado_alternativo: "resultado alternativo"
+resultado_exitoso -> presentacion: "puede mostrarse"
