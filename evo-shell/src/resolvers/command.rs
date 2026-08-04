@@ -21,6 +21,7 @@ pub fn resolve<'a>(
     match command_name {
         "scope-fs" => resolve_scope_fs(stream, tokenize),
         "iter" => resolve_iter(stream, tokenize),
+        "enter" => resolve_enter(stream, tokenize),
         _ => Err(ParseError::UnknownCommand(command_name)),
     }
 }
@@ -55,4 +56,25 @@ fn resolve_iter<'a>(
     }
 
     Ok(Command::Iter)
+}
+
+fn resolve_enter<'a>(
+    stream: &mut TokenStream<'a>,
+    tokenize: Tokenize,
+) -> Result<Command<'a>, ParseError<'a>> {
+    let location_token = tokenize(stream).map_err(ParseError::Tokenize)?;
+
+    let Some(location_token) = location_token else {
+        return Err(ParseError::ExpectedPath);
+    };
+
+    let location = match location_token {
+        Token::Word(location) | Token::String(location) => location,
+    };
+
+    if tokenize(stream).map_err(ParseError::Tokenize)?.is_some() {
+        return Err(ParseError::UnexpectedToken);
+    }
+
+    Ok(Command::Enter(location))
 }

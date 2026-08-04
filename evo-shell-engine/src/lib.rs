@@ -4,11 +4,12 @@ mod providers;
 
 mod resolvers;
 
-pub use agents::{iteration_advancer, iterator, scope_setter};
+pub use agents::{enterer, iteration_advancer, iterator, scope_setter};
 pub use definitions::domain::entities::filesystem_entry::{FilesystemEntry, FilesystemEntryKind};
 pub use definitions::domain::entities::filesystem_iteration::FilesystemIteration;
 pub use definitions::domain::entities::filesystem_scope::FilesystemScope;
 pub use definitions::use_cases::advance::Advance;
+pub use definitions::use_cases::enter::Enter;
 pub use definitions::use_cases::iter::{Iter, IterError};
 pub use definitions::use_cases::set_filesystem_scope::{ScopeError, SetFilesystemScope};
 
@@ -22,6 +23,7 @@ mod tests {
     use std::path::PathBuf;
     use std::time::SystemTime;
 
+    use crate::agents::enterer;
     use crate::agents::iteration_advancer;
     use crate::agents::iterator;
     use crate::agents::scope_setter;
@@ -32,8 +34,11 @@ mod tests {
     use crate::providers;
     use crate::resolvers::filesystem_entry;
     use crate::resolvers::filesystem_iteration;
+    use crate::resolvers::filesystem_path;
     use crate::resolvers::filesystem_scope;
-    use crate::{Advance, FilesystemEntryKind, Iter, IterError, ScopeError, SetFilesystemScope};
+    use crate::{
+        Advance, Enter, FilesystemEntryKind, Iter, IterError, ScopeError, SetFilesystemScope,
+    };
 
     struct TestDirectory {
         path: PathBuf,
@@ -158,6 +163,104 @@ mod tests {
         let result = advance(&mut iteration);
 
         assert!(matches!(result, Ok(None)));
+    }
+
+    #[test]
+    fn enterer_enter_matches_enter_use_case_function_pointer() {
+        let directory = TestDirectory::new("enter_use_case_pointer");
+        let child = directory.path().join("child");
+        fs::create_dir(&child).unwrap();
+        let scope = scope_setter::set(directory.path()).unwrap();
+        let enter: Enter = enterer::enter;
+
+        let result = enter(&scope, Path::new("child")).unwrap();
+
+        assert_eq!(result.path(), child.as_path());
+    }
+
+    #[test]
+    fn enter_child_returns_new_filesystem_scope_for_child() {
+        let directory = TestDirectory::new("enter_child");
+        let child = directory.path().join("child");
+        fs::create_dir(&child).unwrap();
+        let scope = scope_setter::set(directory.path()).unwrap();
+
+        let result = enterer::enter(&scope, Path::new("child")).unwrap();
+
+        assert_eq!(result.path(), child.as_path());
+    }
+
+    #[test]
+    fn enter_compound_child_path_returns_new_filesystem_scope() {
+        let directory = TestDirectory::new("enter_compound_child");
+        let child = directory.path().join("child");
+        let grandchild = child.join("grandchild");
+        fs::create_dir(&child).unwrap();
+        fs::create_dir(&grandchild).unwrap();
+        let scope = scope_setter::set(directory.path()).unwrap();
+
+        let result = enterer::enter(&scope, Path::new("child/grandchild")).unwrap();
+
+        assert_eq!(result.path(), grandchild.as_path());
+    }
+
+    #[test]
+    fn enter_parent_from_child_returns_parent_scope() {
+        let directory = TestDirectory::new("enter_parent");
+        let child = directory.path().join("child");
+        fs::create_dir(&child).unwrap();
+        let scope = scope_setter::set(child.as_path()).unwrap();
+
+        let result = enterer::enter(&scope, Path::new("..")).unwrap();
+
+        assert_eq!(result.path(), child.join("..").as_path());
+    }
+
+    #[test]
+    fn enter_two_parents_from_deep_scope_returns_ancestor_scope() {
+        let directory = TestDirectory::new("enter_two_parents");
+        let child = directory.path().join("child");
+        let grandchild = child.join("grandchild");
+        fs::create_dir(&child).unwrap();
+        fs::create_dir(&grandchild).unwrap();
+        let scope = scope_setter::set(grandchild.as_path()).unwrap();
+
+        let result = enterer::enter(&scope, Path::new("../..")).unwrap();
+
+        assert_eq!(result.path(), grandchild.join("../..").as_path());
+    }
+
+    #[test]
+    fn enter_nonexistent_location_returns_scope_error() {
+        let directory = TestDirectory::new("enter_missing");
+        let scope = scope_setter::set(directory.path()).unwrap();
+
+        let result = enterer::enter(&scope, Path::new("missing"));
+
+        assert!(matches!(result, Err(ScopeError::Filesystem(_))));
+    }
+
+    #[test]
+    fn enter_does_not_modify_original_filesystem_scope() {
+        let directory = TestDirectory::new("enter_original_unchanged");
+        let child = directory.path().join("child");
+        fs::create_dir(&child).unwrap();
+        let scope = scope_setter::set(directory.path()).unwrap();
+
+        let result = enterer::enter(&scope, Path::new("child")).unwrap();
+
+        assert_eq!(scope.path(), directory.path());
+        assert_eq!(result.path(), child.as_path());
+    }
+
+    #[test]
+    fn filesystem_path_resolve_only_produces_candidate_path() {
+        let directory = TestDirectory::new("path_resolve_only");
+        let scope = scope_setter::set(directory.path()).unwrap();
+
+        let result = filesystem_path::resolve(&scope, Path::new("missing"));
+
+        assert_eq!(result, directory.path().join("missing"));
     }
 
     #[test]

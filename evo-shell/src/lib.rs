@@ -154,6 +154,42 @@ mod tests {
     }
 
     #[test]
+    fn parser_resolves_enter_word_location() {
+        let mut stream = TokenStream::new("enter agents");
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        assert_eq!(command, Command::Enter("agents"));
+    }
+
+    #[test]
+    fn parser_resolves_enter_quoted_location() {
+        let mut stream = TokenStream::new("enter \"Mis Documentos\"");
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        assert_eq!(command, Command::Enter("Mis Documentos"));
+    }
+
+    #[test]
+    fn parser_resolves_enter_parent_location() {
+        let mut stream = TokenStream::new("enter ..");
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        assert_eq!(command, Command::Enter(".."));
+    }
+
+    #[test]
+    fn parser_resolves_enter_two_parents_location() {
+        let mut stream = TokenStream::new("enter ../..");
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        assert_eq!(command, Command::Enter("../.."));
+    }
+
+    #[test]
     fn parser_rejects_missing_path() {
         let mut stream = TokenStream::new("scope-fs");
 
@@ -195,6 +231,33 @@ mod tests {
     #[test]
     fn parser_rejects_iter_quoted_argument() {
         let mut stream = TokenStream::new("iter \"/ruta\"");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(result, Err(ParseError::UnexpectedToken)));
+    }
+
+    #[test]
+    fn parser_rejects_enter_without_location() {
+        let mut stream = TokenStream::new("enter");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(result, Err(ParseError::ExpectedPath)));
+    }
+
+    #[test]
+    fn parser_rejects_enter_extra_word_argument() {
+        let mut stream = TokenStream::new("enter agents extra");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(result, Err(ParseError::UnexpectedToken)));
+    }
+
+    #[test]
+    fn parser_rejects_enter_extra_after_quoted_location() {
+        let mut stream = TokenStream::new("enter \"Mis Documentos\" extra");
 
         let result = parser::parse(&mut stream, tokenizer::tokenize);
 
@@ -345,6 +408,117 @@ mod tests {
 
         assert!(result.is_err());
         assert_eq!(shell.filesystem_scope().path(), previous_path.as_path());
+    }
+
+    #[test]
+    fn enter_existing_child_replaces_scope_and_returns_scope_changed() {
+        let directory = TestDirectory::new("enter_child_execute");
+        let child = directory.path.join("child");
+        fs::create_dir(&child).unwrap();
+        let mut shell = shell_from_directory(&directory);
+
+        let result = executor::execute(&mut shell, Command::Enter("child")).unwrap();
+
+        assert!(matches!(result, ExecutionResult::ScopeChanged));
+        assert_eq!(shell.filesystem_scope().path(), child.as_path());
+    }
+
+    #[test]
+    fn enter_parent_replaces_scope_with_parent_path() {
+        let directory = TestDirectory::new("enter_parent_execute");
+        let child = directory.path.join("child");
+        fs::create_dir(&child).unwrap();
+        let mut shell = shell_from_directory(&directory);
+        executor::execute(&mut shell, Command::Enter("child")).unwrap();
+
+        let result = executor::execute(&mut shell, Command::Enter("..")).unwrap();
+
+        assert!(matches!(result, ExecutionResult::ScopeChanged));
+        assert_eq!(shell.filesystem_scope().path(), child.join("..").as_path());
+    }
+
+    #[test]
+    fn enter_two_parents_replaces_scope_with_ancestor_path() {
+        let directory = TestDirectory::new("enter_two_parents_execute");
+        let child = directory.path.join("child");
+        let grandchild = child.join("grandchild");
+        fs::create_dir(&child).unwrap();
+        fs::create_dir(&grandchild).unwrap();
+        let mut shell = shell_from_directory(&directory);
+        executor::execute(&mut shell, Command::Enter("child/grandchild")).unwrap();
+
+        let result = executor::execute(&mut shell, Command::Enter("../..")).unwrap();
+
+        assert!(matches!(result, ExecutionResult::ScopeChanged));
+        assert_eq!(
+            shell.filesystem_scope().path(),
+            grandchild.join("../..").as_path()
+        );
+    }
+
+    #[test]
+    fn enter_missing_location_returns_error_and_keeps_previous_scope() {
+        let directory = TestDirectory::new("enter_missing_execute");
+        let mut shell = shell_from_directory(&directory);
+        let previous_path = shell.filesystem_scope().path().to_path_buf();
+
+        let result = executor::execute(&mut shell, Command::Enter("missing"));
+
+        assert!(matches!(result, Err(ExecuteError::Scope(_))));
+        assert_eq!(shell.filesystem_scope().path(), previous_path.as_path());
+    }
+
+    #[test]
+    fn scope_fs_still_replaces_scope_after_enter_changes() {
+        let initial = TestDirectory::new("scope_fs_after_enter_initial");
+        let replacement = TestDirectory::new("scope_fs_after_enter_replacement");
+        let mut shell = shell_from_directory(&initial);
+        let input = format!("scope-fs \"{}\"", replacement.path.display());
+        let mut stream = TokenStream::new(&input);
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let result = executor::execute(&mut shell, command).unwrap();
+
+        assert!(matches!(result, ExecutionResult::ScopeChanged));
+        assert_eq!(shell.filesystem_scope().path(), replacement.path.as_path());
+    }
+
+    #[test]
+    fn iter_still_works_after_enter() {
+        let directory = TestDirectory::new("iter_after_enter");
+        let child = directory.path.join("child");
+        fs::create_dir(&child).unwrap();
+        fs::write(child.join("inside.txt"), "inside").unwrap();
+        let mut shell = shell_from_directory(&directory);
+        executor::execute(&mut shell, Command::Enter("child")).unwrap();
+
+        let result = executor::execute(&mut shell, Command::Iter).unwrap();
+
+        assert!(matches!(result, ExecutionResult::FilesystemIteration(_)));
+    }
+
+    #[test]
+    fn enter_then_iter_reads_entries_from_child_scope() {
+        let directory = TestDirectory::new("enter_then_iter");
+        let child = directory.path.join("child");
+        fs::create_dir(&child).unwrap();
+        fs::write(child.join("inside.txt"), "inside").unwrap();
+        let mut shell = shell_from_directory(&directory);
+        executor::execute(&mut shell, Command::Enter("child")).unwrap();
+        let result = executor::execute(&mut shell, Command::Iter).unwrap();
+        let ExecutionResult::FilesystemIteration(mut iteration) = result else {
+            panic!("expected filesystem iteration");
+        };
+        let mut found_inside = false;
+
+        while let Some(entry) = iteration_advancer::advance(&mut iteration).unwrap() {
+            if entry.name() == OsStr::new("inside.txt") {
+                assert_eq!(entry.kind(), FilesystemEntryKind::File);
+                found_inside = true;
+            }
+        }
+
+        assert!(found_inside);
     }
 
     #[test]
