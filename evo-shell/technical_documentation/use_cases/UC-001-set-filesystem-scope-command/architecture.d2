@@ -1,0 +1,98 @@
+direction: down
+
+definitions: "definitions" {
+  style.fill: "#edf4ff"
+
+  tokenize: "Use case\n\ndefinitions/use_cases/tokenize.rs\nfunction pointer interno" {
+    shape: rectangle
+  }
+
+  parse: "Use case\n\ndefinitions/use_cases/parse.rs\nfunction pointer interno" {
+    shape: rectangle
+  }
+
+  execute: "Use case\n\ndefinitions/use_cases/execute.rs\nfunction pointer interno" {
+    shape: rectangle
+  }
+}
+
+agents: "agents" {
+  style.fill: "#eefaf1"
+
+  tokenizer: "Agent\n\nagents/tokenizer.rs\ntokenizer::tokenize\n\ncoordina tokenización incremental" {
+    shape: rectangle
+  }
+
+  parser: "Agent\n\nagents/parser.rs\nparser::parse\n\ncoordina interpretación de tokens" {
+    shape: rectangle
+  }
+
+  executor: "Agent\n\nagents/executor.rs\nexecutor::execute\n\ncoordina ejecución del comando" {
+    shape: rectangle
+  }
+}
+
+resolvers: "resolvers" {
+  style.fill: "#fff7e6"
+
+  token: "Resolver\n\nresolvers/token.rs\ntoken::resolve\n\nsiguiente token válido y texto consumido" {
+    shape: rectangle
+  }
+
+  command: "Resolver\n\nresolvers/command.rs\ncommand::resolve\n\nresuelve tokens como Command" {
+    shape: rectangle
+  }
+
+  execution: "Resolver\n\nresolvers/execution.rs\nexecution::resolve\n\nresuelve ejecución de Command" {
+    shape: rectangle
+  }
+}
+
+domain: "domain/model" {
+  style.fill: "#f7edff"
+
+  token_stream: "TokenStream\n\nentrada prestada\nposición actual\nmutabilidad solo al avanzar" {
+    shape: rectangle
+  }
+
+  token_model: "Token\n\nToken::Word(&str)\nToken::String(&str)\nvistas prestadas cuando sea viable" {
+    shape: rectangle
+  }
+
+  command_model: "Command\n\nCommand::ScopeFs(path)\nenum conceptual exhaustivo" {
+    shape: rectangle
+  }
+
+  shell_state: "estado de Evo Shell\n\nfilesystem scope activo: opcional" {
+    shape: rectangle
+  }
+}
+
+external: "external dependency / evo-shell-engine" {
+  style.fill: "#f2f2f2"
+
+  set_filesystem_scope: "SetFilesystemScope\nuse case de frontera" {
+    shape: rectangle
+  }
+
+  filesystem_scope: "FilesystemScope" {
+    shape: rectangle
+  }
+}
+
+definitions.tokenize -> agents.tokenizer: "implementado por"
+agents.tokenizer -> resolvers.token: "coordina"
+resolvers.token -> domain.token_stream: "usa cursor incremental"
+resolvers.token -> domain.token_model: "produce un token"
+
+definitions.parse -> agents.parser: "implementado por"
+agents.parser -> resolvers.command: "coordina"
+resolvers.command -> domain.token_model: "consume tokens incrementalmente"
+resolvers.command -> domain.command_model: "resuelve Command::ScopeFs"
+
+definitions.execute -> agents.executor: "implementado por"
+agents.executor -> resolvers.execution: "coordina"
+resolvers.execution -> domain.command_model: "consume"
+resolvers.execution -> external.set_filesystem_scope: "dispatch por Command::ScopeFs"
+external.set_filesystem_scope -> external.filesystem_scope: "devuelve en éxito"
+external.filesystem_scope -> domain.shell_state: "Evo Shell conserva ownership"

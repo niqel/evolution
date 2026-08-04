@@ -1,0 +1,39 @@
+direction: right
+
+input: "entrada textual\n\nborrowed" {
+  shape: rectangle
+}
+
+token_stream: "TokenStream\n\ninput borrowed\ncurrent position\nmutable only to advance cursor" {
+  shape: rectangle
+}
+
+token: "Token\n\nborrowed view when possible\nToken::Word(&str)\nToken::String(&str)" {
+  shape: rectangle
+}
+
+command: "Command\n\nenum conceptual\nScopeFs(argument)\npuede prestar argumentos mientras la entrada siga viva" {
+  shape: rectangle
+}
+
+filesystem_scope: "FilesystemScope\n\nproducido por Evo Shell Engine\nowned by Evo Shell after successful engine call" {
+  shape: rectangle
+}
+
+shell_state: "estado de Evo Shell\n\nfilesystem scope activo: opcional" {
+  shape: rectangle
+}
+
+borrowing_rule: "Regla\n\nborrow mientras el dato pueda depender de su fuente\nown cuando deba sobrevivir independientemente" {
+  shape: rectangle
+  style.fill: "#edf4ff"
+}
+
+input -> token_stream: "borrowed input"
+token_stream -> token: "&mut TokenStream -> token::resolve -> Token"
+token -> command: "command::resolve"
+command -> filesystem_scope: "execution::resolve -> SetFilesystemScope"
+filesystem_scope -> shell_state: "ownership conservado entre comandos"
+input -> borrowing_rule: "fuente"
+token -> borrowing_rule: "vista prestada"
+command -> borrowing_rule: "efímero"

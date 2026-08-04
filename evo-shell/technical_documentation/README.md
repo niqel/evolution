@@ -37,3 +37,7 @@ Por esta razón, elementos como:
 se documentarán únicamente cuando sean necesarios para implementar una historia de usuario concreta.
 
 Las decisiones técnicas deben mantener separada la sintaxis y la interacción propias de Evo Shell de las capacidades operativas proporcionadas por Evo Shell Engine.
+
+Casos de uso técnicos:
+
+* [UC-001 — Establecer un filesystem scope mediante un comando](use_cases/UC-001-set-filesystem-scope-command/)

@@ -1,0 +1,107 @@
+direction: down
+
+usuario: "Usuario" {
+  shape: person
+}
+
+evo_shell: "Evo Shell recibe texto" {
+  shape: rectangle
+}
+
+tokenizer: "tokenizer::tokenize" {
+  shape: rectangle
+}
+
+token_resolver: "token::resolve" {
+  shape: rectangle
+}
+
+word_token: "Token::Word(\"scope-fs\")" {
+  shape: rectangle
+}
+
+string_token: "Token::String(path)" {
+  shape: rectangle
+}
+
+parser: "parser::parse" {
+  shape: rectangle
+}
+
+command_resolver: "command::resolve" {
+  shape: rectangle
+}
+
+command: "Command::ScopeFs(path)" {
+  shape: rectangle
+}
+
+executor: "executor::execute" {
+  shape: rectangle
+}
+
+execution_resolver: "execution::resolve" {
+  shape: rectangle
+}
+
+set_filesystem_scope: "SetFilesystemScope" {
+  shape: rectangle
+}
+
+engine: "Evo Shell Engine" {
+  shape: rectangle
+}
+
+engine_result: "FilesystemScope / error" {
+  shape: rectangle
+}
+
+shell_state: "estado de Evo Shell" {
+  shape: rectangle
+}
+
+presentation: "resultado conceptual al usuario" {
+  shape: rectangle
+}
+
+usuario -> evo_shell: "scope-fs \"<path>\""
+evo_shell -> tokenizer: "entrada textual"
+tokenizer -> token_resolver: "siguiente token"
+token_resolver -> word_token: "Word(\"scope-fs\")"
+tokenizer -> token_resolver: "continuar desde cursor"
+token_resolver -> string_token: "String(path)"
+tokenizer -> parser: "tokens incrementales"
+parser -> command_resolver: "interpretar tokens"
+command_resolver -> command: "Command::ScopeFs(path)"
+command -> executor: "comando resuelto"
+executor -> execution_resolver: "coordina ejecución"
+execution_resolver -> command: "resuelve dispatch"
+execution_resolver -> set_filesystem_scope: "consume frontera"
+set_filesystem_scope -> engine: "solicita filesystem scope"
+engine -> engine_result: "FilesystemScope / error"
+
+success: "Éxito" {
+  shape: rectangle
+  style.fill: "#eefaf1"
+}
+
+error: "Error" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+engine_result -> success: "nuevo FilesystemScope"
+success -> shell_state: "reemplaza scope anterior"
+shell_state -> presentation: "presenta resultado"
+
+engine_result -> error: "error del engine"
+error -> shell_state: "scope anterior permanece"
+error -> presentation: "presenta error conceptual"
+
+syntax_error: "Error sintáctico\nno llama al engine\nscope anterior permanece" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+command_resolver -> syntax_error: "tokens no cumplen scope-fs"
+syntax_error -> presentation: "presenta error conceptual"
