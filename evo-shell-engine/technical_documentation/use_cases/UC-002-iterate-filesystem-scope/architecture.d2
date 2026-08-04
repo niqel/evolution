@@ -3,15 +3,19 @@ direction: down
 definitions: "definitions" {
   style.fill: "#edf4ff"
 
-  use_case: "Use case público\n\ndefinitions/use_cases/iter.rs\nIter(&FilesystemScope)" {
+  iter_use_case: "Use case público\n\ndefinitions/use_cases/iter.rs\nIter(&FilesystemScope)" {
     shape: rectangle
   }
 
-  read_directory_contract: "Contract interno\n\ndefinitions/contracts/read_directory.rs\nfunction pointer/capacidad: provide" {
+  advance_use_case: "Use case público\n\ndefinitions/use_cases/advance.rs\nAdvance(&mut FilesystemIteration)" {
     shape: rectangle
   }
 
-  next_directory_entry_contract: "Contract interno\n\ndefinitions/contracts/next_directory_entry.rs\nfunction pointer/capacidad: provide" {
+  read_directory_contract: "Contract interno\n\ndefinitions/contracts/read_directory.rs\nReadDirectory" {
+    shape: rectangle
+  }
+
+  next_directory_entry_contract: "Contract interno\n\ndefinitions/contracts/next_directory_entry.rs\nNextDirectoryEntry" {
     shape: rectangle
   }
 
@@ -27,7 +31,11 @@ definitions: "definitions" {
 agents: "agents" {
   style.fill: "#eefaf1"
 
-  iterator: "Agent\n\nagents/iterator.rs\nfunción: iter(&FilesystemScope)" {
+  iterator: "Agent\n\nagents/iterator.rs\niterator::iter" {
+    shape: rectangle
+  }
+
+  iteration_advancer: "Agent\n\nagents/iteration_advancer.rs\niteration_advancer::advance" {
     shape: rectangle
   }
 }
@@ -35,11 +43,11 @@ agents: "agents" {
 resolvers: "resolvers" {
   style.fill: "#fff7e6"
 
-  filesystem_iteration: "Resolver\n\nresolvers/filesystem_iteration.rs\nfunción: resolve\n\ninicia la iteración\nno enumera todo" {
+  filesystem_iteration: "Resolver\n\nresolvers/filesystem_iteration.rs\nfilesystem_iteration::resolve\n\ninicia la iteración\nno enumera todo" {
     shape: rectangle
   }
 
-  filesystem_entry: "Resolver\n\nresolvers/filesystem_entry.rs\nfunción: resolve\n\nDirEntry -> FilesystemEntry" {
+  filesystem_entry: "Resolver existente\n\nresolvers/filesystem_entry.rs\nfilesystem_entry::resolve\n\nmaterializa el siguiente FilesystemEntry" {
     shape: rectangle
   }
 }
@@ -47,11 +55,11 @@ resolvers: "resolvers" {
 providers: "providers" {
   style.fill: "#f7edff"
 
-  read_directory_provider: "Provider interno\n\nproviders/read_directory.rs\nfunción: provide" {
+  read_directory_provider: "Provider interno\n\nproviders/read_directory.rs\nread_directory::provide" {
     shape: rectangle
   }
 
-  next_directory_entry_provider: "Provider interno\n\nproviders/next_directory_entry.rs\nfunción: provide" {
+  next_directory_entry_provider: "Provider interno\n\nproviders/next_directory_entry.rs\nnext_directory_entry::provide" {
     shape: rectangle
   }
 }
@@ -67,7 +75,11 @@ infrastructure: "infrastructure" {
     shape: rectangle
   }
 
-  dir_entry: "std::fs::DirEntry" {
+  read_dir_next: "ReadDir::next" {
+    shape: rectangle
+  }
+
+  dir_entry: "std::fs::DirEntry / fin / error" {
     shape: rectangle
   }
 }
@@ -76,7 +88,12 @@ scope: "FilesystemScope válido\nrecibido como &FilesystemScope\ninvariante esta
   shape: rectangle
 }
 
-definitions.use_case -> agents.iterator: "implementado por"
+consumer: "consumidor externo\n\nevo-shell / evo-script / otro componente" {
+  shape: rectangle
+}
+
+consumer -> definitions.iter_use_case: "frontera pública"
+definitions.iter_use_case -> agents.iterator: "implementado por"
 scope -> agents.iterator: "entrada prestada"
 agents.iterator -> resolvers.filesystem_iteration: "coordina inicio usando provider interno"
 resolvers.filesystem_iteration -> definitions.read_directory_contract: "consume"
@@ -85,13 +102,17 @@ providers.read_directory_provider -> infrastructure.read_dir: "usa"
 infrastructure.read_dir -> infrastructure.read_dir_state: "devuelve"
 resolvers.filesystem_iteration -> definitions.filesystem_iteration_entity: "crea/devuelve"
 definitions.filesystem_iteration_entity -> infrastructure.read_dir_state: "posee estado de infraestructura"
+definitions.filesystem_iteration_entity -> consumer: "FilesystemIteration"
 
-agents.iterator -> resolvers.filesystem_entry: "coordina consumo incremental"
+consumer -> definitions.advance_use_case: "frontera pública"
+definitions.advance_use_case -> agents.iteration_advancer: "implementado por"
+agents.iteration_advancer -> resolvers.filesystem_entry: "coordina avance"
 resolvers.filesystem_entry -> definitions.next_directory_entry_contract: "consume"
 definitions.next_directory_entry_contract -> providers.next_directory_entry_provider: "implementado por"
 providers.next_directory_entry_provider -> definitions.filesystem_iteration_entity: "recibe &mut FilesystemIteration"
-definitions.filesystem_iteration_entity -> infrastructure.read_dir_state: "avance mutable localizado"
-infrastructure.read_dir_state -> providers.next_directory_entry_provider: "ReadDir::next"
-providers.next_directory_entry_provider -> infrastructure.dir_entry: "DirEntry / fin / error"
+definitions.filesystem_iteration_entity -> infrastructure.read_dir_state: "mutabilidad localizada del cursor"
+providers.next_directory_entry_provider -> infrastructure.read_dir_next: "usa"
+infrastructure.read_dir_next -> infrastructure.dir_entry: "DirEntry / fin / error"
 infrastructure.dir_entry -> resolvers.filesystem_entry: "resultado de infraestructura"
-resolvers.filesystem_entry -> definitions.filesystem_entry_entity: "materializa un elemento"
+resolvers.filesystem_entry -> definitions.filesystem_entry_entity: "FilesystemEntry / None / IterError"
+definitions.filesystem_entry_entity -> consumer: "un elemento por llamada"

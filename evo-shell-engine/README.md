@@ -17,6 +17,11 @@ Frontera pública:
 - los providers son implementaciones internas de esos contracts;
 - un consumidor externo no debe proporcionar contracts ni providers internos.
 
+Para iteración de filesystem, la frontera pública conceptual se compone de:
+
+- `Iter(&FilesystemScope)`: inicia una `FilesystemIteration`;
+- `Advance(&mut FilesystemIteration)`: avanza la iteración lazy y produce el siguiente `FilesystemEntry`, fin de iteración o error.
+
 El engine no depende conceptualmente de prompt, terminal, lexer, parser, AST, sintaxis de Evo Script ni UI.
 
 Documentación:

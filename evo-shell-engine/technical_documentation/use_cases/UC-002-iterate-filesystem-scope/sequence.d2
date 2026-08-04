@@ -1,14 +1,6 @@
 direction: down
 
-usuario: "Usuario" {
-  shape: person
-}
-
-evo_shell_engine: "Evo Shell Engine" {
-  shape: rectangle
-}
-
-agent: "iterator::iter" {
+consumer: "consumidor externo" {
   shape: rectangle
 }
 
@@ -16,15 +8,23 @@ scope: "&FilesystemScope" {
   shape: rectangle
 }
 
+iter_use_case: "Iter(&FilesystemScope)" {
+  shape: rectangle
+}
+
+iterator_agent: "iterator::iter" {
+  shape: rectangle
+}
+
 iteration_resolver: "filesystem_iteration::resolve" {
   shape: rectangle
 }
 
-read_directory_contract: "contract read_directory::provide" {
+read_directory_contract: "ReadDirectory" {
   shape: rectangle
 }
 
-read_directory_provider: "provider read_directory::provide" {
+read_directory_provider: "read_directory::provide" {
   shape: rectangle
 }
 
@@ -32,15 +32,15 @@ std_read_dir: "std::fs::read_dir" {
   shape: rectangle
 }
 
-read_dir: "ReadDir" {
-  shape: rectangle
-}
-
 iteration: "FilesystemIteration" {
   shape: rectangle
 }
 
-next_provider: "provider next_directory_entry::provide" {
+advance_use_case: "Advance(&mut FilesystemIteration)" {
+  shape: rectangle
+}
+
+advancer_agent: "iteration_advancer::advance" {
   shape: rectangle
 }
 
@@ -48,53 +48,74 @@ entry_resolver: "filesystem_entry::resolve" {
   shape: rectangle
 }
 
-entry: "FilesystemEntry" {
+next_contract: "NextDirectoryEntry" {
   shape: rectangle
 }
 
-consumer: "consumidor" {
+next_provider: "next_directory_entry::provide" {
   shape: rectangle
 }
 
-usuario -> evo_shell_engine: "1. iter"
-evo_shell_engine -> agent: "2. Iter(&FilesystemScope) / iterator::iter(&FilesystemScope)"
-scope -> agent: "scope válido prestado"
-agent -> iteration_resolver: "3. filesystem_iteration::resolve(scope, read_directory::provide)"
-iteration_resolver -> read_directory_contract: "4. read_directory::provide"
-read_directory_contract -> read_directory_provider: "5. delega capacidad"
-read_directory_provider -> std_read_dir: "6. std::fs::read_dir"
-std_read_dir -> read_dir: "7. ReadDir"
-read_dir -> iteration_resolver: "8. estado de infraestructura"
-iteration_resolver -> iteration: "9. FilesystemIteration"
-iteration -> agent: "10. iteración activa lazy"
-agent -> evo_shell_engine: "11. devuelve FilesystemIteration"
+read_dir_next: "ReadDir::next" {
+  shape: rectangle
+}
 
-lazy_flow: "Consumo lazy elemento por elemento" {
+dir_entry: "DirEntry / fin / error" {
+  shape: rectangle
+}
+
+entry: "FilesystemEntry / None / IterError" {
+  shape: rectangle
+}
+
+stage_1: "ETAPA 1 — iniciar" {
+  shape: rectangle
+  style.fill: "#edf4ff"
+}
+
+stage_2: "ETAPA 2 — consumir" {
   shape: rectangle
   style.fill: "#eefaf1"
 }
 
-evo_shell_engine -> lazy_flow: "consume incrementalmente"
-lazy_flow -> iteration: "&mut FilesystemIteration"
-iteration -> next_provider: "avanza cursor"
-next_provider -> read_dir: "ReadDir::next"
-read_dir -> next_provider: "DirEntry / fin / error"
-next_provider -> entry_resolver: "siguiente DirEntry"
-entry_resolver -> entry: "FilesystemEntry"
-entry -> consumer: "elemento estructurado"
+consumer -> stage_1: "inicia iteración"
+stage_1 -> iter_use_case: "Iter(&FilesystemScope)"
+scope -> iter_use_case: "scope válido prestado"
+iter_use_case -> iterator_agent: "use case público"
+iterator_agent -> iteration_resolver: "coordina"
+iteration_resolver -> read_directory_contract: "consume"
+read_directory_contract -> read_directory_provider: "implementado por"
+read_directory_provider -> std_read_dir: "std::fs::read_dir"
+std_read_dir -> iteration_resolver: "ReadDir / error"
+iteration_resolver -> iteration: "FilesystemIteration / IterError"
+iteration -> consumer: "devuelve iteración lazy"
 
-repeat: "Repetir hasta fin de iteración\nsin acumular resultados" {
+consumer -> stage_2: "consume incrementalmente"
+stage_2 -> advance_use_case: "Advance(&mut FilesystemIteration)"
+advance_use_case -> advancer_agent: "use case público"
+advancer_agent -> entry_resolver: "coordina"
+entry_resolver -> next_contract: "consume"
+next_contract -> next_provider: "implementado por"
+next_provider -> iteration: "&mut FilesystemIteration"
+next_provider -> read_dir_next: "ReadDir::next"
+read_dir_next -> dir_entry: "DirEntry / fin / error"
+dir_entry -> entry_resolver: "vuelve al resolver"
+entry_resolver -> entry: "materializa resultado"
+entry -> consumer: "un FilesystemEntry como máximo"
+
+repeat: "La etapa 2 puede repetirse hasta None\nsin acumular resultados" {
   shape: rectangle
   style.fill: "#fff7e6"
 }
 
-consumer -> repeat: "puede solicitar siguiente"
-repeat -> iteration: "&mut FilesystemIteration"
+consumer -> repeat: "solicita siguiente"
+repeat -> advance_use_case: "&mut FilesystemIteration"
 
-error_flow: "Flujo de error\noperación no resuelta\nscope activo sin cambios" {
+error_flow: "Error operativo\nIterError\nscope sin cambios" {
   shape: rectangle
   style.fill: "#fff0f0"
 }
 
 read_directory_provider -> error_flow: "error al abrir"
 next_provider -> error_flow: "error al avanzar"
+entry_resolver -> error_flow: "error al materializar"

@@ -21,10 +21,16 @@ El caso de uso recibe conceptualmente:
 
 UC-002 no vuelve a resolver si el scope es válido como directorio. Esa garantía proviene de UC-001.
 
-Frontera pública del engine:
+Frontera pública del engine para iniciar la iteración:
 
 ```text
 Iter(&FilesystemScope)
+```
+
+Frontera pública del engine para avanzar la iteración:
+
+```text
+Advance(&mut FilesystemIteration)
 ```
 
 El consumidor externo no proporciona `ReadDirectory`, `NextDirectoryEntry` ni providers internos.
@@ -97,7 +103,19 @@ Los use cases son contratos de entrada públicos del engine.
 
 Los contracts y providers son dependencias internas de salida del engine.
 
-Relación conceptual para iniciar la iteración:
+La iteración de filesystem expone conceptualmente dos capacidades públicas.
+
+### Inicio de iteración
+
+`Iter` inicia una iteración lazy a partir de un `FilesystemScope` válido.
+
+```text
+Iter(&FilesystemScope)
+    ↓
+FilesystemIteration
+```
+
+Relación interna:
 
 ```text
 evo-shell
@@ -117,9 +135,57 @@ providers::read_directory::provide
 std::fs::read_dir
 ```
 
-`ReadDirectory`, `NextDirectoryEntry` y los providers permanecen encapsulados dentro de Evo Shell Engine.
+### Avance de iteración
+
+`Advance` permite a un consumidor externo avanzar una `FilesystemIteration` existente y obtener como máximo un `FilesystemEntry` por llamada.
+
+```text
+Advance(&mut FilesystemIteration)
+    ↓
+FilesystemEntry / fin / error
+```
+
+Significado conceptual:
+
+- `Some(FilesystemEntry)`: siguiente elemento disponible;
+- `None`: fin de iteración;
+- `Err(IterError)`: error operativo.
+
+Relación interna:
+
+```text
+evo-shell
+    ↓
+Advance(&mut FilesystemIteration)
+    ↓
+evo-shell-engine
+    ↓
+iteration_advancer::advance
+    ↓
+filesystem_entry::resolve
+    ↓
+NextDirectoryEntry
+    ↓
+providers::next_directory_entry::provide
+    ↓
+ReadDir::next
+```
+
+`Advance` no representa un nuevo comportamiento funcional independiente del usuario. Es la capacidad técnica pública necesaria para consumir de forma lazy la iteración iniciada por `Iter`.
+
+`ReadDirectory`, `NextDirectoryEntry`, los providers, los resolvers, `ReadDir`, `DirEntry` y `std::fs` permanecen encapsulados dentro de Evo Shell Engine.
 
 La iteración conserva evaluación lazy y avanza elemento por elemento mediante `FilesystemIteration`.
+
+Cada llamada a `Advance` avanza exactamente un elemento.
+
+No se usa `Vec<FilesystemEntry>` ni `collect()`.
+
+No se acumulan entradas anteriores.
+
+La mutabilidad de `&mut FilesystemIteration` existe únicamente porque avanzar `ReadDir` modifica el cursor interno.
+
+No representa modificación del filesystem, modificación del `FilesystemScope`, estado global ni acumulación.
 
 ## Fuera de alcance
 

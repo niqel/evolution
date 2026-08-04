@@ -16,6 +16,11 @@ mutable_iteration: "&mut FilesystemIteration\n\nmutabilidad localizada\nsolo ava
   shape: rectangle
 }
 
+advance: "Advance\n\nuse case público\nno es entidad\navanza una iteración existente" {
+  shape: rectangle
+  style.fill: "#edf4ff"
+}
+
 dir_entry: "std::fs::DirEntry\n\nelemento de infraestructura" {
   shape: rectangle
 }
@@ -37,7 +42,8 @@ std_fs -> external_filesystem: "accede a recurso externo"
 std_fs -> read_dir: "crea ReadDir"
 read_dir -> filesystem_iteration: "estado poseído"
 filesystem_iteration -> mutable_iteration: "borrowed as"
-mutable_iteration -> dir_entry: "siguiente elemento / fin / error"
+mutable_iteration -> advance: "entrada pública"
+advance -> dir_entry: "siguiente elemento / fin / error"
 dir_entry -> filesystem_entry: "filesystem_entry::resolve"
 filesystem_entry -> filesystem_entry: "datos estructurados mínimos"
 
