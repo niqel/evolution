@@ -33,8 +33,8 @@ scope: "FilesystemScope" {
 }
 
 usuario -> evo_shell_engine: "1. scope fs \"<path>\""
-evo_shell_engine -> agent: "2. scope_setter::set(path)"
-agent -> resolver: "3. filesystem_scope::resolve(path)"
+evo_shell_engine -> agent: "2. SetFilesystemScope(&Path) / scope_setter::set(path)"
+agent -> resolver: "3. filesystem_scope::resolve(path, is_directory::provide)"
 resolver -> contract: "4. is_directory::provide(path)"
 contract -> provider: "5. is_directory::provide(path)"
 provider -> std_fs: "6. usa"

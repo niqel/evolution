@@ -3,15 +3,15 @@ direction: down
 definitions: "definitions" {
   style.fill: "#edf4ff"
 
-  use_case: "Use case\n\ndefinitions/use_cases/iter.rs\nfunction pointer del caso de uso" {
+  use_case: "Use case público\n\ndefinitions/use_cases/iter.rs\nIter(&FilesystemScope)" {
     shape: rectangle
   }
 
-  read_directory_contract: "Contract\n\ndefinitions/contracts/read_directory.rs\nfunction pointer/capacidad: provide" {
+  read_directory_contract: "Contract interno\n\ndefinitions/contracts/read_directory.rs\nfunction pointer/capacidad: provide" {
     shape: rectangle
   }
 
-  next_directory_entry_contract: "Contract\n\ndefinitions/contracts/next_directory_entry.rs\nfunction pointer/capacidad: provide" {
+  next_directory_entry_contract: "Contract interno\n\ndefinitions/contracts/next_directory_entry.rs\nfunction pointer/capacidad: provide" {
     shape: rectangle
   }
 
@@ -27,7 +27,7 @@ definitions: "definitions" {
 agents: "agents" {
   style.fill: "#eefaf1"
 
-  iterator: "Agent\n\nagents/iterator.rs\nfunción: iter" {
+  iterator: "Agent\n\nagents/iterator.rs\nfunción: iter(&FilesystemScope)" {
     shape: rectangle
   }
 }
@@ -47,11 +47,11 @@ resolvers: "resolvers" {
 providers: "providers" {
   style.fill: "#f7edff"
 
-  read_directory_provider: "Provider\n\nproviders/read_directory.rs\nfunción: provide" {
+  read_directory_provider: "Provider interno\n\nproviders/read_directory.rs\nfunción: provide" {
     shape: rectangle
   }
 
-  next_directory_entry_provider: "Provider\n\nproviders/next_directory_entry.rs\nfunción: provide" {
+  next_directory_entry_provider: "Provider interno\n\nproviders/next_directory_entry.rs\nfunción: provide" {
     shape: rectangle
   }
 }
@@ -78,7 +78,7 @@ scope: "FilesystemScope válido\nrecibido como &FilesystemScope\ninvariante esta
 
 definitions.use_case -> agents.iterator: "implementado por"
 scope -> agents.iterator: "entrada prestada"
-agents.iterator -> resolvers.filesystem_iteration: "coordina inicio"
+agents.iterator -> resolvers.filesystem_iteration: "coordina inicio usando provider interno"
 resolvers.filesystem_iteration -> definitions.read_directory_contract: "consume"
 definitions.read_directory_contract -> providers.read_directory_provider: "implementado por"
 providers.read_directory_provider -> infrastructure.read_dir: "usa"

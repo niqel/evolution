@@ -21,6 +21,14 @@ El caso de uso recibe conceptualmente:
 
 UC-002 no vuelve a resolver si el scope es válido como directorio. Esa garantía proviene de UC-001.
 
+Frontera pública del engine:
+
+```text
+Iter(&FilesystemScope)
+```
+
+El consumidor externo no proporciona `ReadDirectory`, `NextDirectoryEntry` ni providers internos.
+
 ## Precondiciones
 
 - Existe un `FilesystemScope` válido.
@@ -82,6 +90,36 @@ Ejemplo conceptual estructurado:
 ## Resultado no exitoso
 
 Evo Shell Engine informa que `iter` no pudo completarse.
+
+## Frontera pública e internas
+
+Los use cases son contratos de entrada públicos del engine.
+
+Los contracts y providers son dependencias internas de salida del engine.
+
+Relación conceptual para iniciar la iteración:
+
+```text
+evo-shell
+    ↓
+Iter(&FilesystemScope)
+    ↓
+evo-shell-engine
+    ↓
+iterator::iter
+    ↓
+filesystem_iteration::resolve
+    ↓
+ReadDirectory
+    ↓
+providers::read_directory::provide
+    ↓
+std::fs::read_dir
+```
+
+`ReadDirectory`, `NextDirectoryEntry` y los providers permanecen encapsulados dentro de Evo Shell Engine.
+
+La iteración conserva evaluación lazy y avanza elemento por elemento mediante `FilesystemIteration`.
 
 ## Fuera de alcance
 

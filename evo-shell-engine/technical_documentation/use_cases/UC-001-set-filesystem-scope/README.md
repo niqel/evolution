@@ -18,6 +18,14 @@ scope fs "<path>"
 
 `<path>` representa la ubicación solicitada por el usuario.
 
+Frontera pública del engine:
+
+```text
+SetFilesystemScope(&Path)
+```
+
+El consumidor externo no proporciona `IsDirectory` ni providers internos.
+
 ## Precondiciones
 
 - El usuario de Evo Shell solicita establecer un scope de sistema de archivos.
@@ -50,6 +58,34 @@ fs "/home/user/documents"
 ## Resultado no exitoso
 
 Evo Shell Engine informa que el scope solicitado no pudo establecerse.
+
+## Frontera pública e internas
+
+Los use cases son contratos de entrada públicos del engine.
+
+Los contracts y providers son dependencias internas de salida del engine.
+
+Relación conceptual:
+
+```text
+evo-shell
+    ↓
+SetFilesystemScope(&Path)
+    ↓
+evo-shell-engine
+    ↓
+scope_setter::set
+    ↓
+filesystem_scope::resolve
+    ↓
+IsDirectory
+    ↓
+providers::is_directory::provide
+    ↓
+std::fs
+```
+
+`IsDirectory` y `providers::is_directory::provide` permanecen encapsulados dentro de Evo Shell Engine.
 
 ## Fuera de alcance
 

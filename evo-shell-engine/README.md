@@ -10,6 +10,13 @@ Separación conceptual:
 - Evo Shell: futura interfaz interactiva y command language.
 - Evo Script: futuro lenguaje de scripting.
 
+Frontera pública:
+
+- los use cases son contratos de entrada públicos del engine;
+- los contracts son capacidades internas que el engine necesita de infraestructura;
+- los providers son implementaciones internas de esos contracts;
+- un consumidor externo no debe proporcionar contracts ni providers internos.
+
 El engine no depende conceptualmente de prompt, terminal, lexer, parser, AST, sintaxis de Evo Script ni UI.
 
 Documentación:

@@ -57,9 +57,9 @@ consumer: "consumidor" {
 }
 
 usuario -> evo_shell_engine: "1. iter"
-evo_shell_engine -> agent: "2. iterator::iter(&FilesystemScope)"
+evo_shell_engine -> agent: "2. Iter(&FilesystemScope) / iterator::iter(&FilesystemScope)"
 scope -> agent: "scope válido prestado"
-agent -> iteration_resolver: "3. filesystem_iteration::resolve"
+agent -> iteration_resolver: "3. filesystem_iteration::resolve(scope, read_directory::provide)"
 iteration_resolver -> read_directory_contract: "4. read_directory::provide"
 read_directory_contract -> read_directory_provider: "5. delega capacidad"
 read_directory_provider -> std_read_dir: "6. std::fs::read_dir"
