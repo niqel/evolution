@@ -20,7 +20,11 @@ filesystem_scope: "FilesystemScope\n\nproducido por Evo Shell Engine\nowned by E
   shape: rectangle
 }
 
-shell_state: "estado de Evo Shell\n\nfilesystem scope activo: opcional" {
+shell_state: "estado de Evo Shell\n\nfilesystem scope activo\nrequerido durante operación\nowned by Evo Shell" {
+  shape: rectangle
+}
+
+startup: "inicio de Evo Shell\n\ndirectorio actual\nSetFilesystemScope\nFilesystemScope inicial" {
   shape: rectangle
 }
 
@@ -32,8 +36,9 @@ borrowing_rule: "Regla\n\nborrow mientras el dato pueda depender de su fuente\no
 input -> token_stream: "borrowed input"
 token_stream -> token: "&mut TokenStream -> token::resolve -> Token"
 token -> command: "command::resolve"
+startup -> shell_state: "crea scope activo inicial"
 command -> filesystem_scope: "execution::resolve -> SetFilesystemScope"
-filesystem_scope -> shell_state: "ownership conservado entre comandos"
+filesystem_scope -> shell_state: "reemplaza scope activo en éxito"
 input -> borrowing_rule: "fuente"
 token -> borrowing_rule: "vista prestada"
 command -> borrowing_rule: "efímero"

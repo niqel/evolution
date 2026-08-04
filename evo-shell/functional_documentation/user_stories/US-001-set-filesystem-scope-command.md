@@ -36,9 +36,13 @@ El espacio separa el nombre de la instrucción de su argumento.
 
 La ruta entre comillas representa el argumento proporcionado al comando.
 
-Evo Shell interpreta la instrucción y solicita a Evo Shell Engine establecer el filesystem scope indicado.
+Evo Shell interpreta la instrucción y solicita a Evo Shell Engine resolver el filesystem scope indicado.
 
-Si Evo Shell Engine devuelve un `FilesystemScope` válido, Evo Shell conserva ese scope como el filesystem scope activo.
+Cuando Evo Shell está operativa, ya posee un filesystem scope inicial válido.
+
+`scope-fs` no crea el primer scope operativo.
+
+Si Evo Shell Engine devuelve un `FilesystemScope` válido, Evo Shell reemplaza el filesystem scope activo anterior por el nuevo scope.
 
 ## Criterios de aceptación
 
@@ -46,10 +50,11 @@ Si Evo Shell Engine devuelve un `FilesystemScope` válido, Evo Shell conserva es
 2. Evo Shell reconoce `scope-fs` como una única instrucción.
 3. La ruta proporcionada se interpreta como argumento de `scope-fs`.
 4. Evo Shell solicita a Evo Shell Engine establecer el filesystem scope indicado.
-5. Si Evo Shell Engine devuelve un `FilesystemScope` válido, Evo Shell lo conserva como filesystem scope activo.
+5. Si Evo Shell Engine devuelve un `FilesystemScope` válido, Evo Shell reemplaza el filesystem scope activo anterior.
 6. Si Evo Shell Engine rechaza la operación, Evo Shell informa que el scope no pudo establecerse.
-7. Si ya existe un filesystem scope válido y el nuevo scope no puede establecerse, el scope anterior permanece activo.
+7. Si el nuevo scope no puede establecerse, el scope anterior permanece activo.
 8. Una instrucción que no cumple la sintaxis requerida por `scope-fs` no debe ejecutarse como una solicitud válida al engine.
+9. Evo Shell nunca queda operativa sin scope por un fallo de `scope-fs`.
 
 ## Ejemplos
 
@@ -106,7 +111,29 @@ Evo Shell no duplica la implementación necesaria para resolver un filesystem sc
 
 ## Estado
 
-Esta historia introduce una necesidad funcional importante: Evo Shell debe conservar el `FilesystemScope` válido devuelto por Evo Shell Engine para que comandos posteriores puedan utilizarlo.
+Cuando Evo Shell está operativa, ya posee un filesystem scope inicial válido.
+
+El comando `scope-fs` reemplaza ese scope activo existente.
+
+Relación conceptual:
+
+```text
+inicio de Evo Shell
+    ↓
+directorio actual
+    ↓
+FilesystemScope inicial
+
+scope-fs "<path>"
+    ↓
+nuevo FilesystemScope válido
+    ↓
+reemplaza el anterior
+```
+
+Si el nuevo scope no puede resolverse, el scope anterior permanece activo.
+
+Evo Shell nunca queda operativa sin scope por un fallo de `scope-fs`.
 
 Esta historia no define todavía cómo se representa o almacena internamente ese estado.
 

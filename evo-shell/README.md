@@ -19,6 +19,40 @@ Separación conceptual:
 
 Evo Shell todavía no define implementaciones concretas de lexer, parser o AST.
 
+## Inicialización y scope inicial
+
+Evo Shell toma el directorio actual del proceso al iniciar.
+
+Esa ubicación se solicita a Evo Shell Engine mediante `SetFilesystemScope`.
+
+Evo Shell solo entra en estado operativo si obtiene un `FilesystemScope` válido.
+
+Durante la operación normal siempre existe un filesystem scope activo.
+
+`scope-fs` reemplaza ese scope únicamente cuando el nuevo scope puede resolverse correctamente.
+
+`iter` presta el scope activo, pero no lo modifica.
+
+La decisión usa el directorio actual desde el que se lanzó Evo Shell, no el directorio home del usuario.
+
+Ejemplo conceptual:
+
+```text
+~/repos/evolution> evo-shell
+```
+
+Scope inicial:
+
+```text
+~/repos/evolution
+```
+
+Esta documentación no fija una sintaxis específica de prompt.
+
+La obtención del directorio actual debe apoyarse en la abstracción multiplataforma de Rust `std`.
+
+Evo Shell no construye manualmente rutas Linux o Windows, no asume `/home/...`, no asume `C:\Users\...` y no utiliza variables de entorno como `HOME` o `USERPROFILE` para esta decisión.
+
 ## Gramática básica de comandos
 
 La primera regla establecida de la gramática de Evo Shell es que los nombres compuestos de instrucciones utilizan `-`.

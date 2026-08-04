@@ -63,7 +63,7 @@ domain: "domain/model" {
     shape: rectangle
   }
 
-  shell_state: "estado de Evo Shell\n\nfilesystem scope activo: opcional" {
+  shell_state: "estado de Evo Shell\n\nfilesystem scope activo\nrequerido durante operación\nowned by Evo Shell" {
     shape: rectangle
   }
 
@@ -113,8 +113,8 @@ resolvers.command -> domain.command_model: "resuelve Command::Iter"
 definitions.execute -> agents.executor: "implementado por"
 agents.executor -> resolvers.execution: "coordina"
 resolvers.execution -> domain.command_model: "consume"
-resolvers.execution -> domain.shell_state: "consulta scope activo"
-domain.shell_state -> domain.filesystem_scope: "posee opcionalmente"
+resolvers.execution -> domain.shell_state: "usa scope activo garantizado"
+domain.shell_state -> domain.filesystem_scope: "posee scope activo"
 resolvers.execution -> domain.filesystem_scope: "presta &FilesystemScope"
 resolvers.execution -> external.iter_use_case: "consume frontera pública"
 external.iter_use_case -> external.filesystem_iteration: "devuelve en éxito"

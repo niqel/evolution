@@ -26,7 +26,7 @@ Sintaxis:
 iter
 ```
 
-El comando requiere que Evo Shell tenga un `FilesystemScope` activo previamente establecido.
+Una Evo Shell operativa siempre posee un `FilesystemScope` válido.
 
 Ejemplo conceptual:
 
@@ -38,8 +38,8 @@ iter
 Evo Shell es responsable de:
 
 - reconocer `iter`;
-- comprobar que existe un filesystem scope activo;
 - consumir la capacidad `Iter` de Evo Shell Engine;
+- consumir la capacidad `Advance` de Evo Shell Engine;
 - consumir la iteración incrementalmente;
 - presentar cada elemento al usuario;
 - conservar intacto el filesystem scope activo.
@@ -55,22 +55,20 @@ Evo Shell Engine es responsable de:
 
 1. El usuario puede introducir `iter`.
 2. Evo Shell reconoce `iter` como una única instrucción sin argumentos.
-3. `iter` requiere un `FilesystemScope` activo.
-4. Si no existe un filesystem scope activo:
-   - Evo Shell informa el error;
-   - Evo Shell NO llama a `Iter` del engine.
-5. Si existe un filesystem scope activo:
-   - Evo Shell consume `Iter(&FilesystemScope)`.
-6. El filesystem scope se pasa mediante préstamo y no se modifica.
-7. Si el engine inicia correctamente la iteración:
+3. Una Evo Shell operativa siempre posee un `FilesystemScope` válido.
+4. `iter` recibe acceso al filesystem scope activo durante operación normal.
+5. Evo Shell consume `Iter(&FilesystemScope)`.
+6. Evo Shell consume `Advance(&mut FilesystemIteration)`.
+7. El filesystem scope se pasa mediante préstamo y no se modifica.
+8. Si el engine inicia correctamente la iteración:
    - Evo Shell consume los elementos de forma incremental/lazy.
-8. Evo Shell presenta cada `FilesystemEntry` conforme es consumido.
-9. Evo Shell no necesita acumular todos los elementos antes de presentarlos.
-10. El comando no es recursivo.
-11. Si ocurre un error durante la iteración:
+9. Evo Shell presenta cada `FilesystemEntry` conforme es consumido.
+10. Evo Shell no necesita acumular todos los elementos antes de presentarlos.
+11. El comando no es recursivo.
+12. Si ocurre un error operativo durante la iteración:
     - Evo Shell informa el error;
     - el filesystem scope activo permanece intacto.
-12. `iter` no modifica ni reemplaza el scope activo.
+13. `iter` no modifica ni reemplaza el scope activo.
 
 ## Ejemplos
 
@@ -95,29 +93,12 @@ El formato visual es conceptual.
 
 Esta historia no fija todavía el renderer definitivo.
 
-### Ejemplo sin scope
-
-Entrada:
-
-```text
-iter
-```
-
-Resultado conceptual:
-
-```text
-No hay un filesystem scope activo.
-```
-
-El mensaje mostrado es conceptual.
-
 ## Dependencia funcional
 
 Evo Shell es responsable de:
 
 - recibir la instrucción;
 - interpretar que `iter` no recibe argumentos;
-- comprobar que existe un filesystem scope activo;
 - prestar el filesystem scope activo al engine;
 - consumir incrementalmente los elementos producidos;
 - presentar el resultado al usuario.
@@ -130,26 +111,38 @@ Evo Shell Engine es responsable de:
 
 Evo Shell consume el use case de frontera `Iter` de Evo Shell Engine.
 
+Evo Shell consume también `Advance` de Evo Shell Engine para obtener como máximo un `FilesystemEntry` por llamada.
+
 Evo Shell no duplica la implementación de iteración del filesystem.
 
 ## Estado
 
 Esta historia consume el estado funcional introducido por US-001.
 
-Evo Shell debe conservar un `FilesystemScope` válido para que `iter` pueda ejecutarse.
+Una Evo Shell operativa siempre posee un `FilesystemScope` válido.
+
+No existe un error normal de “scope ausente” dentro de una shell operativa.
 
 Relación conceptual:
 
 ```text
+inicio de Evo Shell
+    ↓
+directorio actual
+    ↓
+FilesystemScope inicial
+
 scope-fs
     ↓
-FilesystemScope owned by Evo Shell
+reemplaza FilesystemScope activo en éxito
 
 iter
     ↓
 borrow &FilesystemScope
     ↓
 Iter
+    ↓
+Advance
 ```
 
 `iter` no toma ownership del filesystem scope activo.

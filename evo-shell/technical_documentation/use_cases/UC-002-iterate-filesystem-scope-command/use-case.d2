@@ -17,7 +17,7 @@ input: "Entrada\n\niter" {
   shape: rectangle
 }
 
-precondition: "Precondición funcional\n\nfilesystem scope activo" {
+precondition: "Precondición funcional\n\nEvo Shell operativa\nfilesystem scope activo garantizado" {
   shape: rectangle
   style.fill: "#edf4ff"
 }
@@ -29,11 +29,6 @@ use_case: "Caso de uso\n\nIterar filesystem scope activo mediante comando" {
 success: "Resultado exitoso\n\nelementos presentados" {
   shape: rectangle
   style.fill: "#eefaf1"
-}
-
-no_scope: "Alternativa\n\nno hay scope activo" {
-  shape: rectangle
-  style.fill: "#fff7e6"
 }
 
 iteration_error: "Alternativa\n\nerror de iteración" {
@@ -48,8 +43,6 @@ precondition -> use_case: "permite ejecutar"
 system -> use_case: "reconoce iter"
 use_case -> engine: "consume Iter(&FilesystemScope)"
 engine -> success: "FilesystemIteration / FilesystemEntry"
-use_case -> no_scope: "sin scope activo\nno llama engine"
 engine -> iteration_error: "error operativo"
 success -> usuario: "presenta"
-no_scope -> usuario: "presenta error conceptual"
 iteration_error -> usuario: "presenta error conceptual"

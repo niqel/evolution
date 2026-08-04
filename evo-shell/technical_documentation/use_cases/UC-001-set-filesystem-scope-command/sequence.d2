@@ -60,11 +60,16 @@ shell_state: "estado de Evo Shell" {
   shape: rectangle
 }
 
+current_scope: "scope activo actual\nrequerido durante operación" {
+  shape: rectangle
+}
+
 presentation: "resultado conceptual al usuario" {
   shape: rectangle
 }
 
 usuario -> evo_shell: "scope-fs \"<path>\""
+current_scope -> shell_state: "estado operativo"
 evo_shell -> tokenizer: "entrada textual"
 tokenizer -> token_resolver: "siguiente token"
 token_resolver -> word_token: "Word(\"scope-fs\")"
@@ -95,10 +100,10 @@ success -> shell_state: "reemplaza scope anterior"
 shell_state -> presentation: "presenta resultado"
 
 engine_result -> error: "error del engine"
-error -> shell_state: "scope anterior permanece"
+error -> shell_state: "scope activo actual permanece"
 error -> presentation: "presenta error conceptual"
 
-syntax_error: "Error sintáctico\nno llama al engine\nscope anterior permanece" {
+syntax_error: "Error sintáctico\nno llama al engine\nscope activo actual permanece" {
   shape: rectangle
   style.fill: "#fff7e6"
 }

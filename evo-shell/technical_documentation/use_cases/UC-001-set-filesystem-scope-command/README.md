@@ -8,7 +8,7 @@ Este caso de uso documenta cómo Evo Shell interpreta y ejecuta el comando:
 scope-fs "<path>"
 ```
 
-Evo Shell recibe texto, lo tokeniza incrementalmente, interpreta los tokens, resuelve el comando, ejecuta el comando consumiendo el use case de frontera `SetFilesystemScope` de Evo Shell Engine, recibe un `FilesystemScope` válido o un error, conserva el nuevo scope únicamente si la operación tuvo éxito y presenta un resultado conceptual al usuario.
+Evo Shell recibe texto, lo tokeniza incrementalmente, interpreta los tokens, resuelve el comando, ejecuta el comando consumiendo el use case de frontera `SetFilesystemScope` de Evo Shell Engine, recibe un `FilesystemScope` válido o un error, reemplaza el scope activo únicamente si la operación tuvo éxito y presenta un resultado conceptual al usuario.
 
 Evo Shell no duplica la lógica de filesystem de Evo Shell Engine.
 
@@ -34,6 +34,7 @@ Gramática establecida para este caso:
 
 - Evo Shell recibe una línea de entrada textual.
 - Evo Shell puede consumir el use case de frontera `SetFilesystemScope` de Evo Shell Engine.
+- Evo Shell está en estado operativo y ya posee un filesystem scope activo válido.
 
 No se requieren precondiciones técnicas adicionales.
 
@@ -51,7 +52,7 @@ No se requieren precondiciones técnicas adicionales.
 10. Evo Shell llama el use case de frontera `SetFilesystemScope` de Evo Shell Engine.
 11. Evo Shell Engine devuelve un `FilesystemScope` válido.
 12. Evo Shell conserva ownership del nuevo `FilesystemScope` como filesystem scope activo.
-13. Si existía un scope anterior, el nuevo `FilesystemScope` lo reemplaza.
+13. El nuevo `FilesystemScope` reemplaza el scope anterior.
 14. Evo Shell presenta un resultado conceptual al usuario.
 
 ## Error sintáctico
@@ -70,7 +71,7 @@ Flujo:
 2. La entrada no cumple la sintaxis requerida por `scope-fs`.
 3. Evo Shell no ejecuta una solicitud válida al engine.
 4. Evo Shell presenta un error conceptual al usuario.
-5. Si ya existía un filesystem scope válido, permanece activo.
+5. El filesystem scope activo actual permanece activo.
 
 ## Error del engine
 
@@ -82,7 +83,7 @@ Flujo:
 2. `execution::resolve` consume `SetFilesystemScope`.
 3. Evo Shell Engine devuelve un error.
 4. Evo Shell presenta un error conceptual al usuario.
-5. Si ya existía un filesystem scope válido, permanece activo.
+5. El filesystem scope activo actual permanece activo.
 
 ## Resultado exitoso
 
@@ -95,24 +96,36 @@ fs "/home/user/documents"
 
 ## Comportamiento del estado
 
-US-001 requiere que Evo Shell conserve el `FilesystemScope` válido devuelto por Evo Shell Engine porque comandos posteriores lo necesitarán.
+UC-001 reemplaza el filesystem scope activo previamente existente.
 
 Representación conceptual:
 
 ```text
 estado de Evo Shell
-    filesystem scope activo: opcional
+    filesystem scope activo: requerido durante operación
 ```
 
 Regla observable:
 
 ```text
+scope activo actual
+        ↓
+scope-fs "<path>"
+        ↓
+SetFilesystemScope
+        ↓
+nuevo FilesystemScope
+        ↓
+reemplaza scope anterior
+
 si SetFilesystemScope devuelve éxito:
     el nuevo FilesystemScope reemplaza al anterior
 
 si SetFilesystemScope devuelve error:
     el FilesystemScope anterior permanece intacto
 ```
+
+Una Evo Shell operativa nunca queda sin filesystem scope activo por un fallo de `scope-fs`.
 
 El engine no mantiene este estado interactivo.
 

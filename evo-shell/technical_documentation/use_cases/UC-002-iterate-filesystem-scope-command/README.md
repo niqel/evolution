@@ -8,7 +8,7 @@ Este caso de uso documenta cómo Evo Shell interpreta y ejecuta el comando:
 iter
 ```
 
-Evo Shell recibe texto, lo tokeniza incrementalmente, interpreta los tokens, resuelve `Command::Iter`, comprueba que existe un filesystem scope activo, consume el use case de frontera `Iter` de Evo Shell Engine, obtiene una `FilesystemIteration`, consume elementos de forma incremental mediante `Advance` y presenta cada resultado al usuario.
+Evo Shell recibe texto, lo tokeniza incrementalmente, interpreta los tokens, resuelve `Command::Iter`, presta el filesystem scope activo garantizado durante operación, consume el use case de frontera `Iter` de Evo Shell Engine, obtiene una `FilesystemIteration`, consume elementos de forma incremental mediante `Advance` y presenta cada resultado al usuario.
 
 Evo Shell no duplica la lógica de iteración del filesystem de Evo Shell Engine.
 
@@ -34,7 +34,7 @@ Gramática establecida para este caso:
 
 - Evo Shell recibe una línea de entrada textual.
 - Evo Shell puede consumir el use case de frontera `Iter` de Evo Shell Engine.
-- Existe un filesystem scope activo para ejecutar exitosamente el comando.
+- Evo Shell está en estado operativo y posee un filesystem scope activo válido.
 
 ## Flujo principal
 
@@ -45,8 +45,8 @@ Gramática establecida para este caso:
 5. `parser::parse` coordina la interpretación de los tokens.
 6. `command::resolve` resuelve los tokens como `Command::Iter`.
 7. `executor::execute` coordina la ejecución del comando resuelto.
-8. `execution::resolve` consulta el filesystem scope activo de Evo Shell.
-9. Si existe un filesystem scope activo, Evo Shell lo presta como `&FilesystemScope`.
+8. `execution::resolve` utiliza el filesystem scope activo garantizado de Evo Shell.
+9. Evo Shell presta el scope activo como `&FilesystemScope`.
 10. Evo Shell consume el use case de frontera `Iter(&FilesystemScope)` de Evo Shell Engine.
 11. Evo Shell Engine devuelve una `FilesystemIteration`.
 12. Evo Shell conserva temporalmente ownership de la `FilesystemIteration`.
@@ -78,32 +78,14 @@ Flujo:
 4. Evo Shell presenta un error conceptual al usuario.
 5. Si ya existía un filesystem scope válido, permanece activo.
 
-## Error por ausencia de scope
-
-Este error pertenece a Evo Shell.
-
-Flujo:
-
-1. Evo Shell interpreta correctamente `iter`.
-2. `execution::resolve` consulta el filesystem scope activo.
-3. Evo Shell determina que no existe un filesystem scope activo.
-4. Evo Shell no llama a `Iter` del engine.
-5. Evo Shell presenta un error conceptual al usuario.
-
-Resultado conceptual:
-
-```text
-No hay un filesystem scope activo.
-```
-
 ## Error del engine
 
-Un error operativo del engine ocurre cuando existe un filesystem scope activo, pero Evo Shell Engine no puede iniciar o consumir la iteración.
+Un error operativo del engine ocurre cuando Evo Shell Engine no puede iniciar o consumir la iteración.
 
 Flujo:
 
 1. Evo Shell interpreta correctamente `iter`.
-2. Existe un filesystem scope activo.
+2. Evo Shell presta el filesystem scope activo garantizado.
 3. `execution::resolve` consume `Iter(&FilesystemScope)`.
 4. Evo Shell Engine devuelve un error operativo al iniciar la iteración o al avanzar mediante `Advance`.
 5. Evo Shell presenta un error conceptual al usuario.
@@ -143,7 +125,7 @@ No se documenta `Vec<FilesystemEntry>` ni `collect()` como estrategia de ejecuci
 
 ## Ownership y borrowing
 
-US-002 consume estado producido por UC-001.
+US-002 consume el filesystem scope activo garantizado durante la operación normal de Evo Shell.
 
 Relación conceptual:
 
@@ -151,7 +133,7 @@ Relación conceptual:
 UC-001:
 scope-fs
     ↓
-FilesystemScope owned by Evo Shell
+reemplaza FilesystemScope activo en éxito
 
 UC-002:
 iter
@@ -174,6 +156,8 @@ El ownership del filesystem scope permanece en Evo Shell.
 `FilesystemIteration` se posee temporalmente durante la ejecución del comando.
 
 Cada `FilesystemEntry` se produce individualmente y puede presentarse sin conservar entradas anteriores.
+
+No existe un flujo normal de `iter` sin filesystem scope activo dentro de una Evo Shell operativa.
 
 ## Presentación
 

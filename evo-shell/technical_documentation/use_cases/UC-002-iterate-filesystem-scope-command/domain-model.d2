@@ -16,7 +16,7 @@ command: "Command\n\nScopeFs(&str)\nIter" {
   shape: rectangle
 }
 
-shell_state: "estado de Evo Shell\n\nfilesystem scope activo: opcional" {
+shell_state: "estado de Evo Shell\n\nfilesystem scope activo\nrequerido durante operación\nowned by Evo Shell" {
   shape: rectangle
 }
 
@@ -36,6 +36,10 @@ advance: "Advance\n\nuse case externo del engine\nno es entidad de Evo Shell" {
   shape: rectangle
 }
 
+startup: "inicio de Evo Shell\n\ndirectorio actual\nSetFilesystemScope\nFilesystemScope inicial" {
+  shape: rectangle
+}
+
 filesystem_entry: "FilesystemEntry\n\nvalor producido individualmente\nname\npath\nkind" {
   shape: rectangle
 }
@@ -47,8 +51,9 @@ presentation: "presentación\n\nno cambia el dominio del engine" {
 input -> token_stream: "borrowed input"
 token_stream -> token: "&mut TokenStream -> token::resolve"
 token -> command: "command::resolve"
-command -> shell_state: "Command::Iter consulta scope activo"
-shell_state -> filesystem_scope: "owns optional scope"
+startup -> shell_state: "crea scope activo inicial"
+command -> shell_state: "Command::Iter usa scope activo garantizado"
+shell_state -> filesystem_scope: "owns active scope"
 filesystem_scope -> filesystem_iteration: "&FilesystemScope -> Iter"
 filesystem_iteration -> mutable_iteration: "borrowed as"
 mutable_iteration -> advance: "entrada pública del engine"

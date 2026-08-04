@@ -38,6 +38,34 @@ se documentarán únicamente cuando sean necesarios para implementar una histori
 
 Las decisiones técnicas deben mantener separada la sintaxis y la interacción propias de Evo Shell de las capacidades operativas proporcionadas por Evo Shell Engine.
 
+## Inicialización de Evo Shell
+
+Evo Shell toma el directorio actual del proceso al iniciar y lo usa como filesystem scope inicial.
+
+Flujo conceptual:
+
+```text
+std::env::current_dir()
+        ↓
+PathBuf
+        ↓
+SetFilesystemScope(&Path)
+        ↓
+FilesystemScope
+        ↓
+estado operativo de Evo Shell
+```
+
+Si falla obtener el directorio actual o resolverlo como `FilesystemScope`, Evo Shell no entra en estado operativo.
+
+Una Evo Shell operativa siempre posee un `FilesystemScope` válido.
+
+Esta decisión no define todavía mensaje final de error, proceso/binario, `main.rs`, exit codes, shell loop, renderer, estructura de estado ni ownership Rust exacto.
+
+Evo Shell debe apoyarse en la abstracción multiplataforma de Rust `std` para obtener el directorio actual y representar rutas con `Path`/`PathBuf`.
+
+No se asumen rutas Linux como `/home/...`, rutas Windows como `C:\Users\...`, ni variables de entorno como `HOME` o `USERPROFILE`.
+
 Casos de uso técnicos:
 
 * [UC-001 — Establecer un filesystem scope mediante un comando](use_cases/UC-001-set-filesystem-scope-command/)
