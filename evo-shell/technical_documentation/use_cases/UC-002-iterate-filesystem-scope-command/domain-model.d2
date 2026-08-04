@@ -1,0 +1,46 @@
+direction: right
+
+input: "entrada textual\n\nborrowed" {
+  shape: rectangle
+}
+
+token_stream: "TokenStream\n\ninput borrowed\ncurrent position\nmutable only to advance cursor" {
+  shape: rectangle
+}
+
+token: "Token\n\nborrowed view when possible\nToken::Word(\"iter\")" {
+  shape: rectangle
+}
+
+command: "Command\n\nScopeFs(&str)\nIter" {
+  shape: rectangle
+}
+
+shell_state: "estado de Evo Shell\n\nfilesystem scope activo: opcional" {
+  shape: rectangle
+}
+
+filesystem_scope: "FilesystemScope\n\nowned by Evo Shell\nborrowed by iter\nnot modified" {
+  shape: rectangle
+}
+
+filesystem_iteration: "FilesystemIteration\n\nowned temporalmente durante ejecución\nlazy state" {
+  shape: rectangle
+}
+
+filesystem_entry: "FilesystemEntry\n\nvalor producido individualmente\nname\npath\nkind" {
+  shape: rectangle
+}
+
+presentation: "presentación\n\nno cambia el dominio del engine" {
+  shape: rectangle
+}
+
+input -> token_stream: "borrowed input"
+token_stream -> token: "&mut TokenStream -> token::resolve"
+token -> command: "command::resolve"
+command -> shell_state: "Command::Iter consulta scope activo"
+shell_state -> filesystem_scope: "owns optional scope"
+filesystem_scope -> filesystem_iteration: "&FilesystemScope -> Iter"
+filesystem_iteration -> filesystem_entry: "lazy next element"
+filesystem_entry -> presentation: "presentar y descartar si no se necesita"

@@ -1,0 +1,120 @@
+direction: down
+
+definitions: "definitions" {
+  style.fill: "#edf4ff"
+
+  tokenize: "Use case\n\ndefinitions/use_cases/tokenize.rs\nfunction pointer interno existente" {
+    shape: rectangle
+  }
+
+  parse: "Use case\n\ndefinitions/use_cases/parse.rs\nfunction pointer interno existente" {
+    shape: rectangle
+  }
+
+  execute: "Use case\n\ndefinitions/use_cases/execute.rs\nfunction pointer interno existente" {
+    shape: rectangle
+  }
+}
+
+agents: "agents existentes" {
+  style.fill: "#eefaf1"
+
+  tokenizer: "Agent\n\nagents/tokenizer.rs\ntokenizer::tokenize" {
+    shape: rectangle
+  }
+
+  parser: "Agent\n\nagents/parser.rs\nparser::parse" {
+    shape: rectangle
+  }
+
+  executor: "Agent\n\nagents/executor.rs\nexecutor::execute" {
+    shape: rectangle
+  }
+}
+
+resolvers: "resolvers existentes" {
+  style.fill: "#fff7e6"
+
+  token: "Resolver\n\nresolvers/token.rs\ntoken::resolve\n\nresuelve Token::Word(\"iter\")" {
+    shape: rectangle
+  }
+
+  command: "Resolver\n\nresolvers/command.rs\ncommand::resolve\n\nresuelve Command::Iter" {
+    shape: rectangle
+  }
+
+  execution: "Resolver\n\nresolvers/execution.rs\nexecution::resolve\n\nconsulta scope activo\ndispatch por Command::Iter" {
+    shape: rectangle
+  }
+}
+
+domain: "domain/model" {
+  style.fill: "#f7edff"
+
+  token_stream: "TokenStream\n\nentrada prestada\nposición actual\nmutabilidad solo al avanzar" {
+    shape: rectangle
+  }
+
+  token_model: "Token\n\nToken::Word(\"iter\")\nvista prestada cuando sea viable" {
+    shape: rectangle
+  }
+
+  command_model: "Command\n\nCommand::ScopeFs(&str)\nCommand::Iter" {
+    shape: rectangle
+  }
+
+  shell_state: "estado de Evo Shell\n\nfilesystem scope activo: opcional" {
+    shape: rectangle
+  }
+
+  filesystem_scope: "FilesystemScope\n\nowned by Evo Shell\nborrowed by iter" {
+    shape: rectangle
+  }
+}
+
+external: "external dependency / evo-shell-engine" {
+  style.fill: "#f2f2f2"
+
+  iter_use_case: "Iter\n\nuse case público\nIter(&FilesystemScope)" {
+    shape: rectangle
+  }
+
+  filesystem_iteration: "FilesystemIteration\n\nestado lazy de iteración" {
+    shape: rectangle
+  }
+
+  public_next: "public iteration-next capability required\n\ncapacidad pública mínima pendiente" {
+    shape: rectangle
+    style.fill: "#fff0f0"
+  }
+
+  filesystem_entry: "FilesystemEntry\n\nname\npath\nkind" {
+    shape: rectangle
+  }
+}
+
+presentation: "presentación\n\ncada entry se muestra al consumirse" {
+  shape: rectangle
+}
+
+definitions.tokenize -> agents.tokenizer: "implementado por"
+agents.tokenizer -> resolvers.token: "coordina"
+resolvers.token -> domain.token_stream: "usa cursor incremental"
+resolvers.token -> domain.token_model: "produce un token"
+
+definitions.parse -> agents.parser: "implementado por"
+agents.parser -> resolvers.command: "coordina"
+resolvers.command -> domain.token_model: "consume tokens incrementalmente"
+resolvers.command -> domain.command_model: "resuelve Command::Iter"
+
+definitions.execute -> agents.executor: "implementado por"
+agents.executor -> resolvers.execution: "coordina"
+resolvers.execution -> domain.command_model: "consume"
+resolvers.execution -> domain.shell_state: "consulta scope activo"
+domain.shell_state -> domain.filesystem_scope: "posee opcionalmente"
+resolvers.execution -> domain.filesystem_scope: "presta &FilesystemScope"
+resolvers.execution -> external.iter_use_case: "consume frontera pública"
+external.iter_use_case -> external.filesystem_iteration: "devuelve en éxito"
+external.filesystem_iteration -> external.public_next: "requiere capacidad pública para avanzar"
+external.public_next -> external.filesystem_entry: "produce un elemento o fin/error"
+external.filesystem_entry -> presentation: "presentar sin acumular"

@@ -1,0 +1,115 @@
+direction: down
+
+usuario: "Usuario" {
+  shape: person
+}
+
+evo_shell: "Evo Shell recibe texto" {
+  shape: rectangle
+}
+
+tokenizer: "tokenizer::tokenize" {
+  shape: rectangle
+}
+
+token_resolver: "token::resolve" {
+  shape: rectangle
+}
+
+word_token: "Token::Word(\"iter\")" {
+  shape: rectangle
+}
+
+parser: "parser::parse" {
+  shape: rectangle
+}
+
+command_resolver: "command::resolve" {
+  shape: rectangle
+}
+
+command: "Command::Iter" {
+  shape: rectangle
+}
+
+executor: "executor::execute" {
+  shape: rectangle
+}
+
+execution_resolver: "execution::resolve" {
+  shape: rectangle
+}
+
+shell_state: "estado de Evo Shell\nfilesystem scope activo: opcional" {
+  shape: rectangle
+}
+
+no_scope: "Error de estado\n\nno hay filesystem scope activo\nno llama engine" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+borrow_scope: "borrow &FilesystemScope" {
+  shape: rectangle
+}
+
+iter_use_case: "Iter(&FilesystemScope)" {
+  shape: rectangle
+}
+
+engine: "Evo Shell Engine" {
+  shape: rectangle
+  style.fill: "#f2f2f2"
+}
+
+iteration: "FilesystemIteration" {
+  shape: rectangle
+}
+
+next_required: "public iteration-next capability required" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+entry: "FilesystemEntry" {
+  shape: rectangle
+}
+
+presentation: "presentar entry" {
+  shape: rectangle
+}
+
+end: "fin de iteración" {
+  shape: rectangle
+}
+
+operational_error: "Error operativo\n\nscope permanece intacto" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+usuario -> evo_shell: "iter"
+evo_shell -> tokenizer: "entrada textual"
+tokenizer -> token_resolver: "siguiente token"
+token_resolver -> word_token: "Word(\"iter\")"
+word_token -> parser: "token incremental"
+parser -> command_resolver: "interpretar tokens"
+command_resolver -> command: "Command::Iter"
+command -> executor: "comando resuelto"
+executor -> execution_resolver: "coordina ejecución"
+execution_resolver -> shell_state: "consulta filesystem scope activo"
+
+shell_state -> no_scope: "no existe"
+no_scope -> presentation: "presenta error conceptual"
+
+shell_state -> borrow_scope: "existe"
+borrow_scope -> iter_use_case: "presta scope"
+iter_use_case -> engine: "consume frontera pública"
+engine -> iteration: "FilesystemIteration / error"
+iteration -> next_required: "consumo lazy elemento por elemento"
+next_required -> entry: "siguiente entry"
+entry -> presentation: "presenta"
+presentation -> next_required: "repetir"
+next_required -> end: "sin más entries"
+engine -> operational_error: "error al iniciar o consumir"
+operational_error -> presentation: "presenta error conceptual"
