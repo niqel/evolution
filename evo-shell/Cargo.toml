@@ -1,0 +1,7 @@
+[package]
+name = "evo-shell"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+evo-shell-engine = { path = "../evo-shell-engine" }

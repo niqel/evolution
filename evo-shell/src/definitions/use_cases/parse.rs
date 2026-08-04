@@ -1,0 +1,19 @@
+use crate::definitions::domain::entities::command::Command;
+use crate::definitions::domain::entities::token::Token;
+use crate::definitions::domain::entities::token_stream::TokenStream;
+use crate::definitions::use_cases::tokenize::{Tokenize, TokenizeError};
+
+pub type Parse = for<'a> fn(
+    stream: &mut TokenStream<'a>,
+    tokenize: Tokenize,
+) -> Result<Command<'a>, ParseError<'a>>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParseError<'a> {
+    Tokenize(TokenizeError),
+    ExpectedCommand,
+    ExpectedPath,
+    UnexpectedToken,
+    UnknownCommand(&'a str),
+    InvalidCommandToken(Token<'a>),
+}
