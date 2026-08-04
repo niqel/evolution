@@ -1,0 +1,79 @@
+direction: down
+
+definitions: "definitions" {
+  style.fill: "#edf4ff"
+
+  enter_use_case: "Use case público\n\ndefinitions/use_cases/enter.rs\nEnter(&FilesystemScope, &Path)" {
+    shape: rectangle
+  }
+
+  set_scope_use_case: "Use case público existente\n\ndefinitions/use_cases/set_filesystem_scope.rs\nSetFilesystemScope(&Path)" {
+    shape: rectangle
+  }
+
+  filesystem_scope_entity: "Domain entity\n\ndefinitions/domain/entities/filesystem_scope.rs\nFilesystemScope" {
+    shape: rectangle
+  }
+}
+
+agents: "agents" {
+  style.fill: "#eefaf1"
+
+  enterer: "Agent\n\nagents/enterer.rs\nenterer::enter" {
+    shape: rectangle
+  }
+
+  scope_setter: "Agent existente\n\nagents/scope_setter.rs\nscope_setter::set" {
+    shape: rectangle
+  }
+}
+
+resolvers: "resolvers" {
+  style.fill: "#fff7e6"
+
+  filesystem_path: "Resolver\n\nresolvers/filesystem_path.rs\nfilesystem_path::resolve\n\nresuelve candidate path" {
+    shape: rectangle
+  }
+}
+
+existing_scope_flow: "Arquitectura existente de UC-001\n\nfilesystem_scope::resolve\nIsDirectory\nproviders::is_directory::provide\nstd::fs" {
+  shape: rectangle
+  style.fill: "#f2f2f2"
+}
+
+current_scope: "current FilesystemScope\n\nrecibido como &FilesystemScope\nno se modifica" {
+  shape: rectangle
+}
+
+relative_location: "relative location\n\nrecibida como &Path cuando sea viable" {
+  shape: rectangle
+}
+
+candidate_path: "candidate Path / PathBuf\n\nvalor temporal producido por filesystem_path::resolve" {
+  shape: rectangle
+}
+
+consumer: "consumidor externo" {
+  shape: rectangle
+}
+
+consumer -> definitions.enter_use_case: "frontera pública"
+definitions.enter_use_case -> agents.enterer: "implementado por"
+current_scope -> agents.enterer: "entrada prestada"
+relative_location -> agents.enterer: "entrada prestada"
+agents.enterer -> resolvers.filesystem_path: "coordina"
+resolvers.filesystem_path -> current_scope: "usa path()"
+resolvers.filesystem_path -> relative_location: "combina como ubicación relativa"
+resolvers.filesystem_path -> candidate_path: "produce"
+agents.enterer -> agents.scope_setter: "reutiliza con candidate path"
+agents.scope_setter -> definitions.set_scope_use_case: "implementa frontera existente"
+agents.scope_setter -> existing_scope_flow: "reutiliza validación de filesystem"
+existing_scope_flow -> definitions.filesystem_scope_entity: "crea/devuelve nuevo FilesystemScope"
+definitions.filesystem_scope_entity -> consumer: "new FilesystemScope / error"
+
+note: "No se duplican contracts/providers de filesystem.\nEnter no conoce std::fs." {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+agents.enterer -> note

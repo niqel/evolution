@@ -1,0 +1,68 @@
+direction: down
+
+consumer: "Consumer" {
+  shape: rectangle
+}
+
+current_scope: "&FilesystemScope actual" {
+  shape: rectangle
+}
+
+location: "relative location" {
+  shape: rectangle
+}
+
+enter_use_case: "Enter(&FilesystemScope, relative location)" {
+  shape: rectangle
+}
+
+enterer_agent: "enterer::enter" {
+  shape: rectangle
+}
+
+path_resolver: "filesystem_path::resolve" {
+  shape: rectangle
+}
+
+candidate_path: "candidate PathBuf" {
+  shape: rectangle
+}
+
+scope_setter_agent: "scope_setter::set" {
+  shape: rectangle
+}
+
+existing_scope_flow: "existing filesystem scope flow\nfilesystem_scope::resolve\nIsDirectory\nprovider\nstd::fs" {
+  shape: rectangle
+}
+
+new_scope: "new FilesystemScope" {
+  shape: rectangle
+}
+
+error: "error" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+unchanged: "original FilesystemScope remains unchanged" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+consumer -> enter_use_case: "1. Enter"
+current_scope -> enter_use_case: "scope prestado"
+location -> enter_use_case: "ubicación relativa"
+enter_use_case -> enterer_agent: "2. use case público"
+enterer_agent -> path_resolver: "3. filesystem_path::resolve(scope, location)"
+path_resolver -> candidate_path: "4. candidate PathBuf"
+candidate_path -> enterer_agent: "5. devuelve candidate path"
+enterer_agent -> scope_setter_agent: "6. scope_setter::set(candidate)"
+scope_setter_agent -> existing_scope_flow: "7. reutiliza UC-001"
+existing_scope_flow -> new_scope: "8. FilesystemScope válido"
+new_scope -> consumer: "9. devuelve nuevo scope"
+
+path_resolver -> error: "ubicación no resoluble"
+existing_scope_flow -> error: "candidate path no utilizable"
+error -> consumer: "devuelve error"
+error -> unchanged: "scope original no se modifica"

@@ -1,0 +1,45 @@
+direction: right
+
+current_scope: "FilesystemScope current\n\nborrowed\nnot modified" {
+  shape: rectangle
+}
+
+relative_location: "RelativeLocation / Path\n\nborrowed when viable" {
+  shape: rectangle
+}
+
+filesystem_path_resolver: "filesystem_path::resolve\n\nresolver\nnot an entity" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+candidate_path: "CandidateFilesystemPath\n\ntemporary owned path value\nconceptually PathBuf" {
+  shape: rectangle
+}
+
+enter_use_case: "Enter\n\nuse case público\nnot an entity" {
+  shape: rectangle
+  style.fill: "#edf4ff"
+}
+
+new_scope: "FilesystemScope new\n\nowned result" {
+  shape: rectangle
+}
+
+consumer: "consumer\n\ndecides whether to replace old scope" {
+  shape: rectangle
+}
+
+error: "error\n\ncurrent scope remains unchanged" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+current_scope -> filesystem_path_resolver: "path()"
+relative_location -> filesystem_path_resolver: "relative location"
+filesystem_path_resolver -> candidate_path: "produces"
+candidate_path -> enter_use_case: "input to scope_setter::set"
+enter_use_case -> new_scope: "success"
+enter_use_case -> error: "failure"
+new_scope -> consumer: "owned by caller after success"
+current_scope -> consumer: "still owned outside Enter"

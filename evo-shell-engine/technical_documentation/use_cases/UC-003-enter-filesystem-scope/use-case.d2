@@ -1,0 +1,37 @@
+direction: down
+
+consumer: "Actor / consumer\n\nevo-shell / evo-script / otro componente" {
+  shape: rectangle
+}
+
+engine: "Evo Shell Engine" {
+  shape: rectangle
+}
+
+enter: "Caso de uso\n\nEnter(current scope, relative location)" {
+  shape: rectangle
+}
+
+current_scope: "FilesystemScope actual" {
+  shape: rectangle
+}
+
+location: "relative location" {
+  shape: rectangle
+}
+
+result: "new FilesystemScope / error" {
+  shape: rectangle
+}
+
+unchanged: "En error:\nFilesystemScope actual sin modificación" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+consumer -> enter: "solicita"
+current_scope -> enter: "entrada"
+location -> enter: "entrada"
+enter -> engine: "frontera pública"
+engine -> result: "devuelve"
+engine -> unchanged: "si falla"
