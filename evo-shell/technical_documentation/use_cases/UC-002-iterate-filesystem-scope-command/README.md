@@ -34,7 +34,8 @@ Gramática establecida para este caso:
 
 - Evo Shell recibe una línea de entrada textual.
 - Evo Shell puede consumir el use case de frontera `Iter` de Evo Shell Engine.
-- Evo Shell está en estado operativo y posee un filesystem scope activo válido.
+- Existe una instancia operativa de `Shell`.
+- `Shell` posee un filesystem scope activo válido.
 
 ## Flujo principal
 
@@ -45,8 +46,8 @@ Gramática establecida para este caso:
 5. `parser::parse` coordina la interpretación de los tokens.
 6. `command::resolve` resuelve los tokens como `Command::Iter`.
 7. `executor::execute` coordina la ejecución del comando resuelto.
-8. `execution::resolve` utiliza el filesystem scope activo garantizado de Evo Shell.
-9. Evo Shell presta el scope activo como `&FilesystemScope`.
+8. `execution::resolve` utiliza `Shell`.
+9. Evo Shell presta el `FilesystemScope` owned by `Shell` como `&FilesystemScope`.
 10. Evo Shell consume el use case de frontera `Iter(&FilesystemScope)` de Evo Shell Engine.
 11. Evo Shell Engine devuelve una `FilesystemIteration`.
 12. Evo Shell conserva temporalmente ownership de la `FilesystemIteration`.
@@ -76,7 +77,7 @@ Flujo:
 2. La entrada no cumple la sintaxis requerida por `iter`.
 3. Evo Shell no llama a `Iter` del engine.
 4. Evo Shell presenta un error conceptual al usuario.
-5. Si ya existía un filesystem scope válido, permanece activo.
+5. El `FilesystemScope` owned by `Shell` permanece intacto.
 
 ## Error del engine
 
@@ -85,7 +86,7 @@ Un error operativo del engine ocurre cuando Evo Shell Engine no puede iniciar o 
 Flujo:
 
 1. Evo Shell interpreta correctamente `iter`.
-2. Evo Shell presta el filesystem scope activo garantizado.
+2. Evo Shell presta el `FilesystemScope` owned by `Shell`.
 3. `execution::resolve` consume `Iter(&FilesystemScope)`.
 4. Evo Shell Engine devuelve un error operativo al iniciar la iteración o al avanzar mediante `Advance`.
 5. Evo Shell presenta un error conceptual al usuario.
@@ -125,7 +126,7 @@ No se documenta `Vec<FilesystemEntry>` ni `collect()` como estrategia de ejecuci
 
 ## Ownership y borrowing
 
-US-002 consume el filesystem scope activo garantizado durante la operación normal de Evo Shell.
+US-002 consume el filesystem scope activo owned by `Shell`.
 
 Relación conceptual:
 
@@ -133,10 +134,12 @@ Relación conceptual:
 UC-001:
 scope-fs
     ↓
-reemplaza FilesystemScope activo en éxito
+Shell reemplaza FilesystemScope activo en éxito
 
 UC-002:
 iter
+    ↓
+&Shell
     ↓
 borrow &FilesystemScope
     ↓
@@ -147,17 +150,28 @@ FilesystemIteration
 Advance(&mut FilesystemIteration)
 ```
 
-El ownership del filesystem scope permanece en Evo Shell.
+El ownership del filesystem scope permanece en `Shell`.
 
 `iter` solo presta el scope al engine.
 
 `iter` no modifica ni reemplaza el filesystem scope activo.
 
-`FilesystemIteration` se posee temporalmente durante la ejecución del comando.
+`FilesystemIteration` se posee temporalmente durante la ejecución del comando y no se convierte en propiedad permanente de `Shell`.
 
 Cada `FilesystemEntry` se produce individualmente y puede presentarse sin conservar entradas anteriores.
 
 No existe un flujo normal de `iter` sin filesystem scope activo dentro de una Evo Shell operativa.
+
+Consecuencia conceptual:
+
+```text
+execute(
+    shell,
+    command
+)
+```
+
+`iter` solo necesita prestar el `FilesystemScope`.
 
 ## Presentación
 

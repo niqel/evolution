@@ -42,23 +42,108 @@ Las decisiones técnicas deben mantener separada la sintaxis y la interacción p
 
 Evo Shell toma el directorio actual del proceso al iniciar y lo usa como filesystem scope inicial.
 
-Flujo conceptual:
+La inicialización construye una instancia operativa de `Shell`.
+
+Una instancia operativa de Evo Shell siempre posee un `FilesystemScope` válido.
+
+Relación conceptual:
 
 ```text
+Shell
+└── owns FilesystemScope
+```
+
+`Shell` representa una instancia operativa de Evo Shell.
+
+La vida del `FilesystemScope` está ligada a la vida de la instancia de `Shell`.
+
+No se utiliza `Option<FilesystemScope>` como estado operativo normal.
+
+### Flujo
+
+```text
+InitializeShell
+        ↓
+shell_initializer::initialize
+        ↓
+shell::resolve
+        ↓
+CurrentDirectory
+        ↓
+current_directory::provide
+        ↓
 std::env::current_dir()
         ↓
 PathBuf
         ↓
 SetFilesystemScope(&Path)
         ↓
+evo-shell-engine
+        ↓
 FilesystemScope
         ↓
-estado operativo de Evo Shell
+Shell
 ```
 
-Si falla obtener el directorio actual o resolverlo como `FilesystemScope`, Evo Shell no entra en estado operativo.
+### Responsabilidades
 
-Una Evo Shell operativa siempre posee un `FilesystemScope` válido.
+`InitializeShell` es el use case de Evo Shell para construir una instancia operativa.
+
+`shell_initializer::initialize` es el agent que coordina el flujo de inicialización.
+
+`shell::resolve` es el resolver que materializa una `Shell` a partir de las capacidades necesarias.
+
+`CurrentDirectory` es un contract interno de Evo Shell y debe definirse mediante function pointer.
+
+`current_directory::provide` es el provider interno que usa `std::env::current_dir()`.
+
+Flujo del resolver:
+
+```text
+CurrentDirectory
+        ↓
+PathBuf
+        ↓
+SetFilesystemScope
+        ↓
+FilesystemScope
+        ↓
+Shell
+```
+
+Evo Shell obtiene `PathBuf` mediante infraestructura propia y consume directamente `SetFilesystemScope(&Path)` de Evo Shell Engine.
+
+Evo Shell Engine resuelve:
+
+```text
+Path
+    ↓
+FilesystemScope
+```
+
+Evo Shell no duplica validación de directorio, providers de filesystem, resolvers de filesystem ni `std::fs` interno del engine.
+
+### Entidad Shell
+
+`Shell`:
+
+* owns `FilesystemScope`;
+* representa una instancia operativa de Evo Shell;
+* vive mientras la shell está operativa;
+* mantiene vivo su `FilesystemScope` mientras vive la `Shell`.
+
+Puede existir conceptualmente un constructor interno mínimo `Shell::new(FilesystemScope)`, pero no representa la API principal de inicialización, no obtiene infraestructura, no valida filesystem y solo materializa una entidad ya válida.
+
+El consumidor conceptual debe usar `shell_initializer::initialize`.
+
+### Errores de inicialización
+
+Errores conceptuales:
+
+1. Error al obtener el directorio actual.
+2. Error al convertirlo en `FilesystemScope` mediante Evo Shell Engine.
+
+En ambos casos, no existe una `Shell` operativa.
 
 Esta decisión no define todavía mensaje final de error, proceso/binario, `main.rs`, exit codes, shell loop, renderer, estructura de estado ni ownership Rust exacto.
 

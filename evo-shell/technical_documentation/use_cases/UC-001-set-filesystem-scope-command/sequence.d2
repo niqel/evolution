@@ -56,11 +56,11 @@ engine_result: "FilesystemScope / error" {
   shape: rectangle
 }
 
-shell_state: "estado de Evo Shell" {
+shell: "Shell\nowns FilesystemScope" {
   shape: rectangle
 }
 
-current_scope: "scope activo actual\nrequerido durante operación" {
+current_scope: "FilesystemScope actual\nowned by Shell" {
   shape: rectangle
 }
 
@@ -69,7 +69,7 @@ presentation: "resultado conceptual al usuario" {
 }
 
 usuario -> evo_shell: "scope-fs \"<path>\""
-current_scope -> shell_state: "estado operativo"
+current_scope -> shell: "estado operativo"
 evo_shell -> tokenizer: "entrada textual"
 tokenizer -> token_resolver: "siguiente token"
 token_resolver -> word_token: "Word(\"scope-fs\")"
@@ -96,11 +96,11 @@ error: "Error" {
 }
 
 engine_result -> success: "nuevo FilesystemScope"
-success -> shell_state: "reemplaza scope anterior"
-shell_state -> presentation: "presenta resultado"
+success -> shell: "reemplaza scope anterior"
+shell -> presentation: "presenta resultado"
 
 engine_result -> error: "error del engine"
-error -> shell_state: "scope activo actual permanece"
+error -> shell: "scope activo actual permanece"
 error -> presentation: "presenta error conceptual"
 
 syntax_error: "Error sintáctico\nno llama al engine\nscope activo actual permanece" {

@@ -28,13 +28,13 @@ resultado_alternativo: "scope no establecido\nscope anterior conservado" {
   shape: rectangle
 }
 
-scope_actual: "scope activo actual\nrequerido durante operación" {
+shell: "Shell\nowns FilesystemScope actual" {
   shape: rectangle
 }
 
 usuario -> evo_shell.set_scope_command: "introduce comando"
 entrada -> evo_shell.set_scope_command: "texto"
-scope_actual -> evo_shell.set_scope_command: "estado operativo"
+shell -> evo_shell.set_scope_command: "instancia operativa"
 evo_shell.set_scope_command -> engine: "consume SetFilesystemScope"
 engine -> evo_shell.set_scope_command: "FilesystemScope / error"
 evo_shell.set_scope_command -> resultado_exitoso: "resultado exitoso"

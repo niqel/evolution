@@ -34,7 +34,8 @@ Gramática establecida para este caso:
 
 - Evo Shell recibe una línea de entrada textual.
 - Evo Shell puede consumir el use case de frontera `SetFilesystemScope` de Evo Shell Engine.
-- Evo Shell está en estado operativo y ya posee un filesystem scope activo válido.
+- Existe una instancia operativa de `Shell`.
+- `Shell` posee un filesystem scope activo válido.
 
 No se requieren precondiciones técnicas adicionales.
 
@@ -48,11 +49,11 @@ No se requieren precondiciones técnicas adicionales.
 6. `parser::parse` coordina la interpretación de los tokens.
 7. `command::resolve` resuelve los tokens como `Command::ScopeFs(path)`.
 8. `executor::execute` coordina la ejecución del comando resuelto.
-9. `execution::resolve` resuelve que `Command::ScopeFs(path)` debe consumir `SetFilesystemScope`.
-10. Evo Shell llama el use case de frontera `SetFilesystemScope` de Evo Shell Engine.
-11. Evo Shell Engine devuelve un `FilesystemScope` válido.
-12. Evo Shell conserva ownership del nuevo `FilesystemScope` como filesystem scope activo.
-13. El nuevo `FilesystemScope` reemplaza el scope anterior.
+9. `execution::resolve` resuelve que `Command::ScopeFs(path)` debe operar sobre `Shell`.
+10. `execution::resolve` consume el use case de frontera `SetFilesystemScope`.
+11. Evo Shell llama `SetFilesystemScope` de Evo Shell Engine.
+12. Evo Shell Engine devuelve un `FilesystemScope` válido.
+13. `Shell` reemplaza el scope anterior por el nuevo `FilesystemScope`.
 14. Evo Shell presenta un resultado conceptual al usuario.
 
 ## Error sintáctico
@@ -71,7 +72,7 @@ Flujo:
 2. La entrada no cumple la sintaxis requerida por `scope-fs`.
 3. Evo Shell no ejecuta una solicitud válida al engine.
 4. Evo Shell presenta un error conceptual al usuario.
-5. El filesystem scope activo actual permanece activo.
+5. El `FilesystemScope` owned by `Shell` permanece intacto.
 
 ## Error del engine
 
@@ -83,7 +84,7 @@ Flujo:
 2. `execution::resolve` consume `SetFilesystemScope`.
 3. Evo Shell Engine devuelve un error.
 4. Evo Shell presenta un error conceptual al usuario.
-5. El filesystem scope activo actual permanece activo.
+5. El `FilesystemScope` owned by `Shell` permanece intacto.
 
 ## Resultado exitoso
 
@@ -96,19 +97,19 @@ fs "/home/user/documents"
 
 ## Comportamiento del estado
 
-UC-001 reemplaza el filesystem scope activo previamente existente.
+UC-001 reemplaza el filesystem scope activo previamente existente en `Shell`.
 
 Representación conceptual:
 
 ```text
-estado de Evo Shell
-    filesystem scope activo: requerido durante operación
+Shell
+└── owns FilesystemScope
 ```
 
 Regla observable:
 
 ```text
-scope activo actual
+&mut Shell
         ↓
 scope-fs "<path>"
         ↓
@@ -116,7 +117,7 @@ SetFilesystemScope
         ↓
 nuevo FilesystemScope
         ↓
-reemplaza scope anterior
+Shell reemplaza scope anterior
 
 si SetFilesystemScope devuelve éxito:
     el nuevo FilesystemScope reemplaza al anterior
@@ -129,9 +130,20 @@ Una Evo Shell operativa nunca queda sin filesystem scope activo por un fallo de 
 
 El engine no mantiene este estado interactivo.
 
-El estado pertenece a Evo Shell.
+La propiedad del `FilesystemScope` pertenece a `Shell`.
 
-Este caso de uso no impone todavía nombres técnicos como Session, ShellState o ActiveScope.
+Este caso de uso no fija todavía la firma Rust definitiva de `execute`.
+
+Consecuencia conceptual:
+
+```text
+execute(
+    shell,
+    command
+)
+```
+
+`scope-fs` necesita poder modificar `Shell`.
 
 ## Inmutabilidad y ownership
 
@@ -140,7 +152,7 @@ Este caso de uso no impone todavía nombres técnicos como Session, ShellState o
 3. `Command` puede ser efímero y prestar sus argumentos mientras la entrada siga viva.
 4. Solo se toma ownership cuando el dato necesita sobrevivir independientemente.
 5. La mutabilidad del tokenizer debe quedar localizada en el cursor incremental.
-6. El `FilesystemScope` válido recibido del engine sí debe sobrevivir entre comandos y por tanto Evo Shell conserva su ownership.
+6. El `FilesystemScope` válido recibido del engine sí debe sobrevivir entre comandos y por tanto `Shell` conserva su ownership.
 
 No se definen todavía firmas Rust concretas ni lifetimes concretos.
 

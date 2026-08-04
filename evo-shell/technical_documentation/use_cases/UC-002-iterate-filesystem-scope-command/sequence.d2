@@ -40,7 +40,7 @@ execution_resolver: "execution::resolve" {
   shape: rectangle
 }
 
-shell_state: "estado de Evo Shell\nfilesystem scope activo requerido" {
+shell: "Shell\nowns FilesystemScope" {
   shape: rectangle
 }
 
@@ -91,8 +91,8 @@ parser -> command_resolver: "interpretar tokens"
 command_resolver -> command: "Command::Iter"
 command -> executor: "comando resuelto"
 executor -> execution_resolver: "coordina ejecución"
-execution_resolver -> shell_state: "usa filesystem scope activo garantizado"
-shell_state -> borrow_scope: "presta"
+execution_resolver -> shell: "usa &Shell"
+shell -> borrow_scope: "presta FilesystemScope"
 borrow_scope -> iter_use_case: "presta scope"
 iter_use_case -> engine: "consume frontera pública"
 engine -> iteration: "FilesystemIteration / error"
