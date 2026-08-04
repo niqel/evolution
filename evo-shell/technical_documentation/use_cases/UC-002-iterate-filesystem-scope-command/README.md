@@ -8,7 +8,7 @@ Este caso de uso documenta cómo Evo Shell interpreta y ejecuta el comando:
 iter
 ```
 
-Evo Shell recibe texto, lo tokeniza incrementalmente, interpreta los tokens, resuelve `Command::Iter`, comprueba que existe un filesystem scope activo, consume el use case de frontera `Iter` de Evo Shell Engine, obtiene una `FilesystemIteration`, consume elementos de forma incremental y presenta cada resultado al usuario.
+Evo Shell recibe texto, lo tokeniza incrementalmente, interpreta los tokens, resuelve `Command::Iter`, comprueba que existe un filesystem scope activo, consume el use case de frontera `Iter` de Evo Shell Engine, obtiene una `FilesystemIteration`, consume elementos de forma incremental mediante `Advance` y presenta cada resultado al usuario.
 
 Evo Shell no duplica la lógica de iteración del filesystem de Evo Shell Engine.
 
@@ -49,11 +49,12 @@ Gramática establecida para este caso:
 9. Si existe un filesystem scope activo, Evo Shell lo presta como `&FilesystemScope`.
 10. Evo Shell consume el use case de frontera `Iter(&FilesystemScope)` de Evo Shell Engine.
 11. Evo Shell Engine devuelve una `FilesystemIteration`.
-12. Evo Shell consume la iteración de forma incremental.
-13. Por cada elemento disponible, Evo Shell recibe un `FilesystemEntry`.
-14. Evo Shell presenta cada elemento al usuario.
-15. La iteración continúa hasta llegar al fin o hasta que ocurra un error operativo.
-16. El filesystem scope activo permanece intacto.
+12. Evo Shell conserva temporalmente ownership de la `FilesystemIteration`.
+13. Evo Shell llama `Advance(&mut FilesystemIteration)`.
+14. Por cada elemento disponible, Evo Shell recibe como máximo un `FilesystemEntry`.
+15. Evo Shell presenta cada elemento al usuario y puede descartarlo cuando ya no se necesita.
+16. Evo Shell repite el avance hasta recibir `None` o hasta que ocurra un error operativo.
+17. El filesystem scope activo permanece intacto.
 
 ## Error sintáctico
 
@@ -104,7 +105,7 @@ Flujo:
 1. Evo Shell interpreta correctamente `iter`.
 2. Existe un filesystem scope activo.
 3. `execution::resolve` consume `Iter(&FilesystemScope)`.
-4. Evo Shell Engine devuelve un error operativo al iniciar o consumir la iteración.
+4. Evo Shell Engine devuelve un error operativo al iniciar la iteración o al avanzar mediante `Advance`.
 5. Evo Shell presenta un error conceptual al usuario.
 6. El filesystem scope activo permanece intacto.
 
@@ -117,17 +118,23 @@ Flujo conceptual:
 ```text
 FilesystemIteration
     ↓
-siguiente FilesystemEntry
+Advance
+    ↓
+FilesystemEntry
     ↓
 presentar
     ↓
-siguiente FilesystemEntry
+drop entry
+    ↓
+Advance
+    ↓
+FilesystemEntry
     ↓
 presentar
     ↓
 ...
     ↓
-fin
+None
 ```
 
 Evo Shell no necesita acumular todos los elementos antes de presentarlos.
@@ -152,6 +159,10 @@ iter
 borrow &FilesystemScope
     ↓
 Iter
+    ↓
+FilesystemIteration
+    ↓
+Advance(&mut FilesystemIteration)
 ```
 
 El ownership del filesystem scope permanece en Evo Shell.
@@ -202,7 +213,10 @@ Si `iter` falla, el filesystem scope activo permanece intacto.
 
 ## Relación con UC-002 de Evo Shell Engine
 
-Evo Shell consume la capacidad pública `Iter(&FilesystemScope)` de Evo Shell Engine.
+Evo Shell consume dos capacidades públicas de Evo Shell Engine:
+
+1. `Iter(&FilesystemScope) -> Result<FilesystemIteration, IterError>`
+2. `Advance(&mut FilesystemIteration) -> Result<Option<FilesystemEntry>, IterError>`
 
 Flujo de frontera:
 
@@ -211,19 +225,41 @@ Flujo de frontera:
     ↓
 Iter
     ↓
-Evo Shell Engine
-    ↓
 FilesystemIteration
+    ↓
+Advance(&mut FilesystemIteration)
+    ↓
+FilesystemEntry / fin / error
+```
+
+Consumo desde Evo Shell:
+
+```text
+obtener FilesystemIteration
+    ↓
+conservar ownership temporal de la iteración
+    ↓
+llamar Advance
+    ↓
+recibir como máximo un FilesystemEntry
+    ↓
+presentar ese entry
+    ↓
+descartar el entry cuando ya no se necesita
+    ↓
+repetir hasta None
 ```
 
 Evo Shell conoce y consume únicamente la API pública necesaria:
 
 - `Iter`;
+- `Advance`;
 - `IterError`;
 - `FilesystemScope`;
 - `FilesystemIteration`;
 - `FilesystemEntry`;
-- `FilesystemEntryKind`.
+- `FilesystemEntryKind`;
+- `iteration_advancer::advance`.
 
 Evo Shell no conoce ni duplica:
 
@@ -231,29 +267,9 @@ Evo Shell no conoce ni duplica:
 - `NextDirectoryEntry`;
 - providers internos del engine;
 - resolvers internos del engine;
+- `ReadDir`;
+- `DirEntry`;
 - `std::fs` interno del engine.
-
-## Limitación actual de API del engine
-
-La API pública actual de Evo Shell Engine permite iniciar una iteración mediante:
-
-```text
-Iter(&FilesystemScope) -> FilesystemIteration
-```
-
-También expone públicamente `FilesystemEntry` y `FilesystemEntryKind`.
-
-Sin embargo, con la frontera pública actual no queda expuesta una capacidad pública para consumir una `FilesystemIteration` y obtener el siguiente `FilesystemEntry` elemento por elemento sin conocer resolvers, providers o contracts internos.
-
-Antes de implementar UC-002 en Rust, podría ser necesario agregar en Evo Shell Engine una capacidad pública mínima para avanzar una iteración y devolver:
-
-```text
-siguiente FilesystemEntry
-fin de iteración
-error operativo
-```
-
-Esta documentación no define todavía la firma Rust definitiva de esa capacidad.
 
 ## Fuera de alcance
 

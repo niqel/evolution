@@ -66,9 +66,8 @@ iteration: "FilesystemIteration" {
   shape: rectangle
 }
 
-next_required: "public iteration-next capability required" {
+advance: "Advance(&mut FilesystemIteration)" {
   shape: rectangle
-  style.fill: "#fff0f0"
 }
 
 entry: "FilesystemEntry" {
@@ -106,10 +105,11 @@ shell_state -> borrow_scope: "existe"
 borrow_scope -> iter_use_case: "presta scope"
 iter_use_case -> engine: "consume frontera pública"
 engine -> iteration: "FilesystemIteration / error"
-iteration -> next_required: "consumo lazy elemento por elemento"
-next_required -> entry: "siguiente entry"
+iteration -> advance: "ownership temporal en Evo Shell"
+advance -> engine: "iteration_advancer::advance"
+engine -> entry: "Some(FilesystemEntry)"
 entry -> presentation: "presenta"
-presentation -> next_required: "repetir"
-next_required -> end: "sin más entries"
-engine -> operational_error: "error al iniciar o consumir"
+presentation -> advance: "repetir"
+advance -> end: "None"
+engine -> operational_error: "error al iniciar o avanzar"
 operational_error -> presentation: "presenta error conceptual"

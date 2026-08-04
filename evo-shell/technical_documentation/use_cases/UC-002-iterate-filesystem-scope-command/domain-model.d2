@@ -28,6 +28,14 @@ filesystem_iteration: "FilesystemIteration\n\nowned temporalmente durante ejecuc
   shape: rectangle
 }
 
+mutable_iteration: "&mut FilesystemIteration\n\nmutable únicamente para avanzar cursor" {
+  shape: rectangle
+}
+
+advance: "Advance\n\nuse case externo del engine\nno es entidad de Evo Shell" {
+  shape: rectangle
+}
+
 filesystem_entry: "FilesystemEntry\n\nvalor producido individualmente\nname\npath\nkind" {
   shape: rectangle
 }
@@ -42,5 +50,7 @@ token -> command: "command::resolve"
 command -> shell_state: "Command::Iter consulta scope activo"
 shell_state -> filesystem_scope: "owns optional scope"
 filesystem_scope -> filesystem_iteration: "&FilesystemScope -> Iter"
-filesystem_iteration -> filesystem_entry: "lazy next element"
+filesystem_iteration -> mutable_iteration: "borrowed as"
+mutable_iteration -> advance: "entrada pública del engine"
+advance -> filesystem_entry: "produce uno por llamada"
 filesystem_entry -> presentation: "presentar y descartar si no se necesita"

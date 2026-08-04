@@ -83,9 +83,12 @@ external: "external dependency / evo-shell-engine" {
     shape: rectangle
   }
 
-  public_next: "public iteration-next capability required\n\ncapacidad pública mínima pendiente" {
+  advance_use_case: "Advance\n\nuse case público\nAdvance(&mut FilesystemIteration)" {
     shape: rectangle
-    style.fill: "#fff0f0"
+  }
+
+  advance_result: "FilesystemEntry / None / IterError\n\nun elemento por llamada" {
+    shape: rectangle
   }
 
   filesystem_entry: "FilesystemEntry\n\nname\npath\nkind" {
@@ -115,6 +118,7 @@ domain.shell_state -> domain.filesystem_scope: "posee opcionalmente"
 resolvers.execution -> domain.filesystem_scope: "presta &FilesystemScope"
 resolvers.execution -> external.iter_use_case: "consume frontera pública"
 external.iter_use_case -> external.filesystem_iteration: "devuelve en éxito"
-external.filesystem_iteration -> external.public_next: "requiere capacidad pública para avanzar"
-external.public_next -> external.filesystem_entry: "produce un elemento o fin/error"
+external.filesystem_iteration -> external.advance_use_case: "&mut FilesystemIteration"
+external.advance_use_case -> external.advance_result: "avanza exactamente un elemento"
+external.advance_result -> external.filesystem_entry: "Some(FilesystemEntry)"
 external.filesystem_entry -> presentation: "presentar sin acumular"
