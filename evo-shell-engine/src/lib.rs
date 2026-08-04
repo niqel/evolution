@@ -4,10 +4,11 @@ mod providers;
 
 mod resolvers;
 
-pub use agents::{iterator, scope_setter};
+pub use agents::{iteration_advancer, iterator, scope_setter};
 pub use definitions::domain::entities::filesystem_entry::{FilesystemEntry, FilesystemEntryKind};
 pub use definitions::domain::entities::filesystem_iteration::FilesystemIteration;
 pub use definitions::domain::entities::filesystem_scope::FilesystemScope;
+pub use definitions::use_cases::advance::Advance;
 pub use definitions::use_cases::iter::{Iter, IterError};
 pub use definitions::use_cases::set_filesystem_scope::{ScopeError, SetFilesystemScope};
 
@@ -21,6 +22,7 @@ mod tests {
     use std::path::PathBuf;
     use std::time::SystemTime;
 
+    use crate::agents::iteration_advancer;
     use crate::agents::iterator;
     use crate::agents::scope_setter;
     use crate::definitions::contracts::is_directory::FilesystemError;
@@ -31,7 +33,7 @@ mod tests {
     use crate::resolvers::filesystem_entry;
     use crate::resolvers::filesystem_iteration;
     use crate::resolvers::filesystem_scope;
-    use crate::{FilesystemEntryKind, Iter, IterError, ScopeError, SetFilesystemScope};
+    use crate::{Advance, FilesystemEntryKind, Iter, IterError, ScopeError, SetFilesystemScope};
 
     struct TestDirectory {
         path: PathBuf,
@@ -147,6 +149,18 @@ mod tests {
     }
 
     #[test]
+    fn iteration_advancer_advance_matches_advance_use_case_function_pointer() {
+        let directory = TestDirectory::new("advance_use_case_pointer");
+        let scope = scope_setter::set(directory.path()).unwrap();
+        let mut iteration = iterator::iter(&scope).unwrap();
+        let advance: Advance = iteration_advancer::advance;
+
+        let result = advance(&mut iteration);
+
+        assert!(matches!(result, Ok(None)));
+    }
+
+    #[test]
     fn read_directory_contract_matches_provider_function_pointer() {
         let directory = TestDirectory::new("read_directory_contract_pointer");
         let read_directory: ReadDirectory = providers::read_directory::provide;
@@ -189,6 +203,64 @@ mod tests {
         assert!(first.is_some());
         assert!(second.is_some());
         assert!(end.is_none());
+    }
+
+    #[test]
+    fn iteration_advancer_advance_returns_at_most_one_entry_per_call() {
+        let directory = TestDirectory::new("advance_one_entry");
+        fs::write(directory.path().join("report.txt"), "report").unwrap();
+        let scope = scope_setter::set(directory.path()).unwrap();
+        let mut iteration = iterator::iter(&scope).unwrap();
+
+        let first = iteration_advancer::advance(&mut iteration).unwrap();
+        let end = iteration_advancer::advance(&mut iteration).unwrap();
+
+        assert!(first.is_some());
+        assert!(end.is_none());
+    }
+
+    #[test]
+    fn iteration_advancer_advance_produces_entries_one_by_one_until_none() {
+        let directory = TestDirectory::new("advance_until_none");
+        fs::write(directory.path().join("report.txt"), "report").unwrap();
+        fs::create_dir(directory.path().join("images")).unwrap();
+        let scope = scope_setter::set(directory.path()).unwrap();
+        let mut iteration = iterator::iter(&scope).unwrap();
+
+        let first = iteration_advancer::advance(&mut iteration).unwrap();
+        let second = iteration_advancer::advance(&mut iteration).unwrap();
+        let end = iteration_advancer::advance(&mut iteration).unwrap();
+
+        assert!(first.is_some());
+        assert!(second.is_some());
+        assert!(end.is_none());
+    }
+
+    #[test]
+    fn public_advance_distinguishes_file_and_directory() {
+        let directory = TestDirectory::new("public_advance_kind");
+        fs::write(directory.path().join("report.txt"), "report").unwrap();
+        fs::create_dir(directory.path().join("images")).unwrap();
+        let scope = scope_setter::set(directory.path()).unwrap();
+        let mut iteration = iterator::iter(&scope).unwrap();
+        let advance: Advance = iteration_advancer::advance;
+        let mut found_file = false;
+        let mut found_directory = false;
+
+        while let Some(entry) = advance(&mut iteration).unwrap() {
+            if entry.name() == OsStr::new("report.txt") {
+                assert_eq!(entry.kind(), FilesystemEntryKind::File);
+                found_file = true;
+            }
+
+            if entry.name() == OsStr::new("images") {
+                assert_eq!(entry.kind(), FilesystemEntryKind::Directory);
+                found_directory = true;
+            }
+        }
+
+        assert!(found_file);
+        assert!(found_directory);
     }
 
     #[test]
@@ -242,6 +314,32 @@ mod tests {
             filesystem_entry::resolve(&mut iteration, providers::next_directory_entry::provide)
                 .unwrap()
         {
+            if entry.name() == OsStr::new("report-link.txt") {
+                assert_eq!(entry.kind(), FilesystemEntryKind::Symlink);
+                found_symlink = true;
+            }
+        }
+
+        assert!(found_symlink);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn public_advance_distinguishes_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let directory = TestDirectory::new("public_advance_symlink");
+        fs::write(directory.path().join("report.txt"), "report").unwrap();
+        symlink(
+            directory.path().join("report.txt"),
+            directory.path().join("report-link.txt"),
+        )
+        .unwrap();
+        let scope = scope_setter::set(directory.path()).unwrap();
+        let mut iteration = iterator::iter(&scope).unwrap();
+        let mut found_symlink = false;
+
+        while let Some(entry) = iteration_advancer::advance(&mut iteration).unwrap() {
             if entry.name() == OsStr::new("report-link.txt") {
                 assert_eq!(entry.kind(), FilesystemEntryKind::Symlink);
                 found_symlink = true;
