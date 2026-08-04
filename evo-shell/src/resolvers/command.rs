@@ -18,10 +18,17 @@ pub fn resolve<'a>(
         return Err(ParseError::InvalidCommandToken(command_token));
     };
 
-    if command_name != "scope-fs" {
-        return Err(ParseError::UnknownCommand(command_name));
+    match command_name {
+        "scope-fs" => resolve_scope_fs(stream, tokenize),
+        "iter" => resolve_iter(stream, tokenize),
+        _ => Err(ParseError::UnknownCommand(command_name)),
     }
+}
 
+fn resolve_scope_fs<'a>(
+    stream: &mut TokenStream<'a>,
+    tokenize: Tokenize,
+) -> Result<Command<'a>, ParseError<'a>> {
     let path_token = tokenize(stream).map_err(ParseError::Tokenize)?;
 
     let Some(path_token) = path_token else {
@@ -37,4 +44,15 @@ pub fn resolve<'a>(
     }
 
     Ok(Command::ScopeFs(path))
+}
+
+fn resolve_iter<'a>(
+    stream: &mut TokenStream<'a>,
+    tokenize: Tokenize,
+) -> Result<Command<'a>, ParseError<'a>> {
+    if tokenize(stream).map_err(ParseError::Tokenize)?.is_some() {
+        return Err(ParseError::UnexpectedToken);
+    }
+
+    Ok(Command::Iter)
 }

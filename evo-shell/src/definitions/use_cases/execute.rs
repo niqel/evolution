@@ -1,10 +1,19 @@
-use evo_shell_engine::{FilesystemScope, ScopeError};
+use evo_shell_engine::{FilesystemIteration, IterError, ScopeError};
 
 use crate::definitions::domain::entities::command::Command;
+use crate::definitions::domain::entities::shell::Shell;
 
-pub type Execute = for<'a> fn(command: Command<'a>) -> Result<FilesystemScope, ExecuteError>;
+pub type Execute =
+    for<'a> fn(shell: &mut Shell, command: Command<'a>) -> Result<ExecutionResult, ExecuteError>;
+
+#[derive(Debug)]
+pub enum ExecutionResult {
+    ScopeChanged,
+    FilesystemIteration(FilesystemIteration),
+}
 
 #[derive(Debug)]
 pub enum ExecuteError {
-    Engine(ScopeError),
+    Scope(ScopeError),
+    Iter(IterError),
 }

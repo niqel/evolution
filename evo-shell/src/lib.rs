@@ -1,27 +1,42 @@
 mod agents;
 mod definitions;
+mod providers;
 mod resolvers;
 
-pub use agents::{executor, parser, tokenizer};
+pub use agents::{executor, parser, shell_initializer, tokenizer};
 pub use definitions::domain::entities::command::Command;
+pub use definitions::domain::entities::shell::Shell;
 pub use definitions::domain::entities::token::Token;
 pub use definitions::domain::entities::token_stream::TokenStream;
-pub use definitions::use_cases::execute::{Execute, ExecuteError};
+pub use definitions::use_cases::execute::{Execute, ExecuteError, ExecutionResult};
+pub use definitions::use_cases::initialize_shell::{InitializeShell, InitializeShellError};
 pub use definitions::use_cases::parse::{Parse, ParseError};
 pub use definitions::use_cases::tokenize::{Tokenize, TokenizeError};
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsStr;
     use std::fs;
+    use std::io;
+    use std::path::Path;
     use std::path::PathBuf;
     use std::time::SystemTime;
 
-    use evo_shell_engine::{FilesystemScope, SetFilesystemScope, scope_setter};
+    use evo_shell_engine::{
+        FilesystemEntryKind, IterError, ScopeError, SetFilesystemScope, iteration_advancer,
+        scope_setter,
+    };
 
+    use crate::definitions::contracts::current_directory::{
+        CurrentDirectory, CurrentDirectoryError,
+    };
+    use crate::definitions::domain::entities::shell::Shell;
+    use crate::resolvers::shell;
     use crate::resolvers::token;
     use crate::{
-        Command, Execute, ExecuteError, Parse, ParseError, Token, TokenStream, Tokenize,
-        TokenizeError, executor, parser, tokenizer,
+        Command, Execute, ExecuteError, ExecutionResult, InitializeShell, InitializeShellError,
+        Parse, ParseError, Token, TokenStream, Tokenize, TokenizeError, executor, parser,
+        shell_initializer, tokenizer,
     };
 
     struct TestDirectory {
@@ -44,6 +59,22 @@ mod tests {
 
             Self { path }
         }
+    }
+
+    fn current_directory() -> Result<PathBuf, CurrentDirectoryError> {
+        std::env::current_dir()
+    }
+
+    fn current_directory_error() -> Result<PathBuf, CurrentDirectoryError> {
+        Err(io::Error::other("current directory failed"))
+    }
+
+    fn scope_error(path: &Path) -> Result<evo_shell_engine::FilesystemScope, ScopeError> {
+        Err(ScopeError::NotDirectory(path.to_path_buf()))
+    }
+
+    fn shell_from_directory(directory: &TestDirectory) -> Shell {
+        Shell::new(scope_setter::set(directory.path.as_path()).unwrap())
     }
 
     impl Drop for TestDirectory {
@@ -114,6 +145,15 @@ mod tests {
     }
 
     #[test]
+    fn parser_resolves_iter_command() {
+        let mut stream = TokenStream::new("iter");
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        assert_eq!(command, Command::Iter);
+    }
+
+    #[test]
     fn parser_rejects_missing_path() {
         let mut stream = TokenStream::new("scope-fs");
 
@@ -141,6 +181,24 @@ mod tests {
             result,
             Err(ParseError::UnknownCommand("unknown-command"))
         ));
+    }
+
+    #[test]
+    fn parser_rejects_iter_extra_token() {
+        let mut stream = TokenStream::new("iter extra");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(result, Err(ParseError::UnexpectedToken)));
+    }
+
+    #[test]
+    fn parser_rejects_iter_quoted_argument() {
+        let mut stream = TokenStream::new("iter \"/ruta\"");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(result, Err(ParseError::UnexpectedToken)));
     }
 
     #[test]
@@ -187,47 +245,189 @@ mod tests {
         let input = format!("scope-fs \"{}\"", directory.path.display());
         let mut stream = TokenStream::new(&input);
         let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+        let mut shell = shell_from_directory(&directory);
         let execute: Execute = executor::execute;
 
-        let scope = execute(command).unwrap();
+        let result = execute(&mut shell, command).unwrap();
 
-        assert_eq!(scope.path(), directory.path.as_path());
+        assert!(matches!(result, ExecutionResult::ScopeChanged));
+        assert_eq!(shell.filesystem_scope().path(), directory.path.as_path());
     }
 
     #[test]
-    fn execution_with_valid_temporary_directory_returns_filesystem_scope() {
-        let directory = TestDirectory::new("valid_execute");
-        let input = format!("scope-fs \"{}\"", directory.path.display());
+    fn shell_initializer_initialize_matches_initialize_shell_function_pointer() {
+        let initialize: InitializeShell = shell_initializer::initialize;
+
+        let shell = initialize().unwrap();
+
+        assert!(shell.filesystem_scope().path().is_dir());
+    }
+
+    #[test]
+    fn shell_resolve_initializes_shell_with_current_directory_and_real_set_scope() {
+        let current_directory: CurrentDirectory = current_directory;
+        let set_scope: SetFilesystemScope = scope_setter::set;
+        let expected = std::env::current_dir().unwrap();
+
+        let shell = shell::resolve(current_directory, set_scope).unwrap();
+
+        assert_eq!(shell.filesystem_scope().path(), expected.as_path());
+    }
+
+    #[test]
+    fn shell_initialized_by_resolver_owns_expected_filesystem_scope() {
+        let shell = shell::resolve(current_directory, scope_setter::set).unwrap();
+        let expected = std::env::current_dir().unwrap();
+
+        assert_eq!(shell.filesystem_scope().path(), expected.as_path());
+    }
+
+    #[test]
+    fn current_directory_error_produces_initialize_shell_error() {
+        let result = shell::resolve(current_directory_error, scope_setter::set);
+
+        assert!(matches!(
+            result,
+            Err(InitializeShellError::CurrentDirectory(_))
+        ));
+    }
+
+    #[test]
+    fn set_filesystem_scope_error_produces_initialize_shell_error() {
+        let result = shell::resolve(current_directory, scope_error);
+
+        assert!(matches!(result, Err(InitializeShellError::Scope(_))));
+    }
+
+    #[test]
+    fn shell_cannot_be_constructed_without_filesystem_scope() {
+        let shell = shell::resolve(current_directory, scope_setter::set).unwrap();
+
+        assert!(shell.filesystem_scope().path().is_dir());
+    }
+
+    #[test]
+    fn scope_fs_valid_path_replaces_previous_scope() {
+        let initial = TestDirectory::new("scope_initial");
+        let replacement = TestDirectory::new("scope_replacement");
+        let mut shell = shell_from_directory(&initial);
+        let input = format!("scope-fs \"{}\"", replacement.path.display());
         let mut stream = TokenStream::new(&input);
         let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
 
-        let scope = executor::execute(command).unwrap();
+        let result = executor::execute(&mut shell, command).unwrap();
 
-        assert_eq!(scope.path(), directory.path.as_path());
+        assert!(matches!(result, ExecutionResult::ScopeChanged));
+        assert_eq!(shell.filesystem_scope().path(), replacement.path.as_path());
     }
 
     #[test]
-    fn engine_error_is_converted_to_execute_error() {
+    fn scope_fs_invalid_path_returns_error() {
+        let initial = TestDirectory::new("scope_invalid_error");
+        let mut shell = shell_from_directory(&initial);
         let mut stream = TokenStream::new("scope-fs \"/definitely/not/a/directory\"");
         let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
 
-        let result = executor::execute(command);
+        let result = executor::execute(&mut shell, command);
 
-        assert!(matches!(result, Err(ExecuteError::Engine(_))));
+        assert!(matches!(result, Err(ExecuteError::Scope(_))));
     }
 
     #[test]
-    fn previous_scope_can_remain_owned_by_caller_when_new_execution_fails() {
-        let directory = TestDirectory::new("previous_scope");
-        let set_scope: SetFilesystemScope = scope_setter::set;
-        let previous_scope: FilesystemScope = set_scope(directory.path.as_path()).unwrap();
-        let previous_path = previous_scope.path().to_path_buf();
+    fn scope_fs_error_leaves_previous_scope_intact() {
+        let initial = TestDirectory::new("previous_scope");
+        let mut shell = shell_from_directory(&initial);
+        let previous_path = shell.filesystem_scope().path().to_path_buf();
         let mut stream = TokenStream::new("scope-fs \"/definitely/not/a/directory\"");
         let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
 
-        let result = executor::execute(command);
+        let result = executor::execute(&mut shell, command);
 
         assert!(result.is_err());
-        assert_eq!(previous_scope.path(), previous_path.as_path());
+        assert_eq!(shell.filesystem_scope().path(), previous_path.as_path());
+    }
+
+    #[test]
+    fn execute_iter_returns_filesystem_iteration() {
+        let directory = TestDirectory::new("iter_execute");
+        let mut shell = shell_from_directory(&directory);
+
+        let result = executor::execute(&mut shell, Command::Iter).unwrap();
+
+        assert!(matches!(result, ExecutionResult::FilesystemIteration(_)));
+    }
+
+    #[test]
+    fn iter_borrows_filesystem_scope_without_replacing_it() {
+        let directory = TestDirectory::new("iter_borrow");
+        let mut shell = shell_from_directory(&directory);
+        let previous_path = shell.filesystem_scope().path().to_path_buf();
+
+        let result = executor::execute(&mut shell, Command::Iter).unwrap();
+
+        assert!(matches!(result, ExecutionResult::FilesystemIteration(_)));
+        assert_eq!(shell.filesystem_scope().path(), previous_path.as_path());
+    }
+
+    #[test]
+    fn iter_can_be_consumed_lazily_with_public_advance() {
+        let directory = TestDirectory::new("iter_lazy");
+        fs::write(directory.path.join("report.txt"), "report").unwrap();
+        fs::create_dir(directory.path.join("images")).unwrap();
+        let mut shell = shell_from_directory(&directory);
+
+        let result = executor::execute(&mut shell, Command::Iter).unwrap();
+        let ExecutionResult::FilesystemIteration(mut iteration) = result else {
+            panic!("expected filesystem iteration");
+        };
+        let mut found_file = false;
+        let mut found_directory = false;
+
+        while let Some(entry) = iteration_advancer::advance(&mut iteration).unwrap() {
+            if entry.name() == OsStr::new("report.txt") {
+                assert_eq!(entry.kind(), FilesystemEntryKind::File);
+                found_file = true;
+            }
+
+            if entry.name() == OsStr::new("images") {
+                assert_eq!(entry.kind(), FilesystemEntryKind::Directory);
+                found_directory = true;
+            }
+        }
+
+        assert!(found_file);
+        assert!(found_directory);
+    }
+
+    #[test]
+    fn iter_error_is_converted_to_execute_error() {
+        let directory = TestDirectory::new("iter_error");
+        let mut shell = shell_from_directory(&directory);
+        fs::remove_dir_all(&directory.path).unwrap();
+
+        let result = executor::execute(&mut shell, Command::Iter);
+
+        assert!(matches!(result, Err(ExecuteError::Iter(_))));
+    }
+
+    #[test]
+    fn advance_errors_remain_iter_error() {
+        let directory = TestDirectory::new("advance_error");
+        let mut shell = shell_from_directory(&directory);
+        fs::write(directory.path.join("report.txt"), "report").unwrap();
+        let result = executor::execute(&mut shell, Command::Iter).unwrap();
+        let ExecutionResult::FilesystemIteration(mut iteration) = result else {
+            panic!("expected filesystem iteration");
+        };
+        fs::remove_dir_all(&directory.path).unwrap();
+
+        let result = iteration_advancer::advance(&mut iteration);
+
+        if let Err(error) = result {
+            assert!(matches!(
+                error,
+                IterError::NextEntry(_) | IterError::MaterializeEntry(_)
+            ));
+        }
     }
 }

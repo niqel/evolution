@@ -1,9 +1,8 @@
-use evo_shell_engine::FilesystemScope;
-
 use crate::definitions::domain::entities::command::Command;
-use crate::definitions::use_cases::execute::ExecuteError;
+use crate::definitions::domain::entities::shell::Shell;
+use crate::definitions::use_cases::execute::{ExecuteError, ExecutionResult};
 use crate::resolvers::execution;
 
-pub fn execute(command: Command<'_>) -> Result<FilesystemScope, ExecuteError> {
-    execution::resolve(command)
+pub fn execute(shell: &mut Shell, command: Command<'_>) -> Result<ExecutionResult, ExecuteError> {
+    execution::resolve(shell, command)
 }
