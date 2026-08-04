@@ -1,0 +1,55 @@
+direction: right
+
+input: "input\n\nborrowed" {
+  shape: rectangle
+}
+
+token_stream: "TokenStream\n\nborrowed input\ncursor incremental" {
+  shape: rectangle
+}
+
+token: "Token\n\nWord\nString" {
+  shape: rectangle
+}
+
+command: "Command\n\nScopeFs(&str)\nIter\nEnter(&str)" {
+  shape: rectangle
+}
+
+shell: "Shell\n\nowns FilesystemScope" {
+  shape: rectangle
+}
+
+current_scope: "FilesystemScope current\n\nowned by Shell\nborrowed for Enter" {
+  shape: rectangle
+}
+
+engine_enter: "Enter\n\nexternal use case del engine\nnot an Evo Shell entity" {
+  shape: rectangle
+  style.fill: "#f2f2f2"
+}
+
+new_scope: "FilesystemScope new\n\nowned result from engine\nreplaces current only on success" {
+  shape: rectangle
+}
+
+scope_changed: "ExecutionResult::ScopeChanged\n\nreused result" {
+  shape: rectangle
+}
+
+error: "error\n\ncurrent FilesystemScope remains owned by Shell" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+input -> token_stream: "borrowed"
+token_stream -> token: "token::resolve"
+token -> command: "command::resolve"
+command -> shell: "executor::execute(&mut Shell, Command)"
+shell -> current_scope: "owns"
+current_scope -> engine_enter: "borrow &FilesystemScope"
+command -> engine_enter: "Enter(&str location)"
+engine_enter -> new_scope: "success"
+engine_enter -> error: "failure"
+new_scope -> shell: "replace owned scope"
+shell -> scope_changed: "result"

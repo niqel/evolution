@@ -1,0 +1,120 @@
+direction: down
+
+definitions: "definitions/use_cases existentes" {
+  style.fill: "#edf4ff"
+
+  tokenize: "tokenize.rs\nTokenize" {
+    shape: rectangle
+  }
+
+  parse: "parse.rs\nParse" {
+    shape: rectangle
+  }
+
+  execute: "execute.rs\nExecute" {
+    shape: rectangle
+  }
+}
+
+agents: "agents existentes" {
+  style.fill: "#eefaf1"
+
+  tokenizer: "tokenizer.rs\ntokenizer::tokenize" {
+    shape: rectangle
+  }
+
+  parser: "parser.rs\nparser::parse" {
+    shape: rectangle
+  }
+
+  executor: "executor.rs\nexecutor::execute" {
+    shape: rectangle
+  }
+}
+
+resolvers: "resolvers existentes" {
+  style.fill: "#fff7e6"
+
+  token: "token.rs\ntoken::resolve" {
+    shape: rectangle
+  }
+
+  command: "command.rs\ncommand::resolve\n\nresuelve Command::Enter(location)" {
+    shape: rectangle
+  }
+
+  execution: "execution.rs\nexecution::resolve\n\ndispatch por Command::Enter" {
+    shape: rectangle
+  }
+}
+
+domain: "domain/model" {
+  style.fill: "#f7edff"
+
+  token_stream: "TokenStream\n\ninput borrowed\ncursor incremental" {
+    shape: rectangle
+  }
+
+  token_model: "Token\n\nToken::Word\nToken::String" {
+    shape: rectangle
+  }
+
+  command_model: "Command\n\nScopeFs(&str)\nIter\nEnter(&str)" {
+    shape: rectangle
+  }
+
+  shell: "Shell\n\nowns FilesystemScope" {
+    shape: rectangle
+  }
+
+  current_scope: "FilesystemScope actual\n\nowned by Shell\nborrowed for Enter" {
+    shape: rectangle
+  }
+}
+
+external: "external dependency / evo-shell-engine" {
+  style.fill: "#f2f2f2"
+
+  enter_use_case: "Enter\n\nuse case público\nEnter(&FilesystemScope, location)" {
+    shape: rectangle
+  }
+
+  enterer_agent: "enterer::enter\n\nagent público del engine" {
+    shape: rectangle
+  }
+
+  new_scope: "FilesystemScope\n\nnuevo scope owned" {
+    shape: rectangle
+  }
+
+  engine_internal: "Interno del engine\n\nfilesystem_path::resolve\nscope_setter::set\nvalidación de filesystem\n\nNo consumido directamente por Evo Shell" {
+    shape: rectangle
+  }
+}
+
+result: "ExecutionResult::ScopeChanged" {
+  shape: rectangle
+}
+
+definitions.tokenize -> agents.tokenizer: "implementado por"
+agents.tokenizer -> resolvers.token: "coordina"
+resolvers.token -> domain.token_stream: "usa cursor"
+resolvers.token -> domain.token_model: "produce Word/String"
+
+definitions.parse -> agents.parser: "implementado por"
+agents.parser -> resolvers.command: "coordina"
+resolvers.command -> domain.token_model: "consume incrementalmente"
+resolvers.command -> domain.command_model: "produce Command::Enter"
+
+definitions.execute -> agents.executor: "implementado por"
+agents.executor -> resolvers.execution: "coordina"
+resolvers.execution -> domain.command_model: "consume"
+resolvers.execution -> domain.shell: "opera sobre &mut Shell"
+domain.shell -> domain.current_scope: "owns"
+resolvers.execution -> domain.current_scope: "borrow &FilesystemScope"
+resolvers.execution -> external.enter_use_case: "consume solo frontera pública"
+external.enter_use_case -> external.enterer_agent: "implementado por"
+external.enterer_agent -> external.engine_internal: "resuelve dentro del engine"
+external.enter_use_case -> external.new_scope: "devuelve en éxito"
+external.new_scope -> domain.shell: "reemplaza scope anterior solo en éxito"
+domain.shell -> result: "resultado de ejecución"

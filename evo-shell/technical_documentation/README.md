@@ -155,3 +155,4 @@ Casos de uso técnicos:
 
 * [UC-001 — Establecer un filesystem scope mediante un comando](use_cases/UC-001-set-filesystem-scope-command/)
 * [UC-002 — Iterar el filesystem scope activo mediante el comando iter](use_cases/UC-002-iterate-filesystem-scope-command/)
+* [UC-003 — Entrar en una ubicación del scope activo mediante el comando enter](use_cases/UC-003-enter-active-scope-location/)

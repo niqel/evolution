@@ -1,0 +1,44 @@
+direction: down
+
+usuario: "Usuario" {
+  shape: person
+}
+
+evo_shell: "Evo Shell" {
+  shape: rectangle
+}
+
+input: "enter <location>" {
+  shape: rectangle
+}
+
+command: "Command::Enter(location)" {
+  shape: rectangle
+}
+
+engine_enter: "Evo Shell Engine\nEnter" {
+  shape: rectangle
+  style.fill: "#f2f2f2"
+}
+
+result: "new FilesystemScope / error" {
+  shape: rectangle
+}
+
+success: "Éxito\nscope activo cambia" {
+  shape: rectangle
+  style.fill: "#eefaf1"
+}
+
+error: "Error\nscope anterior permanece" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+usuario -> input: "introduce"
+input -> evo_shell: "recibe texto"
+evo_shell -> command: "interpreta"
+command -> engine_enter: "consume frontera pública"
+engine_enter -> result: "devuelve"
+result -> success: "nuevo FilesystemScope"
+result -> error: "error"

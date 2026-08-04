@@ -1,0 +1,120 @@
+direction: down
+
+usuario: "Usuario" {
+  shape: person
+}
+
+evo_shell: "Evo Shell recibe texto" {
+  shape: rectangle
+}
+
+token_stream: "TokenStream" {
+  shape: rectangle
+}
+
+tokenizer: "tokenizer::tokenize" {
+  shape: rectangle
+}
+
+token_resolver: "token::resolve" {
+  shape: rectangle
+}
+
+enter_word: "Token::Word(\"enter\")" {
+  shape: rectangle
+}
+
+location_word: "Token::Word(\"agents\")" {
+  shape: rectangle
+}
+
+location_string: "Token::String(\"Mis Documentos\")" {
+  shape: rectangle
+}
+
+parser: "parser::parse" {
+  shape: rectangle
+}
+
+command_resolver: "command::resolve" {
+  shape: rectangle
+}
+
+command: "Command::Enter(\"agents\")" {
+  shape: rectangle
+}
+
+executor: "executor::execute" {
+  shape: rectangle
+}
+
+execution_resolver: "execution::resolve" {
+  shape: rectangle
+}
+
+shell: "Shell\nowns FilesystemScope" {
+  shape: rectangle
+}
+
+borrow_scope: "borrow &Shell.filesystem_scope" {
+  shape: rectangle
+}
+
+engine_enter: "Enter(&FilesystemScope, \"agents\")" {
+  shape: rectangle
+}
+
+engine: "Evo Shell Engine" {
+  shape: rectangle
+  style.fill: "#f2f2f2"
+}
+
+new_scope: "new FilesystemScope" {
+  shape: rectangle
+}
+
+scope_changed: "ExecutionResult::ScopeChanged" {
+  shape: rectangle
+}
+
+presentation: "presentación conceptual" {
+  shape: rectangle
+}
+
+error: "Error\n\nShell no reemplaza scope\nscope anterior permanece" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+usuario -> evo_shell: "enter agents"
+evo_shell -> token_stream: "crea flujo incremental"
+token_stream -> tokenizer: "entrada prestada"
+tokenizer -> token_resolver: "siguiente token"
+token_resolver -> enter_word: "Word(\"enter\")"
+tokenizer -> token_resolver: "continuar desde cursor"
+token_resolver -> location_word: "Word(\"agents\")"
+token_resolver -> location_string: "alternativa válida: String(\"Mis Documentos\")"
+tokenizer -> parser: "tokens incrementales"
+parser -> command_resolver: "interpretar tokens"
+command_resolver -> command: "Command::Enter(location)"
+command -> executor: "comando resuelto"
+executor -> execution_resolver: "coordina ejecución"
+execution_resolver -> shell: "opera sobre &mut Shell"
+shell -> borrow_scope: "presta FilesystemScope"
+borrow_scope -> engine_enter: "scope + location"
+engine_enter -> engine: "consume frontera pública"
+engine -> new_scope: "FilesystemScope / error"
+new_scope -> shell: "reemplaza scope anterior"
+shell -> scope_changed: "éxito"
+scope_changed -> presentation: "presenta resultado"
+
+engine -> error: "Enter devuelve error"
+error -> presentation: "presenta error"
+
+syntax_error: "Error sintáctico\nenter sin argumento o con tokens extra\nno llama al engine" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+command_resolver -> syntax_error: "tokens inválidos"
+syntax_error -> presentation: "presenta error"
