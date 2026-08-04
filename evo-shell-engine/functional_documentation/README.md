@@ -1,6 +1,6 @@
 # Documentación funcional
 
-Esta carpeta contiene la documentación funcional de Evo Shell.
+Esta carpeta contiene la documentación funcional de Evo Shell Engine.
 
 Aquí vivirán principalmente historias de usuario, criterios de aceptación cuando sean necesarios, diccionario de datos y reglas funcionales del producto cuando aparezcan.
 

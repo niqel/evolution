@@ -37,7 +37,7 @@ mod tests {
                 .expect("system time should be after UNIX_EPOCH")
                 .as_nanos();
             let path = std::env::temp_dir().join(format!(
-                "evo_shell_{name}_{}_{}",
+                "evo_shell_engine_{name}_{}_{}",
                 std::process::id(),
                 unique
             ));

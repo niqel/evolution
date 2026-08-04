@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Este caso de uso permite establecer una ubicación del sistema de archivos como scope activo de Evo Shell para que las operaciones posteriores trabajen dentro de ese ámbito.
+Este caso de uso permite establecer una ubicación del sistema de archivos como scope activo de Evo Shell Engine para que las operaciones posteriores trabajen dentro de ese ámbito.
 
 ## Actor
 
@@ -27,15 +27,15 @@ scope fs "<path>"
 
 1. El usuario solicita un scope de tipo `fs`.
 2. El usuario proporciona una ubicación.
-3. Evo Shell evalúa si la ubicación puede utilizarse como scope.
-4. Si puede utilizarse, Evo Shell establece esa ubicación como scope activo.
-5. Evo Shell informa el scope activo.
+3. Evo Shell Engine evalúa si la ubicación puede utilizarse como scope.
+4. Si puede utilizarse, Evo Shell Engine establece esa ubicación como scope activo.
+5. Evo Shell Engine informa el scope activo.
 6. Las operaciones posteriores pueden utilizar ese scope.
 
 ## Flujo alternativo — ubicación no utilizable
 
-1. Evo Shell determina que la ubicación no puede utilizarse.
-2. Evo Shell informa que el scope no pudo establecerse.
+1. Evo Shell Engine determina que la ubicación no puede utilizarse.
+2. Evo Shell Engine informa que el scope no pudo establecerse.
 3. Si ya existía un scope válido activo, este debe conservarse.
 
 ## Resultado exitoso
@@ -49,7 +49,7 @@ fs "/home/user/documents"
 
 ## Resultado no exitoso
 
-Evo Shell informa que el scope solicitado no pudo establecerse.
+Evo Shell Engine informa que el scope solicitado no pudo establecerse.
 
 ## Fuera de alcance
 

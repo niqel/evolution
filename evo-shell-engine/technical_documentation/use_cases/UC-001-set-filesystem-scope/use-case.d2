@@ -4,7 +4,7 @@ usuario: "Usuario" {
   shape: person
 }
 
-evo_shell: "Evo Shell" {
+evo_shell_engine: "Evo Shell Engine" {
   shape: rectangle
 
   establecer_scope: "Establecer filesystem scope" {
@@ -24,7 +24,7 @@ resultado_alternativo: "scope no establecido" {
   shape: rectangle
 }
 
-usuario -> evo_shell.establecer_scope: solicita
-entrada -> evo_shell.establecer_scope: entrada conceptual
-evo_shell.establecer_scope -> resultado_exitoso: resultado exitoso
-evo_shell.establecer_scope -> resultado_alternativo: resultado alternativo
+usuario -> evo_shell_engine.establecer_scope: solicita
+entrada -> evo_shell_engine.establecer_scope: entrada conceptual
+evo_shell_engine.establecer_scope -> resultado_exitoso: resultado exitoso
+evo_shell_engine.establecer_scope -> resultado_alternativo: resultado alternativo

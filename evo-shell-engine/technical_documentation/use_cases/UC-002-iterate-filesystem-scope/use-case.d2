@@ -4,7 +4,7 @@ usuario: "Usuario" {
   shape: person
 }
 
-evo_shell: "Evo Shell" {
+evo_shell_engine: "Evo Shell Engine" {
   shape: rectangle
 
   iterar_scope: "Iterar filesystem scope" {
@@ -28,8 +28,8 @@ presentacion: "representación visual\nseparada" {
   shape: rectangle
 }
 
-usuario -> evo_shell.iterar_scope: "ejecuta iter"
-entrada -> evo_shell.iterar_scope: "scope activo"
-evo_shell.iterar_scope -> resultado_exitoso: "resultado exitoso"
-evo_shell.iterar_scope -> resultado_alternativo: "resultado alternativo"
+usuario -> evo_shell_engine.iterar_scope: "ejecuta iter"
+entrada -> evo_shell_engine.iterar_scope: "scope activo"
+evo_shell_engine.iterar_scope -> resultado_exitoso: "resultado exitoso"
+evo_shell_engine.iterar_scope -> resultado_alternativo: "resultado alternativo"
 resultado_exitoso -> presentacion: "puede mostrarse"

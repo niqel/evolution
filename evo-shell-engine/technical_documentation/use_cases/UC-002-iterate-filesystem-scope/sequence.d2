@@ -4,7 +4,7 @@ usuario: "Usuario" {
   shape: person
 }
 
-evo_shell: "Evo Shell" {
+evo_shell_engine: "Evo Shell Engine" {
   shape: rectangle
 }
 
@@ -56,8 +56,8 @@ consumer: "consumidor" {
   shape: rectangle
 }
 
-usuario -> evo_shell: "1. iter"
-evo_shell -> agent: "2. iterator::iter(&FilesystemScope)"
+usuario -> evo_shell_engine: "1. iter"
+evo_shell_engine -> agent: "2. iterator::iter(&FilesystemScope)"
 scope -> agent: "scope válido prestado"
 agent -> iteration_resolver: "3. filesystem_iteration::resolve"
 iteration_resolver -> read_directory_contract: "4. read_directory::provide"
@@ -67,14 +67,14 @@ std_read_dir -> read_dir: "7. ReadDir"
 read_dir -> iteration_resolver: "8. estado de infraestructura"
 iteration_resolver -> iteration: "9. FilesystemIteration"
 iteration -> agent: "10. iteración activa lazy"
-agent -> evo_shell: "11. devuelve FilesystemIteration"
+agent -> evo_shell_engine: "11. devuelve FilesystemIteration"
 
 lazy_flow: "Consumo lazy elemento por elemento" {
   shape: rectangle
   style.fill: "#eefaf1"
 }
 
-evo_shell -> lazy_flow: "consume incrementalmente"
+evo_shell_engine -> lazy_flow: "consume incrementalmente"
 lazy_flow -> iteration: "&mut FilesystemIteration"
 iteration -> next_provider: "avanza cursor"
 next_provider -> read_dir: "ReadDir::next"

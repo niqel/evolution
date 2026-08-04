@@ -8,7 +8,7 @@ para conocer los recursos disponibles dentro de ese ámbito.
 
 ## Descripción
 
-La operación `iter` trabaja sobre el `scope` activo de Evo Shell.
+La operación `iter` trabaja sobre el `scope` activo de Evo Shell Engine.
 
 Para un scope de sistema de archivos, `iter` debe obtener únicamente los elementos contenidos directamente en la ubicación seleccionada.
 

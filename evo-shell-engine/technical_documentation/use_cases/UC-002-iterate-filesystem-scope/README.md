@@ -29,15 +29,15 @@ UC-002 no vuelve a resolver si el scope es válido como directorio. Esa garantí
 ## Flujo principal
 
 1. El usuario ejecuta `iter`.
-2. Evo Shell utiliza el `FilesystemScope` activo.
-3. Evo Shell solicita iterar los elementos directamente contenidos en ese scope.
+2. Evo Shell Engine utiliza el `FilesystemScope` activo.
+3. Evo Shell Engine solicita iterar los elementos directamente contenidos en ese scope.
 4. El sistema intenta obtener los elementos disponibles en la ruta.
 5. Por cada elemento encontrado, el resultado debe contener como mínimo:
    - nombre
    - ruta
    - tipo de recurso
 6. Los directorios se devuelven como elementos, pero no se recorren.
-7. Evo Shell obtiene un resultado estructurado.
+7. Evo Shell Engine obtiene un resultado estructurado.
 8. La presentación visual del resultado se realiza separadamente.
 
 ## Flujo alternativo — scope no iterable en ese momento
@@ -55,9 +55,9 @@ Estos ejemplos no forman una lista técnica cerrada.
 
 Flujo:
 
-1. Evo Shell intenta obtener los elementos del scope.
+1. Evo Shell Engine intenta obtener los elementos del scope.
 2. La operación no puede resolverse.
-3. Evo Shell informa que `iter` no pudo completarse.
+3. Evo Shell Engine informa que `iter` no pudo completarse.
 4. El scope activo no se modifica.
 
 ## Resultado exitoso
@@ -81,7 +81,7 @@ Ejemplo conceptual estructurado:
 
 ## Resultado no exitoso
 
-Evo Shell informa que `iter` no pudo completarse.
+Evo Shell Engine informa que `iter` no pudo completarse.
 
 ## Fuera de alcance
 
