@@ -8,6 +8,6 @@ pub fn resolve(
     read_directory: ReadDirectory,
 ) -> Result<FilesystemIteration, IterError> {
     read_directory(scope.path())
-        .map(FilesystemIteration::new)
+        .map(|read_dir| FilesystemIteration::new(read_dir, scope.path().to_path_buf()))
         .map_err(IterError::OpenDirectory)
 }

@@ -238,6 +238,41 @@ mod tests {
     }
 
     #[test]
+    fn filesystem_iteration_preserves_scope_path() {
+        let directory = TestDirectory::new("iteration_path");
+        let scope = scope_setter::set(directory.path()).unwrap();
+        let iteration = iterator::iter(&scope).unwrap();
+
+        assert_eq!(iteration.path(), scope.path());
+    }
+
+    #[test]
+    fn creating_filesystem_iteration_does_not_modify_scope() {
+        let directory = TestDirectory::new("iteration_scope_unchanged");
+        let scope = scope_setter::set(directory.path()).unwrap();
+        let scope_path = scope.path().to_path_buf();
+
+        let iteration = iterator::iter(&scope).unwrap();
+
+        assert_eq!(scope.path(), scope_path.as_path());
+        assert_eq!(iteration.path(), scope_path.as_path());
+    }
+
+    #[test]
+    fn empty_filesystem_iteration_preserves_path_after_none() {
+        let directory = TestDirectory::new("empty_iteration_path");
+        let scope = scope_setter::set(directory.path()).unwrap();
+        let mut iteration = iterator::iter(&scope).unwrap();
+        let path = iteration.path().to_path_buf();
+
+        let result = iteration_advancer::advance(&mut iteration).unwrap();
+
+        assert!(result.is_none());
+        assert_eq!(iteration.path(), path.as_path());
+        assert_eq!(iteration.next_index(), 0);
+    }
+
+    #[test]
     fn enterer_enter_matches_enter_use_case_function_pointer() {
         let directory = TestDirectory::new("enter_use_case_pointer");
         let child = directory.path().join("child");

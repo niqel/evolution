@@ -8,6 +8,10 @@ use evo_shell::{
 };
 use evo_shell_engine::IterError;
 
+const PROMPT_SCOPE_COLOR: &str = "\x1b[32m";
+const PROMPT_LOCATION_COLOR: &str = "\x1b[36m";
+const RESET: &str = "\x1b[0m";
+
 fn main() {
     if let Err(error) = run() {
         eprintln!("{error}");
@@ -41,7 +45,11 @@ fn write_prompt(shell: &Shell) -> io::Result<()> {
 }
 
 fn write_prompt_to(writer: &mut impl Write, path: &Path) -> io::Result<()> {
-    write!(writer, "scope-fs {} > ", compact_scope_location(path))
+    write!(
+        writer,
+        "{PROMPT_SCOPE_COLOR}scope-fs{RESET} {PROMPT_LOCATION_COLOR}{}{RESET} > ",
+        compact_scope_location(path)
+    )
 }
 
 fn read_input() -> io::Result<Option<String>> {
@@ -168,7 +176,10 @@ impl From<io::Error> for RunError {
 mod tests {
     use std::path::Path;
 
-    use super::{compact_scope_location, render_scope_changed, write_prompt_to};
+    use super::{
+        PROMPT_LOCATION_COLOR, PROMPT_SCOPE_COLOR, RESET, compact_scope_location,
+        render_scope_changed, write_prompt_to,
+    };
 
     #[test]
     fn compact_scope_location_uses_last_segment_for_deep_path() {
@@ -206,7 +217,7 @@ mod tests {
     }
 
     #[test]
-    fn write_prompt_uses_scope_type_and_compact_location() {
+    fn write_prompt_uses_scope_type_and_compact_location_with_distinct_styles() {
         let mut output = Vec::new();
 
         write_prompt_to(
@@ -215,7 +226,26 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(String::from_utf8(output).unwrap(), "scope-fs …/src > ");
+        assert_eq!(
+            String::from_utf8(output).unwrap(),
+            format!("{PROMPT_SCOPE_COLOR}scope-fs{RESET} {PROMPT_LOCATION_COLOR}…/src{RESET} > ")
+        );
+        assert_ne!(PROMPT_SCOPE_COLOR, PROMPT_LOCATION_COLOR);
+    }
+
+    #[test]
+    fn write_prompt_keeps_separator_neutral_after_reset() {
+        let mut output = Vec::new();
+
+        write_prompt_to(
+            &mut output,
+            Path::new("/home/user/repos/evolution/evo-shell/src"),
+        )
+        .unwrap();
+
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.ends_with(&format!("{RESET} > ")));
+        assert!(!output.contains("/home/user/repos/evolution/evo-shell/src"));
     }
 
     #[test]

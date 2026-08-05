@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 evo-shell-engine = { path = "../evo-shell-engine" }
+time = { version = "0.3", default-features = false, features = ["formatting", "local-offset"] }

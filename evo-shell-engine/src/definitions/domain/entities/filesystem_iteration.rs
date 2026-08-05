@@ -1,17 +1,24 @@
 use std::fs::ReadDir;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct FilesystemIteration {
     read_dir: ReadDir,
     next_index: usize,
+    path: PathBuf,
 }
 
 impl FilesystemIteration {
-    pub(crate) fn new(read_dir: ReadDir) -> Self {
+    pub(crate) fn new(read_dir: ReadDir, path: PathBuf) -> Self {
         Self {
             read_dir,
             next_index: 0,
+            path,
         }
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 
     pub(crate) fn read_dir_mut(&mut self) -> &mut ReadDir {
