@@ -68,7 +68,7 @@ dir_entry: "DirEntry / fin / error" {
   shape: rectangle
 }
 
-entry: "FilesystemEntry\n\nname\npath\nkind\nmodified\nsize" {
+entry: "FilesystemEntry\n\nname\npath\nkind\ncreated\nmodified\nsize" {
   shape: rectangle
 }
 
@@ -110,7 +110,7 @@ next_provider -> iteration: "&mut FilesystemIteration"
 next_provider -> read_dir_next: "ReadDir::next"
 read_dir_next -> dir_entry: "DirEntry / fin / error"
 dir_entry -> entry_resolver: "vuelve al resolver"
-entry_resolver -> entry: "resuelve entry + metadata"
+entry_resolver -> entry: "resuelve entry + metadata\ncreated opcional"
 iteration -> advancer_agent: "lee next_index"
 entry -> advancer_agent: "entry"
 advancer_agent -> item: "package index + entry"
@@ -132,7 +132,15 @@ repeat: "La etapa 2 puede repetirse hasta None\nsin acumular resultados" {
 consumer -> repeat: "solicita siguiente"
 repeat -> advance_use_case: "&mut FilesystemIteration"
 
-error_flow: "Error operativo\nIterError\nscope sin cambios\nno se omite silenciosamente" {
+created_note: "created opcional\n\nmetadata.created().ok()\nsi no existe creation time\nentry.created = None\nno se usa modified como fallback" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+entry_resolver -> created_note: "solo para creation time"
+created_note -> entry: "created"
+
+error_flow: "Error operativo\nIterError\nscope sin cambios\nno se omite silenciosamente\nmetadata general fallida sí falla" {
   shape: rectangle
   style.fill: "#fff0f0"
 }

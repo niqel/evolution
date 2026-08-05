@@ -1,0 +1,94 @@
+direction: down
+
+main_loop: "main / shell loop" {
+  shape: rectangle
+}
+
+prompt: "write prompt" {
+  shape: rectangle
+}
+
+input_style: "activate FILE_STYLE\npara texto del usuario" {
+  shape: rectangle
+}
+
+read_line: "read_line" {
+  shape: rectangle
+}
+
+reset_after_read: "write RESET\ninmediatamente después de read_line" {
+  shape: rectangle
+}
+
+parse_execute: "parse / execute" {
+  shape: rectangle
+}
+
+presenter: "iteration_presenter::present" {
+  shape: rectangle
+}
+
+header: "render header\nPRIMARY_STYLE + BOLD\n# Created Modified Type Size Name\nRESET" {
+  shape: rectangle
+}
+
+advance: "Advance(&mut FilesystemIteration)" {
+  shape: rectangle
+}
+
+item: "FilesystemIterationItem" {
+  shape: rectangle
+}
+
+row: "render row\n\nPRIMARY index\nCREATED_STYLE Created\nMODIFIED_STYLE Modified\nFILE file/size/name\nLOCATION dir/name\nsin BOLD temporal" {
+  shape: rectangle
+}
+
+summary: "render summary\n\nnumber bold + color\nword normal + color" {
+  shape: rectangle
+}
+
+footer: "render footer Path\n\nPRIMARY Path:\nLOCATION full path" {
+  shape: rectangle
+}
+
+next_prompt: "next prompt" {
+  shape: rectangle
+}
+
+empty_line: "línea vacía\n\nRESET ya emitido\nsin salida adicional" {
+  shape: rectangle
+}
+
+invalid_command: "comando inválido\n\nRESET ya emitido\nerror no hereda FILE_STYLE" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+eof: "EOF\n\nRESET ya emitido\ntermina sin estilo activo" {
+  shape: rectangle
+}
+
+main_loop -> prompt: "1"
+prompt -> input_style: "después del espacio final"
+input_style -> read_line: "captura input"
+read_line -> reset_after_read: "siempre después de leer"
+
+reset_after_read -> eof: "0 bytes"
+reset_after_read -> empty_line: "input vacío"
+reset_after_read -> parse_execute: "input con contenido"
+parse_execute -> invalid_command: "parse/execute error"
+parse_execute -> presenter: "ExecutionResult::FilesystemIteration"
+
+presenter -> header: "render"
+header -> advance: "loop lazy"
+advance -> item: "Some(item)"
+item -> row: "render"
+row -> advance: "siguiente"
+advance -> summary: "None"
+summary -> footer: "Path pegado al summary"
+footer -> next_prompt: "blank line final"
+
+empty_line -> next_prompt: "continúa loop"
+invalid_command -> next_prompt: "continúa loop"
+eof -> main_loop: "return"

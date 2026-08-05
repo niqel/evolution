@@ -1,0 +1,41 @@
+direction: right
+
+usuario: "Usuario" {
+  shape: person
+}
+
+evo_shell: "Evo Shell" {
+  shape: rectangle
+
+  visual_identity: "Unificar identidad visual\nprompt + iter" {
+    shape: oval
+  }
+}
+
+entrada: "Entrada conceptual\n\nprompt\niter output\nfooter Path\ninput del usuario" {
+  shape: rectangle
+}
+
+salida: "Salida visible\n\nmisma estructura\nnueva identidad visual" {
+  shape: rectangle
+}
+
+styles: "Estilos compartidos\n\nPRIMARY green\nLOCATION cyan\nFILE pale yellow #FFFFE5\nCREATED teal #218E80\nMODIFIED teal #188273\nRESET" {
+  shape: rectangle
+}
+
+preserved: "Se preserva\n\nCreated\nModified\nindex\nType\nSize\nName\nsummary\nPath footer\nlazy iteration\nnavegación" {
+  shape: rectangle
+}
+
+fuera: "No hace\n\nengine changes\nnuevas columnas\ncrates nuevos\nthemes\nline editor" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+usuario -> evo_shell.visual_identity: "usa shell"
+entrada -> evo_shell.visual_identity: "superficies existentes"
+styles -> evo_shell.visual_identity: "aplica"
+evo_shell.visual_identity -> salida: "renderiza"
+evo_shell.visual_identity -> preserved: "sin cambio semántico"
+evo_shell.visual_identity -> fuera: "mantiene fuera de alcance"

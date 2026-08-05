@@ -8,7 +8,7 @@ filesystem_iteration_item: "FilesystemIterationItem\n\nentidad del engine\nindex
   shape: rectangle
 }
 
-filesystem_entry: "FilesystemEntry\n\nentidad del engine\nname\npath\nkind\nmodified\nsize" {
+filesystem_entry: "FilesystemEntry\n\nentidad del engine\nname\npath\nkind\ncreated\nmodified\nsize" {
   shape: rectangle
 }
 
@@ -36,7 +36,7 @@ filesystem_iteration -> presenter: "entrada"
 presenter -> filesystem_iteration_item: "consume vía Advance"
 filesystem_iteration_item -> filesystem_entry: "entry"
 filesystem_iteration_item -> visible_output: "index -> #"
-filesystem_entry -> visible_output: "modified type size name"
+filesystem_entry -> visible_output: "created modified type size name"
 presenter -> presentation_state: "mantiene counts locales"
 presentation_state -> visible_output: "summary files/directories"
 presenter -> not_domain: "presentación temporal"

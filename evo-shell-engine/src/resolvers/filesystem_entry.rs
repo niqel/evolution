@@ -24,6 +24,7 @@ pub fn resolve(
     } else {
         FilesystemEntryKind::Other
     };
+    let created = metadata.created().ok();
     let modified = metadata.modified().ok();
     let size = if kind == FilesystemEntryKind::File {
         Some(metadata.len())
@@ -35,6 +36,7 @@ pub fn resolve(
         entry.file_name(),
         entry.path(),
         kind,
+        created,
         modified,
         size,
     )))

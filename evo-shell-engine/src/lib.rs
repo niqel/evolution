@@ -586,17 +586,25 @@ mod tests {
                 .unwrap()
         {
             if entry.name() == OsStr::new("report.txt") {
-                assert_eq!(entry.path(), directory.path().join("report.txt").as_path());
+                let path = directory.path().join("report.txt");
+                let metadata = fs::metadata(&path).unwrap();
+
+                assert_eq!(entry.path(), path.as_path());
                 assert_eq!(entry.kind(), FilesystemEntryKind::File);
                 assert_eq!(entry.size(), Some(6));
+                assert_eq!(entry.created(), metadata.created().ok());
                 assert!(entry.modified().is_some());
                 found_file = true;
             }
 
             if entry.name() == OsStr::new("images") {
-                assert_eq!(entry.path(), directory.path().join("images").as_path());
+                let path = directory.path().join("images");
+                let metadata = fs::metadata(&path).unwrap();
+
+                assert_eq!(entry.path(), path.as_path());
                 assert_eq!(entry.kind(), FilesystemEntryKind::Directory);
                 assert_eq!(entry.size(), None);
+                assert_eq!(entry.created(), metadata.created().ok());
                 assert!(entry.modified().is_some());
                 found_directory = true;
             }
@@ -650,6 +658,13 @@ mod tests {
         assert_eq!(entry.name(), OsStr::new("empty.txt"));
         assert_eq!(entry.kind(), FilesystemEntryKind::File);
         assert_eq!(entry.size(), Some(0));
+        assert_eq!(
+            entry.created(),
+            fs::metadata(directory.path().join("empty.txt"))
+                .unwrap()
+                .created()
+                .ok()
+        );
     }
 
     #[test]

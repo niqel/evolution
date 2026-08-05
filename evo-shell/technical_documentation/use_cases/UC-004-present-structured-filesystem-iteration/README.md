@@ -6,6 +6,10 @@ Este caso de uso documenta cómo Evo Shell debe presentar la iteración filesyst
 
 [US-004 — Mostrar información estructurada de los elementos mediante `iter`](../../../functional_documentation/user_stories/US-004-show-structured-filesystem-iteration.md)
 
+También incorpora la ampliación de tabla requerida por:
+
+[US-006 — Mostrar fecha de creación de elementos en `iter`](../../../functional_documentation/user_stories/US-006-show-filesystem-created-time.md)
+
 US-004 no cambia la sintaxis del comando:
 
 ```text
@@ -85,6 +89,7 @@ present
 - encabezado;
 - consumo progresivo mediante `Advance`;
 - render de cada fila;
+- formato de `Created`;
 - formato de `Modified`;
 - formato de `Size`;
 - texto visible de `Type`;
@@ -137,13 +142,17 @@ El presenter consume un item, lo presenta y puede descartarlo antes de solicitar
 Formato conceptual:
 
 ```text
-#   Modified             Type   Size      Name
+#   Created              Modified             Type   Size      Name
 ```
 
 Mapeo:
 
 ```text
 #        ← FilesystemIterationItem.index
+
+Created  ← FilesystemEntry.created
+           convertido en presentación
+           o celda vacía si None
 
 Modified ← FilesystemEntry.modified
            convertido en presentación
@@ -171,7 +180,7 @@ No debe usar el path completo como `Name`.
 
 Evo Shell Engine no devuelve una fecha formateada.
 
-`iteration_presenter::present` transforma el dato temporal estructurado de `FilesystemEntry.modified` a presentación.
+`iteration_presenter::present` transforma los datos temporales estructurados de `FilesystemEntry.created` y `FilesystemEntry.modified` a presentación.
 
 Formato funcional deseado:
 
@@ -190,6 +199,20 @@ Esta documentación no define todavía timezone configurable.
 Si el formato local exacto requiere una dependencia externa y el proyecto decide no agregarla todavía, la implementación debe dejar esa decisión explícita en el momento de implementarse.
 
 No se agrega un crate de fechas en esta tarea documental.
+
+La implementación actual de Evo Shell ya utiliza `time` para presentar fechas locales legibles. Esa dependencia debe reutilizarse para `Created`; no se introduce `chrono`, `jiff` ni otro crate de fecha.
+
+La lógica base de formateo de `SystemTime` debe compartirse entre `Created` y `Modified` mediante una función mínima de presentación.
+
+No se crea:
+
+- `DateFormatter`;
+- trait de formatter;
+- abstracción genérica de fechas.
+
+Si `FilesystemEntry.created` es `None`, la celda `Created` queda vacía.
+
+No se usa `Modified` como fallback para `Created`.
 
 ## Formato de size
 
@@ -307,6 +330,10 @@ Esta documentación no fija una paleta definitiva ni agrega crates externos de t
 
 Una paleta mínima futura debe mantenerse legible y separada del dato estructurado.
 
+`Created` no introduce un color propio.
+
+`Created` y `Modified` pueden permanecer con presentación neutra/default.
+
 ## Main y shell loop
 
 El código actual de presentación vive conceptualmente en `main.rs` mediante responsabilidades como:
@@ -408,6 +435,7 @@ FilesystemEntry
 ├── name
 ├── path
 ├── kind
+├── created
 ├── modified
 └── size
 ```

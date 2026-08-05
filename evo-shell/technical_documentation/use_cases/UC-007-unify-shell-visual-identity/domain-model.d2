@@ -1,0 +1,52 @@
+direction: right
+
+filesystem_iteration: "FilesystemIteration\n\nentidad del engine\nsin estilos" {
+  shape: rectangle
+}
+
+filesystem_iteration_item: "FilesystemIterationItem\n\nindex\nentry\nsin estilos" {
+  shape: rectangle
+}
+
+filesystem_entry: "FilesystemEntry\n\nname\npath\nkind\ncreated\nmodified\nsize\nsin estilos" {
+  shape: rectangle
+}
+
+presentation_style: "presentation_style\n\nconstantes compartidas\nno entidad de dominio" {
+  shape: rectangle
+  style.fill: "#edf4ff"
+}
+
+prompt_behavior: "Prompt behavior\n\nscope-fs\nubicación compacta\n>\ninput style" {
+  shape: rectangle
+  style.fill: "#eefaf1"
+}
+
+iteration_presentation_behavior: "Iteration presentation behavior\n\nheader\nindex\nType\nSize\nName\nsummary\nfooter Path" {
+  shape: rectangle
+  style.fill: "#eefaf1"
+}
+
+not_domain: "No se crean entidades de dominio\n\nTheme\nStyle\nColor enum\nPromptTheme\nTable\nRow" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+filesystem_iteration -> filesystem_iteration_item: "Advance produce"
+filesystem_iteration_item -> filesystem_entry: "entry"
+
+presentation_style -> prompt_behavior: "aplica estilos"
+presentation_style -> iteration_presentation_behavior: "aplica estilos"
+
+filesystem_iteration_item -> iteration_presentation_behavior: "index visible"
+filesystem_entry -> iteration_presentation_behavior: "kind/name/dates/size"
+
+prompt_behavior -> not_domain: "presentación temporal"
+iteration_presentation_behavior -> not_domain: "presentación temporal"
+
+style_rules: "Reglas de estilo\n\nPRIMARY: scope-fs, >, Path:, header, index\nLOCATION: compact location, full path, dir, directory/, directories summary\nFILE: file, file size, file name, input, files summary\nCREATED: Created values\nMODIFIED: Modified values\nRESET: corta propagación\n\nsin BOLD en valores temporales" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+presentation_style -> style_rules: "fuente única mínima"

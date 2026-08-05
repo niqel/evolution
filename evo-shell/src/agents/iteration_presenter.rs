@@ -11,10 +11,12 @@ use time::{OffsetDateTime, UtcOffset, format_description};
 use crate::presentation_style;
 
 const BOLD: &str = "\x1b[1m";
-const CYAN: &str = "\x1b[36m";
 const MAGENTA: &str = "\x1b[35m";
 const YELLOW: &str = "\x1b[33m";
+const INDEX_WIDTH: usize = 3;
+const DATETIME_WIDTH: usize = 20;
 const TYPE_WIDTH: usize = 7;
+const SIZE_WIDTH: usize = 9;
 
 pub fn present(iteration: FilesystemIteration) -> Result<(), PresentIterationError> {
     let mut stdout = io::stdout();
@@ -32,8 +34,10 @@ pub fn present_to(
 
     writeln!(
         writer,
-        "{BOLD}{:<3} {:<20} {:<7} {:<9} {}{}",
+        "{BOLD}{}{:<3} {:<20} {:<20} {:<7} {:<9} {}{}",
+        presentation_style::PRIMARY_STYLE,
         "#",
+        "Created",
         "Modified",
         "Type",
         "Size",
@@ -83,16 +87,18 @@ fn render_row(
     index: usize,
     entry: &FilesystemEntry,
 ) -> Result<(), PresentIterationError> {
+    let index = format_index(index);
     let kind = format_type(entry.kind());
-    let size = format_size(entry.size());
-    let modified = format_modified(entry.modified());
+    let size = format_size_cell(entry.size(), entry.kind());
+    let created = format_created_cell(entry.created());
+    let modified = format_modified_cell(entry.modified());
     let name = format_name(entry.name(), entry.kind());
     let name = color_name(&name, entry.kind());
 
     writeln!(
         writer,
-        "{:<3} {:<20} {} {:<9} {}",
-        index, modified, kind, size, name
+        "{} {} {} {} {} {}",
+        index, created, modified, kind, size, name
     )?;
 
     Ok(())
@@ -123,6 +129,27 @@ fn format_size(size: Option<u64>) -> String {
     format_decimal_unit(bytes as f64 / 1_000_000.0, "MB")
 }
 
+fn format_size_cell(size: Option<u64>, kind: FilesystemEntryKind) -> String {
+    let visible = format_size(size);
+    let padding = SIZE_WIDTH.saturating_sub(visible.len());
+
+    if visible.is_empty() {
+        return " ".repeat(SIZE_WIDTH);
+    }
+
+    if kind == FilesystemEntryKind::File {
+        format!(
+            "{}{}{}{}",
+            presentation_style::FILE_STYLE,
+            visible,
+            presentation_style::RESET,
+            " ".repeat(padding)
+        )
+    } else {
+        format!("{}{}", visible, " ".repeat(padding))
+    }
+}
+
 fn format_decimal_unit(value: f64, unit: &str) -> String {
     let rounded = (value * 10.0).round() / 10.0;
 
@@ -134,11 +161,53 @@ fn format_decimal_unit(value: f64, unit: &str) -> String {
 }
 
 fn format_modified(modified: Option<SystemTime>) -> String {
-    let Some(modified) = modified else {
+    format_system_time(modified)
+}
+
+fn format_created(created: Option<SystemTime>) -> String {
+    format_system_time(created)
+}
+
+fn format_created_cell(created: Option<SystemTime>) -> String {
+    let visible = format_created(created);
+    let padding = DATETIME_WIDTH.saturating_sub(visible.len());
+
+    if visible.is_empty() {
+        " ".repeat(DATETIME_WIDTH)
+    } else {
+        format!(
+            "{}{}{}{}",
+            presentation_style::CREATED_STYLE,
+            visible,
+            presentation_style::RESET,
+            " ".repeat(padding)
+        )
+    }
+}
+
+fn format_modified_cell(modified: Option<SystemTime>) -> String {
+    let visible = format_modified(modified);
+    let padding = DATETIME_WIDTH.saturating_sub(visible.len());
+
+    if visible.is_empty() {
+        " ".repeat(DATETIME_WIDTH)
+    } else {
+        format!(
+            "{}{}{}{}",
+            presentation_style::MODIFIED_STYLE,
+            visible,
+            presentation_style::RESET,
+            " ".repeat(padding)
+        )
+    }
+}
+
+fn format_system_time(time: Option<SystemTime>) -> String {
+    let Some(time) = time else {
         return String::new();
     };
 
-    let utc = OffsetDateTime::from(modified);
+    let utc = OffsetDateTime::from(time);
     let offset = UtcOffset::local_offset_at(utc).unwrap_or(UtcOffset::UTC);
 
     format_offset_datetime(utc.to_offset(offset))
@@ -166,8 +235,8 @@ fn format_name(name: &OsStr, kind: FilesystemEntryKind) -> String {
 
 fn color_for_kind(kind: FilesystemEntryKind) -> &'static str {
     match kind {
-        FilesystemEntryKind::File => "",
-        FilesystemEntryKind::Directory => CYAN,
+        FilesystemEntryKind::File => presentation_style::FILE_STYLE,
+        FilesystemEntryKind::Directory => presentation_style::LOCATION_STYLE,
         FilesystemEntryKind::Symlink => MAGENTA,
         FilesystemEntryKind::Other => YELLOW,
     }
@@ -184,6 +253,17 @@ fn format_type(kind: FilesystemEntryKind) -> String {
     format!("{}{}", color_segment(visible, kind), " ".repeat(padding))
 }
 
+fn format_index(index: usize) -> String {
+    let visible = format!("{index:<INDEX_WIDTH$}");
+
+    format!(
+        "{}{}{}",
+        presentation_style::PRIMARY_STYLE,
+        visible,
+        presentation_style::RESET
+    )
+}
+
 fn color_segment(value: &str, kind: FilesystemEntryKind) -> String {
     let color = color_for_kind(kind);
 
@@ -195,19 +275,35 @@ fn color_segment(value: &str, kind: FilesystemEntryKind) -> String {
 }
 
 fn format_directory_count(count: usize) -> String {
-    if count == 1 {
-        "1 directory".to_string()
+    let word = if count == 1 {
+        "directory"
     } else {
-        format!("{count} directories")
-    }
+        "directories"
+    };
+
+    format!(
+        "{BOLD}{}{}{}{} {}{}",
+        presentation_style::LOCATION_STYLE,
+        count,
+        presentation_style::RESET,
+        presentation_style::LOCATION_STYLE,
+        word,
+        presentation_style::RESET
+    )
 }
 
 fn format_file_count(count: usize) -> String {
-    if count == 1 {
-        "1 file".to_string()
-    } else {
-        format!("{count} files")
-    }
+    let word = if count == 1 { "file" } else { "files" };
+
+    format!(
+        "{BOLD}{}{}{}{} {}{}",
+        presentation_style::FILE_STYLE,
+        count,
+        presentation_style::RESET,
+        presentation_style::FILE_STYLE,
+        word,
+        presentation_style::RESET
+    )
 }
 
 #[derive(Debug)]
@@ -225,8 +321,10 @@ impl From<io::Error> for PresentIterationError {
 #[cfg(test)]
 mod tests {
     use super::{
-        BOLD, CYAN, MAGENTA, YELLOW, color_name, format_directory_count, format_file_count,
-        format_kind, format_modified, format_offset_datetime, format_size, format_type, present_to,
+        BOLD, MAGENTA, YELLOW, color_name, format_created, format_created_cell,
+        format_directory_count, format_file_count, format_index, format_kind, format_modified,
+        format_modified_cell, format_offset_datetime, format_size, format_size_cell, format_type,
+        present_to,
     };
     use crate::presentation_style;
     use evo_shell_engine::{FilesystemEntryKind, iteration_advancer, iterator, scope_setter};
@@ -270,9 +368,13 @@ mod tests {
     fn without_styles(output: &str) -> String {
         output
             .replace(BOLD, "")
-            .replace(CYAN, "")
             .replace(MAGENTA, "")
             .replace(YELLOW, "")
+            .replace(presentation_style::PRIMARY_STYLE, "")
+            .replace(presentation_style::LOCATION_STYLE, "")
+            .replace(presentation_style::FILE_STYLE, "")
+            .replace(presentation_style::CREATED_STYLE, "")
+            .replace(presentation_style::MODIFIED_STYLE, "")
             .replace(presentation_style::PROMPT_SCOPE_STYLE, "")
             .replace(presentation_style::PROMPT_LOCATION_STYLE, "")
             .replace(presentation_style::RESET, "")
@@ -290,51 +392,129 @@ mod tests {
     fn directory_kind_and_name_use_same_color() {
         assert_eq!(
             format_type(FilesystemEntryKind::Directory),
-            format!("{CYAN}dir{}    ", presentation_style::RESET)
+            format!(
+                "{}dir{}    ",
+                presentation_style::LOCATION_STYLE,
+                presentation_style::RESET
+            )
         );
         assert_eq!(
             color_name("release/", FilesystemEntryKind::Directory),
-            format!("{CYAN}release/{}", presentation_style::RESET)
+            format!(
+                "{}release/{}",
+                presentation_style::LOCATION_STYLE,
+                presentation_style::RESET
+            )
         );
     }
 
     #[test]
-    fn file_kind_and_name_remain_unstyled() {
-        assert_eq!(format_type(FilesystemEntryKind::File), "file   ");
+    fn file_kind_and_name_use_file_style() {
+        assert_eq!(
+            format_type(FilesystemEntryKind::File),
+            format!(
+                "{}file{}   ",
+                presentation_style::FILE_STYLE,
+                presentation_style::RESET
+            )
+        );
         assert_eq!(
             color_name("Cargo.toml", FilesystemEntryKind::File),
-            "Cargo.toml"
+            format!(
+                "{}Cargo.toml{}",
+                presentation_style::FILE_STYLE,
+                presentation_style::RESET
+            )
+        );
+    }
+
+    #[test]
+    fn format_index_uses_primary_style_with_visible_padding() {
+        assert_eq!(
+            format_index(7),
+            format!(
+                "{}7  {}",
+                presentation_style::PRIMARY_STYLE,
+                presentation_style::RESET
+            )
         );
     }
 
     #[test]
     fn type_padding_uses_visible_width_before_ansi_color() {
         let file = format!(
-            "{:<3} {:<20} {} {:<9} {}",
+            "{:<3} {} {} {} {} {}",
             0,
-            "05/08/2026 01:43",
+            format_created_cell(Some(UNIX_EPOCH + Duration::from_secs(42))),
+            format_modified_cell(Some(UNIX_EPOCH + Duration::from_secs(43))),
             format_type(FilesystemEntryKind::File),
-            "327.6 kB",
+            format_size_cell(Some(327_600), FilesystemEntryKind::File),
             "libevo_shell.rlib"
         );
         let directory = format!(
-            "{:<3} {:<20} {} {:<9} {}",
+            "{:<3} {} {} {} {} {}",
             1,
-            "05/08/2026 00:18",
+            format_created_cell(None),
+            format_modified_cell(Some(UNIX_EPOCH + Duration::from_secs(44))),
             format_type(FilesystemEntryKind::Directory),
-            "",
+            format_size_cell(None, FilesystemEntryKind::Directory),
             color_name("build/", FilesystemEntryKind::Directory)
         );
         let file_visible = without_styles(&file);
         let directory_visible = without_styles(&directory);
 
-        assert!(file.contains("file    327.6 kB"));
-        assert!(directory.contains(&format!("{CYAN}dir{}", presentation_style::RESET)));
-        assert!(directory.contains(&format!("{CYAN}build/{}", presentation_style::RESET)));
+        assert!(file.contains(&format!(
+            "{}file{}   ",
+            presentation_style::FILE_STYLE,
+            presentation_style::RESET
+        )));
+        assert!(!file.contains(&format!("{}05/08/2026", presentation_style::FILE_STYLE)));
+        assert!(file.contains(&format!(
+            "{}327.6 kB{} ",
+            presentation_style::FILE_STYLE,
+            presentation_style::RESET
+        )));
+        assert!(directory.contains(&format!(
+            "{}dir{}",
+            presentation_style::LOCATION_STYLE,
+            presentation_style::RESET
+        )));
+        assert!(directory.contains(&format!(
+            "{}build/{}",
+            presentation_style::LOCATION_STYLE,
+            presentation_style::RESET
+        )));
         assert_eq!(
             file_visible.find("libevo_shell.rlib"),
             directory_visible.find("build/")
         );
+    }
+
+    #[test]
+    fn temporal_cells_use_distinct_teals_without_bold() {
+        let created = format_created_cell(Some(UNIX_EPOCH + Duration::from_secs(42)));
+        let modified = format_modified_cell(Some(UNIX_EPOCH + Duration::from_secs(42)));
+
+        assert_eq!(presentation_style::CREATED_STYLE, "\x1b[38;2;33;142;128m");
+        assert_eq!(presentation_style::MODIFIED_STYLE, "\x1b[38;2;24;130;115m");
+        assert!(created.starts_with(presentation_style::CREATED_STYLE));
+        assert!(!created.contains(BOLD));
+        assert!(created.contains(presentation_style::RESET));
+        assert!(modified.starts_with(presentation_style::MODIFIED_STYLE));
+        assert!(!modified.contains(BOLD));
+        assert!(modified.contains(presentation_style::RESET));
+        assert_ne!(
+            presentation_style::CREATED_STYLE,
+            presentation_style::MODIFIED_STYLE
+        );
+        assert_eq!(without_styles(&created).len(), 20);
+        assert_eq!(without_styles(&modified).len(), 20);
+    }
+
+    #[test]
+    fn empty_temporal_cells_keep_width_without_style() {
+        assert_eq!(format_created_cell(None), " ".repeat(20));
+        assert_eq!(format_modified_cell(None), " ".repeat(20));
     }
 
     #[test]
@@ -346,6 +526,22 @@ mod tests {
         assert_eq!(format_size(Some(2_400_000)), "2.4 MB");
         assert_eq!(format_size(Some(1_000)), "1 kB");
         assert_eq!(format_size(None), "");
+    }
+
+    #[test]
+    fn format_size_cell_styles_file_size_without_changing_visible_width() {
+        assert_eq!(
+            format_size_cell(Some(228), FilesystemEntryKind::File),
+            format!(
+                "{}228 B{}    ",
+                presentation_style::FILE_STYLE,
+                presentation_style::RESET
+            )
+        );
+        assert_eq!(
+            format_size_cell(None, FilesystemEntryKind::Directory),
+            " ".repeat(9)
+        );
     }
 
     #[test]
@@ -382,11 +578,47 @@ mod tests {
     }
 
     #[test]
+    fn format_created_uses_same_datetime_rules_as_modified() {
+        let time = UNIX_EPOCH + Duration::from_secs(42);
+        let created = format_created(Some(time));
+        let modified = format_modified(Some(time));
+
+        assert_eq!(created, modified);
+        assert!(!created.contains("unix"));
+        assert_eq!(created.len(), "01/01/1970 00:00".len());
+    }
+
+    #[test]
+    fn format_created_none_is_empty() {
+        assert_eq!(format_created(None), "");
+    }
+
+    #[test]
     fn summary_uses_singular_and_plural() {
-        assert_eq!(format_directory_count(1), "1 directory");
-        assert_eq!(format_directory_count(2), "2 directories");
-        assert_eq!(format_file_count(1), "1 file");
-        assert_eq!(format_file_count(2), "2 files");
+        assert_eq!(without_styles(&format_directory_count(1)), "1 directory");
+        assert_eq!(without_styles(&format_directory_count(2)), "2 directories");
+        assert_eq!(without_styles(&format_file_count(1)), "1 file");
+        assert_eq!(without_styles(&format_file_count(2)), "2 files");
+        assert_eq!(
+            format_directory_count(2),
+            format!(
+                "{BOLD}{}2{}{} directories{}",
+                presentation_style::LOCATION_STYLE,
+                presentation_style::RESET,
+                presentation_style::LOCATION_STYLE,
+                presentation_style::RESET
+            )
+        );
+        assert_eq!(
+            format_file_count(2),
+            format!(
+                "{BOLD}{}2{}{} files{}",
+                presentation_style::FILE_STYLE,
+                presentation_style::RESET,
+                presentation_style::FILE_STYLE,
+                presentation_style::RESET
+            )
+        );
     }
 
     #[test]
@@ -406,15 +638,16 @@ mod tests {
         let visible_path_line = format!("Path: {expected_path}");
         let styled_path_line = format!(
             "{}Path:{} {}{}{}",
-            presentation_style::PROMPT_SCOPE_STYLE,
+            presentation_style::PRIMARY_STYLE,
             presentation_style::RESET,
-            presentation_style::PROMPT_LOCATION_STYLE,
+            presentation_style::LOCATION_STYLE,
             expected_path,
             presentation_style::RESET
         );
         assert!(output.starts_with('\n'));
-        assert!(output.starts_with(&format!("\n{BOLD}#")));
-        assert!(visible_output.contains("#   Modified"));
+        assert!(output.starts_with(&format!("\n{BOLD}{}#", presentation_style::PRIMARY_STYLE)));
+        assert!(visible_output.contains("#   Created"));
+        assert!(visible_output.find("Created").unwrap() < visible_output.find("Modified").unwrap());
         assert!(visible_output.contains("Cargo.toml"));
         assert!(visible_output.contains("src/"));
         assert!(visible_output.contains("1 directory\n1 file"));
@@ -422,10 +655,20 @@ mod tests {
         assert!(!visible_output.contains(&format!("1 file\n\n{visible_path_line}")));
         assert_eq!(visible_output.matches(&visible_path_line).count(), 1);
         assert!(
-            visible_output.find("#   Modified").unwrap()
+            visible_output.find("#   Created").unwrap()
                 < visible_output.find(&visible_path_line).unwrap()
         );
         assert!(output.contains(&styled_path_line));
+        assert!(output.contains(&format!(
+            "{}0  {}",
+            presentation_style::PRIMARY_STYLE,
+            presentation_style::RESET
+        )));
+        assert!(output.contains(&format!(
+            "{}file{}",
+            presentation_style::FILE_STYLE,
+            presentation_style::RESET
+        )));
         assert!(visible_output.ends_with("\n\n"));
         assert!(!output.contains("unix"));
     }
@@ -443,7 +686,7 @@ mod tests {
         let output = String::from_utf8(output).unwrap();
         let visible_output = without_styles(&output);
         let path_line = format!("Path: {expected_path}");
-        assert!(output.starts_with(&format!("\n{BOLD}#")));
+        assert!(output.starts_with(&format!("\n{BOLD}{}#", presentation_style::PRIMARY_STYLE)));
         assert!(visible_output.contains("0 directories\n0 files"));
         assert!(visible_output.contains(&format!("0 directories\n0 files\n{path_line}\n\n")));
         assert!(!visible_output.contains(&format!("0 files\n\n{path_line}")));
@@ -463,9 +706,9 @@ mod tests {
         let output = String::from_utf8(output).unwrap();
         assert!(output.contains(&format!(
             "{}Path:{} {}{}{}\n\n",
-            presentation_style::PROMPT_SCOPE_STYLE,
+            presentation_style::PRIMARY_STYLE,
             presentation_style::RESET,
-            presentation_style::PROMPT_LOCATION_STYLE,
+            presentation_style::LOCATION_STYLE,
             expected_path,
             presentation_style::RESET
         )));

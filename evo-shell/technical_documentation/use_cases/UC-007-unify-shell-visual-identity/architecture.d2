@@ -1,0 +1,84 @@
+direction: down
+
+shell: "Evo Shell presentation" {
+  shape: rectangle
+  style.fill: "#edf4ff"
+
+  presentation_style: "presentation_style.rs\n\nPRIMARY_STYLE green\nLOCATION_STYLE cyan\nFILE_STYLE pale yellow #FFFFE5\nCREATED_STYLE teal #218E80\nMODIFIED_STYLE teal #188273\nRESET\n\nfuente mínima compartida" {
+    shape: rectangle
+  }
+
+  prompt_rendering: "Prompt rendering\n\nscope-fs\ncompact location\n>\ninput style" {
+    shape: rectangle
+  }
+
+  iteration_presenter: "iteration_presenter::present\n\nheader\nrows\nsummary\nfooter Path" {
+    shape: rectangle
+  }
+
+  stdout: "stdout / terminal" {
+    shape: rectangle
+  }
+}
+
+engine: "Evo Shell Engine\n\nsin colores\nsin estilos\nsin cambios de datos" {
+  shape: rectangle
+  style.fill: "#f2f2f2"
+
+  item: "FilesystemIterationItem\n\nindex\nentry" {
+    shape: rectangle
+  }
+
+  entry: "FilesystemEntry\n\nname\npath\nkind\ncreated\nmodified\nsize" {
+    shape: rectangle
+  }
+}
+
+rules: "Reglas US-007" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+
+  primary: "PRIMARY_STYLE\n\nscope-fs\n>\nPath:\nheader completo\nrow index" {
+    shape: rectangle
+  }
+
+  location: "LOCATION_STYLE\n\nubicación compacta\nfull path\ndir\ndirectory/" {
+    shape: rectangle
+  }
+
+  file: "FILE_STYLE\n\nfile\nfile size\nfile name\ntexto de input\nfiles summary" {
+    shape: rectangle
+  }
+
+  temporal: "Temporal styles\n\nCreated -> CREATED_STYLE\nModified -> MODIFIED_STYLE\nsin BOLD en fechas" {
+    shape: rectangle
+  }
+
+  neutral: "Neutral/default\n\nno colorear toda la fila\nsummary conserva sus estilos propios\nprompt/footer sin temporal" {
+    shape: rectangle
+  }
+}
+
+shell.presentation_style -> rules.primary: "define"
+shell.presentation_style -> rules.location: "define"
+shell.presentation_style -> rules.file: "define"
+shell.presentation_style -> rules.temporal: "define"
+shell.presentation_style -> rules.neutral: "RESET separa"
+
+shell.prompt_rendering -> shell.presentation_style: "reutiliza"
+shell.iteration_presenter -> shell.presentation_style: "reutiliza"
+
+shell.prompt_rendering -> shell.stdout: "prompt + input style"
+shell.iteration_presenter -> engine.item: "consume datos existentes"
+engine.item -> engine.entry: "entry"
+engine.item -> shell.iteration_presenter: "index"
+engine.entry -> shell.iteration_presenter: "datos estructurados"
+shell.iteration_presenter -> shell.stdout: "tabla + summary + footer"
+
+engine_boundary: "Frontera\n\nENGINE no conoce ANSI\nENGINE no contiene color\nENGINE no cambia semántica" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+engine -> engine_boundary: "preservado"
+rules -> engine_boundary: "solo presentación"

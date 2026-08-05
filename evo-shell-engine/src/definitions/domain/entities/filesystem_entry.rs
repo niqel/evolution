@@ -16,6 +16,7 @@ pub struct FilesystemEntry {
     name: OsString,
     path: PathBuf,
     kind: FilesystemEntryKind,
+    created: Option<SystemTime>,
     modified: Option<SystemTime>,
     size: Option<u64>,
 }
@@ -25,6 +26,7 @@ impl FilesystemEntry {
         name: OsString,
         path: PathBuf,
         kind: FilesystemEntryKind,
+        created: Option<SystemTime>,
         modified: Option<SystemTime>,
         size: Option<u64>,
     ) -> Self {
@@ -32,6 +34,7 @@ impl FilesystemEntry {
             name,
             path,
             kind,
+            created,
             modified,
             size,
         }
@@ -47,6 +50,10 @@ impl FilesystemEntry {
 
     pub fn kind(&self) -> FilesystemEntryKind {
         self.kind
+    }
+
+    pub fn created(&self) -> Option<SystemTime> {
+        self.created
     }
 
     pub fn modified(&self) -> Option<SystemTime> {

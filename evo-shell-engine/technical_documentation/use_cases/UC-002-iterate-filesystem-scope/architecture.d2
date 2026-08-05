@@ -31,7 +31,7 @@ definitions: "definitions" {
     shape: rectangle
   }
 
-  filesystem_entry_entity: "Domain entity\n\ndefinitions/domain/entities/filesystem_entry.rs\nFilesystemEntry\n\nname\npath\nkind\nmodified\nsize\n\nsin index" {
+  filesystem_entry_entity: "Domain entity\n\ndefinitions/domain/entities/filesystem_entry.rs\nFilesystemEntry\n\nname\npath\nkind\ncreated\nmodified\nsize\n\nsin index" {
     shape: rectangle
   }
 }
@@ -55,7 +55,7 @@ resolvers: "resolvers" {
     shape: rectangle
   }
 
-  filesystem_entry: "Resolver existente\n\nresolvers/filesystem_entry.rs\nfilesystem_entry::resolve\n\nmaterializa FilesystemEntry\ncon tipo y metadata" {
+  filesystem_entry: "Resolver existente\n\nresolvers/filesystem_entry.rs\nfilesystem_entry::resolve\n\nmaterializa FilesystemEntry\ncon tipo y metadata\ncreated opcional" {
     shape: rectangle
   }
 }
@@ -87,7 +87,7 @@ infrastructure: "infrastructure" {
     shape: rectangle
   }
 
-  dir_entry: "std::fs::DirEntry / fin / error\n\nfile_type\nmetadata cuando aplique" {
+  dir_entry: "std::fs::DirEntry / fin / error\n\nfile_type\nmetadata\ncreated puede no estar disponible" {
     shape: rectangle
   }
 }

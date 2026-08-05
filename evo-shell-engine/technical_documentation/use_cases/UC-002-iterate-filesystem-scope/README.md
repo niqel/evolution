@@ -12,6 +12,8 @@ US-004 de Evo Shell requiere que la iteración exponga datos suficientes para pr
 
 US-005 de Evo Shell requiere que la iteración conserve el contexto completo del filesystem scope que la originó. Esa evolución también pertenece a este caso de uso porque el path es estado del scope iterado, no un nuevo comportamiento operativo.
 
+US-006 de Evo Shell requiere que cada entrada exponga la fecha de creación cuando el filesystem la proporciona. Esa evolución pertenece a `FilesystemEntry` porque `created` es metadata propia del elemento del filesystem, no de la presentación ni de la iteración.
+
 ## Actor
 
 - Usuario de Evo Shell
@@ -68,6 +70,7 @@ FilesystemEntry
 ├── name
 ├── path
 ├── kind
+├── created
 ├── modified
 └── size
 ```
@@ -77,6 +80,7 @@ Responsabilidades de cada dato:
 - `name`: nombre del elemento dentro de su directorio.
 - `path`: ruta del elemento.
 - `kind`: tipo de entrada filesystem.
+- `created`: fecha de creación reportada por el filesystem cuando está disponible.
 - `modified`: última modificación reportada por el filesystem cuando está disponible.
 - `size`: tamaño en bytes cuando aplica.
 
@@ -92,6 +96,42 @@ Responsabilidades de cada dato:
 Razón:
 
 el índice no es propiedad del archivo ni del directorio. Es propiedad de la posición del elemento dentro de una iteración concreta.
+
+## Created
+
+`created` representa la fecha de creación reportada por el filesystem cuando está disponible.
+
+El engine debe exponer un dato temporal estructurado.
+
+El engine no debe devolver una fecha formateada como:
+
+```text
+05/08/2026 02:15
+```
+
+Ese formato pertenece a Evo Shell.
+
+Conceptualmente, el dato puede apoyarse en el tipo estándar apropiado para tiempo de filesystem, como `SystemTime`.
+
+La forma conceptual mínima correcta es optional:
+
+```text
+Option<SystemTime>
+```
+
+Razón:
+
+la capacidad estándar de metadata puede indicar que el filesystem o la plataforma no soporta creation time para una entrada concreta.
+
+Si la fecha de creación no está disponible, `FilesystemEntry` conserva:
+
+```text
+created: None
+```
+
+No se debe usar `modified` como fallback.
+
+`created` y `modified` representan propiedades distintas.
 
 ## Modified
 
@@ -158,7 +198,7 @@ UC-002 no suma tamaños globales.
 
 ## Metadata
 
-La obtención de `modified` y `size` pertenece a Evo Shell Engine porque ambos son datos del filesystem.
+La obtención de `created`, `modified` y `size` pertenece a Evo Shell Engine porque son datos del filesystem.
 
 No debe hacerse en:
 
@@ -189,6 +229,25 @@ No se debe duplicar trabajo de filesystem sin necesidad.
 Si falla la obtención de metadata necesaria para materializar el item, el error debe encajar con la semántica existente de `IterError`: un fallo operativo al materializar la entrada no se oculta silenciosamente.
 
 Esta documentación no introduce una política de omitir entradas rotas.
+
+La ausencia específica de creation time no invalida la entrada.
+
+Política:
+
+```text
+metadata()
+    → OK
+
+metadata.created()
+    → OK(SystemTime)
+    → FilesystemEntry.created = Some(SystemTime)
+
+metadata.created()
+    → Err(no soportado / no disponible)
+    → FilesystemEntry.created = None
+```
+
+Solo falla la iteración si falla la obtención general de metadata necesaria para materializar la entrada.
 
 ## FilesystemIterationItem
 
@@ -548,6 +607,7 @@ Some(FilesystemIterationItem {
     name: "report.txt",
     path: "/home/user/documents/report.txt",
     kind: File,
+    created: <dato temporal estructurado opcional>,
     modified: <dato temporal estructurado>,
     size: Some(52700)
   }
@@ -559,6 +619,7 @@ Some(FilesystemIterationItem {
     name: "images",
     path: "/home/user/documents/images",
     kind: Directory,
+    created: <dato temporal estructurado opcional>,
     modified: <dato temporal estructurado>,
     size: None
   }
@@ -607,6 +668,8 @@ Si ocurre un error operativo al avanzar o materializar una entrada, se reporta c
 US-004 de Evo Shell amplía la presentación esperada de `iter`, pero no crea un nuevo use case de iteración en el engine.
 
 US-005 de Evo Shell amplía el contexto visible de `iter`, pero tampoco crea un nuevo use case de iteración en el engine.
+
+US-006 de Evo Shell agrega una columna visible `Created`, pero tampoco crea un nuevo use case de iteración en el engine. La evolución técnica se limita a exponer `created` como metadata opcional de `FilesystemEntry`.
 
 Una capacidad futura equivalente a `pwd` podría reutilizar la misma fuente de verdad representada por `FilesystemScope.path()`, pero esta documentación no diseña ese comando ni su arquitectura.
 

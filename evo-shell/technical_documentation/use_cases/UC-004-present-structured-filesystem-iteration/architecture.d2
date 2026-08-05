@@ -25,7 +25,7 @@ engine: "Evo Shell Engine" {
     shape: rectangle
   }
 
-  entry: "FilesystemEntry\n\nname\npath\nkind\nmodified\nsize" {
+  entry: "FilesystemEntry\n\nname\npath\nkind\ncreated\nmodified\nsize" {
     shape: rectangle
   }
 }
@@ -34,11 +34,11 @@ presentation: "Presentación Evo Shell" {
   shape: rectangle
   style.fill: "#edf4ff"
 
-  header: "header\n# Modified Type Size Name" {
+  header: "header\n# Created Modified Type Size Name" {
     shape: rectangle
   }
 
-  row: "row rendering\n\nindex\nmodified formatted\ntype text\nsize formatted\nname" {
+  row: "row rendering\n\nindex\ncreated formatted or empty\nmodified formatted\ntype text\nsize formatted\nname" {
     shape: rectangle
   }
 

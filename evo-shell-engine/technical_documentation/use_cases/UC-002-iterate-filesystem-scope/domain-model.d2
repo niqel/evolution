@@ -25,7 +25,7 @@ dir_entry: "std::fs::DirEntry\n\nelemento de infraestructura\nfile_type\nmetadat
   shape: rectangle
 }
 
-filesystem_entry: "FilesystemEntry\n\nname\npath\nkind\nmodified\nsize\n\nNO contiene index" {
+filesystem_entry: "FilesystemEntry\n\nname\npath\nkind\ncreated\nmodified\nsize\n\nNO contiene index" {
   shape: rectangle
 }
 
@@ -45,6 +45,11 @@ std_fs: "std::fs\nread_dir / ReadDir::next / metadata" {
   shape: rectangle
 }
 
+created_rule: "Regla de created\n\nOption<SystemTime>\ncreation time puede no estar disponible\nno usa modified como fallback\nno falla la entrada si solo falta created" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
 filesystem_scope -> filesystem_iteration: "se presta para iniciar iter\npath copiado una vez al crear iteración"
 std_fs -> external_filesystem: "accede a recurso externo"
 std_fs -> read_dir: "crea ReadDir"
@@ -56,6 +61,8 @@ dir_entry -> filesystem_entry: "filesystem_entry::resolve"
 filesystem_entry_kind -> filesystem_entry: "kind"
 filesystem_entry -> filesystem_iteration_item: "entry"
 filesystem_iteration -> filesystem_iteration_item: "next_index -> index"
+dir_entry -> created_rule: "metadata.created().ok()"
+created_rule -> filesystem_entry: "created"
 
 path_rule: "Regla de path\n\nFilesystemScope es fuente de verdad\nFilesystemIteration conserva su propio path\npath() -> &Path\nno se toma del prompt\nno se toma de FilesystemEntry\nno se repite por item" {
   shape: rectangle

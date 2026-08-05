@@ -25,7 +25,10 @@ fn run_loop(shell: &mut Shell) -> Result<(), RunError> {
     loop {
         write_prompt(shell)?;
 
-        let Some(input) = read_input()? else {
+        let input = read_input();
+        reset_after_input()?;
+
+        let Some(input) = input? else {
             println!();
             return Ok(());
         };
@@ -43,13 +46,26 @@ fn write_prompt(shell: &Shell) -> io::Result<()> {
 fn write_prompt_to(writer: &mut impl Write, path: &Path) -> io::Result<()> {
     write!(
         writer,
-        "{}scope-fs{} {}{}{} > ",
+        "{}scope-fs{} {}{}{} {}>{} {}",
         presentation_style::PROMPT_SCOPE_STYLE,
         presentation_style::RESET,
         presentation_style::PROMPT_LOCATION_STYLE,
         compact_scope_location(path),
         presentation_style::RESET,
+        presentation_style::PROMPT_SCOPE_STYLE,
+        presentation_style::RESET,
+        presentation_style::FILE_STYLE,
     )
+}
+
+fn reset_after_input() -> io::Result<()> {
+    let mut stdout = io::stdout();
+    reset_after_input_to(&mut stdout)?;
+    stdout.flush()
+}
+
+fn reset_after_input_to(writer: &mut impl Write) -> io::Result<()> {
+    write!(writer, "{}", presentation_style::RESET)
 }
 
 fn read_input() -> io::Result<Option<String>> {
@@ -177,7 +193,8 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        compact_scope_location, presentation_style, render_scope_changed, write_prompt_to,
+        compact_scope_location, presentation_style, render_scope_changed, reset_after_input_to,
+        write_prompt_to,
     };
 
     #[test]
@@ -228,11 +245,14 @@ mod tests {
         assert_eq!(
             String::from_utf8(output).unwrap(),
             format!(
-                "{}scope-fs{} {}…/src{} > ",
+                "{}scope-fs{} {}…/src{} {}>{} {}",
                 presentation_style::PROMPT_SCOPE_STYLE,
                 presentation_style::RESET,
                 presentation_style::PROMPT_LOCATION_STYLE,
-                presentation_style::RESET
+                presentation_style::RESET,
+                presentation_style::PROMPT_SCOPE_STYLE,
+                presentation_style::RESET,
+                presentation_style::FILE_STYLE
             )
         );
         assert_ne!(
@@ -242,7 +262,7 @@ mod tests {
     }
 
     #[test]
-    fn write_prompt_keeps_separator_neutral_after_reset() {
+    fn write_prompt_styles_separator_and_activates_input_style() {
         let mut output = Vec::new();
 
         write_prompt_to(
@@ -252,8 +272,26 @@ mod tests {
         .unwrap();
 
         let output = String::from_utf8(output).unwrap();
-        assert!(output.ends_with(&format!("{} > ", presentation_style::RESET)));
+        assert!(output.contains(&format!(
+            "{}>{} {}",
+            presentation_style::PROMPT_SCOPE_STYLE,
+            presentation_style::RESET,
+            presentation_style::FILE_STYLE
+        )));
+        assert!(output.ends_with(presentation_style::FILE_STYLE));
         assert!(!output.contains("/home/user/repos/evolution/evo-shell/src"));
+    }
+
+    #[test]
+    fn reset_after_input_writes_reset() {
+        let mut output = Vec::new();
+
+        reset_after_input_to(&mut output).unwrap();
+
+        assert_eq!(
+            String::from_utf8(output).unwrap(),
+            presentation_style::RESET
+        );
     }
 
     #[test]
