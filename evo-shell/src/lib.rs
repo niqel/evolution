@@ -3,7 +3,7 @@ mod definitions;
 mod providers;
 mod resolvers;
 
-pub use agents::{executor, parser, shell_initializer, tokenizer};
+pub use agents::{executor, iteration_presenter, parser, shell_initializer, tokenizer};
 pub use definitions::domain::entities::command::Command;
 pub use definitions::domain::entities::shell::Shell;
 pub use definitions::domain::entities::token::Token;
@@ -528,7 +528,8 @@ mod tests {
         };
         let mut found_inside = false;
 
-        while let Some(entry) = iteration_advancer::advance(&mut iteration).unwrap() {
+        while let Some(item) = iteration_advancer::advance(&mut iteration).unwrap() {
+            let entry = item.entry();
             if entry.name() == OsStr::new("inside.txt") {
                 assert_eq!(entry.kind(), FilesystemEntryKind::File);
                 found_inside = true;
@@ -574,7 +575,8 @@ mod tests {
         let mut found_file = false;
         let mut found_directory = false;
 
-        while let Some(entry) = iteration_advancer::advance(&mut iteration).unwrap() {
+        while let Some(item) = iteration_advancer::advance(&mut iteration).unwrap() {
+            let entry = item.entry();
             if entry.name() == OsStr::new("report.txt") {
                 assert_eq!(entry.kind(), FilesystemEntryKind::File);
                 found_file = true;

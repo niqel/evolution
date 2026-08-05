@@ -4,11 +4,9 @@ use std::path::{Component, Path};
 
 use evo_shell::{
     ExecuteError, ExecutionResult, InitializeShellError, ParseError, Shell, TokenStream, executor,
-    parser, shell_initializer, tokenizer,
+    iteration_presenter, parser, shell_initializer, tokenizer,
 };
-use evo_shell_engine::{
-    FilesystemEntry, FilesystemEntryKind, FilesystemIteration, IterError, iteration_advancer,
-};
+use evo_shell_engine::IterError;
 
 fn main() {
     if let Err(error) = run() {
@@ -83,7 +81,16 @@ fn handle_input(shell: &mut Shell, input: &str) -> io::Result<()> {
 fn render_execution(_shell: &Shell, result: ExecutionResult) -> io::Result<()> {
     match result {
         ExecutionResult::ScopeChanged => render_scope_changed(&mut io::stdout()),
-        ExecutionResult::FilesystemIteration(iteration) => render_iteration(iteration),
+        ExecutionResult::FilesystemIteration(iteration) => {
+            match iteration_presenter::present(iteration) {
+                Ok(()) => Ok(()),
+                Err(iteration_presenter::PresentIterationError::Io(error)) => Err(error),
+                Err(iteration_presenter::PresentIterationError::Iter(error)) => {
+                    render_iter_error(error);
+                    Ok(())
+                }
+            }
+        }
     }
 }
 
@@ -115,34 +122,6 @@ fn compact_scope_location(path: &Path) -> String {
             format!("…/{}", last.to_string_lossy())
         }
         _ => path.display().to_string(),
-    }
-}
-
-fn render_iteration(mut iteration: FilesystemIteration) -> io::Result<()> {
-    loop {
-        match iteration_advancer::advance(&mut iteration) {
-            Ok(Some(entry)) => render_entry(&entry)?,
-            Ok(None) => return Ok(()),
-            Err(error) => {
-                render_iter_error(error);
-                return Ok(());
-            }
-        }
-    }
-}
-
-fn render_entry(entry: &FilesystemEntry) -> io::Result<()> {
-    let mut stdout = io::stdout();
-    writeln!(stdout, "{}", entry_display_name(entry))
-}
-
-fn entry_display_name(entry: &FilesystemEntry) -> String {
-    let name = entry.name().to_string_lossy();
-
-    match entry.kind() {
-        FilesystemEntryKind::Directory => format!("{name}/"),
-        FilesystemEntryKind::Symlink => format!("{name}@"),
-        FilesystemEntryKind::File | FilesystemEntryKind::Other => name.into_owned(),
     }
 }
 

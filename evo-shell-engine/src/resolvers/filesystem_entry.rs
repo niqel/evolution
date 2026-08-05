@@ -14,6 +14,7 @@ pub fn resolve(
     };
 
     let file_type = entry.file_type().map_err(IterError::MaterializeEntry)?;
+    let metadata = entry.metadata().map_err(IterError::MaterializeEntry)?;
     let kind = if file_type.is_file() {
         FilesystemEntryKind::File
     } else if file_type.is_dir() {
@@ -23,10 +24,18 @@ pub fn resolve(
     } else {
         FilesystemEntryKind::Other
     };
+    let modified = metadata.modified().ok();
+    let size = if kind == FilesystemEntryKind::File {
+        Some(metadata.len())
+    } else {
+        None
+    };
 
     Ok(Some(FilesystemEntry::new(
         entry.file_name(),
         entry.path(),
         kind,
+        modified,
+        size,
     )))
 }

@@ -7,6 +7,7 @@ mod resolvers;
 pub use agents::{enterer, iteration_advancer, iterator, scope_setter};
 pub use definitions::domain::entities::filesystem_entry::{FilesystemEntry, FilesystemEntryKind};
 pub use definitions::domain::entities::filesystem_iteration::FilesystemIteration;
+pub use definitions::domain::entities::filesystem_iteration_item::FilesystemIterationItem;
 pub use definitions::domain::entities::filesystem_scope::FilesystemScope;
 pub use definitions::use_cases::advance::Advance;
 pub use definitions::use_cases::enter::Enter;
@@ -37,7 +38,8 @@ mod tests {
     use crate::resolvers::filesystem_path;
     use crate::resolvers::filesystem_scope;
     use crate::{
-        Advance, Enter, FilesystemEntryKind, Iter, IterError, ScopeError, SetFilesystemScope,
+        Advance, Enter, FilesystemEntryKind, FilesystemIterationItem, Iter, IterError, ScopeError,
+        SetFilesystemScope,
     };
 
     struct TestDirectory {
@@ -92,6 +94,15 @@ mod tests {
         _: &mut FilesystemIteration,
     ) -> Result<Option<fs::DirEntry>, io::Error> {
         Err(io::Error::other("next failed"))
+    }
+
+    static REMOVED_DIRECTORY_ENTRY: std::sync::Mutex<Option<fs::DirEntry>> =
+        std::sync::Mutex::new(None);
+
+    fn removed_directory_entry(
+        _: &mut FilesystemIteration,
+    ) -> Result<Option<fs::DirEntry>, io::Error> {
+        Ok(REMOVED_DIRECTORY_ENTRY.lock().unwrap().take())
     }
 
     #[test]
@@ -215,6 +226,15 @@ mod tests {
         let result = advance(&mut iteration);
 
         assert!(matches!(result, Ok(None)));
+    }
+
+    #[test]
+    fn filesystem_iteration_starts_with_next_index_zero() {
+        let directory = TestDirectory::new("iteration_index_zero");
+        let scope = scope_setter::set(directory.path()).unwrap();
+        let iteration = iterator::iter(&scope).unwrap();
+
+        assert_eq!(iteration.next_index(), 0);
     }
 
     #[test]
@@ -443,6 +463,52 @@ mod tests {
     }
 
     #[test]
+    fn iteration_advancer_assigns_incremental_indexes_to_produced_items() {
+        let directory = TestDirectory::new("advance_indexes");
+        fs::write(directory.path().join("first.txt"), "first").unwrap();
+        fs::write(directory.path().join("second.txt"), "second").unwrap();
+        let scope = scope_setter::set(directory.path()).unwrap();
+        let mut iteration = iterator::iter(&scope).unwrap();
+
+        let first = iteration_advancer::advance(&mut iteration)
+            .unwrap()
+            .expect("first item should exist");
+        let second = iteration_advancer::advance(&mut iteration)
+            .unwrap()
+            .expect("second item should exist");
+        let end = iteration_advancer::advance(&mut iteration).unwrap();
+
+        assert_eq!(first.index(), 0);
+        assert_eq!(second.index(), 1);
+        assert!(
+            first.entry().name() == OsStr::new("first.txt")
+                || first.entry().name() == OsStr::new("second.txt")
+        );
+        assert!(
+            second.entry().name() == OsStr::new("first.txt")
+                || second.entry().name() == OsStr::new("second.txt")
+        );
+        assert!(end.is_none());
+        assert_eq!(iteration.next_index(), 2);
+    }
+
+    #[test]
+    fn filesystem_iteration_item_exposes_index_separately_from_entry() {
+        let directory = TestDirectory::new("iteration_item_entity");
+        fs::write(directory.path().join("report.txt"), "report").unwrap();
+        let scope = scope_setter::set(directory.path()).unwrap();
+        let mut iteration = iterator::iter(&scope).unwrap();
+
+        let item: FilesystemIterationItem = iteration_advancer::advance(&mut iteration)
+            .unwrap()
+            .expect("item should exist");
+
+        assert_eq!(item.index(), 0);
+        assert_eq!(item.entry().name(), OsStr::new("report.txt"));
+        assert_eq!(item.entry().kind(), FilesystemEntryKind::File);
+    }
+
+    #[test]
     fn public_advance_distinguishes_file_and_directory() {
         let directory = TestDirectory::new("public_advance_kind");
         fs::write(directory.path().join("report.txt"), "report").unwrap();
@@ -453,7 +519,8 @@ mod tests {
         let mut found_file = false;
         let mut found_directory = false;
 
-        while let Some(entry) = advance(&mut iteration).unwrap() {
+        while let Some(item) = advance(&mut iteration).unwrap() {
+            let entry = item.entry();
             if entry.name() == OsStr::new("report.txt") {
                 assert_eq!(entry.kind(), FilesystemEntryKind::File);
                 found_file = true;
@@ -486,12 +553,16 @@ mod tests {
             if entry.name() == OsStr::new("report.txt") {
                 assert_eq!(entry.path(), directory.path().join("report.txt").as_path());
                 assert_eq!(entry.kind(), FilesystemEntryKind::File);
+                assert_eq!(entry.size(), Some(6));
+                assert!(entry.modified().is_some());
                 found_file = true;
             }
 
             if entry.name() == OsStr::new("images") {
                 assert_eq!(entry.path(), directory.path().join("images").as_path());
                 assert_eq!(entry.kind(), FilesystemEntryKind::Directory);
+                assert_eq!(entry.size(), None);
+                assert!(entry.modified().is_some());
                 found_directory = true;
             }
         }
@@ -529,6 +600,43 @@ mod tests {
         assert!(found_symlink);
     }
 
+    #[test]
+    fn filesystem_entry_resolve_reports_file_size_for_empty_file() {
+        let directory = TestDirectory::new("entry_empty_file_size");
+        fs::write(directory.path().join("empty.txt"), "").unwrap();
+        let scope = scope_setter::set(directory.path()).unwrap();
+        let mut iteration = iterator::iter(&scope).unwrap();
+
+        let entry =
+            filesystem_entry::resolve(&mut iteration, providers::next_directory_entry::provide)
+                .unwrap()
+                .expect("empty file should exist");
+
+        assert_eq!(entry.name(), OsStr::new("empty.txt"));
+        assert_eq!(entry.kind(), FilesystemEntryKind::File);
+        assert_eq!(entry.size(), Some(0));
+    }
+
+    #[test]
+    fn filesystem_entry_resolve_reports_metadata_error() {
+        let directory = TestDirectory::new("entry_metadata_error");
+        let file = directory.path().join("removed.txt");
+        fs::write(&file, "removed").unwrap();
+        let dir_entry = fs::read_dir(directory.path())
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap();
+        fs::remove_file(&file).unwrap();
+        *REMOVED_DIRECTORY_ENTRY.lock().unwrap() = Some(dir_entry);
+        let scope = scope_setter::set(directory.path()).unwrap();
+        let mut iteration = iterator::iter(&scope).unwrap();
+
+        let result = filesystem_entry::resolve(&mut iteration, removed_directory_entry);
+
+        assert!(matches!(result, Err(IterError::MaterializeEntry(_))));
+    }
+
     #[cfg(unix)]
     #[test]
     fn public_advance_distinguishes_symlink() {
@@ -545,7 +653,8 @@ mod tests {
         let mut iteration = iterator::iter(&scope).unwrap();
         let mut found_symlink = false;
 
-        while let Some(entry) = iteration_advancer::advance(&mut iteration).unwrap() {
+        while let Some(item) = iteration_advancer::advance(&mut iteration).unwrap() {
+            let entry = item.entry();
             if entry.name() == OsStr::new("report-link.txt") {
                 assert_eq!(entry.kind(), FilesystemEntryKind::Symlink);
                 found_symlink = true;
