@@ -87,13 +87,11 @@ debe asumir la presentación completa de `iter`.
 Responsabilidades añadidas por US-005:
 
 - renderizar una línea vacía inicial;
-- renderizar `Path: <full path>` antes de la tabla;
-- renderizar una línea vacía entre `Path:` y la tabla;
+- renderizar el header de la tabla inmediatamente después de esa separación inicial;
 - conservar el consumo lazy mediante `Advance`;
 - renderizar una línea vacía después de la tabla;
 - renderizar el summary;
-- renderizar una línea vacía después del summary;
-- renderizar nuevamente `Path: <full path>`;
+- renderizar `Path: <full path>` inmediatamente después del summary;
 - renderizar una línea vacía final;
 - aplicar la diferenciación visual de directorios de forma consistente entre `Type` y `Name`.
 
@@ -117,23 +115,20 @@ Secuencia conceptual:
 iteration_presenter::present(iteration)
 
 1. render blank line
-2. render top Path
-3. render blank line
-4. render table header
+2. render table header
 
-5. loop lazy:
+3. loop lazy:
    - Advance
    - render row
    - update files/directories counters
 
-6. Advance -> None
+4. Advance -> None
 
-7. render blank line
-8. render summary
-9. render blank line
-10. render bottom Path
-11. render blank line
-12. return
+5. render blank line
+6. render summary
+7. render Path footer immediately after the summary
+8. render blank line
+9. return
 ```
 
 Después de que el presenter retorna, el main/shell loop vuelve a renderizar el prompt.
@@ -152,24 +147,19 @@ Secuencia visible:
 command
 <blank line>
 
-Path
-<blank line>
-
 table
 <blank line>
 
 summary
-<blank line>
-
 Path
 <blank line>
 
 prompt
 ```
 
-## Path superior e inferior
+## Path footer
 
-El path superior y el path inferior deben salir de la misma fuente:
+El footer `Path:` debe salir de la propia iteración recibida:
 
 ```text
 iteration.path()
@@ -184,7 +174,9 @@ Esto evita que la salida de una iteración dependa de otro estado después de qu
 Formato visible:
 
 ```text
-Path: /home/user/repos/evolution/evo-shell/target
+5 directories
+7 files
+Path: /home/user/repos/evolution/evo-shell/target/release
 ```
 
 `Path:` es texto de presentación.
@@ -199,28 +191,69 @@ No debe ser el prompt compacto ni una forma abreviada como:
 
 La conversión a texto debe respetar la representación de paths del sistema operativo y evitar pérdida innecesaria de información.
 
+No debe existir una línea vacía entre `N files` y `Path:`.
+
+Debe existir una línea vacía después del footer `Path:` antes de que el main/shell loop renderice el siguiente prompt.
+
+## Identidad visual del footer
+
+El footer reutiliza la identidad visual del prompt.
+
+Prompt conceptual:
+
+```text
+scope-fs …/src >
+^^^^^^^ ^^^^^^^
+style A style B
+```
+
+Footer:
+
+```text
+Path: /home/user/repos/evolution/evo-shell/src
+^^^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+style A                  style B
+```
+
+Reglas técnicas:
+
+- `Path:` usa el mismo estilo visual que `scope-fs`;
+- el full path usa el mismo estilo visual que la ubicación compacta del prompt;
+- cuando sea razonable con el código actual, ambas superficies deben reutilizar las mismas definiciones mínimas de estilo;
+- no se duplican colores mágicos distintos para prompt y footer;
+- no se crea una entidad de dominio para estilos.
+
+Si las definiciones de estilo viven cerca del render actual del prompt y `iteration_presenter` necesita usarlas, la evolución debe ser la mínima coherente con el código existente.
+
+No se crea:
+
+- `Theme`;
+- `PromptTheme`;
+- `PathTheme`;
+- `Style`;
+- crate de presentación.
+
 ## Directorio vacío
 
 El path pertenece a la iteración, no a sus filas.
 
-Por eso una iteración vacía puede presentar contexto:
+Por eso una iteración vacía puede presentar el footer:
 
 ```text
 scope-fs …/empty > iter
-
-Path: /home/user/empty
 
 #   Modified             Type    Size      Name
 
 0 directories
 0 files
-
 Path: /home/user/empty
 
 scope-fs …/empty >
 ```
 
-El presenter debe renderizar el path superior e inferior aunque `Advance` devuelva `None` en la primera llamada.
+El presenter debe renderizar el footer `Path:` aunque `Advance` devuelva `None` en la primera llamada.
+
+No se renderiza `Path:` antes del header.
 
 ## Tabla
 
@@ -282,6 +315,8 @@ No se crea un sistema de themes.
 
 No se documenta una paleta configurable.
 
+El color del footer `Path:` pertenece a esta misma frontera de presentación.
+
 ## Prompt
 
 US-005 también mejora visualmente el prompt.
@@ -304,6 +339,11 @@ Responsabilidades:
 
 El símbolo `>` puede permanecer neutral/default.
 
+El footer `Path:` reutiliza esos estilos:
+
+- `Path:` comparte estilo con `scope-fs`;
+- el full path comparte estilo con la ubicación compacta.
+
 Si el prompt actual se genera en `main.rs`, la evolución mínima es mantener esa responsabilidad donde ya vive la presentación del prompt.
 
 No se crea un agent nuevo si el componente actual puede asumir el estilo visual.
@@ -315,13 +355,15 @@ No se crea una arquitectura genérica de themes.
 1. El usuario ejecuta `iter`.
 2. `executor::execute` devuelve `ExecutionResult::FilesystemIteration(iteration)`.
 3. El main/shell loop delega en `iteration_presenter::present(iteration)`.
-4. El presenter lee el path completo de la propia iteración.
-5. El presenter renderiza línea vacía, Path superior, línea vacía y header.
-6. El presenter consume la iteración de forma lazy mediante `Advance`.
-7. Cada item se presenta como una fila.
-8. El presenter actualiza solo contadores locales de files/directories.
-9. Al terminar, renderiza summary, Path inferior y línea vacía final.
-10. El main/shell loop renderiza el siguiente prompt compacto.
+4. El presenter renderiza línea vacía y header.
+5. El presenter consume la iteración de forma lazy mediante `Advance`.
+6. Cada item se presenta como una fila.
+7. El presenter actualiza solo contadores locales de files/directories.
+8. Al terminar, renderiza summary.
+9. El presenter lee el path completo de la propia iteración.
+10. El presenter renderiza el footer `Path:` inmediatamente después del summary.
+11. El presenter renderiza una línea vacía final.
+12. El main/shell loop renderiza el siguiente prompt compacto.
 
 ## Errores
 
@@ -381,4 +423,3 @@ Esta documentación no define:
 - scopes DB
 - scopes URL
 - código Rust
-

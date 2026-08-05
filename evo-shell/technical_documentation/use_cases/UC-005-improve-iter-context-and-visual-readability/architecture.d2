@@ -31,7 +31,7 @@ shell: "evo-shell" {
     shape: rectangle
   }
 
-  path_rendering: "Path rendering\n\nPath: <full path>\ntop + bottom\nmisma fuente" {
+  path_rendering: "Footer Path rendering\n\nPath: <full path>\nfooter único\nusa iteration.path()" {
     shape: rectangle
   }
 
@@ -47,6 +47,10 @@ shell: "evo-shell" {
     shape: rectangle
   }
 
+  shared_styles: "Shared presentation styles\n\nstyle A: scope label / Path:\nstyle B: compact location / full path\n\nsin theme entity" {
+    shape: rectangle
+  }
+
   stdout: "stdout / terminal" {
     shape: rectangle
   }
@@ -55,13 +59,15 @@ shell: "evo-shell" {
 engine.filesystem_scope -> engine.filesystem_iteration: "scope.path copiado una vez\nal crear iteración"
 engine.filesystem_iteration -> shell.execution_result: "resultado de executor"
 shell.execution_result -> shell.iteration_presenter: "main/shell loop delega"
-engine.filesystem_iteration -> shell.iteration_presenter: "iteration.path()"
-shell.iteration_presenter -> shell.path_rendering: "top Path\nbottom Path"
+engine.filesystem_iteration -> shell.iteration_presenter: "iteration.path() para footer"
+shell.iteration_presenter -> shell.path_rendering: "footer Path después del summary"
 shell.iteration_presenter -> engine.advance: "loop lazy"
 engine.advance -> engine.item: "item / None / error"
 engine.item -> shell.row_rendering: "render fila"
 shell.row_rendering -> shell.summary: "actualiza counts locales"
 shell.iteration_presenter -> shell.summary: "render al final"
+shell.prompt_rendering -> shell.shared_styles: "define/reutiliza estilos mínimos"
+shell.path_rendering -> shell.shared_styles: "Path: style A\nfull path style B"
 shell.path_rendering -> shell.stdout: "Path: <full path>"
 shell.row_rendering -> shell.stdout: "filas"
 shell.summary -> shell.stdout: "N directories\nN files"
@@ -74,4 +80,3 @@ engine_boundary: "Frontera\n\nENGINE no conoce colores\nENGINE no agrega \"Path:
 
 shell.iteration_presenter -> engine_boundary: "presentación vive en evo-shell"
 shell.prompt_rendering -> engine_boundary: "estilos viven en evo-shell"
-

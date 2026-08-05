@@ -16,7 +16,7 @@ filesystem_entry_kind: "FilesystemEntryKind\n\nFile\nDirectory\nSymlink\nOther" 
   shape: rectangle
 }
 
-presentation_behavior: "Presentation behavior\n\nblank lines\ntop Path\nbottom Path\nrow rendering\nsummary\ncolors" {
+presentation_behavior: "Presentation behavior\n\nblank line inicial\nrow rendering\nsummary\nfooter Path\nblank line final\ncolors" {
   shape: rectangle
   style.fill: "#eefaf1"
 }
@@ -31,12 +31,12 @@ prompt_surface: "Prompt surface\n\nscope type\ncompact location\nvisual styles" 
   style.fill: "#eefaf1"
 }
 
-no_entities: "No se crean entidades de dominio\n\nPathHeader\nPathFooter\nPromptColor\nDirectoryColor\nPresentationTheme\nTable\nRow" {
+no_entities: "No se crean entidades de dominio\n\nPathFooter\nPromptColor\nDirectoryColor\nPresentationTheme\nStyle\nTable\nRow" {
   shape: rectangle
   style.fill: "#fff0f0"
 }
 
-filesystem_iteration -> presentation_behavior: "path() para top/bottom Path"
+filesystem_iteration -> presentation_behavior: "path() para footer Path"
 filesystem_iteration -> filesystem_iteration_item: "Advance produce items"
 filesystem_iteration_item -> filesystem_entry: "entry"
 filesystem_entry_kind -> filesystem_entry: "kind"
@@ -63,3 +63,10 @@ color_rule: "Regla de color\n\nENGINE no conoce colores\nType=dir y Name=directo
 presentation_behavior -> color_rule: "aplica a iter"
 prompt_surface -> color_rule: "aplica a prompt"
 
+footer_style_rule: "Regla de footer\n\nPath: comparte estilo con scope-fs\nfull path comparte estilo con ubicación compacta\nsin crear theme/style entity" {
+  shape: rectangle
+  style.fill: "#edf4ff"
+}
+
+presentation_behavior -> footer_style_rule: "aplica a footer"
+prompt_surface -> footer_style_rule: "provee identidad visual a reutilizar"

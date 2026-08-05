@@ -12,19 +12,11 @@ presenter: "iteration_presenter::present(iteration)" {
   shape: rectangle
 }
 
-iteration_path: "iteration.path()\n\nmisma fuente para Path superior e inferior" {
+iteration_path: "iteration.path()\n\nfuente para footer Path" {
   shape: rectangle
 }
 
 blank_start: "render blank line" {
-  shape: rectangle
-}
-
-top_path: "render top Path\nPath: <full path>" {
-  shape: rectangle
-}
-
-blank_before_table: "render blank line" {
   shape: rectangle
 }
 
@@ -60,11 +52,7 @@ summary: "render summary\nN directories\nN files" {
   shape: rectangle
 }
 
-blank_after_summary: "render blank line" {
-  shape: rectangle
-}
-
-bottom_path: "render bottom Path\nPath: <same full path>" {
+footer_path: "render footer Path\nPath: <full path>\ninmediatamente después de summary" {
   shape: rectangle
 }
 
@@ -78,32 +66,26 @@ prompt: "render next prompt\nscope-fs …/target >\nsegments styled separately" 
 
 main_loop -> execution_result: "recibe resultado"
 execution_result -> presenter: "delega presentación de iter"
-presenter -> iteration_path: "lee contexto de la iteración"
 presenter -> blank_start: "1"
-blank_start -> top_path: "2"
-iteration_path -> top_path: "full path"
-top_path -> blank_before_table: "3"
-blank_before_table -> header: "4"
-header -> advance: "5 loop lazy"
+blank_start -> header: "2"
+header -> advance: "3 loop lazy"
 advance -> item: "Some(item)"
 item -> row: "render una fila"
 row -> counters: "actualiza counts"
 counters -> advance: "siguiente item"
 advance -> none: "fin"
-none -> blank_before_summary: "7"
-blank_before_summary -> summary: "8"
-summary -> blank_after_summary: "9"
-blank_after_summary -> bottom_path: "10"
-iteration_path -> bottom_path: "same source"
-bottom_path -> blank_end: "11"
-blank_end -> main_loop: "12 return"
+none -> blank_before_summary: "5"
+blank_before_summary -> summary: "6"
+summary -> iteration_path: "7 lee contexto"
+iteration_path -> footer_path: "full path"
+footer_path -> blank_end: "8"
+blank_end -> main_loop: "9 return"
 main_loop -> prompt: "render siguiente prompt"
 
-empty_directory: "Directorio vacío\n\nPath se renderiza antes de Advance\nAdvance -> None\nsummary 0/0\nPath se renderiza otra vez" {
+empty_directory: "Directorio vacío\n\nblank\nheader\nAdvance -> None\nsummary 0/0\nfooter Path\nblank" {
   shape: rectangle
   style.fill: "#fff7e6"
 }
 
 iteration_path -> empty_directory: "path existe sin items"
 none -> empty_directory: "primer Advance puede ser None"
-
