@@ -11,6 +11,8 @@ Las historias de usuario describen el comportamiento observable desde la perspec
 * los errores observables;
 * el estado que debe conservarse entre comandos cuando sea necesario.
 
+Las reglas de lenguaje describen convenciones sintácticas transversales reutilizables por múltiples comandos.
+
 Evo Shell proporciona una interfaz de comandos sobre las capacidades de Evo Shell Engine.
 
 La documentación funcional de Evo Shell describe **qué solicita el usuario mediante comandos y qué comportamiento espera obtener**, pero no duplica la definición de las capacidades operativas proporcionadas por Evo Shell Engine.
@@ -25,3 +27,17 @@ Esto incluye, entre otros:
 * representación interna del estado;
 * ejecución de comandos;
 * integración técnica con Evo Shell Engine.
+
+## Historias de usuario
+
+* [US-001 — Establecer un filesystem scope mediante un comando](user_stories/US-001-set-filesystem-scope-command.md)
+* [US-002 — Iterar el filesystem scope activo mediante el comando iter](user_stories/US-002-iterate-filesystem-scope-command.md)
+* [US-003 — Entrar en una ubicación del scope activo mediante el comando enter](user_stories/US-003-enter-active-scope-location.md)
+* [US-004 — Mostrar información estructurada de los elementos mediante iter](user_stories/US-004-show-structured-filesystem-iteration.md)
+* [US-005 — Mejorar el contexto y la legibilidad visual de iter](user_stories/US-005-improve-iter-context-and-visual-readability.md)
+* [US-006 — Mostrar fecha de creación de elementos en iter](user_stories/US-006-show-filesystem-created-time.md)
+* [US-007 — Unificar la identidad visual de la tabla, los archivos y el prompt](user_stories/US-007-unify-shell-visual-identity.md)
+
+## Reglas de lenguaje
+
+* [LR-001 — Command Arguments and Options](language_rules/LR-001-command-arguments-and-options.md)
