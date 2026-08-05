@@ -1,0 +1,49 @@
+direction: right
+
+actor: "Usuario" {
+  shape: person
+}
+
+main: "main" {
+  shape: rectangle
+}
+
+starter: "starter Agent\nstart()" {
+  shape: rectangle
+}
+
+initializer: "InitializeShell Use Case" {
+  shape: rectangle
+}
+
+clearer: "TerminalClearer Use Case\nVisible" {
+  shape: rectangle
+}
+
+welcome: "WelcomePresenter Use Case" {
+  shape: rectangle
+}
+
+shell: "Shell" {
+  shape: rectangle
+}
+
+prompt: "Prompt" {
+  shape: rectangle
+}
+
+outside: "Fuera de alcance\n\n--no-banner\nopciones de startup\nASCII art\nemoji Unicode" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+actor -> main: "inicia Evo Shell"
+main -> starter: "start()"
+starter -> initializer: "InitializeShell"
+starter -> clearer: "TerminalClearer(Visible)"
+starter -> welcome: "WelcomePresenter"
+initializer -> shell: "success"
+clearer -> welcome: "success"
+welcome -> shell: "bienvenida"
+shell -> prompt: "run_loop"
+starter -> outside: "no implementa"

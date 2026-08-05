@@ -1,0 +1,47 @@
+direction: right
+
+shell: "Shell\n\ninstancia operativa\nfilesystem scope válido" {
+  shape: rectangle
+}
+
+start: "Start\n\ncaso de uso compuesto" {
+  shape: rectangle
+}
+
+welcome_presenter: "WelcomePresenter\n\npresentación de bienvenida" {
+  shape: rectangle
+}
+
+terminal_clearer: "TerminalClearer\n\nlimpia pantalla visible" {
+  shape: rectangle
+}
+
+initialize_shell: "InitializeShell\n\nconstruye Shell" {
+  shape: rectangle
+}
+
+mode: "TerminalClearMode\n\nVisible" {
+  shape: rectangle
+}
+
+version: "Version\n\nenv!(CARGO_PKG_VERSION)" {
+  shape: rectangle
+}
+
+prompt: "Prompt\n\nscope-fs …/path >" {
+  shape: rectangle
+}
+
+not_domain: "No se crean\n\nTheme\nBanner genérico\nStruct de DI\nASCII art model\nbool de startup" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+start -> initialize_shell: "InitializeShell"
+start -> terminal_clearer: "TerminalClearer"
+start -> welcome_presenter: "WelcomePresenter"
+terminal_clearer -> mode: "Visible"
+welcome_presenter -> version: "usa versión de paquete"
+initialize_shell -> shell: "Shell"
+shell -> prompt: "loop normal"
+start -> not_domain: "composición mínima"

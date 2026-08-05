@@ -283,3 +283,4 @@ Casos de uso técnicos:
 * [UC-005 — Mejorar el contexto y la legibilidad visual de iter](use_cases/UC-005-improve-iter-context-and-visual-readability/)
 * [UC-007 — Unificar la identidad visual de la tabla y el prompt](use_cases/UC-007-unify-shell-visual-identity/)
 * [UC-008 — Limpiar la terminal](use_cases/UC-008-clear-terminal/)
+* [UC-009 — Iniciar Evo Shell con una presentación de bienvenida](use_cases/UC-009-start-shell-with-welcome/)

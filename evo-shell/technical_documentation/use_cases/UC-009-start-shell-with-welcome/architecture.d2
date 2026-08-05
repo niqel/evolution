@@ -1,0 +1,77 @@
+direction: down
+
+main: "main.rs" {
+  shape: rectangle
+}
+
+starter: "starter Agent\n\nstart()\nstart_with(...)" {
+  shape: rectangle
+}
+
+initialize_shell: "InitializeShell use case\nshell_initializer::initialize" {
+  shape: rectangle
+}
+
+terminal_clearer: "TerminalClearer use case\nterminal_clearer::clear" {
+  shape: rectangle
+}
+
+welcome_presenter: "WelcomePresenter use case\nwelcome_presenter::present" {
+  shape: rectangle
+}
+
+shell: "Shell\n\ninstancia operativa" {
+  shape: rectangle
+}
+
+run_loop: "run_loop\n\nprompt + input" {
+  shape: rectangle
+}
+
+prompt: "prompt visible\nscope-fs …/path >" {
+  shape: rectangle
+}
+
+welcome_agent: "welcome_presenter Agent\ncoordina" {
+  shape: rectangle
+}
+
+welcome_resolver: "welcome_presenter Resolver\nresuelve versión" {
+  shape: rectangle
+}
+
+welcome_provider: "welcome_presenter Provider\nstdout / terminal" {
+  shape: rectangle
+}
+
+starter_no_resolver: "Starter sin resolver propio" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+starter_no_provider: "Starter sin provider propio" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+engine: "Evo Shell Engine\n\nno participa en startup" {
+  shape: rectangle
+  style.fill: "#f2f2f2"
+}
+
+main -> starter: "start()"
+starter -> initialize_shell: "InitializeShell"
+initialize_shell -> shell: "Shell"
+starter -> terminal_clearer: "TerminalClearer(Visible)"
+starter -> welcome_presenter: "WelcomePresenter"
+welcome_presenter -> welcome_agent: "agent"
+welcome_agent -> welcome_resolver: "Resolve"
+welcome_resolver -> welcome_provider: "Provide"
+welcome_provider -> shell: "stdout welcome"
+starter -> shell: "return"
+shell -> run_loop: "after startup"
+run_loop -> prompt: "next visible prompt"
+
+starter -> starter_no_resolver: "compuesto"
+starter -> starter_no_provider: "compuesto"
+starter -> engine: "no llama"

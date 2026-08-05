@@ -3,8 +3,8 @@ use std::io::{self, Write};
 use std::path::{Component, Path};
 
 use evo_shell::{
-    ExecuteError, ExecutionResult, InitializeShellError, ParseError, Shell, TokenStream, executor,
-    iteration_presenter, parser, presentation_style, shell_initializer, tokenizer,
+    ExecuteError, ExecutionResult, ParseError, Shell, StartError, TokenStream, executor,
+    iteration_presenter, parser, presentation_style, starter, tokenizer,
 };
 use evo_shell_engine::IterError;
 
@@ -16,7 +16,7 @@ fn main() {
 }
 
 fn run() -> Result<(), RunError> {
-    let mut shell = shell_initializer::initialize()?;
+    let mut shell = starter::start()?;
     run_loop(&mut shell)?;
     Ok(())
 }
@@ -164,22 +164,22 @@ fn render_iter_error(error: IterError) {
 
 #[derive(Debug)]
 enum RunError {
-    InitializeShell(InitializeShellError),
+    Start(StartError),
     Io(io::Error),
 }
 
 impl fmt::Display for RunError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InitializeShell(error) => write!(formatter, "{error:?}"),
+            Self::Start(error) => write!(formatter, "{error:?}"),
             Self::Io(error) => write!(formatter, "{error}"),
         }
     }
 }
 
-impl From<InitializeShellError> for RunError {
-    fn from(error: InitializeShellError) -> Self {
-        Self::InitializeShell(error)
+impl From<StartError> for RunError {
+    fn from(error: StartError) -> Self {
+        Self::Start(error)
     }
 }
 

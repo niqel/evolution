@@ -5,7 +5,8 @@ mod providers;
 mod resolvers;
 
 pub use agents::{
-    executor, iteration_presenter, parser, shell_initializer, terminal_clearer, tokenizer,
+    executor, iteration_presenter, parser, shell_initializer, starter, terminal_clearer, tokenizer,
+    welcome_presenter,
 };
 pub use definitions::domain::entities::command::Command;
 pub use definitions::domain::entities::shell::Shell;
@@ -15,8 +16,10 @@ pub use definitions::domain::value_objects::terminal_clear_mode::TerminalClearMo
 pub use definitions::use_cases::execute::{Execute, ExecuteError, ExecutionResult};
 pub use definitions::use_cases::initialize_shell::{InitializeShell, InitializeShellError};
 pub use definitions::use_cases::parse::{Parse, ParseError};
+pub use definitions::use_cases::starter::{Start, StartError};
 pub use definitions::use_cases::terminal_clearer::{TerminalClearError, TerminalClearer};
 pub use definitions::use_cases::tokenize::{Tokenize, TokenizeError};
+pub use definitions::use_cases::welcome_presenter::{WelcomePresenter, WelcomePresenterError};
 
 #[cfg(test)]
 mod tests {

@@ -1,0 +1,66 @@
+direction: down
+
+main: "main.rs" {
+  shape: rectangle
+}
+
+starter: "starter::start()" {
+  shape: rectangle
+}
+
+initialize_shell: "InitializeShell" {
+  shape: rectangle
+}
+
+terminal_clearer: "TerminalClearer(Visible)" {
+  shape: rectangle
+}
+
+welcome_presenter: "WelcomePresenter" {
+  shape: rectangle
+}
+
+shell: "Shell" {
+  shape: rectangle
+}
+
+welcome_output: "stdout\n\nCatarinaSoft\nevo-shell {version}\nevo-shell is a life :)" {
+  shape: rectangle
+}
+
+prompt: "run_loop\nprompt" {
+  shape: rectangle
+}
+
+init_error: "InitializeShell error\nstartup aborts" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+clear_error: "TerminalClearer error\nstartup aborts" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+welcome_error: "WelcomePresenter error\nstartup aborts" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+main -> starter: "start()"
+starter -> initialize_shell: "1"
+initialize_shell -> init_error: "error"
+init_error -> main: "return error"
+
+initialize_shell -> terminal_clearer: "success"
+terminal_clearer -> clear_error: "error"
+clear_error -> main: "return error"
+
+terminal_clearer -> welcome_presenter: "success"
+welcome_presenter -> welcome_output: "success"
+welcome_output -> shell: "blank line then prompt"
+shell -> prompt: "return Shell"
+prompt -> main: "run_loop"
+
+welcome_presenter -> welcome_error: "error"
+welcome_error -> main: "return error"
