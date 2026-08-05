@@ -1,0 +1,70 @@
+direction: down
+
+shell: "Evo Shell" {
+  shape: rectangle
+  style.fill: "#edf4ff"
+
+  command: "Command::Clear(mode)" {
+    shape: rectangle
+  }
+
+  executor: "executor::execute" {
+    shape: rectangle
+  }
+
+  agent: "Agent\nagents/terminal_clearer.rs\n\nterminal_clearer::clear(mode)\ncoordina" {
+    shape: rectangle
+  }
+
+  resolver: "Resolver\nresolvers/terminal_clearer.rs\n\nresolve(mode, provide)\nresuelve y delega" {
+    shape: rectangle
+  }
+
+  provider: "Provider\nproviders/terminal_clearer.rs\n\nprovide(mode)\nescribe ANSI/VT" {
+    shape: rectangle
+  }
+}
+
+definitions: "Definitions" {
+  shape: rectangle
+  style.fill: "#eefaf1"
+
+  mode: "TerminalClearMode\n\nVisible\nAll" {
+    shape: rectangle
+  }
+
+  use_case: "definitions/use_cases/terminal_clearer.rs\n\nTerminalClearer function pointer" {
+    shape: rectangle
+  }
+
+  resolver_definition: "definitions/resolvers/terminal_clearer.rs\n\nResolve function pointer" {
+    shape: rectangle
+  }
+
+  provider_definition: "definitions/providers/terminal_clearer.rs\n\nProvide function pointer" {
+    shape: rectangle
+  }
+}
+
+terminal: "Terminal\n\ninfraestructura externa" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+engine: "Evo Shell Engine\n\nno participa\nsin cambios" {
+  shape: rectangle
+  style.fill: "#f2f2f2"
+}
+
+definitions.mode -> shell.command: "mode"
+shell.command -> shell.executor: "execute"
+shell.executor -> definitions.use_case: "TerminalClearer"
+definitions.use_case -> shell.agent: "function pointer"
+shell.agent -> definitions.resolver_definition: "Resolve"
+definitions.resolver_definition -> shell.resolver: "function pointer"
+shell.resolver -> definitions.provider_definition: "Provide"
+definitions.provider_definition -> shell.provider: "function pointer"
+shell.provider -> terminal: "ANSI/VT IO"
+
+shell.executor -> engine: "no llama"
+shell.provider -> engine: "no llama"

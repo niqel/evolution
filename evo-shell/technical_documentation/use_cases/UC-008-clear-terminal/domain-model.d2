@@ -1,0 +1,29 @@
+direction: right
+
+command: "Command\n\nScopeFs(&str)\nIter\nEnter(&str)\nClear(TerminalClearMode)" {
+  shape: rectangle
+}
+
+mode: "TerminalClearMode\n\nVisible\nAll" {
+  shape: rectangle
+}
+
+shell: "Shell\n\nfilesystem scope activo\nsin cambios por clear" {
+  shape: rectangle
+}
+
+terminal: "Terminal\n\ninfraestructura externa\nrecibe secuencias ANSI/VT" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+not_domain: "No se crean\n\nbool all\nTheme\nTerminal entity de dominio\nAST genérico\nOption struct" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+command -> mode: "Clear(mode)"
+command -> shell: "executor recibe Shell + Command"
+mode -> terminal: "provider traduce intención a ANSI/VT"
+shell -> shell: "scope permanece igual"
+mode -> not_domain: "modelo explícito mínimo"

@@ -105,6 +105,7 @@ fn handle_input(shell: &mut Shell, input: &str) -> io::Result<()> {
 fn render_execution(_shell: &Shell, result: ExecutionResult) -> io::Result<()> {
     match result {
         ExecutionResult::ScopeChanged => render_scope_changed(&mut io::stdout()),
+        ExecutionResult::TerminalCleared => Ok(()),
         ExecutionResult::FilesystemIteration(iteration) => {
             match iteration_presenter::present(iteration) {
                 Ok(()) => Ok(()),

@@ -1,6 +1,7 @@
 use crate::definitions::domain::entities::command::Command;
 use crate::definitions::domain::entities::token::Token;
 use crate::definitions::domain::entities::token_stream::TokenStream;
+use crate::definitions::domain::value_objects::terminal_clear_mode::TerminalClearMode;
 use crate::definitions::use_cases::parse::ParseError;
 use crate::definitions::use_cases::tokenize::Tokenize;
 
@@ -22,6 +23,7 @@ pub fn resolve<'a>(
         "scope-fs" => resolve_scope_fs(stream, tokenize),
         "iter" => resolve_iter(stream, tokenize),
         "enter" => resolve_enter(stream, tokenize),
+        "clear" => resolve_clear(stream, tokenize),
         _ => Err(ParseError::UnknownCommand(command_name)),
     }
 }
@@ -77,4 +79,25 @@ fn resolve_enter<'a>(
     }
 
     Ok(Command::Enter(location))
+}
+
+fn resolve_clear<'a>(
+    stream: &mut TokenStream<'a>,
+    tokenize: Tokenize,
+) -> Result<Command<'a>, ParseError<'a>> {
+    let option_token = tokenize(stream).map_err(ParseError::Tokenize)?;
+
+    let Some(option_token) = option_token else {
+        return Ok(Command::Clear(TerminalClearMode::Visible));
+    };
+
+    let Token::Word("--all") = option_token else {
+        return Err(ParseError::UnexpectedToken);
+    };
+
+    if tokenize(stream).map_err(ParseError::Tokenize)?.is_some() {
+        return Err(ParseError::UnexpectedToken);
+    }
+
+    Ok(Command::Clear(TerminalClearMode::All))
 }

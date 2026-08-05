@@ -1,0 +1,43 @@
+direction: right
+
+actor: "Usuario" {
+  shape: person
+}
+
+evo_shell: "Evo Shell" {
+  shape: rectangle
+
+  clear_terminal: "Limpiar terminal\n\nclear\nclear --all" {
+    shape: oval
+  }
+}
+
+input: "Entrada\n\nclear\nclear --all" {
+  shape: rectangle
+}
+
+mode: "TerminalClearMode\n\nVisible\nAll" {
+  shape: rectangle
+}
+
+output: "Resultado\n\nterminal limpiada\nprompt reaparece\nscope sin cambios" {
+  shape: rectangle
+}
+
+invalid: "Entradas inválidas\n\nclear all\nclear --unknown\nclear --all extra" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+outside: "Fuera de alcance\n\nclear -a\naliases\nparser genérico de opciones\nengine changes" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+actor -> evo_shell.clear_terminal: "solicita"
+input -> evo_shell.clear_terminal: "parse"
+evo_shell.clear_terminal -> mode: "resuelve intención"
+mode -> evo_shell.clear_terminal: "ejecuta vía terminal_clearer"
+evo_shell.clear_terminal -> output: "éxito"
+invalid -> evo_shell.clear_terminal: "rechazo sintáctico"
+evo_shell.clear_terminal -> outside: "no implementa"

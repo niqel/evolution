@@ -1,0 +1,70 @@
+direction: down
+
+user: "User" {
+  shape: person
+}
+
+parser: "parser::parse" {
+  shape: rectangle
+}
+
+command_visible: "Command::Clear(Visible)" {
+  shape: rectangle
+}
+
+command_all: "Command::Clear(All)" {
+  shape: rectangle
+}
+
+executor: "executor::execute(&mut Shell, Command)" {
+  shape: rectangle
+}
+
+agent: "terminal_clearer agent\nclear(mode)" {
+  shape: rectangle
+}
+
+resolver: "terminal_clearer resolver\nresolve(mode, provide)" {
+  shape: rectangle
+}
+
+provider: "terminal_clearer provider\nprovide(mode)" {
+  shape: rectangle
+}
+
+terminal_visible: "Terminal\n\nVisible:\nESC[2J\nESC[H" {
+  shape: rectangle
+}
+
+terminal_all: "Terminal\n\nAll:\nESC[2J\nESC[3J\nESC[H" {
+  shape: rectangle
+}
+
+result: "ExecutionResult::TerminalCleared\n\nShell scope unchanged" {
+  shape: rectangle
+}
+
+prompt: "shell loop\nrender next prompt\nsame scope" {
+  shape: rectangle
+}
+
+user -> parser: "clear"
+parser -> command_visible: "mode Visible"
+command_visible -> executor: "execute"
+
+user -> parser: "clear --all"
+parser -> command_all: "mode All"
+command_all -> executor: "execute"
+
+executor -> agent: "TerminalClearer function pointer"
+agent -> resolver: "Resolve function pointer"
+resolver -> provider: "Provide function pointer"
+provider -> terminal_visible: "mode Visible"
+provider -> terminal_all: "mode All"
+terminal_visible -> provider: "io result"
+terminal_all -> provider: "io result"
+provider -> resolver: "result"
+resolver -> agent: "result"
+agent -> executor: "result"
+executor -> result: "success"
+result -> prompt: "next loop"

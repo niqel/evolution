@@ -282,3 +282,4 @@ Casos de uso técnicos:
 * [UC-004 — Presentar una iteración filesystem estructurada](use_cases/UC-004-present-structured-filesystem-iteration/)
 * [UC-005 — Mejorar el contexto y la legibilidad visual de iter](use_cases/UC-005-improve-iter-context-and-visual-readability/)
 * [UC-007 — Unificar la identidad visual de la tabla y el prompt](use_cases/UC-007-unify-shell-visual-identity/)
+* [UC-008 — Limpiar la terminal](use_cases/UC-008-clear-terminal/)

@@ -4,14 +4,18 @@ pub mod presentation_style;
 mod providers;
 mod resolvers;
 
-pub use agents::{executor, iteration_presenter, parser, shell_initializer, tokenizer};
+pub use agents::{
+    executor, iteration_presenter, parser, shell_initializer, terminal_clearer, tokenizer,
+};
 pub use definitions::domain::entities::command::Command;
 pub use definitions::domain::entities::shell::Shell;
 pub use definitions::domain::entities::token::Token;
 pub use definitions::domain::entities::token_stream::TokenStream;
+pub use definitions::domain::value_objects::terminal_clear_mode::TerminalClearMode;
 pub use definitions::use_cases::execute::{Execute, ExecuteError, ExecutionResult};
 pub use definitions::use_cases::initialize_shell::{InitializeShell, InitializeShellError};
 pub use definitions::use_cases::parse::{Parse, ParseError};
+pub use definitions::use_cases::terminal_clearer::{TerminalClearError, TerminalClearer};
 pub use definitions::use_cases::tokenize::{Tokenize, TokenizeError};
 
 #[cfg(test)]
@@ -32,16 +36,34 @@ mod tests {
         CurrentDirectory, CurrentDirectoryError,
     };
     use crate::definitions::domain::entities::shell::Shell;
+    use crate::definitions::providers::terminal_clearer::Provide;
+    use crate::definitions::resolvers::terminal_clearer::Resolve;
+    use crate::definitions::use_cases::terminal_clearer::TerminalClearError;
+    use crate::providers::terminal_clearer as terminal_clearer_provider;
+    use crate::resolvers::execution;
     use crate::resolvers::shell;
+    use crate::resolvers::terminal_clearer as terminal_clearer_resolver;
     use crate::resolvers::token;
     use crate::{
         Command, Execute, ExecuteError, ExecutionResult, InitializeShell, InitializeShellError,
-        Parse, ParseError, Token, TokenStream, Tokenize, TokenizeError, executor, parser,
-        shell_initializer, tokenizer,
+        Parse, ParseError, TerminalClearMode, TerminalClearer, Token, TokenStream, Tokenize,
+        TokenizeError, executor, parser, shell_initializer, terminal_clearer, tokenizer,
     };
 
     struct TestDirectory {
         path: PathBuf,
+    }
+
+    struct FailingWriter;
+
+    impl io::Write for FailingWriter {
+        fn write(&mut self, _buffer: &[u8]) -> io::Result<usize> {
+            Err(io::Error::other("write failed"))
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
     }
 
     impl TestDirectory {
@@ -155,6 +177,24 @@ mod tests {
     }
 
     #[test]
+    fn parser_resolves_clear_command() {
+        let mut stream = TokenStream::new("clear");
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        assert_eq!(command, Command::Clear(TerminalClearMode::Visible));
+    }
+
+    #[test]
+    fn parser_resolves_clear_all_flag() {
+        let mut stream = TokenStream::new("clear --all");
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        assert_eq!(command, Command::Clear(TerminalClearMode::All));
+    }
+
+    #[test]
     fn parser_resolves_enter_word_location() {
         let mut stream = TokenStream::new("enter agents");
 
@@ -239,6 +279,33 @@ mod tests {
     }
 
     #[test]
+    fn parser_rejects_clear_positional_argument() {
+        let mut stream = TokenStream::new("clear all");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(result, Err(ParseError::UnexpectedToken)));
+    }
+
+    #[test]
+    fn parser_rejects_clear_unknown_option() {
+        let mut stream = TokenStream::new("clear --unknown");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(result, Err(ParseError::UnexpectedToken)));
+    }
+
+    #[test]
+    fn parser_rejects_clear_all_extra_token() {
+        let mut stream = TokenStream::new("clear --all extra");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(result, Err(ParseError::UnexpectedToken)));
+    }
+
+    #[test]
     fn parser_rejects_enter_without_location() {
         let mut stream = TokenStream::new("enter");
 
@@ -316,6 +383,78 @@ mod tests {
 
         assert!(matches!(result, ExecutionResult::ScopeChanged));
         assert_eq!(shell.filesystem_scope().path(), directory.path.as_path());
+    }
+
+    #[test]
+    fn terminal_clearer_clear_matches_use_case_function_pointer() {
+        let clear: TerminalClearer = terminal_clearer::clear;
+
+        let _ = clear;
+    }
+
+    #[test]
+    fn terminal_clearer_agent_delegates_to_resolver() {
+        fn resolve(mode: TerminalClearMode, _provide: Provide) -> Result<(), TerminalClearError> {
+            match mode {
+                TerminalClearMode::Visible => Ok(()),
+                TerminalClearMode::All => Err(io::Error::other("all rejected").into()),
+            }
+        }
+
+        fn provide(_mode: TerminalClearMode) -> Result<(), TerminalClearError> {
+            Ok(())
+        }
+
+        let result = terminal_clearer::clear_with(TerminalClearMode::Visible, resolve, provide);
+        assert!(result.is_ok());
+
+        let result = terminal_clearer::clear_with(TerminalClearMode::All, resolve, provide);
+        assert!(matches!(result, Err(TerminalClearError::Io(_))));
+    }
+
+    #[test]
+    fn terminal_clearer_resolver_delegates_to_provider_and_preserves_mode() {
+        fn provide(mode: TerminalClearMode) -> Result<(), TerminalClearError> {
+            match mode {
+                TerminalClearMode::Visible => Ok(()),
+                TerminalClearMode::All => Err(io::Error::other("all rejected").into()),
+            }
+        }
+
+        let resolve: Resolve = terminal_clearer_resolver::resolve;
+
+        let result = resolve(TerminalClearMode::Visible, provide);
+        assert!(result.is_ok());
+
+        let result = resolve(TerminalClearMode::All, provide);
+        assert!(matches!(result, Err(TerminalClearError::Io(_))));
+    }
+
+    #[test]
+    fn terminal_clearer_provider_visible_writes_expected_ansi_sequence() {
+        let mut output = Vec::new();
+
+        terminal_clearer_provider::provide_to(&mut output, TerminalClearMode::Visible).unwrap();
+
+        assert_eq!(output, b"\x1b[2J\x1b[H");
+    }
+
+    #[test]
+    fn terminal_clearer_provider_all_writes_expected_ansi_sequence() {
+        let mut output = Vec::new();
+
+        terminal_clearer_provider::provide_to(&mut output, TerminalClearMode::All).unwrap();
+
+        assert_eq!(output, b"\x1b[2J\x1b[3J\x1b[H");
+    }
+
+    #[test]
+    fn terminal_clearer_provider_propagates_io_error() {
+        let mut writer = FailingWriter;
+
+        let result = terminal_clearer_provider::provide_to(&mut writer, TerminalClearMode::Visible);
+
+        assert!(matches!(result, Err(TerminalClearError::Io(_))));
     }
 
     #[test]
@@ -548,6 +687,51 @@ mod tests {
         let result = executor::execute(&mut shell, Command::Iter).unwrap();
 
         assert!(matches!(result, ExecutionResult::FilesystemIteration(_)));
+    }
+
+    #[test]
+    fn execute_clear_returns_terminal_cleared_without_changing_scope() {
+        fn clear(mode: TerminalClearMode) -> Result<(), TerminalClearError> {
+            match mode {
+                TerminalClearMode::Visible => Ok(()),
+                TerminalClearMode::All => Err(io::Error::other("expected visible").into()),
+            }
+        }
+
+        let directory = TestDirectory::new("clear_execute");
+        let mut shell = shell_from_directory(&directory);
+        let previous_path = shell.filesystem_scope().path().to_path_buf();
+
+        let result = execution::resolve_with(
+            &mut shell,
+            Command::Clear(TerminalClearMode::Visible),
+            clear,
+        )
+        .unwrap();
+
+        assert!(matches!(result, ExecutionResult::TerminalCleared));
+        assert_eq!(shell.filesystem_scope().path(), previous_path.as_path());
+    }
+
+    #[test]
+    fn execute_clear_all_returns_terminal_cleared_without_changing_scope() {
+        fn clear(mode: TerminalClearMode) -> Result<(), TerminalClearError> {
+            match mode {
+                TerminalClearMode::Visible => Err(io::Error::other("expected all").into()),
+                TerminalClearMode::All => Ok(()),
+            }
+        }
+
+        let directory = TestDirectory::new("clear_all_execute");
+        let mut shell = shell_from_directory(&directory);
+        let previous_path = shell.filesystem_scope().path().to_path_buf();
+
+        let result =
+            execution::resolve_with(&mut shell, Command::Clear(TerminalClearMode::All), clear)
+                .unwrap();
+
+        assert!(matches!(result, ExecutionResult::TerminalCleared));
+        assert_eq!(shell.filesystem_scope().path(), previous_path.as_path());
     }
 
     #[test]
