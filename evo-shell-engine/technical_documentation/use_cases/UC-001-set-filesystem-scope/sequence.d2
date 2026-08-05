@@ -28,7 +28,7 @@ std_fs: "std::fs" {
   shape: rectangle
 }
 
-scope: "FilesystemScope" {
+scope: "resolved FilesystemScope" {
   shape: rectangle
 }
 
@@ -41,8 +41,8 @@ provider -> std_fs: "6. usa"
 std_fs -> provider: "7. resultado del filesystem"
 provider -> contract: "resultado"
 contract -> resolver: "resultado"
-resolver -> scope: "8-9. path utilizable; crea/devuelve nuevo scope"
-scope -> resolver: "FilesystemScope válido"
+resolver -> scope: "8-9. path utilizable; crea/devuelve nuevo scope resuelto"
+scope -> resolver: "FilesystemScope válido y resuelto"
 resolver -> agent: "10. nuevo scope"
 agent -> evo_shell_engine: "10. nuevo scope"
 evo_shell_engine -> scope: "11. reemplaza el scope activo anterior"

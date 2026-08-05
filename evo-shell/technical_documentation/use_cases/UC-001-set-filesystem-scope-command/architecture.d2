@@ -63,7 +63,7 @@ domain: "domain/model" {
     shape: rectangle
   }
 
-  shell: "Shell\n\ninstancia operativa\nowns FilesystemScope" {
+  shell: "Shell\n\ninstancia operativa\nowns FilesystemScope resuelto" {
     shape: rectangle
   }
 }
@@ -75,7 +75,7 @@ external: "external dependency / evo-shell-engine" {
     shape: rectangle
   }
 
-  filesystem_scope: "FilesystemScope" {
+  filesystem_scope: "FilesystemScope\n\nubicación filesystem resuelta" {
     shape: rectangle
   }
 }
@@ -97,3 +97,9 @@ resolvers.execution -> domain.shell: "opera sobre &mut Shell"
 resolvers.execution -> external.set_filesystem_scope: "dispatch por Command::ScopeFs"
 external.set_filesystem_scope -> external.filesystem_scope: "devuelve en éxito"
 external.filesystem_scope -> domain.shell: "reemplaza scope anterior en éxito"
+
+presentation: "presentación\n\nprompt compacto\nscope-fs …/<último-segmento> >\nno corrige paths" {
+  shape: rectangle
+}
+
+domain.shell -> presentation: "muestra estado activo\nsin línea Scope activo"

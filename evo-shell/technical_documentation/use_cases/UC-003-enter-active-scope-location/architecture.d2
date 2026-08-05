@@ -63,11 +63,11 @@ domain: "domain/model" {
     shape: rectangle
   }
 
-  shell: "Shell\n\nowns FilesystemScope" {
+  shell: "Shell\n\nowns FilesystemScope resuelto" {
     shape: rectangle
   }
 
-  current_scope: "FilesystemScope actual\n\nowned by Shell\nborrowed for Enter" {
+  current_scope: "FilesystemScope actual\n\nowned by Shell\nborrowed for Enter\nubicación filesystem resuelta" {
     shape: rectangle
   }
 }
@@ -83,7 +83,7 @@ external: "external dependency / evo-shell-engine" {
     shape: rectangle
   }
 
-  new_scope: "FilesystemScope\n\nnuevo scope owned" {
+  new_scope: "FilesystemScope\n\nnuevo scope owned\nubicación filesystem resuelta" {
     shape: rectangle
   }
 
@@ -93,6 +93,10 @@ external: "external dependency / evo-shell-engine" {
 }
 
 result: "ExecutionResult::ScopeChanged" {
+  shape: rectangle
+}
+
+presentation: "presentación\n\nprompt compacto\nscope-fs …/<último-segmento> >\nno corrige paths" {
   shape: rectangle
 }
 
@@ -118,3 +122,4 @@ external.enterer_agent -> external.engine_internal: "resuelve dentro del engine"
 external.enter_use_case -> external.new_scope: "devuelve en éxito"
 external.new_scope -> domain.shell: "reemplaza scope anterior solo en éxito"
 domain.shell -> result: "resultado de ejecución"
+domain.shell -> presentation: "muestra estado activo\nsin línea Scope activo"

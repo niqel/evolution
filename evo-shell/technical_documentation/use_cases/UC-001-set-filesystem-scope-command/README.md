@@ -8,7 +8,7 @@ Este caso de uso documenta cómo Evo Shell interpreta y ejecuta el comando:
 scope-fs "<path>"
 ```
 
-Evo Shell recibe texto, lo tokeniza incrementalmente, interpreta los tokens, resuelve el comando, ejecuta el comando consumiendo el use case de frontera `SetFilesystemScope` de Evo Shell Engine, recibe un `FilesystemScope` válido o un error, reemplaza el scope activo únicamente si la operación tuvo éxito y presenta un resultado conceptual al usuario.
+Evo Shell recibe texto, lo tokeniza incrementalmente, interpreta los tokens, resuelve el comando, ejecuta el comando consumiendo el use case de frontera `SetFilesystemScope` de Evo Shell Engine, recibe un `FilesystemScope` válido y resuelto o un error, reemplaza el scope activo únicamente si la operación tuvo éxito y actualiza la presentación del prompt.
 
 Evo Shell no duplica la lógica de filesystem de Evo Shell Engine.
 
@@ -52,9 +52,9 @@ No se requieren precondiciones técnicas adicionales.
 9. `execution::resolve` resuelve que `Command::ScopeFs(path)` debe operar sobre `Shell`.
 10. `execution::resolve` consume el use case de frontera `SetFilesystemScope`.
 11. Evo Shell llama `SetFilesystemScope` de Evo Shell Engine.
-12. Evo Shell Engine devuelve un `FilesystemScope` válido.
+12. Evo Shell Engine devuelve un `FilesystemScope` válido y resuelto.
 13. `Shell` reemplaza el scope anterior por el nuevo `FilesystemScope`.
-14. Evo Shell presenta un resultado conceptual al usuario.
+14. Evo Shell actualiza el prompt a partir del nuevo scope activo.
 
 ## Error sintáctico
 
@@ -91,9 +91,16 @@ Flujo:
 Ejemplo conceptual:
 
 ```text
-Scope activo:
-fs "/home/user/documents"
+scope-fs …/documents >
 ```
+
+Un cambio exitoso de scope no debe imprimir una línea adicional como:
+
+```text
+Scope activo: /home/...
+```
+
+El prompt representa el estado activo.
 
 ## Comportamiento del estado
 
@@ -131,6 +138,10 @@ Una Evo Shell operativa nunca queda sin filesystem scope activo por un fallo de 
 El engine no mantiene este estado interactivo.
 
 La propiedad del `FilesystemScope` pertenece a `Shell`.
+
+El `FilesystemScope` recibido desde Evo Shell Engine ya debe representar una ubicación filesystem resuelta.
+
+Evo Shell no corrige, normaliza ni canonicaliza ese path para hacerlo presentable.
 
 Este caso de uso no fija todavía la firma Rust definitiva de `execute`.
 
@@ -175,6 +186,10 @@ Evo Shell no conoce ni duplica:
 - `std::fs`;
 - validación/resolución del filesystem.
 
+Evo Shell tampoco resuelve componentes de navegación como `..`.
+
+La invariante de ubicación resuelta pertenece al engine.
+
 Flujo de frontera:
 
 ```text
@@ -196,6 +211,30 @@ Este caso de uso no implementa ni diseña un sistema de autocompletado.
 Representar comandos mediante un enum conceptual no impide agregar posteriormente metadata estática o un catálogo independiente para discovery/autocomplete.
 
 No se crea ese catálogo en UC-001.
+
+## Presentación
+
+El prompt debe usar una representación compacta del scope activo:
+
+```text
+scope-fs …/<último-segmento> >
+```
+
+Ejemplo:
+
+```text
+FilesystemScope:
+/home/user/repos/evolution/evo-shell/src
+
+Prompt:
+scope-fs …/src >
+```
+
+`…/` es únicamente presentación, no forma parte del path ni de la sintaxis de usuario.
+
+El prompt no modifica ni corrige el `FilesystemScope`.
+
+Una futura capacidad equivalente a `pwd` podría mostrar la ubicación completa, pero UC-001 no la define.
 
 ## Fuera de alcance
 

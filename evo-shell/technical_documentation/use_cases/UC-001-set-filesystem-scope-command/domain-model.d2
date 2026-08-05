@@ -16,11 +16,15 @@ command: "Command\n\nenum conceptual\nScopeFs(argument)\npuede prestar argumento
   shape: rectangle
 }
 
-filesystem_scope: "FilesystemScope\n\nproducido por Evo Shell Engine\nowned by Shell after successful engine call" {
+filesystem_scope: "FilesystemScope\n\nproducido por Evo Shell Engine\nubicación filesystem resuelta\nowned by Shell after successful engine call" {
   shape: rectangle
 }
 
 shell: "Shell\n\ninstancia operativa\nowns FilesystemScope\nvive mientras la shell está operativa" {
+  shape: rectangle
+}
+
+prompt: "prompt\n\nscope-fs …/<último-segmento> >\npresentation only\nno corrige paths" {
   shape: rectangle
 }
 
@@ -39,6 +43,7 @@ token -> command: "command::resolve"
 initialize_shell -> shell: "crea Shell operativa"
 command -> filesystem_scope: "execution::resolve -> SetFilesystemScope"
 filesystem_scope -> shell: "reemplaza scope activo en éxito"
+shell -> prompt: "presentación compacta"
 input -> borrowing_rule: "fuente"
 token -> borrowing_rule: "vista prestada"
 command -> borrowing_rule: "efímero"

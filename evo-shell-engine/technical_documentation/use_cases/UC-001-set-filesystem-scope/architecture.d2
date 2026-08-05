@@ -27,7 +27,7 @@ agents: "agents" {
 resolvers: "resolvers" {
   style.fill: "#fff7e6"
 
-  filesystem_scope: "Resolver\n\nresolvers/filesystem_scope.rs\nfunción: resolve" {
+  filesystem_scope: "Resolver\n\nresolvers/filesystem_scope.rs\nfunción: resolve\n\nvalida y resuelve ubicación efectiva" {
     shape: rectangle
   }
 }
@@ -53,4 +53,4 @@ agents.scope_setter -> resolvers.filesystem_scope: "coordina usando provider int
 resolvers.filesystem_scope -> definitions.contract: "consume"
 definitions.contract -> providers.is_directory_provider: "implementado por"
 providers.is_directory_provider -> infrastructure.std_fs: "usa"
-resolvers.filesystem_scope -> definitions.domain_entity: "crea/devuelve cuando la ubicación puede utilizarse"
+resolvers.filesystem_scope -> definitions.domain_entity: "crea/devuelve FilesystemScope resuelto cuando la ubicación puede utilizarse"

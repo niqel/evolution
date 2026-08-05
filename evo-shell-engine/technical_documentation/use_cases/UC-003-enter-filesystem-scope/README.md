@@ -83,7 +83,7 @@ No se definen todavía otros tipos de scope para `Enter`.
 5. `filesystem_path::resolve` devuelve un candidate `PathBuf`.
 6. `enterer::enter` entrega el candidate path a `scope_setter::set`.
 7. `scope_setter::set` reutiliza el flujo existente de UC-001 para resolver si el path puede convertirse en un `FilesystemScope`.
-8. Si el candidate path puede utilizarse, Evo Shell Engine devuelve un nuevo `FilesystemScope`.
+8. Si el candidate path puede utilizarse, Evo Shell Engine devuelve un nuevo `FilesystemScope` con ubicación filesystem resuelta.
 
 Cadena conceptual:
 
@@ -98,7 +98,7 @@ candidate PathBuf
     ↓
 scope_setter::set
     ↓
-FilesystemScope
+resolved FilesystemScope
 ```
 
 ## Responsabilidades
@@ -113,6 +113,10 @@ FilesystemScope
 
 `Enter` no duplica la resolución del filesystem.
 
+`Enter` no corrige ni normaliza por sí mismo el candidate path.
+
+La invariante de ubicación resuelta pertenece al flujo de creación de `FilesystemScope`.
+
 ## Relación con SetFilesystemScope
 
 `Enter` reutiliza `SetFilesystemScope` mediante `scope_setter::set`.
@@ -126,7 +130,7 @@ candidate PathBuf
     ↓
 scope_setter::set
     ↓
-new FilesystemScope / ScopeError
+resolved FilesystemScope / ScopeError
 ```
 
 No se vuelve a implementar:
@@ -137,6 +141,76 @@ No se vuelve a implementar:
 - `std::fs`;
 - errores de filesystem ya manejados por scope.
 
+## Relación con la invariante de FilesystemScope
+
+Un `FilesystemScope` válido representa una ubicación filesystem resuelta, no simplemente el texto utilizado para llegar a ella.
+
+`filesystem_path::resolve` mantiene su responsabilidad limitada:
+
+```text
+FilesystemScope
+    +
+relative location
+    ↓
+candidate PathBuf
+```
+
+Ejemplo:
+
+```text
+current:
+/home/user/repos/evolution/evo-shell/src
+
+location:
+..
+
+candidate:
+/home/user/repos/evolution/evo-shell/src/..
+```
+
+Ese candidate path es correcto para el resolver.
+
+Después:
+
+```text
+candidate Path
+    ↓
+scope_setter::set
+    ↓
+flujo de resolución/validación de FilesystemScope
+    ↓
+FilesystemScope con ubicación resuelta
+```
+
+Resultado:
+
+```text
+FilesystemScope:
+/home/user/repos/evolution/evo-shell
+```
+
+Otro ejemplo:
+
+```text
+current:
+/home/user/repos/evolution/evo-shell/src/agents
+
+location:
+../..
+
+candidate:
+/home/user/repos/evolution/evo-shell/src/agents/../..
+
+FilesystemScope resultante:
+/home/user/repos/evolution/evo-shell
+```
+
+No se mueve esta resolución a `filesystem_path::resolve`.
+
+No se crea lógica especial para `..`.
+
+La implementación futura debe respetar la semántica real del filesystem, incluidos casos como symlinks, usando capacidades estándar de Rust/std cuando corresponda y sin dependencias externas.
+
 ## Relación con FilesystemScope
 
 El `FilesystemScope` actual se recibe conceptualmente mediante préstamo.
@@ -144,6 +218,8 @@ El `FilesystemScope` actual se recibe conceptualmente mediante préstamo.
 `Enter` no modifica ese scope.
 
 El resultado exitoso es un nuevo `FilesystemScope` owned.
+
+Ese nuevo `FilesystemScope` debe representar la ubicación filesystem resuelta.
 
 Conceptualmente:
 

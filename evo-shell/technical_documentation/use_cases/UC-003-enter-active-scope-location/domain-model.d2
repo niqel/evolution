@@ -20,7 +20,7 @@ shell: "Shell\n\nowns FilesystemScope" {
   shape: rectangle
 }
 
-current_scope: "FilesystemScope current\n\nowned by Shell\nborrowed for Enter" {
+current_scope: "FilesystemScope current\n\nowned by Shell\nborrowed for Enter\nresolved filesystem location" {
   shape: rectangle
 }
 
@@ -29,11 +29,15 @@ engine_enter: "Enter\n\nexternal use case del engine\nnot an Evo Shell entity" {
   style.fill: "#f2f2f2"
 }
 
-new_scope: "FilesystemScope new\n\nowned result from engine\nreplaces current only on success" {
+new_scope: "FilesystemScope new\n\nowned result from engine\nresolved filesystem location\nreplaces current only on success" {
   shape: rectangle
 }
 
 scope_changed: "ExecutionResult::ScopeChanged\n\nreused result" {
+  shape: rectangle
+}
+
+prompt: "prompt\n\nscope-fs …/<último-segmento> >\npresentation only" {
   shape: rectangle
 }
 
@@ -53,3 +57,4 @@ engine_enter -> new_scope: "success"
 engine_enter -> error: "failure"
 new_scope -> shell: "replace owned scope"
 shell -> scope_changed: "result"
+current_scope -> prompt: "compact display\nno path correction"

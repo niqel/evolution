@@ -36,7 +36,7 @@ existing_scope_flow: "existing filesystem scope flow\nfilesystem_scope::resolve\
   shape: rectangle
 }
 
-new_scope: "new FilesystemScope" {
+new_scope: "new resolved FilesystemScope" {
   shape: rectangle
 }
 
@@ -55,11 +55,11 @@ current_scope -> enter_use_case: "scope prestado"
 location -> enter_use_case: "ubicación relativa"
 enter_use_case -> enterer_agent: "2. use case público"
 enterer_agent -> path_resolver: "3. filesystem_path::resolve(scope, location)"
-path_resolver -> candidate_path: "4. candidate PathBuf"
+path_resolver -> candidate_path: "4. candidate PathBuf puede conservar .."
 candidate_path -> enterer_agent: "5. devuelve candidate path"
 enterer_agent -> scope_setter_agent: "6. scope_setter::set(candidate)"
 scope_setter_agent -> existing_scope_flow: "7. reutiliza UC-001"
-existing_scope_flow -> new_scope: "8. FilesystemScope válido"
+existing_scope_flow -> new_scope: "8. FilesystemScope válido y resuelto"
 new_scope -> consumer: "9. devuelve nuevo scope"
 
 path_resolver -> error: "ubicación no resoluble"

@@ -123,6 +123,10 @@ FilesystemScope
 
 Evo Shell no duplica validación de directorio, providers de filesystem, resolvers de filesystem ni `std::fs` interno del engine.
 
+El `FilesystemScope` recibido desde Evo Shell Engine representa una ubicación filesystem resuelta.
+
+Evo Shell no corrige, normaliza ni canonicaliza ese path.
+
 ### Entidad Shell
 
 `Shell`:
@@ -135,6 +139,125 @@ Evo Shell no duplica validación de directorio, providers de filesystem, resolve
 Puede existir conceptualmente un constructor interno mínimo `Shell::new(FilesystemScope)`, pero no representa la API principal de inicialización, no obtiene infraestructura, no valida filesystem y solo materializa una entidad ya válida.
 
 El consumidor conceptual debe usar `shell_initializer::initialize`.
+
+## Prompt y presentación del scope activo
+
+El prompt de Evo Shell debe mostrar una representación compacta del filesystem scope activo.
+
+Formato aprobado:
+
+```text
+scope-fs …/src >
+```
+
+El prompt incluye explícitamente el tipo de scope:
+
+```text
+scope-fs
+```
+
+Esto prepara conceptualmente la presentación para futuros tipos de scope, como `scope-db` o `scope-url`, sin diseñarlos ni implementarlos todavía.
+
+La parte:
+
+```text
+…/
+```
+
+significa que existen componentes anteriores del path que no se muestran en el prompt.
+
+`…/` no forma parte del `FilesystemScope`.
+
+`…/` no es sintaxis que pueda introducir el usuario.
+
+`…/` no modifica el path.
+
+Es exclusivamente presentación.
+
+Ejemplos:
+
+```text
+FilesystemScope real:
+/home/user/repos/evolution/evo-shell/src
+
+Prompt:
+scope-fs …/src >
+```
+
+```text
+FilesystemScope real:
+/home/user/repos/evolution/evo-shell/src/agents
+
+Prompt:
+scope-fs …/agents >
+```
+
+Después de:
+
+```text
+enter ..
+```
+
+si el `FilesystemScope` resuelto es:
+
+```text
+/home/user/repos/evolution/evo-shell/src
+```
+
+el prompt debe ser:
+
+```text
+scope-fs …/src >
+```
+
+Para la raíz del filesystem, el prompt debe usar una representación compacta apropiada sin inventar un segmento.
+
+No se usa `~` como sustituto arbitrario del path.
+
+El formato aprobado para paths truncados es:
+
+```text
+…/<último-segmento>
+```
+
+La presentación no debe corregir paths ni resolver componentes como `..`.
+
+Evo Shell Engine mantiene la invariante del `FilesystemScope`.
+
+Evo Shell obtiene el `FilesystemScope` actual desde `Shell` y muestra únicamente una representación compacta.
+
+Un cambio exitoso de scope no debe imprimir adicionalmente:
+
+```text
+Scope activo: /home/...
+```
+
+El prompt ya representa el estado activo.
+
+Interacción conceptual:
+
+```text
+scope-fs …/evo-shell >
+enter src
+scope-fs …/src >
+```
+
+No:
+
+```text
+scope-fs …/evo-shell >
+enter src
+Scope activo: /home/user/repos/evolution/evo-shell/src
+scope-fs …/src >
+```
+
+Lo mismo aplica a `scope-fs`.
+
+`ExecutionResult::ScopeChanged` sigue existiendo conceptualmente como resultado de ejecución.
+
+La capa de presentación decide no producir una línea adicional para ese resultado.
+
+Una capacidad futura equivalente a `pwd` podría mostrar la ubicación completa, pero esta documentación no define ese comando, no crea una historia de usuario y no fija su nombre definitivo.
 
 ### Errores de inicialización
 

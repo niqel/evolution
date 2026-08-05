@@ -52,7 +52,7 @@ engine: "Evo Shell Engine" {
   shape: rectangle
 }
 
-engine_result: "FilesystemScope / error" {
+engine_result: "resolved FilesystemScope / error" {
   shape: rectangle
 }
 
@@ -64,7 +64,7 @@ current_scope: "FilesystemScope actual\nowned by Shell" {
   shape: rectangle
 }
 
-presentation: "resultado conceptual al usuario" {
+presentation: "prompt compacto\nscope-fs …/<último-segmento> >" {
   shape: rectangle
 }
 
@@ -95,9 +95,9 @@ error: "Error" {
   style.fill: "#fff0f0"
 }
 
-engine_result -> success: "nuevo FilesystemScope"
+engine_result -> success: "nuevo FilesystemScope resuelto"
 success -> shell: "reemplaza scope anterior"
-shell -> presentation: "presenta resultado"
+shell -> presentation: "actualiza prompt\nsin línea Scope activo"
 
 engine_result -> error: "error del engine"
 error -> shell: "scope activo actual permanece"

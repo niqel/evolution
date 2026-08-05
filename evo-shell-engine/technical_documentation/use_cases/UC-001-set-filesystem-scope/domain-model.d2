@@ -4,6 +4,10 @@ requested_path: "requested path" {
   shape: rectangle
 }
 
+resolved_path: "resolved filesystem location\n\nubicación efectiva\nsin componentes de navegación como .." {
+  shape: rectangle
+}
+
 borrowed_path: "Entrada prestada\n&Path" {
   shape: rectangle
 }
@@ -12,7 +16,7 @@ resolver: "filesystem_scope::resolve" {
   shape: rectangle
 }
 
-filesystem_scope: "FilesystemScope\n\n- path: PathBuf" {
+filesystem_scope: "FilesystemScope\n\n- path: PathBuf\n- representa ubicación filesystem resuelta\n- no conserva cómo se llegó ahí" {
   shape: rectangle
 }
 
@@ -26,8 +30,9 @@ access: "std::fs / provider" {
 
 requested_path -> borrowed_path: "borrowed as"
 borrowed_path -> resolver: "entrada"
-resolver -> filesystem_scope: "crea/devuelve"
-filesystem_scope -> filesystem_scope: "owns PathBuf"
+resolver -> resolved_path: "valida/resuelve ubicación efectiva"
+resolved_path -> filesystem_scope: "crea/devuelve"
+filesystem_scope -> filesystem_scope: "owns resolved PathBuf"
 filesystem_scope -> external_filesystem: "NO posee ni duplica"
 access -> external_filesystem: "accede como recurso externo"
 resolver -> access: "consulta capacidad externa"

@@ -36,8 +36,8 @@ El consumidor externo no proporciona `IsDirectory` ni providers internos.
 1. El usuario solicita un scope de tipo `fs`.
 2. El usuario proporciona una ubicación.
 3. Evo Shell Engine evalúa si la ubicación puede utilizarse como scope.
-4. Si puede utilizarse, Evo Shell Engine establece esa ubicación como scope activo.
-5. Evo Shell Engine informa el scope activo.
+4. Si puede utilizarse, Evo Shell Engine resuelve la ubicación filesystem efectiva.
+5. Evo Shell Engine produce un `FilesystemScope` válido que representa la ubicación resuelta.
 6. Las operaciones posteriores pueden utilizar ese scope.
 
 ## Flujo alternativo — ubicación no utilizable
@@ -51,9 +51,71 @@ El consumidor externo no proporciona `IsDirectory` ni providers internos.
 Ejemplo conceptual:
 
 ```text
-Scope activo:
-fs "/home/user/documents"
+FilesystemScope:
+"/home/user/documents"
 ```
+
+## Invariante de FilesystemScope
+
+Un `FilesystemScope` válido representa una ubicación filesystem resuelta, no simplemente el texto utilizado para llegar a ella.
+
+La entidad representa dónde está el scope, no cómo se llegó al scope.
+
+Ejemplos:
+
+```text
+Path solicitado:
+/home/user/repos/evolution/evo-shell/src/..
+
+FilesystemScope resultante:
+/home/user/repos/evolution/evo-shell
+```
+
+```text
+Path solicitado:
+/home/user/repos/evolution/evo-shell/src/agents/../..
+
+FilesystemScope resultante:
+/home/user/repos/evolution/evo-shell
+```
+
+Esto aplica a cualquier creación válida de `FilesystemScope`, no solo a `Enter`.
+
+Por ejemplo:
+
+```text
+scope-fs "/tmp/a/../b"
+```
+
+si resulta en una ubicación válida, el `FilesystemScope` resultante debe representar la ubicación filesystem resuelta correspondiente.
+
+Esta invariante beneficia a:
+
+- `Enter`;
+- `scope-fs`;
+- inicialización del `FilesystemScope`;
+- futuras consultas equivalentes a `pwd`;
+- comparación conceptual de scopes;
+- presentación del scope;
+- futuros consumidores como Evo Script.
+
+La resolución debe pertenecer al flujo existente de creación de `FilesystemScope`:
+
+```text
+Path solicitado
+    ↓
+validación/resolución
+    ↓
+FilesystemScope válido y resuelto
+```
+
+No debe resolverse únicamente en presentación.
+
+La presentación consume el estado correcto del dominio; no debe ocultar un path interno sin resolver.
+
+La implementación futura debe usar capacidades estándar de Rust/std cuando corresponda y debe respetar la semántica real del filesystem, incluidos casos como symlinks.
+
+No se agregan dependencias externas para esta responsabilidad.
 
 ## Resultado no exitoso
 

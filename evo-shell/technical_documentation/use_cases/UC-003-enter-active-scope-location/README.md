@@ -8,7 +8,7 @@ Este caso de uso documenta cómo Evo Shell interpreta y ejecuta el comando:
 enter <location>
 ```
 
-Evo Shell recibe texto, lo tokeniza incrementalmente, interpreta los tokens, resuelve `Command::Enter(location)`, ejecuta el comando sobre la `Shell` actual, consume la frontera pública `Enter` de Evo Shell Engine, recibe un nuevo `FilesystemScope` o un error, reemplaza el scope activo únicamente si la operación tuvo éxito y presenta un resultado conceptual al usuario.
+Evo Shell recibe texto, lo tokeniza incrementalmente, interpreta los tokens, resuelve `Command::Enter(location)`, ejecuta el comando sobre la `Shell` actual, consume la frontera pública `Enter` de Evo Shell Engine, recibe un nuevo `FilesystemScope` resuelto o un error, reemplaza el scope activo únicamente si la operación tuvo éxito y actualiza la presentación del prompt.
 
 Evo Shell no duplica la lógica de resolución de paths ni la validación de filesystem de Evo Shell Engine.
 
@@ -59,10 +59,10 @@ No se requieren precondiciones técnicas adicionales.
 9. `execution::resolve` resuelve que `Command::Enter(location)` debe operar sobre `Shell`.
 10. Evo Shell presta el `FilesystemScope` owned by `Shell`.
 11. Evo Shell consume la frontera pública `Enter` de Evo Shell Engine.
-12. Evo Shell Engine devuelve un nuevo `FilesystemScope` válido.
+12. Evo Shell Engine devuelve un nuevo `FilesystemScope` válido y resuelto.
 13. `Shell` reemplaza el scope anterior por el nuevo `FilesystemScope`.
 14. Evo Shell devuelve `ExecutionResult::ScopeChanged`.
-15. Evo Shell presenta un resultado conceptual al usuario.
+15. Evo Shell actualiza el prompt a partir del nuevo scope activo.
 
 ## Tokenización y parsing
 
@@ -232,6 +232,10 @@ scope actual + location relativa
 
 pertenece a Evo Shell Engine.
 
+La resolución final del `FilesystemScope` también pertenece a Evo Shell Engine.
+
+Evo Shell no corrige paths, no resuelve `..`, no canonicaliza filesystem y no intenta ocultar rutas sin resolver en presentación.
+
 ## Shell y estado
 
 `Shell` sigue siendo propietaria del filesystem scope activo.
@@ -248,6 +252,8 @@ FilesystemScope B
         ↓ success
 Shell reemplaza A por B
 ```
+
+`FilesystemScope B` debe representar la ubicación filesystem resuelta producida por Evo Shell Engine.
 
 En error:
 
@@ -271,6 +277,18 @@ No se crea una variante nueva exclusivamente para `enter`.
 Desde la perspectiva de ejecución, tanto `scope-fs` como `enter` pueden terminar exitosamente con un nuevo scope activo.
 
 La intención funcional de ambos comandos sigue siendo diferente.
+
+La presentación interactiva no necesita producir una línea adicional para `ExecutionResult::ScopeChanged`.
+
+El prompt compacto representa el nuevo estado activo.
+
+Ejemplo conceptual:
+
+```text
+scope-fs …/evo-shell >
+enter src
+scope-fs …/src >
+```
 
 ## Errores
 
@@ -335,6 +353,23 @@ Enter(&current_scope, "..")
 
 La semántica de resolver `..` pertenece al engine.
 
+El resultado que vuelve del engine debe ser un `FilesystemScope` resuelto.
+
+Ejemplo:
+
+```text
+scope actual:
+/home/user/repos/evolution/evo-shell/src
+
+enter ..
+
+candidate en engine:
+/home/user/repos/evolution/evo-shell/src/..
+
+FilesystemScope resultante:
+/home/user/repos/evolution/evo-shell
+```
+
 Lo mismo aplica para:
 
 ```text
@@ -375,6 +410,48 @@ Enter:
 Evo Shell no clona `FilesystemScope` para ejecutar `Enter`.
 
 El nuevo `FilesystemScope` solo reemplaza al anterior cuando `Enter` devuelve éxito.
+
+## Presentación
+
+El prompt debe mostrar una representación compacta del scope activo:
+
+```text
+scope-fs …/<último-segmento> >
+```
+
+Ejemplos:
+
+```text
+FilesystemScope:
+/home/user/repos/evolution/evo-shell/src
+
+Prompt:
+scope-fs …/src >
+```
+
+```text
+FilesystemScope:
+/home/user/repos/evolution/evo-shell/src/agents
+
+Prompt:
+scope-fs …/agents >
+```
+
+`…/` indica que existen componentes anteriores no mostrados.
+
+`…/` no forma parte del `FilesystemScope`, no es sintaxis de usuario y no modifica el path.
+
+El prompt consume el estado correcto del dominio; no corrige paths ni resuelve componentes como `..`.
+
+Un `enter` exitoso no debe imprimir adicionalmente:
+
+```text
+Scope activo: /home/...
+```
+
+`ExecutionResult::ScopeChanged` sigue existiendo conceptualmente, pero la capa de presentación no necesita producir una línea adicional para ese resultado.
+
+Una futura capacidad equivalente a `pwd` podría mostrar la ubicación completa, pero UC-003 no define ese comando.
 
 ## Relación con US-003
 

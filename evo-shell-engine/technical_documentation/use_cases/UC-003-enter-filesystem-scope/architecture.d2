@@ -11,7 +11,7 @@ definitions: "definitions" {
     shape: rectangle
   }
 
-  filesystem_scope_entity: "Domain entity\n\ndefinitions/domain/entities/filesystem_scope.rs\nFilesystemScope" {
+  filesystem_scope_entity: "Domain entity\n\ndefinitions/domain/entities/filesystem_scope.rs\nFilesystemScope\n\nubicación filesystem resuelta" {
     shape: rectangle
   }
 }
@@ -49,7 +49,7 @@ relative_location: "relative location\n\nrecibida como &Path cuando sea viable" 
   shape: rectangle
 }
 
-candidate_path: "candidate Path / PathBuf\n\nvalor temporal producido por filesystem_path::resolve" {
+candidate_path: "candidate Path / PathBuf\n\nvalor temporal producido por filesystem_path::resolve\npuede contener .." {
   shape: rectangle
 }
 
@@ -68,7 +68,7 @@ resolvers.filesystem_path -> candidate_path: "produce"
 agents.enterer -> agents.scope_setter: "reutiliza con candidate path"
 agents.scope_setter -> definitions.set_scope_use_case: "implementa frontera existente"
 agents.scope_setter -> existing_scope_flow: "reutiliza validación de filesystem"
-existing_scope_flow -> definitions.filesystem_scope_entity: "crea/devuelve nuevo FilesystemScope"
+existing_scope_flow -> definitions.filesystem_scope_entity: "crea/devuelve nuevo FilesystemScope resuelto"
 definitions.filesystem_scope_entity -> consumer: "new FilesystemScope / error"
 
 note: "No se duplican contracts/providers de filesystem.\nEnter no conoce std::fs." {
