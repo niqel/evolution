@@ -1,0 +1,42 @@
+direction: right
+
+filesystem_iteration: "FilesystemIteration\n\nentidad del engine\nowned temporalmente por Evo Shell\ndurante presentación" {
+  shape: rectangle
+}
+
+filesystem_iteration_item: "FilesystemIterationItem\n\nentidad del engine\nindex\nentry" {
+  shape: rectangle
+}
+
+filesystem_entry: "FilesystemEntry\n\nentidad del engine\nname\npath\nkind\nmodified\nsize" {
+  shape: rectangle
+}
+
+presenter: "iteration_presenter::present\n\nagent de presentación\nno entidad de dominio" {
+  shape: rectangle
+  style.fill: "#eefaf1"
+}
+
+presentation_state: "Estado temporal de presentación\n\nfiles count\ndirectories count\n\nvive solo durante present()" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+visible_output: "Salida visible\n\ncolumnas\ncolores\nsummary" {
+  shape: rectangle
+  style.fill: "#edf4ff"
+}
+
+not_domain: "No se crean entidades de dominio para\n\ntable\nrow\nheader\nsummary" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+filesystem_iteration -> presenter: "entrada"
+presenter -> filesystem_iteration_item: "consume vía Advance"
+filesystem_iteration_item -> filesystem_entry: "entry"
+filesystem_iteration_item -> visible_output: "index -> #"
+filesystem_entry -> visible_output: "modified type size name"
+presenter -> presentation_state: "mantiene counts locales"
+presentation_state -> visible_output: "summary files/directories"
+presenter -> not_domain: "presentación temporal"

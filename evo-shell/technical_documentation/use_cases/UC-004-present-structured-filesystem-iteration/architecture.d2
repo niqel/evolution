@@ -1,0 +1,76 @@
+direction: down
+
+shell_loop: "main / shell loop\n\nrecibe ExecutionResult" {
+  shape: rectangle
+}
+
+execution_result: "ExecutionResult::FilesystemIteration(iteration)" {
+  shape: rectangle
+}
+
+presenter: "Agent\n\nagents/iteration_presenter.rs\niteration_presenter::present\n\nresponsable de presentación" {
+  shape: rectangle
+  style.fill: "#eefaf1"
+}
+
+engine: "Evo Shell Engine" {
+  shape: rectangle
+  style.fill: "#f2f2f2"
+
+  advance: "Advance(&mut FilesystemIteration)\niteration_advancer::advance" {
+    shape: rectangle
+  }
+
+  item: "FilesystemIterationItem\n\nindex\nentry" {
+    shape: rectangle
+  }
+
+  entry: "FilesystemEntry\n\nname\npath\nkind\nmodified\nsize" {
+    shape: rectangle
+  }
+}
+
+presentation: "Presentación Evo Shell" {
+  shape: rectangle
+  style.fill: "#edf4ff"
+
+  header: "header\n# Modified Type Size Name" {
+    shape: rectangle
+  }
+
+  row: "row rendering\n\nindex\nmodified formatted\ntype text\nsize formatted\nname" {
+    shape: rectangle
+  }
+
+  colors: "colors\n\nheaders\ndirectories\nfiles\nsymlinks\nother\n\npresentación, no dato" {
+    shape: rectangle
+  }
+
+  summary: "summary\n\nfiles count\ndirectories count\n\nno total bytes" {
+    shape: rectangle
+  }
+}
+
+local_state: "Estado local temporal del presenter\n\nfiles count\ndirectories count\n\nno domain entity\nno Vec items" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+stdout: "stdout / terminal" {
+  shape: rectangle
+}
+
+shell_loop -> execution_result: "match"
+execution_result -> presenter: "present(iteration)"
+presenter -> presentation.header: "render header"
+presenter -> engine.advance: "consume progresivamente"
+engine.advance -> engine.item: "Some(item) / None / IterError"
+engine.item -> engine.entry: "entry"
+engine.item -> presentation.row: "index"
+engine.entry -> presentation.row: "structured data"
+presentation.row -> presentation.colors: "aplica ayuda visual"
+presenter -> local_state: "incrementa counts locales"
+local_state -> presentation.summary: "al finalizar"
+presentation.header -> stdout: "write"
+presentation.row -> stdout: "write por item"
+presentation.summary -> stdout: "write al final"

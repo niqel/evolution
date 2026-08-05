@@ -8,11 +8,11 @@ read_dir: "std::fs::ReadDir\n\nestado externo de iteración" {
   shape: rectangle
 }
 
-filesystem_iteration: "FilesystemIteration\n\nposee el estado necesario\npara continuar la iteración lazy\n\nconceptualmente contiene ReadDir\nNO contiene Vec\nNO materializa todo el directorio" {
+filesystem_iteration: "FilesystemIteration\n\nposee el estado necesario\npara continuar la iteración lazy\n\nread_dir state\nnext_index\n\nNO contiene Vec\nNO materializa todo el directorio\nNO guarda historial" {
   shape: rectangle
 }
 
-mutable_iteration: "&mut FilesystemIteration\n\nmutabilidad localizada\nsolo avanza el cursor interno" {
+mutable_iteration: "&mut FilesystemIteration\n\nmutabilidad localizada\navanza cursor interno\nactualiza next_index" {
   shape: rectangle
 }
 
@@ -21,11 +21,19 @@ advance: "Advance\n\nuse case público\nno es entidad\navanza una iteración exi
   style.fill: "#edf4ff"
 }
 
-dir_entry: "std::fs::DirEntry\n\nelemento de infraestructura" {
+dir_entry: "std::fs::DirEntry\n\nelemento de infraestructura\nfile_type\nmetadata" {
   shape: rectangle
 }
 
-filesystem_entry: "FilesystemEntry\n\nname\npath\nkind" {
+filesystem_entry: "FilesystemEntry\n\nname\npath\nkind\nmodified\nsize\n\nNO contiene index" {
+  shape: rectangle
+}
+
+filesystem_entry_kind: "FilesystemEntryKind\n\nFile\nDirectory\nSymlink\nOther" {
+  shape: rectangle
+}
+
+filesystem_iteration_item: "FilesystemIterationItem\n\nindex\nentry: FilesystemEntry\n\nindex pertenece al item\ny a la iteración concreta" {
   shape: rectangle
 }
 
@@ -33,7 +41,7 @@ external_filesystem: "filesystem real\nSistema operativo" {
   shape: cylinder
 }
 
-std_fs: "std::fs\nread_dir / ReadDir::next" {
+std_fs: "std::fs\nread_dir / ReadDir::next / metadata" {
   shape: rectangle
 }
 
@@ -45,7 +53,16 @@ filesystem_iteration -> mutable_iteration: "borrowed as"
 mutable_iteration -> advance: "entrada pública"
 advance -> dir_entry: "siguiente elemento / fin / error"
 dir_entry -> filesystem_entry: "filesystem_entry::resolve"
-filesystem_entry -> filesystem_entry: "datos estructurados mínimos"
+filesystem_entry_kind -> filesystem_entry: "kind"
+filesystem_entry -> filesystem_iteration_item: "entry"
+filesystem_iteration -> filesystem_iteration_item: "next_index -> index"
+
+index_rule: "Regla de index\n\nempieza en 0\nse incrementa por item producido\nno es inode\nno es file ID\nno es identidad persistente\nno se genera en presentación" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+filesystem_iteration_item -> index_rule: "contiene index"
 
 immutability_rule: "Regla\n\nPreferir inmutabilidad por defecto.\nAceptar mutabilidad localizada cuando representa\nel estado inherentemente mutable de un recurso." {
   shape: rectangle

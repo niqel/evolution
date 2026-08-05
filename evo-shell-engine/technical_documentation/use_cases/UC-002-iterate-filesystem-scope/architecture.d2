@@ -7,7 +7,7 @@ definitions: "definitions" {
     shape: rectangle
   }
 
-  advance_use_case: "Use case público\n\ndefinitions/use_cases/advance.rs\nAdvance(&mut FilesystemIteration)" {
+  advance_use_case: "Use case público\n\ndefinitions/use_cases/advance.rs\nAdvance(&mut FilesystemIteration)\n\nconceptualmente devuelve\nOption<FilesystemIterationItem>" {
     shape: rectangle
   }
 
@@ -19,11 +19,15 @@ definitions: "definitions" {
     shape: rectangle
   }
 
-  filesystem_iteration_entity: "Domain entity\n\ndefinitions/domain/entities/filesystem_iteration.rs\nFilesystemIteration\n\nposee estado lazy\nconceptualmente ReadDir\nno contiene Vec" {
+  filesystem_iteration_entity: "Domain entity\n\ndefinitions/domain/entities/filesystem_iteration.rs\nFilesystemIteration\n\nposee estado lazy\nread_dir state\nnext_index\nno contiene Vec" {
     shape: rectangle
   }
 
-  filesystem_entry_entity: "Domain entity\n\ndefinitions/domain/entities/filesystem_entry.rs\nFilesystemEntry\n\nname\npath\nkind" {
+  filesystem_iteration_item_entity: "Domain entity\n\nFilesystemIterationItem\n\nindex\nentry: FilesystemEntry" {
+    shape: rectangle
+  }
+
+  filesystem_entry_entity: "Domain entity\n\ndefinitions/domain/entities/filesystem_entry.rs\nFilesystemEntry\n\nname\npath\nkind\nmodified\nsize\n\nsin index" {
     shape: rectangle
   }
 }
@@ -35,7 +39,7 @@ agents: "agents" {
     shape: rectangle
   }
 
-  iteration_advancer: "Agent\n\nagents/iteration_advancer.rs\niteration_advancer::advance" {
+  iteration_advancer: "Agent\n\nagents/iteration_advancer.rs\niteration_advancer::advance\n\nempaqueta index + entry" {
     shape: rectangle
   }
 }
@@ -43,11 +47,11 @@ agents: "agents" {
 resolvers: "resolvers" {
   style.fill: "#fff7e6"
 
-  filesystem_iteration: "Resolver\n\nresolvers/filesystem_iteration.rs\nfilesystem_iteration::resolve\n\ninicia la iteración\nno enumera todo" {
+  filesystem_iteration: "Resolver\n\nresolvers/filesystem_iteration.rs\nfilesystem_iteration::resolve\n\ninicia la iteración\ninicializa next_index en 0\nno enumera todo" {
     shape: rectangle
   }
 
-  filesystem_entry: "Resolver existente\n\nresolvers/filesystem_entry.rs\nfilesystem_entry::resolve\n\nmaterializa el siguiente FilesystemEntry" {
+  filesystem_entry: "Resolver existente\n\nresolvers/filesystem_entry.rs\nfilesystem_entry::resolve\n\nmaterializa FilesystemEntry\ncon tipo y metadata" {
     shape: rectangle
   }
 }
@@ -79,7 +83,7 @@ infrastructure: "infrastructure" {
     shape: rectangle
   }
 
-  dir_entry: "std::fs::DirEntry / fin / error" {
+  dir_entry: "std::fs::DirEntry / fin / error\n\nfile_type\nmetadata cuando aplique" {
     shape: rectangle
   }
 }
@@ -106,7 +110,7 @@ definitions.filesystem_iteration_entity -> consumer: "FilesystemIteration"
 
 consumer -> definitions.advance_use_case: "frontera pública"
 definitions.advance_use_case -> agents.iteration_advancer: "implementado por"
-agents.iteration_advancer -> resolvers.filesystem_entry: "coordina avance"
+agents.iteration_advancer -> resolvers.filesystem_entry: "coordina resolución de entry"
 resolvers.filesystem_entry -> definitions.next_directory_entry_contract: "consume"
 definitions.next_directory_entry_contract -> providers.next_directory_entry_provider: "implementado por"
 providers.next_directory_entry_provider -> definitions.filesystem_iteration_entity: "recibe &mut FilesystemIteration"
@@ -115,4 +119,7 @@ providers.next_directory_entry_provider -> infrastructure.read_dir_next: "usa"
 infrastructure.read_dir_next -> infrastructure.dir_entry: "DirEntry / fin / error"
 infrastructure.dir_entry -> resolvers.filesystem_entry: "resultado de infraestructura"
 resolvers.filesystem_entry -> definitions.filesystem_entry_entity: "FilesystemEntry / None / IterError"
-definitions.filesystem_entry_entity -> consumer: "un elemento por llamada"
+definitions.filesystem_iteration_entity -> agents.iteration_advancer: "next_index"
+agents.iteration_advancer -> definitions.filesystem_iteration_item_entity: "index + entry"
+definitions.filesystem_entry_entity -> definitions.filesystem_iteration_item_entity: "entry"
+definitions.filesystem_iteration_item_entity -> consumer: "un item por llamada"

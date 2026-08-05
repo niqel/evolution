@@ -1,0 +1,59 @@
+direction: down
+
+shell_loop: "main / shell loop" {
+  shape: rectangle
+}
+
+execution_result: "ExecutionResult::FilesystemIteration(iteration)" {
+  shape: rectangle
+}
+
+presenter: "iteration_presenter::present(iteration)" {
+  shape: rectangle
+}
+
+header: "render header\n# Modified Type Size Name" {
+  shape: rectangle
+}
+
+advance: "Advance(&mut FilesystemIteration)" {
+  shape: rectangle
+}
+
+item: "FilesystemIterationItem" {
+  shape: rectangle
+}
+
+row: "render row\n\nindex\nmodified\nkind\nsize\nname" {
+  shape: rectangle
+}
+
+counts: "update local counts\n\nfiles\ndirectories" {
+  shape: rectangle
+}
+
+summary: "render summary\n\nN directories\nN files" {
+  shape: rectangle
+}
+
+done: "return to shell loop" {
+  shape: rectangle
+}
+
+error: "IterError\n\npresent error\nscope intact" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+shell_loop -> execution_result: "match execution result"
+execution_result -> presenter: "present(iteration)"
+presenter -> header: "write once"
+presenter -> advance: "request next item"
+advance -> item: "Some(item)"
+item -> row: "render structured row"
+row -> counts: "count file/dir"
+counts -> advance: "loop"
+advance -> summary: "None"
+summary -> done: "finish"
+advance -> error: "Err(IterError)"
+error -> done: "stop presentation"

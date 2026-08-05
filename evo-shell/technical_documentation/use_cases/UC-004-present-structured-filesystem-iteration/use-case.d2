@@ -1,0 +1,36 @@
+direction: right
+
+usuario: "Usuario" {
+  shape: person
+}
+
+evo_shell: "Evo Shell" {
+  shape: rectangle
+
+  present_iteration: "Presentar iteración filesystem estructurada" {
+    shape: oval
+  }
+}
+
+entrada: "Entrada conceptual\nExecutionResult::FilesystemIteration\nFilesystemIteration" {
+  shape: rectangle
+}
+
+engine_data: "Datos del engine\nFilesystemIterationItem\nindex\nFilesystemEntry\nname path kind modified size" {
+  shape: rectangle
+}
+
+salida: "Salida visible\n# Modified Type Size Name\nsummary files/directories" {
+  shape: rectangle
+}
+
+fuera: "No hace\nmetadata filesystem\nindex inventado\nordenamiento\nVec/collect\ntotal bytes" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+usuario -> evo_shell.present_iteration: "ejecuta iter"
+entrada -> evo_shell.present_iteration: "resultado de ejecución"
+evo_shell.present_iteration -> engine_data: "consume Advance"
+engine_data -> salida: "formatea y presenta"
+evo_shell.present_iteration -> fuera: "mantiene fuera de alcance"
