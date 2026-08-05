@@ -25,7 +25,7 @@ US-004 define que `iter` presenta una tabla estructurada con:
 US-005 mejora la presentación observable de esa salida para que:
 
 - el usuario vea la ruta completa que está siendo iterada;
-- esa ruta completa aparezca antes y después de la lista;
+- esa ruta completa aparezca como footer final de la salida;
 - exista separación visual clara entre comando, contexto, tabla, resumen y siguiente prompt;
 - el prompt compacto distinga visualmente el tipo de scope y la ubicación;
 - los directorios se identifiquen de manera coherente en `Type` y `Name`.
@@ -37,23 +37,18 @@ Esta historia no cambia la semántica de `iter`.
 Ejemplo conceptual:
 
 ```text
-scope-fs …/target > iter
-
-Path: /home/user/repos/evolution/evo-shell/target
+scope-fs …/src > iter
 
 #   Modified             Type    Size      Name
-0   04/08/2026 12:10     dir               flycheck0/
-1   05/08/2026 00:18     dir               debug/
-2   04/08/2026 12:10     file    1.7 kB    .rustc_info.json
-3   04/08/2026 02:02     file    177 B     CACHEDIR.TAG
-4   05/08/2026 00:18     dir               release/
+0   05/08/2026 00:18     dir               agents/
+1   05/08/2026 00:18     file    1.2 kB    lib.rs
+2   05/08/2026 00:18     dir               providers/
 
-3 directories
-2 files
+2 directories
+1 file
+Path: /home/user/repos/evolution/evo-shell/src
 
-Path: /home/user/repos/evolution/evo-shell/target
-
-scope-fs …/target >
+scope-fs …/src >
 ```
 
 Los valores son conceptuales.
@@ -62,12 +57,16 @@ Los colores no pueden representarse completamente en texto Markdown.
 
 Funcionalmente:
 
-- `scope-fs` y `…/target` tienen colores distintos en el prompt;
-- `dir` y el nombre de directorio, por ejemplo `release/`, comparten la misma diferenciación visual de directorio.
+- `scope-fs` y `…/src` tienen colores distintos en el prompt;
+- `Path:` usa la misma identidad visual que `scope-fs`;
+- la ruta completa del footer usa la misma identidad visual que la ubicación compacta del prompt;
+- `dir` y el nombre de directorio, por ejemplo `agents/`, comparten la misma diferenciación visual de directorio.
 
 ## Regla de espaciado
 
-`iter` comienza su presentación con una línea vacía y termina su presentación con una línea vacía.
+Después de ejecutar `iter`, la presentación deja exactamente una línea vacía antes de comenzar la tabla.
+
+Después del footer `Path:` existe exactamente una línea vacía antes del siguiente prompt.
 
 Secuencia conceptual:
 
@@ -75,15 +74,10 @@ Secuencia conceptual:
 command
 <blank line>
 
-Path
-<blank line>
-
 table
 <blank line>
 
 summary
-<blank line>
-
 Path
 <blank line>
 
@@ -94,56 +88,101 @@ Esta historia habla de líneas vacías.
 
 No define “dos espacios” como regla visual.
 
-## Path superior
+## Path como footer
 
-Después de ejecutar:
+`Path:` aparece una sola vez como footer final de la presentación de `iter`.
 
-```text
-iter
-```
-
-debe mostrarse la ruta completa de la ubicación que está siendo iterada.
+Debe mostrarse inmediatamente después del resumen, sin una línea vacía intermedia.
 
 Formato conceptual:
 
 ```text
-Path: /home/user/repos/evolution/evo-shell/target
+Path: /home/user/repos/evolution/evo-shell/src
 ```
 
-Debe aparecer después de una línea vacía desde el comando.
+La ruta debe ser completa.
 
-Después debe existir otra línea vacía antes de la tabla.
-
-Ejemplo:
+No debe abreviarse como:
 
 ```text
-scope-fs …/target > iter
+…/src
+```
 
-Path: /home/user/repos/evolution/evo-shell/target
+El prompt continúa usando la ubicación compacta.
+
+El footer usa la ubicación completa.
+
+Ejemplo correcto:
+
+```text
+2 directories
+1 file
+Path: /home/user/repos/evolution/evo-shell/src
+
+scope-fs …/src >
+```
+
+Ejemplo incorrecto:
+
+```text
+2 directories
+1 file
+
+Path: /home/user/repos/evolution/evo-shell/src
+```
+
+En el ejemplo incorrecto, existe una línea vacía entre el resumen y `Path:`.
+
+## Espacio entre comando y tabla
+
+Debe existir exactamente una línea vacía entre el comando y el comienzo de la tabla.
+
+Ejemplo correcto:
+
+```text
+scope-fs …/src > iter
 
 #   Modified ...
 ```
 
-## Path inferior
+No debe mostrarse `Path:` en ese espacio.
 
-Después del resumen debe mostrarse nuevamente la ruta completa.
-
-Ejemplo:
+Ejemplo incorrecto:
 
 ```text
-3 directories
-2 files
+scope-fs …/src > iter
 
-Path: /home/user/repos/evolution/evo-shell/target
+Path: /home/user/repos/evolution/evo-shell/src
 
-scope-fs …/target >
+#   Modified ...
 ```
 
-Motivo funcional:
+## Identidad visual del footer
 
-si la iteración produce muchas filas, el usuario debe poder conocer el contexto del resultado sin regresar visualmente al principio.
+El footer `Path:` reutiliza la identidad visual del prompt.
 
-Debe existir una línea vacía antes del siguiente prompt.
+Conceptualmente:
+
+```text
+Prompt:
+scope-fs …/src >
+^^^^^^^ ^^^^^^^
+color A color B
+
+Footer:
+Path: /home/user/repos/evolution/evo-shell/src
+^^^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+color A                  color B
+```
+
+Reglas:
+
+- `Path:` usa la misma identidad visual que `scope-fs`;
+- la ruta completa usa la misma identidad visual que la ubicación compacta del prompt;
+- `Path:` no cambia el significado del prompt;
+- los colores son presentación, no datos del filesystem.
+
+Esta historia no fija códigos de terminal, valores RGB ni una paleta definitiva.
 
 ## Path como contexto
 
@@ -181,7 +220,7 @@ Prompt:
 `Path:`:
 
 - muestra contexto completo;
-- aparece al consultar la iteración.
+- aparece como footer final al consultar la iteración.
 
 ## Colores del prompt
 
@@ -298,26 +337,25 @@ No se cambia la lógica funcional aprobada en US-004.
 
 ## Lista vacía
 
-Si la ubicación no contiene elementos, `Path:` debe mostrarse igualmente antes y después de la tabla.
+Si la ubicación no contiene elementos, `Path:` debe mostrarse igualmente como footer final.
 
 Ejemplo conceptual:
 
 ```text
 scope-fs …/empty > iter
 
-Path: /home/user/empty
-
 #   Modified             Type    Size      Name
 
 0 directories
 0 files
-
 Path: /home/user/empty
 
 scope-fs …/empty >
 ```
 
 El contexto `Path:` se muestra incluso si la iteración está vacía.
+
+No existe `Path:` antes de la tabla.
 
 ## Relación con futuro `pwd`
 
@@ -349,33 +387,37 @@ La historia no depende de una terminal específica.
 
 ## Criterios de aceptación
 
-1. `iter` deja una línea vacía antes de comenzar su presentación.
-2. Se muestra `Path:` con la ruta completa antes de la tabla.
-3. Existe una línea vacía entre `Path:` y la tabla.
+1. `iter` deja exactamente una línea vacía después del comando.
+2. No se muestra `Path:` antes de la tabla.
+3. La tabla comienza directamente después de esa separación.
 4. La tabla conserva:
    - `#`;
    - `Modified`;
    - `Type`;
    - `Size`;
    - `Name`.
-5. El resumen conserva:
+5. Después de la última fila existe la separación ya definida antes del summary.
+6. El summary conserva:
    - `N directories`;
    - `N files`.
-6. Después del resumen existe una línea vacía.
-7. `Path:` vuelve a mostrarse después del resumen.
-8. Existe una línea vacía entre el `Path:` final y el siguiente prompt.
-9. El `Path:` superior y el `Path:` inferior representan la misma ubicación iterada.
-10. `Path:` se muestra incluso cuando no existen elementos.
-11. El prompt permanece compacto:
+7. `Path:` aparece exactamente una vez.
+8. `Path:` aparece inmediatamente después de `N files`.
+9. No existe una línea vacía entre `N files` y `Path:`.
+10. `Path:` muestra la ruta completa de la iteración.
+11. `Path:` usa la misma identidad visual que `scope-fs`.
+12. La ruta completa usa la misma identidad visual que la ubicación compacta del prompt.
+13. Después de `Path:` existe exactamente una línea vacía antes del siguiente prompt.
+14. El prompt permanece compacto:
 
     ```text
     scope-fs …/target >
     ```
 
-12. `scope-fs` y `…/target` se distinguen visualmente mediante colores diferentes.
-13. Para directories, `dir` y el nombre del directorio usan la misma diferenciación visual.
-14. Esta historia no altera index, metadata, size ni comportamiento lazy.
-15. No se agrega total acumulado de bytes.
+15. Una iteración vacía también muestra `Path:` como footer.
+16. Para directories, `dir` y el nombre del directorio usan la misma diferenciación visual.
+17. No se agrega `Created`.
+18. Esta historia no altera index, metadata, size ni comportamiento lazy.
+19. No se agrega total acumulado de bytes.
 
 ## Ejemplos
 
@@ -393,8 +435,6 @@ Resultado conceptual:
 ```text
 scope-fs …/target > iter
 
-Path: /home/user/repos/evolution/evo-shell/target
-
 #   Modified             Type    Size      Name
 0   04/08/2026 12:10     dir               flycheck0/
 1   05/08/2026 00:18     dir               debug/
@@ -404,7 +444,6 @@ Path: /home/user/repos/evolution/evo-shell/target
 
 3 directories
 2 files
-
 Path: /home/user/repos/evolution/evo-shell/target
 
 scope-fs …/target >
@@ -415,6 +454,8 @@ Los colores no pueden representarse completamente en texto Markdown.
 Funcionalmente:
 
 - `scope-fs` y `…/target` tienen colores distintos;
+- `Path:` comparte identidad visual con `scope-fs`;
+- la ruta completa del footer comparte identidad visual con `…/target`;
 - `dir` y `directory-name/` comparten color de directory.
 
 ### B. Iteración vacía
@@ -431,13 +472,10 @@ Resultado conceptual:
 ```text
 scope-fs …/empty > iter
 
-Path: /home/user/empty
-
 #   Modified             Type    Size      Name
 
 0 directories
 0 files
-
 Path: /home/user/empty
 
 scope-fs …/empty >
@@ -466,6 +504,7 @@ Es una mejora de contexto y presentación.
 
 Esta historia no define todavía:
 
+- `Created`;
 - `pwd`;
 - pipelines;
 - index operator;
@@ -484,8 +523,4 @@ Esta historia no define todavía:
 - URL scopes;
 - Web API scopes;
 - implementación Rust;
-- agents;
-- resolvers;
-- providers;
-- contracts;
-- estructuras internas para transportar `Path`.
+- arquitectura interna.
