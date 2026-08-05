@@ -1,6 +1,6 @@
 direction: right
 
-filesystem_scope: "FilesystemScope\n\nscope válido de UC-001\nrecibido como &FilesystemScope\nno se modifica" {
+filesystem_scope: "FilesystemScope\n\nscope válido de UC-001\nrecibido como &FilesystemScope\npath\nno se modifica" {
   shape: rectangle
 }
 
@@ -8,7 +8,7 @@ read_dir: "std::fs::ReadDir\n\nestado externo de iteración" {
   shape: rectangle
 }
 
-filesystem_iteration: "FilesystemIteration\n\nposee el estado necesario\npara continuar la iteración lazy\n\nread_dir state\nnext_index\n\nNO contiene Vec\nNO materializa todo el directorio\nNO guarda historial" {
+filesystem_iteration: "FilesystemIteration\n\nposee el estado necesario\npara continuar la iteración lazy\n\nread_dir state\nnext_index\npath\n\nNO contiene Vec\nNO materializa todo el directorio\nNO guarda historial" {
   shape: rectangle
 }
 
@@ -45,7 +45,7 @@ std_fs: "std::fs\nread_dir / ReadDir::next / metadata" {
   shape: rectangle
 }
 
-filesystem_scope -> filesystem_iteration: "se presta para iniciar iter"
+filesystem_scope -> filesystem_iteration: "se presta para iniciar iter\npath copiado una vez al crear iteración"
 std_fs -> external_filesystem: "accede a recurso externo"
 std_fs -> read_dir: "crea ReadDir"
 read_dir -> filesystem_iteration: "estado poseído"
@@ -56,6 +56,16 @@ dir_entry -> filesystem_entry: "filesystem_entry::resolve"
 filesystem_entry_kind -> filesystem_entry: "kind"
 filesystem_entry -> filesystem_iteration_item: "entry"
 filesystem_iteration -> filesystem_iteration_item: "next_index -> index"
+
+path_rule: "Regla de path\n\nFilesystemScope es fuente de verdad\nFilesystemIteration conserva su propio path\npath() -> &Path\nno se toma del prompt\nno se toma de FilesystemEntry\nno se repite por item" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+filesystem_scope -> path_rule: "fuente"
+filesystem_iteration -> path_rule: "contexto de iteración"
+filesystem_entry -> path_rule: "NO provee iteration.path"
+filesystem_iteration_item -> path_rule: "NO contiene path"
 
 index_rule: "Regla de index\n\nempieza en 0\nse incrementa por item producido\nno es inode\nno es file ID\nno es identidad persistente\nno se genera en presentación" {
   shape: rectangle

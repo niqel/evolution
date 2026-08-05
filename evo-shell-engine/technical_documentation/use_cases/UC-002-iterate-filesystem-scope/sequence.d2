@@ -8,6 +8,10 @@ scope: "&FilesystemScope" {
   shape: rectangle
 }
 
+scope_path: "scope.path()\n\npath completo/resuelto\ndel FilesystemScope" {
+  shape: rectangle
+}
+
 iter_use_case: "Iter(&FilesystemScope)" {
   shape: rectangle
 }
@@ -32,7 +36,7 @@ std_read_dir: "std::fs::read_dir" {
   shape: rectangle
 }
 
-iteration: "FilesystemIteration\n\nread_dir state\nnext_index = 0" {
+iteration: "FilesystemIteration\n\nread_dir state\nnext_index = 0\npath = scope path" {
   shape: rectangle
 }
 
@@ -86,12 +90,14 @@ consumer -> stage_1: "inicia iteración"
 stage_1 -> iter_use_case: "Iter(&FilesystemScope)"
 scope -> iter_use_case: "scope válido prestado"
 iter_use_case -> iterator_agent: "use case público"
+scope -> scope_path: "lee estado de entidad"
+scope_path -> iteration_resolver: "contexto para construir iteración"
 iterator_agent -> iteration_resolver: "coordina"
 iteration_resolver -> read_directory_contract: "consume"
 read_directory_contract -> read_directory_provider: "implementado por"
 read_directory_provider -> std_read_dir: "std::fs::read_dir"
 std_read_dir -> iteration_resolver: "ReadDir / error"
-iteration_resolver -> iteration: "FilesystemIteration / IterError"
+iteration_resolver -> iteration: "FilesystemIteration / IterError\nread_dir + next_index + path"
 iteration -> consumer: "devuelve iteración lazy"
 
 consumer -> stage_2: "consume incrementalmente"
@@ -110,6 +116,13 @@ entry -> advancer_agent: "entry"
 advancer_agent -> item: "package index + entry"
 advancer_agent -> iteration: "incrementa next_index"
 item -> consumer: "un FilesystemIterationItem como máximo"
+
+path_note: "El path no participa en Advance\nno se consulta por item\nno se obtiene desde FilesystemEntry" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+iteration -> path_note: "conserva contexto"
 
 repeat: "La etapa 2 puede repetirse hasta None\nsin acumular resultados" {
   shape: rectangle

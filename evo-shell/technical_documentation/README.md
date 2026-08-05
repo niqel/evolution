@@ -279,3 +279,5 @@ Casos de uso técnicos:
 * [UC-001 — Establecer un filesystem scope mediante un comando](use_cases/UC-001-set-filesystem-scope-command/)
 * [UC-002 — Iterar el filesystem scope activo mediante el comando iter](use_cases/UC-002-iterate-filesystem-scope-command/)
 * [UC-003 — Entrar en una ubicación del scope activo mediante el comando enter](use_cases/UC-003-enter-active-scope-location/)
+* [UC-004 — Presentar una iteración filesystem estructurada](use_cases/UC-004-present-structured-filesystem-iteration/)
+* [UC-005 — Mejorar el contexto y la legibilidad visual de iter](use_cases/UC-005-improve-iter-context-and-visual-readability/)

@@ -16,7 +16,7 @@ entrada: "Entrada conceptual\niter\nFilesystemScope válido" {
   shape: rectangle
 }
 
-resultado_exitoso: "resultado estructurado lazy\nFilesystemIterationItem\nindex\nFilesystemEntry\nname path kind modified size" {
+resultado_exitoso: "resultado estructurado lazy\nFilesystemIteration\npath del scope\n\nAdvance produce\nFilesystemIterationItem\nindex\nFilesystemEntry\nname path kind modified size" {
   shape: rectangle
 }
 
@@ -28,8 +28,14 @@ presentacion: "representación visual\nseparada en Evo Shell" {
   shape: rectangle
 }
 
+path_context: "contexto conservado\nFilesystemScope.path\ncopiado una vez en FilesystemIteration\nno requiere agent propio" {
+  shape: rectangle
+}
+
 usuario -> evo_shell_engine.iterar_scope: "ejecuta iter"
 entrada -> evo_shell_engine.iterar_scope: "scope activo"
 evo_shell_engine.iterar_scope -> resultado_exitoso: "resultado exitoso"
 evo_shell_engine.iterar_scope -> resultado_alternativo: "resultado alternativo"
 resultado_exitoso -> presentacion: "puede mostrarse"
+entrada -> path_context: "fuente de verdad del path"
+path_context -> resultado_exitoso: "contexto de la iteración"

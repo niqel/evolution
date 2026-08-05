@@ -10,6 +10,8 @@ El resultado conceptual es estructurado y no debe confundirse con la representac
 
 US-004 de Evo Shell requiere que la iteración exponga datos suficientes para presentar una salida estructurada. Esa evolución pertenece a este mismo caso de uso porque no cambia la intención funcional de iterar un filesystem scope; amplía el dato producido por cada avance.
 
+US-005 de Evo Shell requiere que la iteración conserve el contexto completo del filesystem scope que la originó. Esa evolución también pertenece a este caso de uso porque el path es estado del scope iterado, no un nuevo comportamiento operativo.
+
 ## Actor
 
 - Usuario de Evo Shell
@@ -48,7 +50,7 @@ El consumidor externo no proporciona `ReadDirectory`, `NextDirectoryEntry` ni pr
 2. Evo Shell Engine utiliza el `FilesystemScope` activo.
 3. Evo Shell Engine solicita iterar los elementos directamente contenidos en ese scope.
 4. El sistema intenta obtener los elementos disponibles en la ruta.
-5. `Iter` devuelve una `FilesystemIteration` lazy.
+5. `Iter` devuelve una `FilesystemIteration` lazy que conserva el path completo del scope de origen.
 6. Cada llamada a `Advance` obtiene como máximo el siguiente elemento disponible.
 7. Por cada elemento producido, el engine resuelve un `FilesystemEntry` con datos estructurados de filesystem.
 8. El engine envuelve esa entrada en un `FilesystemIterationItem` con su índice ordinal dentro de la iteración actual.
@@ -256,15 +258,26 @@ Esta documentación no define todavía una sintaxis como `index 0`.
 
 Con US-004 también debe conservar el estado mínimo necesario para producir índices incrementales.
 
+Con US-005 también debe conservar el contexto completo del scope que originó esa iteración.
+
 Modelo conceptual:
 
 ```text
 FilesystemIteration
 ├── read_dir state
-└── next_index
+├── next_index
+└── path
 ```
 
 `next_index` representa el ordinal que se asignará al próximo elemento producido.
+
+`path` representa la ubicación completa del `FilesystemScope` que originó la iteración.
+
+El path no participa en `Advance`.
+
+El path no pertenece a `FilesystemEntry`.
+
+El path no pertenece a `FilesystemIterationItem`.
 
 No se materializan entradas.
 
@@ -273,6 +286,78 @@ No se guarda `Vec<FilesystemEntry>`.
 No se guarda `Vec<FilesystemIterationItem>`.
 
 No se guarda historial.
+
+No se duplica el path por cada item producido.
+
+## Contexto Path de la iteración
+
+La fuente de verdad del path es el `FilesystemScope` válido recibido por `Iter`.
+
+Conceptualmente:
+
+```text
+FilesystemScope.path()
+       ↓
+iterator::iter
+       ↓
+FilesystemIteration.path
+```
+
+No se reconstruye el path desde:
+
+- `FilesystemEntry`;
+- el primer elemento producido;
+- el directorio actual del proceso;
+- el prompt;
+- strings de presentación.
+
+`FilesystemIteration` debe exponer conceptualmente:
+
+```text
+path() -> &Path
+```
+
+No expone:
+
+- `String`;
+- `OsString`;
+- path abreviado;
+- texto con prefijo `Path:`;
+- una representación como `…/target`.
+
+El engine conserva el path estructurado completo.
+
+La presentación textual pertenece a Evo Shell.
+
+## Ownership del Path
+
+`FilesystemIteration` debe poder sobrevivir independientemente después de que `Iter` termina.
+
+Si la arquitectura Rust actual no tiene un lifetime compartido apropiado, la solución mínima documentada es que la iteración conserve su propio `PathBuf` derivado del path del scope.
+
+Esta copia ocurre una sola vez al crear la iteración.
+
+No se introducen lifetimes complejos únicamente para evitar clonar un `PathBuf`.
+
+No se copia el path por cada `FilesystemIterationItem`.
+
+## Directorio vacío
+
+El path existe aunque la iteración no produzca elementos.
+
+Ejemplo conceptual:
+
+```text
+FilesystemIteration
+├── path: /home/user/empty
+├── read_dir state
+└── next_index: 0
+
+Advance
+→ None
+```
+
+Esto permite que un consumidor presente el contexto de una iteración vacía sin obtenerlo desde un primer item.
 
 Flujo conceptual de `Advance`:
 
@@ -312,6 +397,10 @@ No se crea un agent nuevo para index.
 
 El avance conoce naturalmente la posición actual porque recibe `&mut FilesystemIteration`.
 
+US-005 no modifica la frontera conceptual de `Advance`.
+
+`Advance` no recibe, calcula ni devuelve el path de la iteración.
+
 ## Frontera pública e internas
 
 Los use cases son contratos de entrada públicos del engine.
@@ -328,6 +417,15 @@ La iteración de filesystem expone conceptualmente dos capacidades públicas.
 Iter(&FilesystemScope)
     ↓
 FilesystemIteration
+```
+
+La iteración resultante conserva:
+
+```text
+FilesystemIteration
+├── estado de read_dir
+├── next_index = 0
+└── path = scope.path()
 ```
 
 Relación interna:
@@ -348,6 +446,8 @@ ReadDirectory
 providers::read_directory::provide
     ↓
 std::fs::read_dir
+    ↓
+FilesystemIteration con path del scope
 ```
 
 ### Avance de iteración
@@ -376,6 +476,10 @@ FilesystemIterationItem
 
 `ReadDirectory`, `NextDirectoryEntry`, los providers, los resolvers, `ReadDir`, `DirEntry` y `std::fs` permanecen encapsulados dentro de Evo Shell Engine.
 
+Leer `FilesystemScope::path()` o `FilesystemIteration::path()` es lectura de estado de entidad.
+
+No requiere un nuevo use case, agent, resolver, provider ni contract.
+
 ## Lazy y memoria
 
 La iteración conserva evaluación lazy y avanza elemento por elemento mediante `FilesystemIteration`.
@@ -400,6 +504,8 @@ No se usa:
 - precarga del directorio completo
 
 El costo adicional del índice debe ser únicamente el contador necesario dentro del estado de iteración.
+
+El costo adicional del contexto `path` debe ser una copia única al crear `FilesystemIteration`, cuando sea necesaria por ownership.
 
 La mutabilidad de `&mut FilesystemIteration` existe porque avanzar la iteración modifica el cursor interno y el ordinal siguiente.
 
@@ -430,6 +536,12 @@ Flujo:
 Ejemplo conceptual estructurado de avances sucesivos:
 
 ```text
+FilesystemIteration {
+  path: "/home/user/documents",
+  read_dir state,
+  next_index: 0
+}
+
 Some(FilesystemIterationItem {
   index: 0,
   entry: FilesystemEntry {
@@ -469,6 +581,10 @@ Si ocurre un error operativo al avanzar o materializar una entrada, se reporta c
 - pipes
 - variables
 - transformación de resultados
+- comando `pwd`
+- use case para obtener path
+- agent para obtener path
+- resolver o provider para obtener path
 - formato de fecha para terminal
 - formato de tamaño legible para terminal
 - colores
@@ -489,6 +605,10 @@ Si ocurre un error operativo al avanzar o materializar una entrada, se reporta c
 [US-002 — Iterar los elementos del scope activo](../../../functional_documentation/user_stories/US-002-iterate-active-scope.md)
 
 US-004 de Evo Shell amplía la presentación esperada de `iter`, pero no crea un nuevo use case de iteración en el engine.
+
+US-005 de Evo Shell amplía el contexto visible de `iter`, pero tampoco crea un nuevo use case de iteración en el engine.
+
+Una capacidad futura equivalente a `pwd` podría reutilizar la misma fuente de verdad representada por `FilesystemScope.path()`, pero esta documentación no diseña ese comando ni su arquitectura.
 
 ## Relación con UC-001
 

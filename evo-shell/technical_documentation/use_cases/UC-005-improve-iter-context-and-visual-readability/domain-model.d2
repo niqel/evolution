@@ -1,0 +1,65 @@
+direction: right
+
+filesystem_iteration: "FilesystemIteration\n\nentidad del engine consumida por evo-shell\n\nread_dir state\nnext_index\npath\n\npath() -> &Path" {
+  shape: rectangle
+}
+
+filesystem_iteration_item: "FilesystemIterationItem\n\nindex\nentry" {
+  shape: rectangle
+}
+
+filesystem_entry: "FilesystemEntry\n\nname\npath\nkind\nmodified\nsize" {
+  shape: rectangle
+}
+
+filesystem_entry_kind: "FilesystemEntryKind\n\nFile\nDirectory\nSymlink\nOther" {
+  shape: rectangle
+}
+
+presentation_behavior: "Presentation behavior\n\nblank lines\ntop Path\nbottom Path\nrow rendering\nsummary\ncolors" {
+  shape: rectangle
+  style.fill: "#eefaf1"
+}
+
+presentation_state: "Presentation state local\n\nfiles count\ndirectories count\n\nNO dominio\nNO se devuelve al engine" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+prompt_surface: "Prompt surface\n\nscope type\ncompact location\nvisual styles" {
+  shape: rectangle
+  style.fill: "#eefaf1"
+}
+
+no_entities: "No se crean entidades de dominio\n\nPathHeader\nPathFooter\nPromptColor\nDirectoryColor\nPresentationTheme\nTable\nRow" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+filesystem_iteration -> presentation_behavior: "path() para top/bottom Path"
+filesystem_iteration -> filesystem_iteration_item: "Advance produce items"
+filesystem_iteration_item -> filesystem_entry: "entry"
+filesystem_entry_kind -> filesystem_entry: "kind"
+filesystem_iteration_item -> presentation_behavior: "index + entry para fila"
+presentation_behavior -> presentation_state: "actualiza counters locales"
+prompt_surface -> presentation_behavior: "superficie separada\nno se mezcla con iter presenter"
+presentation_behavior -> no_entities: "decisiones de presentación\nno entidades nuevas"
+prompt_surface -> no_entities: "estilos no son dominio"
+
+path_rule: "Regla de path\n\npath pertenece a FilesystemIteration\nNO a FilesystemEntry\nNO a FilesystemIterationItem\nNO sale del prompt" {
+  shape: rectangle
+  style.fill: "#edf4ff"
+}
+
+filesystem_iteration -> path_rule: "contexto"
+filesystem_entry -> path_rule: "no provee iteration path"
+filesystem_iteration_item -> path_rule: "no contiene path"
+
+color_rule: "Regla de color\n\nENGINE no conoce colores\nType=dir y Name=directory/ comparten estilo en evo-shell\nscope-fs y ubicación compacta tienen estilos distintos" {
+  shape: rectangle
+  style.fill: "#edf4ff"
+}
+
+presentation_behavior -> color_rule: "aplica a iter"
+prompt_surface -> color_rule: "aplica a prompt"
+

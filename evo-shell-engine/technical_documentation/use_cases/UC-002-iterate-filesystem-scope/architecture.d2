@@ -19,7 +19,11 @@ definitions: "definitions" {
     shape: rectangle
   }
 
-  filesystem_iteration_entity: "Domain entity\n\ndefinitions/domain/entities/filesystem_iteration.rs\nFilesystemIteration\n\nposee estado lazy\nread_dir state\nnext_index\nno contiene Vec" {
+  filesystem_scope_entity: "Domain entity\n\ndefinitions/domain/entities/filesystem_scope.rs\nFilesystemScope\n\npath\nscope válido de UC-001" {
+    shape: rectangle
+  }
+
+  filesystem_iteration_entity: "Domain entity\n\ndefinitions/domain/entities/filesystem_iteration.rs\nFilesystemIteration\n\nposee estado lazy\nread_dir state\nnext_index\npath\nno contiene Vec" {
     shape: rectangle
   }
 
@@ -88,7 +92,7 @@ infrastructure: "infrastructure" {
   }
 }
 
-scope: "FilesystemScope válido\nrecibido como &FilesystemScope\ninvariante establecida por UC-001" {
+scope: "FilesystemScope válido\nrecibido como &FilesystemScope\ninvariante establecida por UC-001\nfuente de verdad del path" {
   shape: rectangle
 }
 
@@ -99,13 +103,16 @@ consumer: "consumidor externo\n\nevo-shell / evo-script / otro componente" {
 consumer -> definitions.iter_use_case: "frontera pública"
 definitions.iter_use_case -> agents.iterator: "implementado por"
 scope -> agents.iterator: "entrada prestada"
+scope -> definitions.filesystem_scope_entity: "entidad"
+definitions.filesystem_scope_entity -> agents.iterator: "scope.path()"
 agents.iterator -> resolvers.filesystem_iteration: "coordina inicio usando provider interno"
 resolvers.filesystem_iteration -> definitions.read_directory_contract: "consume"
 definitions.read_directory_contract -> providers.read_directory_provider: "implementado por"
 providers.read_directory_provider -> infrastructure.read_dir: "usa"
 infrastructure.read_dir -> infrastructure.read_dir_state: "devuelve"
-resolvers.filesystem_iteration -> definitions.filesystem_iteration_entity: "crea/devuelve"
+resolvers.filesystem_iteration -> definitions.filesystem_iteration_entity: "crea/devuelve\nread_dir + next_index + path"
 definitions.filesystem_iteration_entity -> infrastructure.read_dir_state: "posee estado de infraestructura"
+definitions.filesystem_scope_entity -> definitions.filesystem_iteration_entity: "path copiado una vez\nal crear iteración"
 definitions.filesystem_iteration_entity -> consumer: "FilesystemIteration"
 
 consumer -> definitions.advance_use_case: "frontera pública"

@@ -1,0 +1,52 @@
+direction: right
+
+usuario: "Usuario" {
+  shape: person
+}
+
+evo_shell: "Evo Shell" {
+  shape: rectangle
+
+  present_iter: "Presentar iter con contexto y legibilidad visual" {
+    shape: oval
+  }
+
+  render_prompt: "Renderizar prompt compacto con estilos por segmento" {
+    shape: oval
+  }
+}
+
+entrada: "Entrada conceptual\niter\nExecutionResult::FilesystemIteration" {
+  shape: rectangle
+}
+
+engine_context: "Contexto del engine\nFilesystemIteration.path()\nAdvance sin cambios" {
+  shape: rectangle
+}
+
+resultado_visual: "Salida conceptual\nblank line\nPath superior\nblank line\ntabla\nblank line\nsummary\nblank line\nPath inferior\nblank line" {
+  shape: rectangle
+}
+
+prompt_visual: "Prompt compacto\nscope-fs …/target >\nscope type y ubicación\ncon estilos distintos" {
+  shape: rectangle
+}
+
+directory_style: "Directory style\nType=dir\nName=target/\nmismo estilo visual" {
+  shape: rectangle
+}
+
+out_of_scope: "Fuera de alcance\npwd\npath getter\npipelines\nsorting\nthemes\nrenderer genérico\ncódigo Rust" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+usuario -> evo_shell.present_iter: "ejecuta iter"
+entrada -> evo_shell.present_iter: "iteración creada"
+engine_context -> evo_shell.present_iter: "path + items lazy"
+evo_shell.present_iter -> resultado_visual: "presenta"
+evo_shell.present_iter -> directory_style: "aplica a filas directory"
+evo_shell.render_prompt -> prompt_visual: "presenta siguiente prompt"
+resultado_visual -> evo_shell.render_prompt: "después de retornar al loop"
+out_of_scope -> evo_shell.present_iter: "no se implementa aquí"
+

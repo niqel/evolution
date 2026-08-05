@@ -1,0 +1,77 @@
+direction: down
+
+engine: "evo-shell-engine" {
+  style.fill: "#edf4ff"
+
+  filesystem_scope: "FilesystemScope\n\npath\nfuente de verdad" {
+    shape: rectangle
+  }
+
+  filesystem_iteration: "FilesystemIteration\n\nread_dir state\nnext_index\npath" {
+    shape: rectangle
+  }
+
+  advance: "Advance(&mut FilesystemIteration)\n\nsin cambios por US-005\nproduce Option<FilesystemIterationItem>" {
+    shape: rectangle
+  }
+
+  item: "FilesystemIterationItem\n\nindex\nentry" {
+    shape: rectangle
+  }
+}
+
+shell: "evo-shell" {
+  style.fill: "#eefaf1"
+
+  execution_result: "ExecutionResult::FilesystemIteration(iteration)" {
+    shape: rectangle
+  }
+
+  iteration_presenter: "Agent existente\niteration_presenter::present\n\npresenta iter completo" {
+    shape: rectangle
+  }
+
+  path_rendering: "Path rendering\n\nPath: <full path>\ntop + bottom\nmisma fuente" {
+    shape: rectangle
+  }
+
+  row_rendering: "Row rendering\n\n# Modified Type Size Name\nType + Name comparten estilo directory" {
+    shape: rectangle
+  }
+
+  summary: "Presentation counters\n\nfiles\ndirectories\n\nsin total bytes" {
+    shape: rectangle
+  }
+
+  prompt_rendering: "Prompt rendering\n\nscope-fs …/target >\nscope type y ubicación\ncon estilos distintos" {
+    shape: rectangle
+  }
+
+  stdout: "stdout / terminal" {
+    shape: rectangle
+  }
+}
+
+engine.filesystem_scope -> engine.filesystem_iteration: "scope.path copiado una vez\nal crear iteración"
+engine.filesystem_iteration -> shell.execution_result: "resultado de executor"
+shell.execution_result -> shell.iteration_presenter: "main/shell loop delega"
+engine.filesystem_iteration -> shell.iteration_presenter: "iteration.path()"
+shell.iteration_presenter -> shell.path_rendering: "top Path\nbottom Path"
+shell.iteration_presenter -> engine.advance: "loop lazy"
+engine.advance -> engine.item: "item / None / error"
+engine.item -> shell.row_rendering: "render fila"
+shell.row_rendering -> shell.summary: "actualiza counts locales"
+shell.iteration_presenter -> shell.summary: "render al final"
+shell.path_rendering -> shell.stdout: "Path: <full path>"
+shell.row_rendering -> shell.stdout: "filas"
+shell.summary -> shell.stdout: "N directories\nN files"
+shell.prompt_rendering -> shell.stdout: "siguiente prompt"
+
+engine_boundary: "Frontera\n\nENGINE no conoce colores\nENGINE no agrega \"Path:\"\nENGINE no formatea prompt" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+shell.iteration_presenter -> engine_boundary: "presentación vive en evo-shell"
+shell.prompt_rendering -> engine_boundary: "estilos viven en evo-shell"
+
