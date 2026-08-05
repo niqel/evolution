@@ -1,5 +1,6 @@
 use std::fmt;
 use std::io::{self, Write};
+use std::path::{Component, Path};
 
 use evo_shell::{
     ExecuteError, ExecutionResult, InitializeShellError, ParseError, Shell, TokenStream, executor,
@@ -37,8 +38,12 @@ fn run_loop(shell: &mut Shell) -> Result<(), RunError> {
 
 fn write_prompt(shell: &Shell) -> io::Result<()> {
     let mut stdout = io::stdout();
-    write!(stdout, "{} > ", shell.filesystem_scope().path().display())?;
+    write_prompt_to(&mut stdout, shell.filesystem_scope().path())?;
     stdout.flush()
+}
+
+fn write_prompt_to(writer: &mut impl Write, path: &Path) -> io::Result<()> {
+    write!(writer, "scope-fs {} > ", compact_scope_location(path))
 }
 
 fn read_input() -> io::Result<Option<String>> {
@@ -75,17 +80,41 @@ fn handle_input(shell: &mut Shell, input: &str) -> io::Result<()> {
     }
 }
 
-fn render_execution(shell: &Shell, result: ExecutionResult) -> io::Result<()> {
+fn render_execution(_shell: &Shell, result: ExecutionResult) -> io::Result<()> {
     match result {
-        ExecutionResult::ScopeChanged => {
-            let mut stdout = io::stdout();
-            writeln!(
-                stdout,
-                "Scope activo: {}",
-                shell.filesystem_scope().path().display()
-            )
-        }
+        ExecutionResult::ScopeChanged => render_scope_changed(&mut io::stdout()),
         ExecutionResult::FilesystemIteration(iteration) => render_iteration(iteration),
+    }
+}
+
+fn render_scope_changed(_writer: &mut impl Write) -> io::Result<()> {
+    Ok(())
+}
+
+fn compact_scope_location(path: &Path) -> String {
+    let mut normal_count = 0;
+    let mut last_normal = None;
+
+    for component in path.components() {
+        if let Component::Normal(name) = component {
+            normal_count += 1;
+            last_normal = Some(name);
+        }
+    }
+
+    match (normal_count, last_normal) {
+        (0, _) => path.display().to_string(),
+        (1, Some(only)) => {
+            if path.is_absolute() {
+                path.display().to_string()
+            } else {
+                only.to_string_lossy().into_owned()
+            }
+        }
+        (_, Some(last)) => {
+            format!("…/{}", last.to_string_lossy())
+        }
+        _ => path.display().to_string(),
     }
 }
 
@@ -153,5 +182,69 @@ impl From<InitializeShellError> for RunError {
 impl From<io::Error> for RunError {
     fn from(error: io::Error) -> Self {
         Self::Io(error)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::{compact_scope_location, render_scope_changed, write_prompt_to};
+
+    #[test]
+    fn compact_scope_location_uses_last_segment_for_deep_path() {
+        let path = Path::new("/home/user/repos/evolution/evo-shell/src");
+
+        let result = compact_scope_location(path);
+
+        assert_eq!(result, "…/src");
+    }
+
+    #[test]
+    fn compact_scope_location_uses_last_segment_after_enter_agents() {
+        let path = Path::new("/home/user/repos/evolution/evo-shell/src/agents");
+
+        let result = compact_scope_location(path);
+
+        assert_eq!(result, "…/agents");
+    }
+
+    #[test]
+    fn compact_scope_location_uses_resolved_parent_path() {
+        let path = Path::new("/home/user/repos/evolution/evo-shell");
+
+        let result = compact_scope_location(path);
+
+        assert_eq!(result, "…/evo-shell");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn compact_scope_location_represents_unix_root() {
+        let result = compact_scope_location(Path::new("/"));
+
+        assert_eq!(result, "/");
+    }
+
+    #[test]
+    fn write_prompt_uses_scope_type_and_compact_location() {
+        let mut output = Vec::new();
+
+        write_prompt_to(
+            &mut output,
+            Path::new("/home/user/repos/evolution/evo-shell/src"),
+        )
+        .unwrap();
+
+        assert_eq!(String::from_utf8(output).unwrap(), "scope-fs …/src > ");
+    }
+
+    #[test]
+    fn scope_changed_does_not_render_redundant_active_scope_line() {
+        let mut output = Vec::new();
+
+        render_scope_changed(&mut output).unwrap();
+
+        assert!(output.is_empty());
     }
 }

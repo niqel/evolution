@@ -434,7 +434,17 @@ mod tests {
         let result = executor::execute(&mut shell, Command::Enter("..")).unwrap();
 
         assert!(matches!(result, ExecutionResult::ScopeChanged));
-        assert_eq!(shell.filesystem_scope().path(), child.join("..").as_path());
+        assert_eq!(
+            shell.filesystem_scope().path(),
+            directory.path.canonicalize().unwrap().as_path()
+        );
+        assert!(
+            !shell
+                .filesystem_scope()
+                .path()
+                .components()
+                .any(|component| matches!(component, std::path::Component::ParentDir))
+        );
     }
 
     #[test]
@@ -452,7 +462,14 @@ mod tests {
         assert!(matches!(result, ExecutionResult::ScopeChanged));
         assert_eq!(
             shell.filesystem_scope().path(),
-            grandchild.join("../..").as_path()
+            directory.path.canonicalize().unwrap().as_path()
+        );
+        assert!(
+            !shell
+                .filesystem_scope()
+                .path()
+                .components()
+                .any(|component| matches!(component, std::path::Component::ParentDir))
         );
     }
 

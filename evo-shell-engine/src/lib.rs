@@ -96,26 +96,31 @@ mod tests {
 
     #[test]
     fn accepted_path_returns_filesystem_scope_with_expected_path() {
-        let path = Path::new("/some/path");
+        let directory = TestDirectory::new("accepted_path");
+        let path = directory.path();
 
         let scope =
             filesystem_scope::resolve(path, always_directory).expect("path should be accepted");
 
-        assert_eq!(scope.path(), path);
+        assert_eq!(scope.path(), path.canonicalize().unwrap().as_path());
     }
 
     #[test]
     fn rejected_path_returns_scope_error_without_valid_scope() {
-        let path = Path::new("/not/a/directory");
+        let directory = TestDirectory::new("rejected_path");
+        let path = directory.path();
 
         let result = filesystem_scope::resolve(path, never_directory);
 
-        assert!(matches!(result, Err(ScopeError::NotDirectory(rejected)) if rejected == path));
+        assert!(
+            matches!(result, Err(ScopeError::NotDirectory(rejected)) if rejected == path.canonicalize().unwrap())
+        );
     }
 
     #[test]
     fn provider_error_is_reported_as_filesystem_error() {
-        let path = Path::new("/unavailable/path");
+        let directory = TestDirectory::new("provider_error");
+        let path = directory.path();
 
         let result = filesystem_scope::resolve(path, provider_error);
 
@@ -129,7 +134,54 @@ mod tests {
 
         let scope = set_scope(directory.path()).expect("agent should match the use case signature");
 
-        assert_eq!(scope.path(), directory.path());
+        assert_eq!(
+            scope.path(),
+            directory.path().canonicalize().unwrap().as_path()
+        );
+    }
+
+    #[test]
+    fn scope_setter_returns_resolved_path_for_normal_path() {
+        let directory = TestDirectory::new("set_resolved_normal");
+
+        let scope = scope_setter::set(directory.path()).unwrap();
+
+        assert_eq!(
+            scope.path(),
+            directory.path().canonicalize().unwrap().as_path()
+        );
+    }
+
+    #[test]
+    fn scope_setter_resolves_child_parent_without_preserving_parent_component() {
+        let directory = TestDirectory::new("set_resolved_parent_component");
+        let child = directory.path().join("child");
+        fs::create_dir(&child).unwrap();
+
+        let scope = scope_setter::set(child.join("..").as_path()).unwrap();
+
+        assert_eq!(
+            scope.path(),
+            directory.path().canonicalize().unwrap().as_path()
+        );
+        assert!(
+            !scope
+                .path()
+                .components()
+                .any(|component| { matches!(component, std::path::Component::ParentDir) })
+        );
+    }
+
+    #[test]
+    fn scope_setter_resolves_current_directory_component() {
+        let directory = TestDirectory::new("set_resolved_current_component");
+
+        let scope = scope_setter::set(directory.path().join(".").as_path()).unwrap();
+
+        assert_eq!(
+            scope.path(),
+            directory.path().canonicalize().unwrap().as_path()
+        );
     }
 
     #[test]
@@ -213,7 +265,16 @@ mod tests {
 
         let result = enterer::enter(&scope, Path::new("..")).unwrap();
 
-        assert_eq!(result.path(), child.join("..").as_path());
+        assert_eq!(
+            result.path(),
+            directory.path().canonicalize().unwrap().as_path()
+        );
+        assert!(
+            !result
+                .path()
+                .components()
+                .any(|component| { matches!(component, std::path::Component::ParentDir) })
+        );
     }
 
     #[test]
@@ -227,7 +288,16 @@ mod tests {
 
         let result = enterer::enter(&scope, Path::new("../..")).unwrap();
 
-        assert_eq!(result.path(), grandchild.join("../..").as_path());
+        assert_eq!(
+            result.path(),
+            directory.path().canonicalize().unwrap().as_path()
+        );
+        assert!(
+            !result
+                .path()
+                .components()
+                .any(|component| { matches!(component, std::path::Component::ParentDir) })
+        );
     }
 
     #[test]
@@ -261,6 +331,39 @@ mod tests {
         let result = filesystem_path::resolve(&scope, Path::new("missing"));
 
         assert_eq!(result, directory.path().join("missing"));
+    }
+
+    #[test]
+    fn filesystem_path_resolve_can_preserve_parent_component_in_candidate() {
+        let directory = TestDirectory::new("path_resolve_parent_component");
+        let child = directory.path().join("child");
+        fs::create_dir(&child).unwrap();
+        let scope = scope_setter::set(child.as_path()).unwrap();
+
+        let result = filesystem_path::resolve(&scope, Path::new(".."));
+
+        assert_eq!(result, child.join(".."));
+        assert!(
+            result
+                .components()
+                .any(|component| { matches!(component, std::path::Component::ParentDir) })
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn scope_setter_resolves_symlink_using_filesystem_semantics() {
+        use std::os::unix::fs::symlink;
+
+        let directory = TestDirectory::new("set_resolved_symlink");
+        let target = directory.path().join("target");
+        let link = directory.path().join("link");
+        fs::create_dir(&target).unwrap();
+        symlink(&target, &link).unwrap();
+
+        let scope = scope_setter::set(link.as_path()).unwrap();
+
+        assert_eq!(scope.path(), target.canonicalize().unwrap().as_path());
     }
 
     #[test]
