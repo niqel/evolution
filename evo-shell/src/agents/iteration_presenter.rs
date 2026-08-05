@@ -8,11 +8,12 @@ use evo_shell_engine::{
 };
 use time::{OffsetDateTime, UtcOffset, format_description};
 
+use crate::presentation_style;
+
 const BOLD: &str = "\x1b[1m";
 const CYAN: &str = "\x1b[36m";
 const MAGENTA: &str = "\x1b[35m";
 const YELLOW: &str = "\x1b[33m";
-const RESET: &str = "\x1b[0m";
 const TYPE_WIDTH: usize = 7;
 
 pub fn present(iteration: FilesystemIteration) -> Result<(), PresentIterationError> {
@@ -28,13 +29,16 @@ pub fn present_to(
     let mut directories = 0;
 
     writeln!(writer)?;
-    render_path(writer, iteration.path())?;
-    writeln!(writer)?;
 
     writeln!(
         writer,
-        "{BOLD}{:<3} {:<20} {:<7} {:<9} {}{RESET}",
-        "#", "Modified", "Type", "Size", "Name"
+        "{BOLD}{:<3} {:<20} {:<7} {:<9} {}{}",
+        "#",
+        "Modified",
+        "Type",
+        "Size",
+        "Name",
+        presentation_style::RESET
     )?;
 
     loop {
@@ -53,7 +57,6 @@ pub fn present_to(
                 writeln!(writer)?;
                 writeln!(writer, "{}", format_directory_count(directories))?;
                 writeln!(writer, "{}", format_file_count(files))?;
-                writeln!(writer)?;
                 render_path(writer, iteration.path())?;
                 writeln!(writer)?;
                 return Ok(());
@@ -64,7 +67,15 @@ pub fn present_to(
 }
 
 fn render_path(writer: &mut impl Write, path: &Path) -> io::Result<()> {
-    writeln!(writer, "Path: {}", path.display())
+    writeln!(
+        writer,
+        "{}Path:{} {}{}{}",
+        presentation_style::PROMPT_SCOPE_STYLE,
+        presentation_style::RESET,
+        presentation_style::PROMPT_LOCATION_STYLE,
+        path.display(),
+        presentation_style::RESET
+    )
 }
 
 fn render_row(
@@ -179,7 +190,7 @@ fn color_segment(value: &str, kind: FilesystemEntryKind) -> String {
     if color.is_empty() {
         value.to_string()
     } else {
-        format!("{color}{value}{RESET}")
+        format!("{color}{value}{}", presentation_style::RESET)
     }
 }
 
@@ -214,9 +225,10 @@ impl From<io::Error> for PresentIterationError {
 #[cfg(test)]
 mod tests {
     use super::{
-        BOLD, CYAN, RESET, color_name, format_directory_count, format_file_count, format_kind,
-        format_modified, format_offset_datetime, format_size, format_type, present_to,
+        BOLD, CYAN, MAGENTA, YELLOW, color_name, format_directory_count, format_file_count,
+        format_kind, format_modified, format_offset_datetime, format_size, format_type, present_to,
     };
+    use crate::presentation_style;
     use evo_shell_engine::{FilesystemEntryKind, iteration_advancer, iterator, scope_setter};
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -255,6 +267,17 @@ mod tests {
         }
     }
 
+    fn without_styles(output: &str) -> String {
+        output
+            .replace(BOLD, "")
+            .replace(CYAN, "")
+            .replace(MAGENTA, "")
+            .replace(YELLOW, "")
+            .replace(presentation_style::PROMPT_SCOPE_STYLE, "")
+            .replace(presentation_style::PROMPT_LOCATION_STYLE, "")
+            .replace(presentation_style::RESET, "")
+    }
+
     #[test]
     fn format_kind_uses_user_visible_values() {
         assert_eq!(format_kind(FilesystemEntryKind::File), "file");
@@ -267,11 +290,11 @@ mod tests {
     fn directory_kind_and_name_use_same_color() {
         assert_eq!(
             format_type(FilesystemEntryKind::Directory),
-            format!("{CYAN}dir{RESET}    ")
+            format!("{CYAN}dir{}    ", presentation_style::RESET)
         );
         assert_eq!(
             color_name("release/", FilesystemEntryKind::Directory),
-            format!("{CYAN}release/{RESET}")
+            format!("{CYAN}release/{}", presentation_style::RESET)
         );
     }
 
@@ -302,12 +325,12 @@ mod tests {
             "",
             color_name("build/", FilesystemEntryKind::Directory)
         );
-        let file_visible = file.replace(CYAN, "").replace(RESET, "");
-        let directory_visible = directory.replace(CYAN, "").replace(RESET, "");
+        let file_visible = without_styles(&file);
+        let directory_visible = without_styles(&directory);
 
         assert!(file.contains("file    327.6 kB"));
-        assert!(directory.contains(&format!("{CYAN}dir{RESET}")));
-        assert!(directory.contains(&format!("{CYAN}build/{RESET}")));
+        assert!(directory.contains(&format!("{CYAN}dir{}", presentation_style::RESET)));
+        assert!(directory.contains(&format!("{CYAN}build/{}", presentation_style::RESET)));
         assert_eq!(
             file_visible.find("libevo_shell.rlib"),
             directory_visible.find("build/")
@@ -367,7 +390,7 @@ mod tests {
     }
 
     #[test]
-    fn present_renders_path_before_header_and_after_summary() {
+    fn present_renders_header_after_initial_blank_and_path_as_footer() {
         let directory = TestDirectory::new("path_context");
         fs::write(directory.path().join("Cargo.toml"), "manifest").unwrap();
         fs::create_dir(directory.path().join("src")).unwrap();
@@ -379,21 +402,36 @@ mod tests {
         present_to(&mut output, iteration).unwrap();
 
         let output = String::from_utf8(output).unwrap();
-        let path_line = format!("Path: {expected_path}");
+        let visible_output = without_styles(&output);
+        let visible_path_line = format!("Path: {expected_path}");
+        let styled_path_line = format!(
+            "{}Path:{} {}{}{}",
+            presentation_style::PROMPT_SCOPE_STYLE,
+            presentation_style::RESET,
+            presentation_style::PROMPT_LOCATION_STYLE,
+            expected_path,
+            presentation_style::RESET
+        );
         assert!(output.starts_with('\n'));
-        assert!(output.contains(&format!("\n{path_line}\n\n{BOLD}#")));
-        assert!(output.contains("#   Modified"));
-        assert!(output.contains("Cargo.toml"));
-        assert!(output.contains("src/"));
-        assert!(output.contains("1 directory\n1 file"));
-        assert!(output.contains(&format!("1 directory\n1 file\n\n{path_line}\n")));
-        assert!(output.ends_with('\n'));
-        assert_eq!(output.matches(&path_line).count(), 2);
+        assert!(output.starts_with(&format!("\n{BOLD}#")));
+        assert!(visible_output.contains("#   Modified"));
+        assert!(visible_output.contains("Cargo.toml"));
+        assert!(visible_output.contains("src/"));
+        assert!(visible_output.contains("1 directory\n1 file"));
+        assert!(visible_output.contains(&format!("1 directory\n1 file\n{visible_path_line}\n\n")));
+        assert!(!visible_output.contains(&format!("1 file\n\n{visible_path_line}")));
+        assert_eq!(visible_output.matches(&visible_path_line).count(), 1);
+        assert!(
+            visible_output.find("#   Modified").unwrap()
+                < visible_output.find(&visible_path_line).unwrap()
+        );
+        assert!(output.contains(&styled_path_line));
+        assert!(visible_output.ends_with("\n\n"));
         assert!(!output.contains("unix"));
     }
 
     #[test]
-    fn present_empty_iteration_renders_path_header_zero_summary_and_path() {
+    fn present_empty_iteration_renders_footer_path_without_path_header() {
         let directory = TestDirectory::new("empty_path_context");
         let scope = scope_setter::set(directory.path()).unwrap();
         let iteration = iterator::iter(&scope).unwrap();
@@ -403,11 +441,34 @@ mod tests {
         present_to(&mut output, iteration).unwrap();
 
         let output = String::from_utf8(output).unwrap();
+        let visible_output = without_styles(&output);
         let path_line = format!("Path: {expected_path}");
-        assert!(output.contains(&format!("\n{path_line}\n\n{BOLD}#")));
-        assert!(output.contains("0 directories\n0 files"));
-        assert!(output.contains(&format!("0 directories\n0 files\n\n{path_line}\n")));
-        assert_eq!(output.matches(&path_line).count(), 2);
+        assert!(output.starts_with(&format!("\n{BOLD}#")));
+        assert!(visible_output.contains("0 directories\n0 files"));
+        assert!(visible_output.contains(&format!("0 directories\n0 files\n{path_line}\n\n")));
+        assert!(!visible_output.contains(&format!("0 files\n\n{path_line}")));
+        assert_eq!(visible_output.matches(&path_line).count(), 1);
+    }
+
+    #[test]
+    fn footer_path_reuses_prompt_styles_and_resets_each_segment() {
+        let directory = TestDirectory::new("footer_style");
+        let scope = scope_setter::set(directory.path()).unwrap();
+        let iteration = iterator::iter(&scope).unwrap();
+        let expected_path = scope.path().display().to_string();
+        let mut output = Vec::new();
+
+        present_to(&mut output, iteration).unwrap();
+
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains(&format!(
+            "{}Path:{} {}{}{}\n\n",
+            presentation_style::PROMPT_SCOPE_STYLE,
+            presentation_style::RESET,
+            presentation_style::PROMPT_LOCATION_STYLE,
+            expected_path,
+            presentation_style::RESET
+        )));
     }
 
     #[test]

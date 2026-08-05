@@ -4,13 +4,9 @@ use std::path::{Component, Path};
 
 use evo_shell::{
     ExecuteError, ExecutionResult, InitializeShellError, ParseError, Shell, TokenStream, executor,
-    iteration_presenter, parser, shell_initializer, tokenizer,
+    iteration_presenter, parser, presentation_style, shell_initializer, tokenizer,
 };
 use evo_shell_engine::IterError;
-
-const PROMPT_SCOPE_COLOR: &str = "\x1b[32m";
-const PROMPT_LOCATION_COLOR: &str = "\x1b[36m";
-const RESET: &str = "\x1b[0m";
 
 fn main() {
     if let Err(error) = run() {
@@ -47,8 +43,12 @@ fn write_prompt(shell: &Shell) -> io::Result<()> {
 fn write_prompt_to(writer: &mut impl Write, path: &Path) -> io::Result<()> {
     write!(
         writer,
-        "{PROMPT_SCOPE_COLOR}scope-fs{RESET} {PROMPT_LOCATION_COLOR}{}{RESET} > ",
-        compact_scope_location(path)
+        "{}scope-fs{} {}{}{} > ",
+        presentation_style::PROMPT_SCOPE_STYLE,
+        presentation_style::RESET,
+        presentation_style::PROMPT_LOCATION_STYLE,
+        compact_scope_location(path),
+        presentation_style::RESET,
     )
 }
 
@@ -177,8 +177,7 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        PROMPT_LOCATION_COLOR, PROMPT_SCOPE_COLOR, RESET, compact_scope_location,
-        render_scope_changed, write_prompt_to,
+        compact_scope_location, presentation_style, render_scope_changed, write_prompt_to,
     };
 
     #[test]
@@ -228,9 +227,18 @@ mod tests {
 
         assert_eq!(
             String::from_utf8(output).unwrap(),
-            format!("{PROMPT_SCOPE_COLOR}scope-fs{RESET} {PROMPT_LOCATION_COLOR}…/src{RESET} > ")
+            format!(
+                "{}scope-fs{} {}…/src{} > ",
+                presentation_style::PROMPT_SCOPE_STYLE,
+                presentation_style::RESET,
+                presentation_style::PROMPT_LOCATION_STYLE,
+                presentation_style::RESET
+            )
         );
-        assert_ne!(PROMPT_SCOPE_COLOR, PROMPT_LOCATION_COLOR);
+        assert_ne!(
+            presentation_style::PROMPT_SCOPE_STYLE,
+            presentation_style::PROMPT_LOCATION_STYLE
+        );
     }
 
     #[test]
@@ -244,7 +252,7 @@ mod tests {
         .unwrap();
 
         let output = String::from_utf8(output).unwrap();
-        assert!(output.ends_with(&format!("{RESET} > ")));
+        assert!(output.ends_with(&format!("{} > ", presentation_style::RESET)));
         assert!(!output.contains("/home/user/repos/evolution/evo-shell/src"));
     }
 
