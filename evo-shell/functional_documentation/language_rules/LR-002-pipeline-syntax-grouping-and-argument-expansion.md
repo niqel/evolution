@@ -138,7 +138,7 @@ Aquí:
 Otro ejemplo conceptual:
 
 ```text
-copy-to file1.txt, file2.txt, file3.txt, path = "~/repos/documents"
+copy-to file1.txt, file2.txt, file3.txt, path: "~/repos/documents"
 ```
 
 Los valores `file1.txt`, `file2.txt` y `file3.txt` son argumentos posicionales.
@@ -150,13 +150,13 @@ La posición y el contrato del comando determinan su función semántica.
 Un argumento puede ser nombrado mediante:
 
 ```text
-name = value
+name: value
 ```
 
 Ejemplo conceptual:
 
 ```text
-path = "~/repos/documents"
+path: "~/repos/documents"
 ```
 
 `path` es el nombre del argumento.
@@ -177,7 +177,7 @@ La coma separa argumentos del comando actual.
 Ejemplo conceptual:
 
 ```text
-copy-to file1.txt, file2.txt, file3.txt, path = "~/repos/documents"
+copy-to file1.txt, file2.txt, file3.txt, path: "~/repos/documents"
 ```
 
 Conceptualmente, la coma permite listar múltiples argumentos homogéneos.
@@ -274,13 +274,13 @@ copy-to (
     iter
     |> select full_name
     |> to-args
-), path = "~/repos/documents"
+), path: "~/repos/documents"
 ```
 
 Conceptualmente equivale a:
 
 ```text
-copy-to file1.txt, file2.txt, file3.txt, path = "~/repos/documents"
+copy-to file1.txt, file2.txt, file3.txt, path: "~/repos/documents"
 ```
 
 `to-args` no genera texto fuente ni comas sintácticas.
@@ -326,7 +326,7 @@ sources: Path...
 path: Path
 ```
 
-Esto solo explica la semántica.
+Esto solo explica la semántica de un contrato conceptual.
 
 No define una sintaxis de funciones.
 
@@ -337,7 +337,7 @@ Estas dos formas deben representar conceptualmente la misma entrada para el coma
 Forma manual:
 
 ```text
-copy-to file1.txt, file2.txt, file3.txt, path = "~/repos/documents"
+copy-to file1.txt, file2.txt, file3.txt, path: "~/repos/documents"
 ```
 
 Forma derivada:
@@ -347,7 +347,7 @@ copy-to (
     iter
     |> select full_name
     |> to-args
-), path = "~/repos/documents"
+), path: "~/repos/documents"
 ```
 
 El comando consumidor no debe necesitar saber si los argumentos fueron escritos manualmente o producidos por un pipeline.
@@ -379,7 +379,7 @@ copy-to (
     |> filter ext = "txt"
     |> select full_name
     |> to-args
-), path = "~/repos/documents"
+), path: "~/repos/documents"
 ```
 
 `filter ext = "txt"` aparece aquí solo como expresión ilustrativa simple.
