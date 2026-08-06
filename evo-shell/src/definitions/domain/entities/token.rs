@@ -4,4 +4,6 @@ pub enum Token<'a> {
     String(&'a str),
     PipelineSeparator,
     Comma,
+    LeftParen,
+    RightParen,
 }

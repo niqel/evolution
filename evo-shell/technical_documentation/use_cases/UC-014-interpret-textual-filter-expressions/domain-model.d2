@@ -1,0 +1,46 @@
+direction: right
+
+command: "Command\n\nPipeline(Pipeline)" {
+  shape: box
+}
+
+pipeline: "Pipeline\n\noperations: ordered PipelineOperation[]" {
+  shape: box
+}
+
+pipeline_operation_filter: "PipelineOperation::Filter(FilterExpression)" {
+  shape: box
+}
+
+filter_expression: "FilterExpression\n\nComparison(FilterComparison)\nAnd(Vec<FilterExpression>)\nOr(Vec<FilterExpression>)" {
+  shape: box
+}
+
+filter_comparison: "FilterComparison\n\nproperty\noperator\noperand" {
+  shape: box
+}
+
+filter_property: "FilterProperty\n\nIndex\nCreated\nModified\nType\nSize\nName" {
+  shape: box
+}
+
+filter_operator: "FilterOperator\n\nEquals\nNotEquals\nGreaterThan\nLessThan\nAtLeast\nAtMost\nBetween\nNotBetween" {
+  shape: box
+}
+
+filter_operand: "FilterOperand\n\nSingle(FilterValue)\nRange(lower, upper)" {
+  shape: box
+}
+
+filter_value: "FilterValue\n\nIndex(usize)\nTime(SystemTime)\nType(FilesystemEntryKind)\nSize(u64)\nName(OsString)" {
+  shape: box
+}
+
+command -> pipeline
+pipeline -> pipeline_operation_filter
+pipeline_operation_filter -> filter_expression
+filter_expression -> filter_comparison
+filter_comparison -> filter_property
+filter_comparison -> filter_operator
+filter_comparison -> filter_operand
+filter_operand -> filter_value

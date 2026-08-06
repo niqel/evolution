@@ -1,0 +1,21 @@
+direction: right
+
+actor: "Shell input consumer" {
+  shape: oval
+}
+
+use_case: "Interpret Textual Filter Expressions" {
+  shape: box
+}
+
+includes_note: "Incluye\n- identificar etapa filter\n- resolver expresiones tipadas\n- preservar orden de etapas\n- devolver Command::Pipeline(Pipeline)" {
+  shape: note
+}
+
+excludes_note: "Excluye\n- ejecutar filter\n- evaluar filesystem\n- multilinea\n- subpipelines\n- pipelines como argumentos\n- parser clásico\n- AST textual paralelo" {
+  shape: note
+}
+
+actor -> use_case
+use_case -> includes_note
+use_case -> excludes_note

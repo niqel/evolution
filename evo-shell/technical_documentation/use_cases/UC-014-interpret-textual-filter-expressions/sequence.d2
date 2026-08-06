@@ -1,0 +1,54 @@
+direction: right
+
+input: "iter |> filter name equals \"file.txt\" |> select name |> to-values" {
+  shape: box
+}
+
+tokenize: "Tokenize" {
+  shape: box
+}
+
+token_stream: "TokenStream" {
+  shape: box
+}
+
+parser_agent: "Parser Agent" {
+  shape: box
+}
+
+parse_use_case: "Parse Use Case" {
+  shape: box
+}
+
+command_resolver: "Command Resolver" {
+  shape: box
+}
+
+pipeline_resolver: "Pipeline Resolver" {
+  shape: box
+}
+
+filter_expression_resolver: "Filter Expression Resolver" {
+  shape: box
+}
+
+filter_expression: "FilterExpression" {
+  shape: box
+}
+
+pipeline_operation_filter: "PipelineOperation::Filter" {
+  shape: box
+}
+
+command_pipeline: "Command::Pipeline(Pipeline)" {
+  shape: box
+}
+
+input -> tokenize -> token_stream
+token_stream -> parser_agent -> parse_use_case -> command_resolver -> pipeline_resolver -> filter_expression_resolver -> filter_expression -> pipeline_operation_filter -> command_pipeline
+
+note: "No execution.\nNo PipelineExecutor.\nNo provider.\nNo multilinea.\nNo subpipelines." {
+  shape: note
+}
+
+command_pipeline -> note

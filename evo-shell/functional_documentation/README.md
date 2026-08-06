@@ -43,6 +43,7 @@ Esto incluye, entre otros:
 * [US-011 — Ejecutar un pipeline estructurado](user_stories/US-011-execute-structured-pipeline.md)
 * [US-012 — Interpretar un pipeline textual básico](user_stories/US-012-interpret-basic-textual-pipeline.md)
 * [US-013 — Presentar el resultado de un pipeline ejecutado](user_stories/US-013-present-pipeline-execution-result.md)
+* [US-014 — Interpretar expresiones textuales de `filter`](user_stories/US-014-interpret-textual-filter-expressions.md)
 
 ## Reglas de lenguaje
 

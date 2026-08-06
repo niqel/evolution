@@ -34,6 +34,7 @@ pub use definitions::use_cases::welcome_presenter::{WelcomePresenter, WelcomePre
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
     use std::ffi::OsStr;
     use std::fs;
     use std::io;
@@ -43,7 +44,8 @@ mod tests {
     use std::time::SystemTime;
 
     use evo_shell_engine::{
-        FilesystemEntryKind, IterError, ProjectedValue, ScopeError, SelectProperty,
+        FilesystemEntryKind, FilterComparison, FilterExpression, FilterOperand, FilterOperator,
+        FilterProperty, FilterValue, IterError, ProjectedValue, ScopeError, SelectProperty,
         SetFilesystemScope, iteration_advancer, scope_setter,
     };
 
@@ -53,9 +55,11 @@ mod tests {
     use crate::definitions::domain::entities::shell::Shell;
     use crate::definitions::providers::terminal_clearer::Provide;
     use crate::definitions::resolvers::terminal_clearer::Resolve;
+    use crate::definitions::use_cases::pipeline_result_presenter::PipelineResultPresentError;
     use crate::definitions::use_cases::terminal_clearer::TerminalClearError;
     use crate::providers::terminal_clearer as terminal_clearer_provider;
     use crate::resolvers::execution;
+    use crate::resolvers::pipeline_result_presenter as pipeline_result_presenter_resolver;
     use crate::resolvers::shell;
     use crate::resolvers::terminal_clearer as terminal_clearer_resolver;
     use crate::resolvers::token;
@@ -64,7 +68,8 @@ mod tests {
         InitializeShellError, Parse, ParseError, Pipeline, PipelineExecutionError,
         PipelineOperation, PipelineOperationKind, PipelineValue, PipelineValueKind,
         TerminalClearMode, TerminalClearer, Token, TokenStream, Tokenize, TokenizeError, executor,
-        exiter, parser, pipeline_executor, shell_initializer, terminal_clearer, tokenizer,
+        exiter, parser, pipeline_executor, pipeline_result_presenter, shell_initializer,
+        terminal_clearer, tokenizer,
     };
 
     struct TestDirectory {
@@ -72,6 +77,10 @@ mod tests {
     }
 
     struct FailingWriter;
+
+    thread_local! {
+        static CAPTURED_OUTPUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+    }
 
     impl io::Write for FailingWriter {
         fn write(&mut self, _buffer: &[u8]) -> io::Result<usize> {
@@ -115,6 +124,26 @@ mod tests {
 
     fn shell_from_directory(directory: &TestDirectory) -> Shell {
         Shell::new(scope_setter::set(directory.path.as_path()).unwrap())
+    }
+
+    fn capture_rendered(rendered: &str) -> Result<(), PipelineResultPresentError> {
+        CAPTURED_OUTPUT.with(|buffer| {
+            buffer.borrow_mut().extend_from_slice(rendered.as_bytes());
+        });
+
+        Ok(())
+    }
+
+    fn captured_rendered_output() -> String {
+        CAPTURED_OUTPUT.with(|buffer| {
+            String::from_utf8(buffer.borrow().clone()).expect("rendered output should be utf8")
+        })
+    }
+
+    fn clear_captured_output() {
+        CAPTURED_OUTPUT.with(|buffer| {
+            buffer.borrow_mut().clear();
+        });
     }
 
     impl Drop for TestDirectory {
@@ -187,6 +216,21 @@ mod tests {
     }
 
     #[test]
+    fn token_resolver_recognizes_parentheses_as_separate_tokens() {
+        let mut stream = TokenStream::new("filter (name equals \"x\")");
+        token::resolve(&mut stream).unwrap();
+
+        let left = token::resolve(&mut stream).unwrap();
+        token::resolve(&mut stream).unwrap();
+        token::resolve(&mut stream).unwrap();
+        token::resolve(&mut stream).unwrap();
+        let right = token::resolve(&mut stream).unwrap();
+
+        assert_eq!(left, Some(Token::LeftParen));
+        assert_eq!(right, Some(Token::RightParen));
+    }
+
+    #[test]
     fn unterminated_quote_returns_tokenize_error() {
         let mut stream = TokenStream::new("scope-fs \"/tmp");
         token::resolve(&mut stream).unwrap();
@@ -255,6 +299,87 @@ mod tests {
             pipeline.operations(),
             &[
                 PipelineOperation::Iter,
+                PipelineOperation::Take(1),
+                PipelineOperation::Select(vec![SelectProperty::Name]),
+                PipelineOperation::ToValue,
+            ]
+        );
+    }
+
+    #[test]
+    fn parser_resolves_filter_pipeline_equals() {
+        let mut stream = TokenStream::new(
+            r#"iter |> filter name equals "file.txt" |> select name |> to-values"#,
+        );
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let Command::Pipeline(pipeline) = command else {
+            panic!("expected pipeline command");
+        };
+
+        assert_eq!(
+            pipeline.operations(),
+            &[
+                PipelineOperation::Iter,
+                PipelineOperation::Filter(FilterExpression::comparison(FilterComparison::new(
+                    FilterProperty::Name,
+                    FilterOperator::Equals,
+                    FilterOperand::single(FilterValue::name("file.txt")),
+                ))),
+                PipelineOperation::Select(vec![SelectProperty::Name]),
+                PipelineOperation::ToValues,
+            ]
+        );
+    }
+
+    #[test]
+    fn parser_resolves_filter_pipeline_not_equals() {
+        let mut stream = TokenStream::new(
+            r#"iter |> filter name not-equals "alpha.txt" |> select name |> to-values"#,
+        );
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let Command::Pipeline(pipeline) = command else {
+            panic!("expected pipeline command");
+        };
+
+        assert_eq!(
+            pipeline.operations(),
+            &[
+                PipelineOperation::Iter,
+                PipelineOperation::Filter(FilterExpression::comparison(FilterComparison::new(
+                    FilterProperty::Name,
+                    FilterOperator::NotEquals,
+                    FilterOperand::single(FilterValue::name("alpha.txt")),
+                ))),
+                PipelineOperation::Select(vec![SelectProperty::Name]),
+                PipelineOperation::ToValues,
+            ]
+        );
+    }
+
+    #[test]
+    fn parser_resolves_filter_pipeline_continuation() {
+        let mut stream =
+            TokenStream::new(r#"iter |> filter size > 10kb |> take 1 |> select name |> to-value"#);
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let Command::Pipeline(pipeline) = command else {
+            panic!("expected pipeline command");
+        };
+
+        assert_eq!(
+            pipeline.operations(),
+            &[
+                PipelineOperation::Iter,
+                PipelineOperation::Filter(FilterExpression::comparison(FilterComparison::new(
+                    FilterProperty::Size,
+                    FilterOperator::GreaterThan,
+                    FilterOperand::single(FilterValue::size(10 * 1024)),
+                ))),
                 PipelineOperation::Take(1),
                 PipelineOperation::Select(vec![SelectProperty::Name]),
                 PipelineOperation::ToValue,
@@ -586,18 +711,6 @@ mod tests {
         assert!(matches!(
             result,
             Err(ParseError::UnexpectedPipelineArgument("to-value"))
-        ));
-    }
-
-    #[test]
-    fn parser_rejects_filter_pipeline_textually_in_this_story() {
-        let mut stream = TokenStream::new("iter |> filter name equals \"x\"");
-
-        let result = parser::parse(&mut stream, tokenizer::tokenize);
-
-        assert!(matches!(
-            result,
-            Err(ParseError::UnknownPipelineOperation("filter"))
         ));
     }
 
@@ -1235,6 +1348,64 @@ mod tests {
                 }
             ))
         ));
+    }
+
+    #[test]
+    fn execute_and_present_parsed_filter_pipeline_equals_output() {
+        let directory = TestDirectory::new("pipeline_filter_equals");
+        fs::write(directory.path.join("alpha.txt"), "alpha").unwrap();
+        fs::write(directory.path.join("beta.txt"), "beta").unwrap();
+        let mut shell = shell_from_directory(&directory);
+        let mut stream = TokenStream::new(
+            r#"iter |> filter name equals "alpha.txt" |> take 1 |> select name |> to-value"#,
+        );
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let result = executor::execute(&mut shell, command).unwrap();
+        let ExecutionResult::Pipeline(value) = result else {
+            panic!("expected pipeline execution result");
+        };
+
+        clear_captured_output();
+        pipeline_result_presenter::present_with(
+            pipeline_result_presenter_resolver::resolve,
+            capture_rendered,
+            &shell,
+            value,
+        )
+        .unwrap();
+
+        let rendered = captured_rendered_output();
+        assert_eq!(rendered, "alpha.txt\n");
+    }
+
+    #[test]
+    fn execute_and_present_parsed_filter_pipeline_not_equals_output() {
+        let directory = TestDirectory::new("pipeline_filter_not_equals");
+        fs::write(directory.path.join("alpha.txt"), "alpha").unwrap();
+        fs::write(directory.path.join("beta.txt"), "beta").unwrap();
+        let mut shell = shell_from_directory(&directory);
+        let mut stream = TokenStream::new(
+            r#"iter |> filter name not-equals "alpha.txt" |> select name |> to-values"#,
+        );
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let result = executor::execute(&mut shell, command).unwrap();
+        let ExecutionResult::Pipeline(value) = result else {
+            panic!("expected pipeline execution result");
+        };
+
+        clear_captured_output();
+        pipeline_result_presenter::present_with(
+            pipeline_result_presenter_resolver::resolve,
+            capture_rendered,
+            &shell,
+            value,
+        )
+        .unwrap();
+
+        let rendered = captured_rendered_output();
+        assert_eq!(rendered, "beta.txt\n");
     }
 
     #[test]

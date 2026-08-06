@@ -1,0 +1,42 @@
+direction: right
+
+parser_agent: "Parser Agent" {
+  shape: oval
+}
+
+parse_use_case: "Parse Use Case" {
+  shape: box
+}
+
+command_resolver: "Command Resolver" {
+  shape: box
+}
+
+pipeline_resolver: "Pipeline Resolver" {
+  shape: box
+}
+
+filter_expression_resolver: "Filter Expression Resolver" {
+  shape: box
+}
+
+filter_expression: "FilterExpression\n\nComparison\nAnd\nOr" {
+  shape: box
+}
+
+pipeline_operation_filter: "PipelineOperation::Filter" {
+  shape: box
+}
+
+parser_agent -> parse_use_case
+parse_use_case -> command_resolver
+command_resolver -> pipeline_resolver
+pipeline_resolver -> filter_expression_resolver
+filter_expression_resolver -> filter_expression
+filter_expression -> pipeline_operation_filter
+
+note: "Resolver propio: sí\nProvider propio: no\nPipelineExecutor: no participa" {
+  shape: note
+}
+
+filter_expression_resolver -> note

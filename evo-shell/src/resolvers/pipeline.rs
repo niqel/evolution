@@ -5,6 +5,7 @@ use crate::definitions::domain::entities::token_stream::TokenStream;
 use crate::definitions::domain::value_objects::pipeline::{Pipeline, PipelineOperation};
 use crate::definitions::use_cases::parse::ParseError;
 use crate::definitions::use_cases::tokenize::Tokenize;
+use crate::resolvers::filter_expression;
 
 pub fn resolve<'a>(
     stream: &mut TokenStream<'a>,
@@ -54,7 +55,7 @@ fn resolve_stage<'a>(
         "to-value" => resolve_to_value(stream, tokenize),
         "to-values" => resolve_to_values(stream, tokenize),
         "to-args" => resolve_to_args(stream, tokenize),
-        "filter" => Err(ParseError::UnknownPipelineOperation(stage_name)),
+        "filter" => resolve_filter(stream, tokenize),
         _ => Err(ParseError::UnknownPipelineOperation(stage_name)),
     }
 }
@@ -134,6 +135,14 @@ fn resolve_to_args<'a>(
     Ok(PipelineOperation::ToArgs)
 }
 
+fn resolve_filter<'a>(
+    stream: &mut TokenStream<'a>,
+    tokenize: Tokenize,
+) -> Result<PipelineOperation, ParseError<'a>> {
+    let expression = filter_expression::resolve(stream, tokenize)?;
+    Ok(PipelineOperation::Filter(expression))
+}
+
 fn parse_single_usize<'a>(
     stream: &mut TokenStream<'a>,
     tokenize: Tokenize,
@@ -175,6 +184,9 @@ fn next_word_token<'a>(
         Token::String(word) => Err(ParseError::InvalidPipelineArgument(word)),
         Token::PipelineSeparator => Err(ParseError::MissingPipelineArgument(stage_name)),
         Token::Comma => Err(ParseError::MissingPipelineArgument(stage_name)),
+        Token::LeftParen | Token::RightParen => {
+            Err(ParseError::UnexpectedPipelineArgument(stage_name))
+        }
     }
 }
 

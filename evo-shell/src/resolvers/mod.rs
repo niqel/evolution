@@ -1,5 +1,6 @@
 pub mod command;
 pub mod execution;
+pub mod filter_expression;
 pub mod pipeline;
 pub mod pipeline_result_presenter;
 pub mod shell;

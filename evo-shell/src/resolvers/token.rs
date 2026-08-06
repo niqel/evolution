@@ -30,6 +30,30 @@ pub fn resolve<'a>(stream: &mut TokenStream<'a>) -> Result<Option<Token<'a>>, To
         return Ok(Some(Token::Comma));
     }
 
+    if remaining.starts_with('(') {
+        stream.advance_to(start + '('.len_utf8());
+        return Ok(Some(Token::LeftParen));
+    }
+
+    if remaining.starts_with(')') {
+        stream.advance_to(start + ')'.len_utf8());
+        return Ok(Some(Token::RightParen));
+    }
+
+    if remaining.starts_with('>') {
+        stream.advance_to(start + '>'.len_utf8());
+        return Ok(Some(Token::Word(
+            &stream.input()[start..start + '>'.len_utf8()],
+        )));
+    }
+
+    if remaining.starts_with('<') {
+        stream.advance_to(start + '<'.len_utf8());
+        return Ok(Some(Token::Word(
+            &stream.input()[start..start + '<'.len_utf8()],
+        )));
+    }
+
     resolve_word(stream, start, remaining)
 }
 
@@ -60,7 +84,14 @@ fn resolve_word<'a>(
             return Err(TokenizeError::UnexpectedCharacter);
         }
 
-        if character.is_whitespace() || character == '|' || character == ',' {
+        if character.is_whitespace()
+            || character == '|'
+            || character == ','
+            || character == '('
+            || character == ')'
+            || character == '>'
+            || character == '<'
+        {
             break;
         }
 
