@@ -6,20 +6,23 @@ use crate::agents::exiter;
 use crate::definitions::domain::entities::command::Command;
 use crate::definitions::domain::entities::shell::Shell;
 use crate::definitions::use_cases::execute::{ExecuteError, ExecutionResult};
+use crate::definitions::use_cases::execute_pipeline::ExecutePipeline;
 use crate::definitions::use_cases::exiter::Exit;
 use crate::definitions::use_cases::terminal_clearer::TerminalClearer;
 use crate::terminal_clearer;
 
 pub fn resolve(shell: &mut Shell, command: Command<'_>) -> Result<ExecutionResult, ExecuteError> {
     let clear: TerminalClearer = terminal_clearer::clear;
+    let execute_pipeline: ExecutePipeline = crate::pipeline_executor::execute;
 
-    resolve_with(shell, command, clear)
+    resolve_with(shell, command, clear, execute_pipeline)
 }
 
 pub(crate) fn resolve_with(
     shell: &mut Shell,
     command: Command<'_>,
     clear: TerminalClearer,
+    execute_pipeline: ExecutePipeline,
 ) -> Result<ExecutionResult, ExecuteError> {
     match command {
         Command::ScopeFs(path) => {
@@ -49,6 +52,9 @@ pub(crate) fn resolve_with(
             exit();
             Ok(ExecutionResult::Exit)
         }
-        Command::Pipeline(_) => Err(ExecuteError::PipelineNotIntegrated),
+        Command::Pipeline(pipeline) => {
+            let result = execute_pipeline(shell, pipeline).map_err(ExecuteError::Pipeline)?;
+            Ok(ExecutionResult::Pipeline(result))
+        }
     }
 }

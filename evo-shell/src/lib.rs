@@ -36,11 +36,12 @@ mod tests {
     use std::io;
     use std::path::Path;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::SystemTime;
 
     use evo_shell_engine::{
-        FilesystemEntryKind, IterError, ScopeError, SelectProperty, SetFilesystemScope,
-        iteration_advancer, scope_setter,
+        FilesystemEntryKind, IterError, ProjectedValue, ScopeError, SelectProperty,
+        SetFilesystemScope, iteration_advancer, scope_setter,
     };
 
     use crate::definitions::contracts::current_directory::{
@@ -57,9 +58,10 @@ mod tests {
     use crate::resolvers::token;
     use crate::{
         Command, Execute, ExecuteError, ExecutionResult, Exit, InitializeShell,
-        InitializeShellError, Parse, ParseError, PipelineOperation, TerminalClearMode,
-        TerminalClearer, Token, TokenStream, Tokenize, TokenizeError, executor, exiter, parser,
-        shell_initializer, terminal_clearer, tokenizer,
+        InitializeShellError, Parse, ParseError, Pipeline, PipelineExecutionError,
+        PipelineOperation, PipelineOperationKind, PipelineValue, PipelineValueKind,
+        TerminalClearMode, TerminalClearer, Token, TokenStream, Tokenize, TokenizeError, executor,
+        exiter, parser, pipeline_executor, shell_initializer, terminal_clearer, tokenizer,
     };
 
     struct TestDirectory {
@@ -1099,6 +1101,140 @@ mod tests {
     }
 
     #[test]
+    fn executor_delegates_pipeline_execution_and_returns_typed_pipeline_result() {
+        static CALLS: AtomicUsize = AtomicUsize::new(0);
+
+        fn clear(_mode: TerminalClearMode) -> Result<(), TerminalClearError> {
+            Ok(())
+        }
+
+        fn execute_pipeline(
+            shell: &Shell,
+            pipeline: Pipeline,
+        ) -> Result<PipelineValue, PipelineExecutionError> {
+            CALLS.fetch_add(1, Ordering::SeqCst);
+            assert!(shell.filesystem_scope().path().is_dir());
+            assert_eq!(pipeline.operations(), &[PipelineOperation::Iter]);
+
+            Ok(PipelineValue::Value(ProjectedValue::name("delegated.txt")))
+        }
+
+        let directory = TestDirectory::new("executor_pipeline_delegate");
+        let mut shell = shell_from_directory(&directory);
+        let command = Command::Pipeline(Pipeline::new(vec![PipelineOperation::Iter]));
+
+        let result = executor::execute_with(&mut shell, command, clear, execute_pipeline).unwrap();
+
+        assert_eq!(CALLS.load(Ordering::SeqCst), 1);
+        let ExecutionResult::Pipeline(PipelineValue::Value(value)) = result else {
+            panic!("expected delegated pipeline value");
+        };
+
+        assert_eq!(value, ProjectedValue::name("delegated.txt"));
+    }
+
+    #[test]
+    fn executor_propagates_pipeline_execution_error() {
+        fn clear(_mode: TerminalClearMode) -> Result<(), TerminalClearError> {
+            Ok(())
+        }
+
+        fn execute_pipeline(
+            _shell: &Shell,
+            _pipeline: Pipeline,
+        ) -> Result<PipelineValue, PipelineExecutionError> {
+            Err(PipelineExecutionError::EmptyPipeline)
+        }
+
+        let directory = TestDirectory::new("executor_pipeline_error");
+        let mut shell = shell_from_directory(&directory);
+        let command = Command::Pipeline(Pipeline::new(vec![PipelineOperation::Iter]));
+
+        let result = executor::execute_with(&mut shell, command, clear, execute_pipeline);
+
+        assert!(matches!(
+            result,
+            Err(ExecuteError::Pipeline(
+                PipelineExecutionError::EmptyPipeline
+            ))
+        ));
+    }
+
+    #[test]
+    fn execute_parsed_pipeline_to_value_returns_pipeline_value() {
+        let directory = TestDirectory::new("pipeline_to_value");
+        fs::write(directory.path.join("only.txt"), "only").unwrap();
+        let mut shell = shell_from_directory(&directory);
+        let mut stream = TokenStream::new("iter |> take 1 |> select name |> to-value");
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let result = executor::execute(&mut shell, command).unwrap();
+
+        let ExecutionResult::Pipeline(PipelineValue::Value(value)) = result else {
+            panic!("expected typed pipeline value");
+        };
+
+        assert_eq!(value, ProjectedValue::name("only.txt"));
+    }
+
+    #[test]
+    fn execute_parsed_pipeline_to_values_returns_values() {
+        let directory = TestDirectory::new("pipeline_to_values");
+        fs::write(directory.path.join("only.txt"), "only").unwrap();
+        let mut shell = shell_from_directory(&directory);
+        let mut stream = TokenStream::new("iter |> select name |> to-values");
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let result = executor::execute(&mut shell, command).unwrap();
+
+        let ExecutionResult::Pipeline(PipelineValue::Values(values)) = result else {
+            panic!("expected typed values");
+        };
+
+        assert_eq!(values.len(), 1);
+        assert_eq!(values.items(), &[ProjectedValue::name("only.txt")]);
+    }
+
+    #[test]
+    fn execute_parsed_pipeline_to_args_returns_arguments() {
+        let directory = TestDirectory::new("pipeline_to_args");
+        fs::write(directory.path.join("only.txt"), "only").unwrap();
+        let mut shell = shell_from_directory(&directory);
+        let mut stream = TokenStream::new("iter |> select name |> to-args");
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let result = executor::execute(&mut shell, command).unwrap();
+
+        let ExecutionResult::Pipeline(PipelineValue::Arguments(arguments)) = result else {
+            panic!("expected typed arguments");
+        };
+
+        assert_eq!(arguments.len(), 1);
+        assert_eq!(arguments.items(), &[ProjectedValue::name("only.txt")]);
+    }
+
+    #[test]
+    fn execute_parsed_semantically_invalid_pipeline_returns_pipeline_error() {
+        let directory = TestDirectory::new("pipeline_invalid_transition");
+        fs::write(directory.path.join("only.txt"), "only").unwrap();
+        let mut shell = shell_from_directory(&directory);
+        let mut stream = TokenStream::new("iter |> to-value");
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let result = executor::execute(&mut shell, command);
+
+        assert!(matches!(
+            result,
+            Err(ExecuteError::Pipeline(
+                PipelineExecutionError::InvalidTransition {
+                    operation: PipelineOperationKind::ToValue,
+                    state: PipelineValueKind::StructuredItems,
+                }
+            ))
+        ));
+    }
+
+    #[test]
     fn execute_clear_returns_terminal_cleared_without_changing_scope() {
         fn clear(mode: TerminalClearMode) -> Result<(), TerminalClearError> {
             match mode {
@@ -1115,6 +1251,7 @@ mod tests {
             &mut shell,
             Command::Clear(TerminalClearMode::Visible),
             clear,
+            pipeline_executor::execute,
         )
         .unwrap();
 
@@ -1135,9 +1272,13 @@ mod tests {
         let mut shell = shell_from_directory(&directory);
         let previous_path = shell.filesystem_scope().path().to_path_buf();
 
-        let result =
-            execution::resolve_with(&mut shell, Command::Clear(TerminalClearMode::All), clear)
-                .unwrap();
+        let result = execution::resolve_with(
+            &mut shell,
+            Command::Clear(TerminalClearMode::All),
+            clear,
+            pipeline_executor::execute,
+        )
+        .unwrap();
 
         assert!(matches!(result, ExecutionResult::TerminalCleared));
         assert_eq!(shell.filesystem_scope().path(), previous_path.as_path());
@@ -1149,7 +1290,12 @@ mod tests {
         let mut shell = shell_from_directory(&directory);
         let previous_path = shell.filesystem_scope().path().to_path_buf();
 
-        let result = execution::resolve_with(&mut shell, Command::Exit, terminal_clearer::clear);
+        let result = execution::resolve_with(
+            &mut shell,
+            Command::Exit,
+            terminal_clearer::clear,
+            pipeline_executor::execute,
+        );
 
         assert!(matches!(result, Ok(ExecutionResult::Exit)));
         assert_eq!(shell.filesystem_scope().path(), previous_path.as_path());

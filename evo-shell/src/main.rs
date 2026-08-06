@@ -127,6 +127,7 @@ fn render_execution(_shell: &Shell, result: ExecutionResult) -> io::Result<LoopC
                 }
             }
         }
+        ExecutionResult::Pipeline(_pipeline) => Ok(LoopControl::Continue),
         ExecutionResult::Exit => Ok(LoopControl::Exit),
     }
 }
