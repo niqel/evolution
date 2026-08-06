@@ -1,6 +1,7 @@
 pub mod executor;
 pub mod exiter;
 pub mod iteration_presenter;
+pub mod iteration_rendering;
 pub mod parser;
 pub mod pipeline_executor;
 pub mod pipeline_result_presenter;
