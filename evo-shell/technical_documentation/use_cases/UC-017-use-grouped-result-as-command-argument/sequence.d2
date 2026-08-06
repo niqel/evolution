@@ -1,0 +1,28 @@
+direction: down
+
+user: "User" {
+  shape: person
+}
+
+shell: "Evo Shell (main)" {
+  shape: rectangle
+}
+
+parser: "Parser Agent" {
+  shape: rectangle
+}
+
+executor: "Executor Agent" {
+  shape: rectangle
+}
+
+enter_uc: "Enter Use Case" {
+  shape: rectangle
+}
+
+user -> shell: "enter (iter |> index 0 |> select name |> to-value)"
+shell -> parser: "parse(input)"
+parser -> executor: "Command::Enter(CommandArgument::Grouped)"
+executor -> executor: "evaluates inner pipeline -> PipelineValue::Value"
+executor -> enter_uc: "enter(scope, location)"
+enter_uc -> shell: "updates filesystem scope"

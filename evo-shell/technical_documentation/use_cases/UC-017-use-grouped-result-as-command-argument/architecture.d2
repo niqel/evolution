@@ -1,0 +1,22 @@
+direction: down
+
+input: "enter (iter |> ...)" {
+  shape: rectangle
+}
+
+parser: "Parser Agent\n(recognizes CommandArgument::Grouped)" {
+  shape: rectangle
+}
+
+executor: "Executor Agent\n(evaluates grouped argument first)" {
+  shape: rectangle
+}
+
+enter_uc: "Enter Use Case\n(enterer::enter)" {
+  shape: rectangle
+}
+
+input -> parser: "parse"
+parser -> executor: "Command::Enter(Grouped)"
+executor -> executor: "evaluates inner grouped pipeline"
+executor -> enter_uc: "executes enter with resolved string argument"

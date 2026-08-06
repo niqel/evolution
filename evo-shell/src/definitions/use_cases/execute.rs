@@ -24,6 +24,7 @@ pub enum ExecuteError {
     Iter(IterError),
     TerminalClear(TerminalClearError),
     Pipeline(PipelineExecutionError),
+    IncompatibleGroupedArgument,
 }
 
 impl From<PipelineExecutionError> for ExecuteError {

@@ -1,0 +1,21 @@
+direction: down
+
+command: "Command::Enter" {
+  shape: rectangle
+}
+
+arg: "CommandArgument" {
+  shape: rectangle
+}
+
+literal: "CommandArgument::Literal(&str)" {
+  shape: rectangle
+}
+
+grouped: "CommandArgument::Grouped(Box<Command>)" {
+  shape: rectangle
+}
+
+command -> arg: "contains"
+arg -> literal: "variant"
+arg -> grouped: "variant"

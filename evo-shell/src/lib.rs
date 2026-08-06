@@ -8,7 +8,7 @@ pub use agents::{
     executor, exiter, iteration_presenter, parser, pipeline_executor, pipeline_result_presenter,
     shell_initializer, starter, terminal_clearer, tokenizer, welcome_presenter,
 };
-pub use definitions::domain::entities::command::Command;
+pub use definitions::domain::entities::command::{Command, CommandArgument};
 pub use definitions::domain::entities::shell::Shell;
 pub use definitions::domain::entities::token::Token;
 pub use definitions::domain::entities::token_stream::TokenStream;
@@ -64,7 +64,7 @@ mod tests {
     use crate::resolvers::terminal_clearer as terminal_clearer_resolver;
     use crate::resolvers::token;
     use crate::{
-        Command, Execute, ExecuteError, ExecutionResult, Exit, InitializeShell,
+        Command, CommandArgument, Execute, ExecuteError, ExecutionResult, Exit, InitializeShell,
         InitializeShellError, Parse, ParseError, Pipeline, PipelineExecutionError,
         PipelineOperation, PipelineOperationKind, PipelineValue, PipelineValueKind,
         TerminalClearMode, TerminalClearer, Token, TokenStream, Tokenize, TokenizeError, executor,
@@ -720,7 +720,7 @@ mod tests {
 
         let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
 
-        assert_eq!(command, Command::Enter("agents"));
+        assert_eq!(command, Command::Enter(CommandArgument::Literal("agents")));
     }
 
     #[test]
@@ -729,7 +729,10 @@ mod tests {
 
         let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
 
-        assert_eq!(command, Command::Enter("Mis Documentos"));
+        assert_eq!(
+            command,
+            Command::Enter(CommandArgument::Literal("Mis Documentos"))
+        );
     }
 
     #[test]
@@ -738,7 +741,7 @@ mod tests {
 
         let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
 
-        assert_eq!(command, Command::Enter(".."));
+        assert_eq!(command, Command::Enter(CommandArgument::Literal("..")));
     }
 
     #[test]
@@ -747,7 +750,7 @@ mod tests {
 
         let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
 
-        assert_eq!(command, Command::Enter("../.."));
+        assert_eq!(command, Command::Enter(CommandArgument::Literal("../..")));
     }
 
     #[test]
@@ -1084,7 +1087,11 @@ mod tests {
         fs::create_dir(&child).unwrap();
         let mut shell = shell_from_directory(&directory);
 
-        let result = executor::execute(&mut shell, Command::Enter("child")).unwrap();
+        let result = executor::execute(
+            &mut shell,
+            Command::Enter(CommandArgument::Literal("child")),
+        )
+        .unwrap();
 
         assert!(matches!(result, ExecutionResult::ScopeChanged));
         assert_eq!(shell.filesystem_scope().path(), child.as_path());
@@ -1096,9 +1103,17 @@ mod tests {
         let child = directory.path.join("child");
         fs::create_dir(&child).unwrap();
         let mut shell = shell_from_directory(&directory);
-        executor::execute(&mut shell, Command::Enter("child")).unwrap();
+        executor::execute(
+            &mut shell,
+            Command::Enter(CommandArgument::Literal("child")),
+        )
+        .unwrap();
 
-        let result = executor::execute(&mut shell, Command::Enter("..")).unwrap();
+        let result = executor::execute(
+            &mut shell,
+            Command::Enter(CommandArgument::Literal("..")),
+        )
+        .unwrap();
 
         assert!(matches!(result, ExecutionResult::ScopeChanged));
         assert_eq!(
@@ -1122,9 +1137,17 @@ mod tests {
         fs::create_dir(&child).unwrap();
         fs::create_dir(&grandchild).unwrap();
         let mut shell = shell_from_directory(&directory);
-        executor::execute(&mut shell, Command::Enter("child/grandchild")).unwrap();
+        executor::execute(
+            &mut shell,
+            Command::Enter(CommandArgument::Literal("child/grandchild")),
+        )
+        .unwrap();
 
-        let result = executor::execute(&mut shell, Command::Enter("../..")).unwrap();
+        let result = executor::execute(
+            &mut shell,
+            Command::Enter(CommandArgument::Literal("../..")),
+        )
+        .unwrap();
 
         assert!(matches!(result, ExecutionResult::ScopeChanged));
         assert_eq!(
@@ -1146,7 +1169,10 @@ mod tests {
         let mut shell = shell_from_directory(&directory);
         let previous_path = shell.filesystem_scope().path().to_path_buf();
 
-        let result = executor::execute(&mut shell, Command::Enter("missing"));
+        let result = executor::execute(
+            &mut shell,
+            Command::Enter(CommandArgument::Literal("missing")),
+        );
 
         assert!(matches!(result, Err(ExecuteError::Scope(_))));
         assert_eq!(shell.filesystem_scope().path(), previous_path.as_path());
@@ -1174,7 +1200,11 @@ mod tests {
         fs::create_dir(&child).unwrap();
         fs::write(child.join("inside.txt"), "inside").unwrap();
         let mut shell = shell_from_directory(&directory);
-        executor::execute(&mut shell, Command::Enter("child")).unwrap();
+        executor::execute(
+            &mut shell,
+            Command::Enter(CommandArgument::Literal("child")),
+        )
+        .unwrap();
 
         let result = executor::execute(&mut shell, Command::Iter).unwrap();
 
@@ -1188,7 +1218,11 @@ mod tests {
         fs::create_dir(&child).unwrap();
         fs::write(child.join("inside.txt"), "inside").unwrap();
         let mut shell = shell_from_directory(&directory);
-        executor::execute(&mut shell, Command::Enter("child")).unwrap();
+        executor::execute(
+            &mut shell,
+            Command::Enter(CommandArgument::Literal("child")),
+        )
+        .unwrap();
         let result = executor::execute(&mut shell, Command::Iter).unwrap();
         let ExecutionResult::FilesystemIteration(mut iteration) = result else {
             panic!("expected filesystem iteration");

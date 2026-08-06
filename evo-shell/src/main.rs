@@ -951,4 +951,165 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&directory);
     }
+
+    #[test]
+    fn parser_recognizes_grouped_expression_as_command_argument() {
+        use evo_shell::{Command, CommandArgument, TokenStream, parser, tokenizer};
+
+        let mut stream = TokenStream::new("enter (iter |> index 0 |> select name |> to-value)");
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let Command::Enter(CommandArgument::Grouped(_)) = command else {
+            panic!("expected enter command with grouped argument");
+        };
+    }
+
+    #[test]
+    fn enter_accepts_grouped_scalar_argument() {
+        use evo_shell::{Command, TokenStream, executor, parser, shell_initializer, tokenizer};
+
+        let root = std::env::temp_dir().join(format!(
+            "evo_shell_enter_grouped_arg_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let child = root.join("child");
+        std::fs::create_dir_all(&child).unwrap();
+
+        let mut shell = shell_initializer::initialize().unwrap();
+        executor::execute(
+            &mut shell,
+            Command::ScopeFs(root.to_str().expect("temp path should be utf-8")),
+        )
+        .unwrap();
+
+        let mut stream = TokenStream::new("enter (iter |> take 1 |> select name |> to-value)");
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+        let result = executor::execute(&mut shell, command).unwrap();
+
+        assert!(matches!(result, evo_shell::ExecutionResult::ScopeChanged));
+        assert_eq!(shell.filesystem_scope().path(), child);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn invalid_multi_value_grouped_argument_returns_typed_error() {
+        use evo_shell::{
+            Command, ExecuteError, TokenStream, executor, parser, shell_initializer, tokenizer,
+        };
+
+        let root = std::env::temp_dir().join(format!(
+            "evo_shell_invalid_grouped_arg_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(root.join("child1")).unwrap();
+        std::fs::create_dir_all(root.join("child2")).unwrap();
+
+        let mut shell = shell_initializer::initialize().unwrap();
+        executor::execute(
+            &mut shell,
+            Command::ScopeFs(root.to_str().expect("temp path should be utf-8")),
+        )
+        .unwrap();
+
+        let mut stream = TokenStream::new("enter (iter |> select name |> to-values)");
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+        let result = executor::execute(&mut shell, command);
+
+        assert!(matches!(
+            result,
+            Err(ExecuteError::IncompatibleGroupedArgument)
+        ));
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn grouped_argument_pipeline_error_propagates() {
+        use evo_shell::{
+            ExecuteError, TokenStream, executor, parser, shell_initializer, tokenizer,
+        };
+
+        let mut shell = shell_initializer::initialize().unwrap();
+        let mut stream = TokenStream::new("enter (iter |> to-value)");
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+        let result = executor::execute(&mut shell, command);
+
+        assert!(matches!(result, Err(ExecuteError::Pipeline(_))));
+    }
+
+    #[test]
+    fn multiline_grouped_argument_works() {
+        let input_text = "enter (\n    iter |>\n    take 1 |>\n    select name |>\n    to-value\n)";
+        let mut input = std::io::Cursor::new(input_text.as_bytes());
+        let mut output = Vec::new();
+
+        let result = read_input_from(&mut input, &mut output).unwrap();
+
+        assert_eq!(result.as_deref(), Some(input_text));
+    }
+
+    #[test]
+    fn vertical_enter_grouped_test() {
+        thread_local! {
+            static CAPTURED: RefCell<String> = const { RefCell::new(String::new()) };
+        }
+
+        fn present_for_test(
+            _shell: &evo_shell::Shell,
+            value: PipelineValue,
+        ) -> Result<(), PipelineResultPresentError> {
+            CAPTURED.with(|captured| {
+                let mut captured = captured.borrow_mut();
+                if let PipelineValue::Value(ProjectedValue::Name(name)) = value {
+                    captured.push_str(&name.to_string_lossy());
+                    captured.push('\n');
+                }
+            });
+
+            Ok(())
+        }
+
+        let root = std::env::temp_dir().join(format!(
+            "evo_shell_vertical_enter_grouped_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let child = root.join("child");
+        std::fs::create_dir_all(&child).unwrap();
+
+        let mut shell = shell_initializer::initialize().unwrap();
+        executor::execute(
+            &mut shell,
+            Command::ScopeFs(root.to_str().expect("temp path should be utf-8")),
+        )
+        .unwrap();
+
+        let multiline_input = "enter (\n    iter |>\n    filter type equals \"directory\" |>\n    filter name equals \"child\" |>\n    select name |>\n    to-value\n)";
+        let mut stream = TokenStream::new(multiline_input);
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        CAPTURED.with(|c| c.borrow_mut().clear());
+        let result = executor::execute(&mut shell, command).unwrap();
+
+        let loop_control = render_execution_with(&shell, result, present_for_test).unwrap();
+        let rendered = CAPTURED.with(|captured| captured.borrow().clone());
+
+        assert!(matches!(loop_control, LoopControl::Continue));
+        assert!(rendered.is_empty());
+        assert_eq!(shell.filesystem_scope().path(), child);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

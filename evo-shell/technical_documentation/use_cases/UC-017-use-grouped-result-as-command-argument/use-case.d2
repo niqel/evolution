@@ -1,0 +1,16 @@
+direction: down
+
+user: "User" {
+  shape: person
+}
+
+uc17: "UC-017: Use Grouped Result as Command Argument" {
+  shape: oval
+}
+
+shell: "Evo Shell Interactive Loop" {
+  shape: rectangle
+}
+
+user -> uc17: "enter (expression)"
+uc17 -> shell: "evaluates inner expression and passes typed result as argument to enter"

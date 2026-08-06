@@ -1,4 +1,4 @@
-use crate::definitions::domain::entities::command::Command;
+use crate::definitions::domain::entities::command::{Command, CommandArgument};
 use crate::definitions::domain::entities::token::Token;
 use crate::definitions::domain::entities::token_stream::TokenStream;
 use crate::definitions::domain::value_objects::terminal_clear_mode::TerminalClearMode;
@@ -101,8 +101,16 @@ fn resolve_enter<'a>(
         return Err(ParseError::ExpectedPath);
     };
 
-    let location = match location_token {
-        Token::Word(location) | Token::String(location) => location,
+    let argument = match location_token {
+        Token::LeftParen => {
+            let inner = resolve(stream, tokenize)?;
+            let closing = tokenize(stream).map_err(ParseError::Tokenize)?;
+            let Some(Token::RightParen) = closing else {
+                return Err(ParseError::UnclosedParenthesis);
+            };
+            CommandArgument::Grouped(Box::new(inner))
+        }
+        Token::Word(location) | Token::String(location) => CommandArgument::Literal(location),
         _ => return Err(ParseError::UnexpectedToken),
     };
 
@@ -110,7 +118,7 @@ fn resolve_enter<'a>(
         return Err(ParseError::UnexpectedToken);
     }
 
-    Ok(Command::Enter(location))
+    Ok(Command::Enter(argument))
 }
 
 fn resolve_clear<'a>(

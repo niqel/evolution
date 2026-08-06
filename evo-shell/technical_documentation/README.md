@@ -291,3 +291,4 @@ Casos de uso técnicos:
 * [UC-014 — Interpretar expresiones textuales de `filter`](use_cases/UC-014-interpret-textual-filter-expressions/)
 * [UC-015 — Recolectar entrada textual multilínea de pipeline](use_cases/UC-015-collect-multiline-pipeline-input/)
 * [UC-016 — Agrupar y evaluar una expresión mediante paréntesis](use_cases/UC-016-group-and-evaluate-expression-using-parentheses/)
+* [UC-017 — Usar el resultado de una expresión agrupada como argumento de un comando](use_cases/UC-017-use-grouped-result-as-command-argument/)

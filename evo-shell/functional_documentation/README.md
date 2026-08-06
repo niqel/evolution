@@ -46,6 +46,7 @@ Esto incluye, entre otros:
 * [US-014 — Interpretar expresiones textuales de `filter`](user_stories/US-014-interpret-textual-filter-expressions.md)
 * [US-015 — Continuar un pipeline textual en múltiples líneas](user_stories/US-015-continue-textual-pipeline-across-multiple-lines.md)
 * [US-016 — Agrupar y evaluar una expresión mediante paréntesis](user_stories/US-016-group-and-evaluate-expression-using-parentheses.md)
+* [US-017 — Usar el resultado de una expresión agrupada como argumento de un comando](user_stories/US-017-use-grouped-result-as-command-argument.md)
 
 ## Reglas de lenguaje
 
