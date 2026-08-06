@@ -17,6 +17,7 @@ Su objetivo es describir conceptualmente:
 - `to-values`;
 - `to-args`;
 - `filter`;
+- `select`;
 - operadores comparativos básicos;
 - operadores lógicos básicos.
 
@@ -275,7 +276,7 @@ Ejemplo conceptual:
 ```text
 copy-to (
     iter
-    |> select full_name
+    |> select name
     |> to-args
 ), path: "~/repos/documents"
 ```
@@ -346,6 +347,151 @@ No modifica el filesystem.
 No cambia el scope.
 
 No reindexa necesariamente en esta regla.
+
+`filter` reduce elementos, no propiedades.
+
+La propiedad utilizada para evaluar el filtro no se convierte automáticamente en la salida del pipeline.
+
+## Select
+
+`select` proyecta propiedades estructuradas de los elementos recibidos.
+
+No filtra elementos.
+
+No decide qué filas continúan.
+
+Su propósito es elegir qué propiedades permanecen visibles en la salida.
+
+La selección se expresa únicamente por nombre de propiedad.
+
+Sintaxis inicial aprobada:
+
+```text
+select property
+```
+
+o:
+
+```text
+select property, property, property
+```
+
+Ejemplos conceptuales:
+
+```text
+select name
+```
+
+```text
+select name, size
+```
+
+```text
+select name, size, modified
+```
+
+La coma separa los nombres de propiedades solicitados por `select`.
+
+La coma no significa:
+
+- AND;
+- OR;
+- pipeline;
+- concatenación.
+
+`select` conserva el orden solicitado explícitamente por el usuario.
+
+Ejemplo conceptual:
+
+```text
+select name, type, size
+```
+
+produce conceptualmente una proyección en ese orden:
+
+- `name`;
+- `type`;
+- `size`.
+
+`select size, name` y `select name, size` seleccionan las mismas propiedades, pero no expresan el mismo orden de proyección.
+
+`select` no elimina elementos por el valor de sus propiedades.
+
+Si recibe 10 elementos y la proyección es válida, continúa trabajando sobre esos mismos 10 elementos, pero con una estructura proyectada.
+
+Si `select` solicita una propiedad que no existe en la estructura recibida, la operación es inválida.
+
+No se ignora silenciosamente la propiedad.
+
+No se devuelve una propiedad vacía.
+
+No se inventa `null`.
+
+No se inventa `None`.
+
+`select` es una proyección, no un filtro.
+
+## Filter y select
+
+`filter` y `select` resuelven problemas distintos.
+
+`filter` decide qué elementos continúan.
+
+`select` decide qué propiedades de esos elementos continúan.
+
+Ejemplo conceptual:
+
+```text
+iter
+|> filter type equals "file"
+|> select name, size
+```
+
+Interpretación conceptual:
+
+1. `iter` produce elementos completos;
+2. `filter` elimina los elementos cuyo `type` no sea `file`;
+3. los elementos que pasan `filter` todavía conservan su estructura;
+4. `select` proyecta `name` y `size`;
+5. el pipeline continúa con esa nueva estructura proyectada.
+
+`filter` no convierte automáticamente el resultado en una sola propiedad aunque la propiedad usada en el predicado sea `name`.
+
+`select` no es obligatorio después de `filter`.
+
+Ejemplo válido:
+
+```text
+iter
+|> filter name equals "README.md"
+```
+
+Ese resultado sigue siendo estructurado y conserva las propiedades del elemento recibido.
+
+Para obtener únicamente la propiedad `name` se requiere explícitamente:
+
+```text
+iter
+|> filter name equals "README.md"
+|> select name
+```
+
+Y para convertir posteriormente una única fila y una única columna a escalar, cuando las cardinalidades sean apropiadas:
+
+```text
+iter
+|> filter name equals "README.md"
+|> select name
+|> to-value
+```
+
+## Select por posición
+
+No se aprueba todavía `select 0` ni `select 0, 3`.
+
+La selección por número de propiedad queda diferida.
+
+Para esta versión, `select` trabaja exclusivamente con nombres de propiedades.
 
 ## Propiedades filtrables
 
@@ -554,9 +700,9 @@ filter type equals "file"
 Otro ejemplo conceptual:
 
 ```text
-filter ext equals "txt"
-    or ext equals "exe"
-    or ext equals "md"
+filter name equals "README.md"
+    or name equals "LICENSE"
+    or name equals "CHANGELOG.md"
 ```
 
 La indentación sigue siendo visual.
@@ -665,7 +811,7 @@ iter
     type equals "file"
     and size between 10kb, 5mb
 )
-|> select full_name
+|> select name
 |> to-args
 ```
 
@@ -688,7 +834,7 @@ copy-to (
         type equals "file"
         and size between 10kb, 5mb
     )
-    |> select full_name
+    |> select name
     |> to-args
 ), path: "~/repos/documents"
 ```
@@ -744,7 +890,7 @@ Forma derivada:
 ```text
 copy-to (
     iter
-    |> select full_name
+    |> select name
     |> to-args
 ), path: "~/repos/documents"
 ```
@@ -775,13 +921,13 @@ Ejemplo principal con `copy-to`:
 ```text
 copy-to (
     iter
-    |> filter ext equals "txt"
-    |> select full_name
+    |> filter name equals "README.md"
+    |> select name
     |> to-args
 ), path: "~/repos/documents"
 ```
 
-`filter ext equals "txt"` aparece aquí solo como expresión ilustrativa simple.
+`filter name equals "README.md"` aparece aquí solo como expresión ilustrativa simple.
 
 ## Alcance diferido
 
