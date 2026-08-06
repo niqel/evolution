@@ -184,41 +184,75 @@ Una pieza de código debe revisarse si ocurre cualquiera de estos casos:
 
 ## Reglas de Composición y Organización
 
-### Resolver y Agent
+### Subject y Sujeto Agente
 
-- **Resolver:**
-  - Recibe valores ya disponibles;
-  - Aplica una transformación, validación o decisión determinista;
-  - Retorna un resultado tipado `Result<T, E>`;
-  - No controla flujo mediante `if`s de negocio dispersos;
-  - Permite encadenamiento mediante `Result` y `?`.
+- **Subject:** Representa aquello sobre lo cual se realiza una acción o que participa en el caso de uso. No debe convertirse en una clase de servicio. Los datos y el estado permanecen representados mediante las estructuras del dominio apropiadas (`entities`, `value_objects`, vistas prestadas `borrowed`).
+- **Sujeto Agente:** Asigna identidad semántica a módulos, tipos y componentes en función de la acción principal que realizan.
 
-  Forma conceptual:
+### Agent
+
+- **Responsabilidad:** Coordina un caso de uso específico del sistema.
+- **Acciones:**
+  - Coordinar el flujo del caso de uso.
+  - Tomar decisiones de coordinación de alto nivel.
+  - Delegar resoluciones puntuales a los Resolvers.
+  - Delegar o componer otros casos de uso invocando directamente a otros Agents (`Agent -> Agent`).
+  - Propagar resultados y errores tipados mediante `Result<T, E>` y el operador `?`.
+  - Asegurar que el caso de uso se complete exitosamente o reportar explícitamente por qué no pudo completarse.
+- **Prohibiciones:**
+  - No implementa infraestructura.
+  - No consume directamente Providers (`Agent -> Provider` PROHIBIDO).
+  - No realiza pequeñas transformaciones que corresponden a Resolvers.
+  - No invoca `Tools` ni `Collaborators` directamente (`Agent -> Tool` / `Agent -> Collaborator` PROHIBIDO).
+  - No se convierte en un "Manager" o contenedor genérico de lógica.
+- **Agent -> Agent (Acíclico):** Un Agent puede llamar directamente a otro Agent cuando un caso de uso necesita la ejecución de otro caso de uso completo. No debe colocarse un Resolver artificial entre dos Agents. Las dependencias entre Agents deben ser estrictamente **acíclicas** (`Agent A -> Agent B -> Agent C`).
+
+### Resolver
+
+- **Responsabilidad:** Es la frontera responsable de determinar si una necesidad puntual del caso de uso queda resuelta o no (`Result<ResolvedValue, ResolveError>`).
+- **Cadena Obligatoria:** Se ubica obligatoriamente entre el Agent y el Provider:
   ```text
-  input → resolver → Result<output, error>
+  Agent → Resolver → Contract → Provider
   ```
-  El resolver favorece la composición limpia:
-  ```rust
-  let a = resolver_a::resolve(...)?;
-  let b = resolver_b::resolve(a)?;
-  let c = resolver_c::resolve(b)?;
-  Ok(c)
-  ```
-  `Ok(value)` y `Err(error)` constituyen los dos caminos explícitos de resolución.
+- **Acciones:**
+  - Recibe la necesidad puntual (`input`).
+  - Solicita capacidades al exterior mediante Contracts.
+  - Recibe el resultado técnico nativo retornado por el Provider.
+  - Interpreta dicho resultado técnico y lo traduce a tipos/errores del dominio (`Result<T, E>`).
+  - Se auxilia internamente de `Tools` (funciones puras pequeñas) y `Collaborators` (lógica de resolución interna cohesionada).
+- **Prohibiciones:**
+  - No invoca Agents (`Resolver -> Agent` PROHIBIDO).
+  - No realiza I/O o trabajo de infraestructura por sí mismo sin un Contract/Provider.
 
-- **Agent:**
-  - Coordina acciones;
-  - Encadena resolvers, providers y capacidades;
-  - Expresa el flujo del caso de uso;
-  - Propaga errores tipados mediante `Result` / `?`;
-  - No duplica lógica que pertenece a resolvers;
-  - No se convierte en un "manager" genérico.
+### Provider y Contract
 
-  Forma conceptual:
-  ```text
-  Agent → resolver A → provider → resolver B → Result
-  ```
-  El agent representa la **acción** aplicada al **sujeto** (`iterator`, `iteration_advancer`, `pipeline_executor`, `executor`).
+- **Provider:** Representa la comunicación con la infraestructura real y el exterior (filesystem, terminal, OS, red, temporizadores, procesos). Ejecuta la operación externa y retorna el resultado técnico nativo (p. ej., `io::Result<ReadDir>`) sin decidir su significado para el dominio.
+- **Contract:** Define la firma de las capacidades que el Resolver requiere del exterior. Se prefieren **function pointers** (`type Provide = fn(...) -> Result<...>`) sobre traits o structs artificiales cuando la capacidad representa una sola acción stateless.
+
+### Tool y Collaborator
+
+- **Tool:** Función interna pequeña, puramente matemática, algorítmica o de formato, genérica, stateless, determinista, sin I/O y sin conocimiento del caso de uso completo.
+- **Collaborator:** Pieza interna de lógica cohesionada y más compleja que ayuda al Resolver en la interpretación o estructuración de una resolución. No realiza I/O directo ni coordina un caso de uso completo.
+
+### Mapa de Relaciones Arquitectónicas
+
+Se aplica la regla central:
+
+> *"Agents coordinate Agents and Resolvers. Resolvers resolve using Contracts/Providers, Tools, and Collaborators."*
+
+- **Permitidas (VALID):**
+  - `Agent -> Agent` (Delegación acíclica de casos de uso)
+  - `Agent -> Resolver` (Solicitud de resolución puntual)
+  - `Resolver -> Contract` (Solicitud de capacidad externa)
+  - `Resolver -> Tool` (Asistencia en cálculos o trasformaciones puras pequeñas)
+  - `Resolver -> Collaborator` (Asistencia en lógica de resolución interna cohesionada)
+  - `Contract -> Provider` (Implementación de la capacidad externa)
+- **Prohibidas (INVALID):**
+  - `Agent -> Provider` (Violación de aislamiento de infraestructura)
+  - `Agent -> Tool` (Violación de responsabilidad)
+  - `Agent -> Collaborator` (Violación de responsabilidad)
+  - `Resolver -> Agent` (Violación de dirección de dependencias)
+  - `Provider -> Agent` (Violación de dirección de dependencias)
 
 ### Function Pointer Preference
 
@@ -242,20 +276,19 @@ Se usará `trait` únicamente cuando exista una necesidad real que justifique:
 ### Structs vs Acciones
 
 - **Structs / Entities / Value Objects:** representan datos, estado e invariantes.
-- **Acciones:** se expresan preferentemente mediante módulos y funciones.
+- **Acciones:** se expresan preferentemente mediante módulos y funciones con identidad de sujeto agente.
 
 Esta convención evita la creación innecesaria de clases contenedoras en Rust.
 
-### Testing Ownership
+### Testing Ownership y Tester (Responsabilidad Transversal)
 
-Los tests deben vivir junto al componente cuya responsabilidad prueban:
+`Tester` representa la responsabilidad conceptual de verificar el comportamiento e invariantes de cualquier pieza (`Agent`, `Resolver`, `Provider`, `Tool`, `Collaborator`, `Domain`).
 
-- **Resolver tests:** junto al resolver (en `mod tests` dentro del propio archivo).
-- **Agent tests:** junto al agent (en `mod tests` dentro del propio archivo).
-- **Provider tests:** junto al provider (en `mod tests` dentro del propio archivo).
-- **Entity / Value Object tests:** junto al tipo correspondiente.
-- **Parser / Tokenizer tests:** junto a parser, tokenizer o resolver correspondiente.
-- **Tests de Integración Vertical:** viven exclusivamente en `tests/` del crate (e.g. `evo-shell/tests/`).
+- **Naturaleza:** Es una responsabilidad conceptual **exclusivamente de testing**, NO de producción. NUNCA crear `struct Tester`, `trait Tester` ni módulos de producción llamados `tester`.
+- **Ubicación en Rust:**
+  - Unit Tests: `#[cfg(test)] mod tests { use super::*; }` colocado junto al componente propietario.
+  - Integration Tests: Viven exclusivamente en `tests/` del crate (e.g. `evo-shell/tests/`).
+- **Provider Tester:** Prueban la correcta adaptación de los Providers con la infraestructura física real o mockeada según necesidad real (principio de no ceremonia).
 
 `lib.rs` nunca debe utilizarse como depósito global de tests.
 
@@ -268,6 +301,15 @@ Los tests deben vivir junto al componente cuya responsabilidad prueban:
 - documentación indispensable del crate.
 
 No debe contener lógica de negocio, helpers, resolvers, providers, mocks o suites globales de tests. `lib.rs` debe poder leerse como un índice limpio del crate.
+
+### Principio de No Ceremonia
+
+Las piezas de la arquitectura (Tool, Collaborator, Provider, Resolver, Agent) **NUNCA deben crearse por simetría o ceremonia**.
+
+- No todo flujo requiere una `Tool` o un `Collaborator`.
+- Sin embargo, todo acceso de un `Agent` a infraestructura DEBE respetar la cadena `Agent -> Resolver -> Contract -> Provider`.
+- Todo caso de uso DEBE tener su `Agent` correspondiente.
+- Se debe crear una pieza únicamente cuando exista una responsabilidad real y defendible en el sistema.
 
 ## Aplicación General
 

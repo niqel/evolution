@@ -10,18 +10,20 @@ La meta no es crear capas por costumbre. La meta es separar responsabilidades de
 
 ## Principio General
 
-La arquitectura sigue una dirección simple:
+La arquitectura sigue un flujo de responsabilidades y dirección de dependencias claro:
 
 ```text
-agent
-  ↓
-resolver
-  ↓
-contract
-  ↓
-provider
-
-(tool → opcional)
+                         ┌──────────── Agent B
+                         │
+Subject → Agent A ───────┤
+                         │
+                         └──────────── Resolver
+                                          │
+                    ┌─────────────────────┼─────────────────────┐
+                    ↓                     ↓                     ↓
+                  Tool              Collaborator             Contract
+                                                               ↓
+                                                            Provider
 ```
 
 El flujo debe conservar esa dirección.
@@ -35,37 +37,76 @@ La filosofía general es:
 
 ---
 
-## Agent
+## Subject (Sujeto y Sujeto Agente)
 
-Un `agent` representa un caso de uso específico del sistema.
+Se mantiene la arquitectura basada en sujeto/acción.
 
-Sigue la regla del sujeto agente.
+El **Subject** representa aquello sobre lo cual se realiza una acción o aquello que participa en el caso de uso.
 
-Ejemplos:
+Reglas del Subject:
 
-- lavadora → lava
-- licuadora → licua
-- report_generator → genera reportes
+- No convertir el Subject en una clase de servicio.
+- Los datos y el estado deben representarse mediante las estructuras del dominio apropiadas (`entities`, `value_objects`, vistas prestadas `borrowed`).
+- Las acciones no se empaquetan en métodos artificiales de clases de servicio; se expresan mediante funciones y módulos con identidad de sujeto agente.
 
-Un `agent`:
+---
 
-- coordina un caso de uso
-- organiza el flujo internamente como pipeline
-- solo trabaja con `resolvers`
-- no implementa resolución fina
-- no usa `providers` directamente
+## Agent — Responsabilidad
 
-Puede:
+Un `agent` representa y coordina un caso de uso específico del sistema.
 
-- iniciar flujo
-- seleccionar resolvers
-- terminar ejecución
+Sigue la regla del sujeto agente (ejemplos: `copier` coordina la copia, `executor` coordina la ejecución de comandos).
 
-No puede:
+### Responsabilidades del Agent:
 
-- consultar infraestructura
-- transformar datos arbitrariamente
-- resolver por sí mismo
+- coordinar el flujo completo del caso de uso;
+- tomar decisiones de coordinación del flujo;
+- delegar resoluciones puntuales a los `resolvers` correspondientes;
+- coordinar otros casos de uso invocando a otros `agents` cuando sea necesario (`Agent -> Agent`);
+- propagar resultados y errores tipados mediante `Result<T, E>` y el operador `?`;
+- asegurar que el caso de uso se complete exitosamente o reporte explícitamente por qué no pudo completarse.
+
+### El Agent NO debe:
+
+- implementar infraestructura directa;
+- hablar directamente con `providers` (`Agent -> Provider` está estrictamente prohibido);
+- realizar pequeñas transformaciones que pertenecen a `resolvers`;
+- invocar `tools` o `collaborators` directamente (`Agent -> Tool` / `Agent -> Collaborator` prohibido);
+- convertirse en un contenedor genérico de lógica (no es un "Manager" o "Service").
+
+El código de un Agent debe poder leerse principalmente como una secuencia de coordinación limpia:
+
+```rust
+let source = source_resolver::resolve(...)?;
+let result = another_agent::execute(source)?;
+let output = output_resolver::resolve(result)?;
+
+Ok(output)
+```
+
+---
+
+## Agent → Agent (Delegación de Casos de Uso)
+
+Un Agent puede llamar directamente a otro Agent (`Agent A -> Agent B`).
+
+Esto representa la **composición o delegación directa de casos de uso**. Si Agent A necesita ejecutar una capacidad funcional que ya pertenece conceptualmente al caso de uso coordinado por Agent B, la llamada directa es totalmente válida.
+
+Reglas:
+
+- **VÁLIDO:** `Agent A -> Agent B` cuando un caso de uso necesita otro caso de uso completo.
+- **INCORRECTO:** No debe introducirse artificialmente un Resolver entre ambos (`Agent A -> Resolver -> Agent B`). El Resolver no existe para envolver Agents.
+
+---
+
+## Dependencias entre Agents (Acíclicas)
+
+Las dependencias entre Agents deben ser estrictamente **acíclicas**.
+
+- **Permitido:** `Agent A -> Agent B -> Agent C`
+- **No permitido:** `Agent A -> Agent B -> Agent C -> Agent A` (Ciclos)
+
+Si surge una dependencia circular entre Agents, es una señal inequívoca de que la división de responsabilidades de los casos de uso debe revisarse.
 
 ---
 
@@ -79,30 +120,10 @@ Un `use_case` representa una capacidad pública específica del sistema.
 
 Regla:
 
-- un `use_case` define una sola acción pública
-- un `agent` implementa ese `use_case`
-- otros proyectos dependen del `use_case`, no del `agent` concreto
-- los `resolvers` permanecen internos al proyecto
-
-Ejemplo conceptual:
-
-```rust
-pub trait UseCaseLavadora {
-    fn lavar(&self, ropa: &mut Ropa);
-}
-```
-
-Implementación:
-
-```rust
-pub struct Lavadora;
-
-impl UseCaseLavadora for Lavadora {
-    fn lavar(&self, ropa: &mut Ropa) {
-        // flujo interno con resolvers
-    }
-}
-```
+- un `use_case` define una sola acción pública;
+- un `agent` implementa ese `use_case`;
+- otros proyectos dependen del `use_case`, no del `agent` concreto;
+- los `resolvers` permanecen internos al proyecto.
 
 Relación:
 
@@ -130,209 +151,205 @@ Porque el `resolver` forma parte de la mecánica interna del sistema y no de su 
 
 ---
 
-## Resolver
+## Resolver — Responsabilidad
 
-Un `resolver` decide si existe una forma operable para continuar.
+Un `resolver` es la frontera responsable de determinar si una necesidad puntual del caso de uso queda resuelta o no.
 
-Para resolver:
+### El Resolver:
 
-- usa contratos
-- consume datos del provider mediante contratos
-- evita copias innecesarias
-- puede usar `tools`
+- recibe la necesidad puntual (`input`);
+- solicita capacidades externas mediante `contracts`;
+- recibe el resultado técnico proporcionado por un `provider`;
+- interpreta ese resultado técnico;
+- determina si la necesidad quedó resuelta;
+- convierte errores técnicos de bajo nivel (p. ej., `io::Error`) a errores tipados con significado explícito para el dominio o caso de uso (`IterError`, `ScopeError`, etc.);
+- retorna un `Result<ResolvedValue, ResolveError>` tipado.
 
-Resultado esperado:
+### El Resolver NO debe:
 
-```text
-resolved
-not_resolved
-```
+- realizar trabajo de infraestructura o I/O por sí mismo sin un `contract`/`provider`;
+- coordinar casos de uso completos (eso pertenece al `agent`);
+- invocar a un `agent` (`Resolver -> Agent` está prohibido);
+- crear ownership innecesario.
 
-Puede:
-
-- inspeccionar
-- resolver
-- devolver imposibilidad explícita
-
-No puede:
-
-- coordinar casos de uso
-- convertirse en provider
-- crear ownership innecesario
-
-Forma esperada:
+Forma conceptual del flujo del Resolver:
 
 ```text
-resolver.resolve(...)
+input
+    ↓
+Resolver
+    ↓
+Contract
+    ↓
+Provider
+    ↓
+resultado técnico
+    ↓
+Resolver
+    ↓
+Result<ResolvedValue, ResolveError>
 ```
 
+---
 
-### Regla de Alcance
+## Resolver Siempre entre Agent y Provider
 
-Un `resolver` debe resolver una sola condición o transición necesaria para que el caso de uso pueda continuar.
+Se establece como regla arquitectónica obligatoria: **Un Agent NUNCA consume directamente un Provider.**
 
-Su responsabilidad no es ejecutar todo el caso de uso, sino responder una pregunta operativa concreta, por ejemplo:
+- **INCORRECTO:** `Agent -> Provider`
+- **CORRECTO:** `Agent -> Resolver -> Contract -> Provider`
 
-- ¿el origen es válido y accesible?
-- ¿el destino permite la operación?
-- ¿la copia pudo realizarse?
-- ¿el origen puede eliminarse después de una copia confirmada?
+Aunque la responsabilidad del Resolver sea pequeña o directa, sigue siendo indispensable porque constituye la frontera encargada de interpretar si la respuesta técnica enviada por el Provider satisface la necesidad del caso de uso. Esto mantiene al Agent completamente aislado de detalles técnicos y errores de infraestructura.
 
-El nombre del módulo expresa qué resuelve. Dentro del módulo, la operación pública puede conservar una forma uniforme:
+---
 
-```rust
-resolver_origen::resolve(...)
-resolver_destino::resolve(...)
-resolver_copia::resolve(...)
-```
+## Provider — Responsabilidad
 
-La identidad semántica pertenece al módulo. La función `resolve` expresa la acción común de todos los resolvers.
+Un `provider` representa la comunicación con el mundo real y la infraestructura externa.
 
-Un resolver:
+Ejemplos de infraestructura:
+- sistema de archivos (`std::fs`);
+- terminal (`stdout`, `stdin`, secuencias ANSI);
+- sistema operativo / entorno;
+- red / sockets;
+- reloj externo / temporizadores de sistema;
+- procesos externos.
 
-- habilita o rechaza un paso del flujo
-- devuelve un resultado explícito
-- usa contratos para solicitar capacidades externas
-- no coordina resolvers anteriores o posteriores
+### El Provider:
 
-Distinción:
+- provee información externa o ejecuta operaciones físicas sobre la infraestructura;
+- devuelve el resultado técnico nativo correspondiente (p. ej., `io::Result<ReadDir>`).
 
-```text
-agent      → coordina el caso de uso
-resolver   → habilita o rechaza un paso
-contract   → define una capacidad externa
-provider   → ejecuta contra infraestructura real
-tool       → transforma o calcula
-```
+### El Provider NO debe:
 
-### Ejemplo: Copiar un Archivo
+- decidir qué significa ese resultado técnico para el caso de uso o para el dominio.
 
-El caso de uso público es copiar un archivo desde un origen hacia un destino.
+Ejemplo conceptual:
 
-El sujeto agente es el módulo `copiador`:
+- **Provider:** `std::fs::read_dir(path) -> io::Result<ReadDir>` (resultado técnico)
+- **Resolver:** `io::Result<ReadDir> -> Result<FilesystemIteration, IterError>` (interpretación del dominio)
 
-```text
-copiador::copiar(origen, destino)
-```
-
-El agente no consulta directamente el sistema de archivos ni realiza por sí mismo cada operación. Coordina una cadena de resolvers:
-
-```text
-copiador::copiar(origen, destino)
-    ↓
-resolver_origen::resolve(origen)
-    ↓
-resolver_destino::resolve(destino)
-    ↓
-resolver_copia::resolve(origen, destino)
-```
-
-Responsabilidades:
-
-- `resolver_origen` confirma que el origen representa un archivo operable
-- `resolver_destino` confirma que el destino acepta la operación
-- `resolver_copia` solicita la copia y confirma su resultado
-
-Cada resolver usa contratos del sistema de archivos. Un provider implementa esos contratos mediante la infraestructura real, por ejemplo `std::fs`.
-
-```text
-copiador
-   ↓
-resolvers
-   ↓
-file_system contract
-   ↓
-std_file_system provider
-   ↓
-std::fs
-```
-
-La operación de copiar conserva el archivo original.
-
-Si el caso de uso también elimina el origen después de confirmar la copia, entonces semánticamente ya no es un `copiador`, sino un `movedor`:
-
-```text
-movedor::mover(origen, destino)
-    ↓
-resolver_origen::resolve(origen)
-    ↓
-resolver_destino::resolve(destino)
-    ↓
-resolver_copia::resolve(origen, destino)
-    ↓
-resolver_eliminacion::resolve(origen)
-```
-
-El resolver de eliminación solo puede ejecutarse después de que la copia haya sido confirmada. El agente conserva la responsabilidad de coordinar ese orden.
+La interpretación del resultado técnico pertenece exclusivamente al Resolver.
 
 ---
 
 ## Contract
 
-Un `contract` define qué se espera del exterior.
+Un `contract` define qué se espera del exterior sin implementarlo ni coordinarlo.
 
-No implementa.
-
-No coordina.
-
-Solo define capacidades externas.
-
-Se agrupa en:
-
-- inputs
-- outputs
-- actions
-- events
-
-Puede:
-
-- definir comportamiento esperado
-- expresar capacidades
-
-No puede:
-
-- ejecutar lógica
-- hablar con tecnología real
+- El Resolver solicita capacidades al exterior expresadas formalmente en el Contract: `Resolver -> Contract -> Provider`.
+- **Preferencia por Function Pointers:** Cuando una capacidad representa una sola acción stateless, se prefiere definir la firma mediante un `function pointer`:
+  ```rust
+  type ReadDirectory = fn(&Path) -> io::Result<ReadDir>;
+  ```
+- No se deben crear `traits` ni `structs` artificiales únicamente para envolver una sola operación stateless.
 
 ---
 
-## Provider
+## Tool (Herramienta Interna)
 
-Un `provider` implementa contratos.
+Una `tool` es una pieza interna, pequeña, genérica, stateless, determinista, sin I/O y sin conocimiento del caso de uso completo.
 
-Es quien habla con el mundo real.
-
-Puede:
-
-- leer
-- escribir
-- ejecutar
-- emitir
-
-No puede:
-
-- decidir flujo
-- definir reglas del dominio
-- coordinar casos de uso
+- **Propósito:** Ayuda a un `resolver` a realizar una operación interna pequeña, puramente matemática, algorítmica o de formateo.
+- **Ejemplos conceptuales:** `normalize_path`, `format_size`, `compare_strings`, `calculate_offset`.
+- **Fronteras:** Una Tool no es un Agent, ni un Resolver, ni un Provider, ni un caso de uso.
+- **Regla:** No se deben crear Tools por costumbre si una función privada local dentro del Resolver expresa suficientemente la operación. La categoría existe para funciones genéricas reutilizables de pequeña responsabilidad.
 
 ---
 
-## Tool (Opcional)
+## Collaborator (Colaborador Interno)
 
-Una `tool` es una herramienta puntual.
+Un `collaborator` es una pieza interna que ayuda a un `resolver` a completar una resolución más compleja.
 
-Solo existe cuando una operación específica merece identidad propia.
+- **Características:**
+  - Trabaja internamente (sin I/O ni contacto directo con infraestructura externa);
+  - Posee una responsabilidad cohesionada y más significativa que una simple Tool;
+  - Ayuda al Resolver a interpretar o estructurar una resolución;
+  - No coordina un caso de uso completo (no es un Agent).
+- **Ejemplos conceptuales:** `recursive copier`, `argument expander`, `expression evaluator`, `path classifier`.
 
-Puede:
+### Diferencia Fundamental entre Piezas:
 
-- transformar
-- calcular
-- normalizar
+```text
+Tool          → Pequeña, genérica y sin estado.
+Collaborator  → Lógica interna más significativa y cohesionada.
+Provider      → Comunicación con infraestructura externa.
+Agent         → Coordinador del caso de uso completo.
+Resolver      → Evaluador determinista de una necesidad puntual.
+```
 
-No puede:
+---
 
-- coordinar
-- resolver flujo
+## Mapa de Relaciones Arquitectónicas
+
+La arquitectura se sintetiza bajo la siguiente regla central:
+
+> *"Agents coordinate Agents and Resolvers. Resolvers resolve using Contracts/Providers, Tools, and Collaborators."*
+
+### Relaciones Permitidas (VALID)
+
+| Origen | Destino | Naturaleza de la Relación |
+|---|---|---|
+| `Agent` | `Agent` | Composición / delegación directa de caso de uso |
+| `Agent` | `Resolver` | Solicitud de resolución de un paso del flujo |
+| `Resolver` | `Contract` | Invocación de capacidad externa requerida |
+| `Resolver` | `Tool` | Asistencia en cálculos/operaciones puras pequeñas |
+| `Resolver` | `Collaborator` | Asistencia en lógica interna cohesionada |
+| `Contract` | `Provider` | Implementación concreta de la capacidad externa |
+
+### Relaciones Prohibidas (INVALID)
+
+| Origen | Destino | Motivo de Prohibición |
+|---|---|---|
+| `Agent` | `Provider` | Violación de aislamiento de infraestructura (requiere Resolver) |
+| `Agent` | `Tool` | Violación de frontera (el Agent solo coordina Resolvers y Agents) |
+| `Agent` | `Collaborator` | Violación de frontera (el Collaborator asiste al Resolver) |
+| `Resolver` | `Agent` | Violación de dirección (un Resolver no invoca casos de uso) |
+| `Provider` | `Agent` | Violación de dirección (la infraestructura no invoca casos de uso) |
+
+### Nota sobre Composición Resolver → Resolver
+
+Si en flujos específicos existe composición puntual de un Resolver sobre otro, se trata como una composición interna puntual y no como una regla rígida de nivel superior.
+
+---
+
+## Tester (Responsabilidad Transversal de Pruebas)
+
+`Tester` representa la responsabilidad conceptual de verificar el contrato, comportamiento e invariantes de cualquier pieza del sistema.
+
+### Naturaleza del Tester:
+
+- Es una responsabilidad conceptual **exclusivamente de testing**, NO de producción.
+- **REGLA:** NUNCA crear un `struct Tester`, `trait Tester` ni módulos de producción llamados `tester`.
+- Existe conceptualmente para probar: `Agent`, `Resolver`, `Provider`, `Tool`, `Collaborator` y estructuras del dominio.
+
+### Roles Conceptuales del Tester:
+
+- **Agent Tester:** Verifica la correcta secuencia de coordinación, toma de decisiones y propagación de errores del caso de uso.
+- **Resolver Tester:** Verifica la interpretación del input, la toma de decisión determinista y la conversión de resultados a `Ok`/`Err`.
+- **Provider Tester:** Verifica la adaptación e interacción adecuada con la infraestructura real o mediante mocks controlados de sistema, asegurando que los errores técnicos se reporten fielmente.
+- **Tool Tester:** Verifica operaciones deterministas y casos borde de funciones puras.
+- **Collaborator Tester:** Verifica la lógica de resolución interna cohesionada.
+
+### Representación Física en Rust (Testing Ownership):
+
+- **Unit Tests:** Viven en el módulo `#[cfg(test)] mod tests { use super::*; }` colocado en el mismo archivo del componente propietario.
+- **Integration Tests:** Viven exclusivamente en el directorio `tests/` del crate correspondiente.
+
+### Regla para Provider Tester:
+
+Un Provider también debe probarse para verificar su adaptación e interacción con la infraestructura física. No obstante, se aplica el principio de no ceremonia: no se exigen pruebas artificiales para Providers triviales si no aportan valor real.
+
+---
+
+## Principio de No Ceremonia
+
+Las piezas de la arquitectura (Tool, Collaborator, Provider, Resolver, Agent) **NUNCA deben crearse por simetría o ceremonia**.
+
+- No todo flujo requiere una `Tool` o un `Collaborator`.
+- Sin embargo, todo acceso de un `Agent` a infraestructura DEBE respetar la cadena `Agent -> Resolver -> Contract -> Provider`.
+- Todo caso de uso DEBE tener su `Agent` correspondiente.
+- Se debe crear una pieza únicamente cuando exista una responsabilidad real y defendible en el sistema.
 
 ---
 
@@ -347,7 +364,6 @@ Reglas:
 - materializa solo cuando haga falta independencia real
 
 ---
-
 
 ## Borrowed en Rust
 
@@ -375,6 +391,7 @@ Regla:
 - si modificas → `&mut T`
 - si necesitas conservar → ownership
 
+---
 
 ## Failure Is Not Flow
 
@@ -438,8 +455,6 @@ Contiene aquello que el sistema necesita definir sin implementarlo:
 - vistas prestadas en `borrowed`
 - entidades con ownership cuando son necesarias
 
-Para Evo-script, estas definiciones pueden expresarse mediante firmas de funciones y function pointers, sin requerir `trait`, `dyn` ni genéricos de comportamiento.
-
 ### use_cases/
 
 Contiene las fronteras públicas que otros componentes o proyectos pueden consumir.
@@ -474,9 +489,12 @@ Regla:
 
 ## Resumen
 
+- el `subject` representa la entidad sobre la cual se actúa (mantiene datos e invariantes, no es clase de servicio)
 - el `use_case` expone una acción pública entre proyectos
-- el `agent` coordina e implementa el caso de uso
-- el `resolver` decide
-- el `contract` define
-- el `provider` implementa
-- la `tool` ayuda
+- el `agent` coordina e implementa el caso de uso (puede llamar a otros agents de forma acíclica)
+- el `resolver` decide e interpreta resultados técnicos de providers en resultados del dominio
+- el `contract` define capacidades requeridas del exterior (vía function pointers cuando son stateless)
+- el `provider` habla con la infraestructura externa sin decidir semántica del dominio
+- la `tool` realiza operaciones internas pequeñas, puras y stateless para un resolver
+- el `collaborator` realiza lógica interna cohesionada más compleja para un resolver
+- el `tester` es la responsabilidad transversal de verificación (solo en `#[cfg(test)]` o `tests/`)
