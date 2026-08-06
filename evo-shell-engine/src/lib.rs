@@ -4,7 +4,7 @@ mod providers;
 
 mod resolvers;
 
-pub use agents::{enterer, filterer, iteration_advancer, iterator, scope_setter};
+pub use agents::{enterer, filterer, iteration_advancer, iterator, scope_setter, selector};
 pub use definitions::domain::entities::filesystem_entry::{FilesystemEntry, FilesystemEntryKind};
 pub use definitions::domain::entities::filesystem_iteration::FilesystemIteration;
 pub use definitions::domain::entities::filesystem_iteration_item::FilesystemIterationItem;
@@ -12,10 +12,14 @@ pub use definitions::domain::entities::filesystem_scope::FilesystemScope;
 pub use definitions::domain::value_objects::filter::{
     FilterComparison, FilterExpression, FilterOperand, FilterOperator, FilterProperty, FilterValue,
 };
+pub use definitions::domain::value_objects::select::{
+    ProjectedRow, ProjectedValue, SelectProperty, StructuredProjection,
+};
 pub use definitions::use_cases::advance::Advance;
 pub use definitions::use_cases::enter::Enter;
 pub use definitions::use_cases::filter::{Filter, FilterError};
 pub use definitions::use_cases::iter::{Iter, IterError};
+pub use definitions::use_cases::select::{Select, SelectError};
 pub use definitions::use_cases::set_filesystem_scope::{ScopeError, SetFilesystemScope};
 
 #[cfg(test)]

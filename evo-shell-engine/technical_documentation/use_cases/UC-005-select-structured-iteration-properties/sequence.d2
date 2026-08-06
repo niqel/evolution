@@ -1,0 +1,45 @@
+direction: down
+
+consumer: "consumidor externo\n\nevo-shell / evo-script" {
+  shape: rectangle
+}
+
+use_case: "Select(&[FilesystemIterationItem], &[SelectProperty])" {
+  shape: rectangle
+}
+
+agent: "selector::select" {
+  shape: rectangle
+}
+
+resolver: "select::resolve" {
+  shape: rectangle
+}
+
+input: "colección estructurada\n0..N FilesystemIterationItem\npropiedades estructuradas" {
+  shape: rectangle
+}
+
+projection: "proyección estructurada\n0..N filas\norden de propiedades preservado" {
+  shape: rectangle
+}
+
+error: "SelectError\npropiedad no soportada" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+consumer -> use_case: "invoca"
+input -> use_case: "entrada prestada"
+use_case -> agent: "implementado por"
+agent -> resolver: "coordina"
+resolver -> projection: "valida propiedades y proyecta filas"
+resolver -> error: "si la propiedad no es soportada"
+projection -> consumer: "éxito o proyección vacía"
+
+note: "No provider.\nNo parser textual.\nNo cambio de filas.\nNo conversión a string." {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+resolver -> note

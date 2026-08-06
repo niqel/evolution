@@ -1,0 +1,30 @@
+direction: right
+
+consumer: "Consumidor" {
+  shape: person
+}
+
+engine: "Evo Shell Engine" {
+  shape: rectangle
+
+  seleccionar: "Seleccionar propiedades estructuradas" {
+    shape: oval
+  }
+}
+
+entrada: "colección estructurada\npropiedades estructuradas" {
+  shape: rectangle
+}
+
+resultado: "proyección estructurada\nfilas conservadas\norden preservado" {
+  shape: rectangle
+}
+
+error: "SelectError" {
+  shape: rectangle
+}
+
+consumer -> engine.seleccionar: solicita
+entrada -> engine.seleccionar: recibe
+engine.seleccionar -> resultado: éxito
+engine.seleccionar -> error: fallo semántico

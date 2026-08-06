@@ -8,6 +8,7 @@ Esta carpeta contiene el diseño técnico derivado de la documentación funciona
 * [UC-002 — Iterar los elementos de un filesystem scope](use_cases/UC-002-iterate-filesystem-scope/README.md)
 * [UC-003 — Entrar en una ubicación de un filesystem scope](use_cases/UC-003-enter-filesystem-scope/README.md)
 * [UC-004 — Filtrar una iteración estructurada](use_cases/UC-004-filter-structured-iteration/README.md)
+* [UC-005 — Seleccionar propiedades estructuradas de una iteración](use_cases/UC-005-select-structured-iteration-properties/README.md)
 
 Aquí pueden vivir diagramas de casos de uso, diagramas de arquitectura, diagramas de secuencia, modelo técnico del dominio y documentación de definitions, borrowed, entities y firmas importantes cuando sea necesario.
 

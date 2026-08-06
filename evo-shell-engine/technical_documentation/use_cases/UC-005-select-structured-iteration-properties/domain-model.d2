@@ -1,0 +1,32 @@
+direction: right
+
+select_property: "SelectProperty\n\nIndex\nCreated\nModified\nType\nSize\nName\n\nUnsupported(String)" {
+  shape: rectangle
+}
+
+projected_value: "ProjectedValue\n\nIndex(usize)\nCreated(Option<SystemTime>)\nModified(Option<SystemTime>)\nType(FilesystemEntryKind)\nSize(Option<u64>)\nName(OsString)" {
+  shape: rectangle
+}
+
+projected_row: "ProjectedRow\n\nvalues: Vec<ProjectedValue>\n\nconserva el orden de las propiedades solicitadas" {
+  shape: rectangle
+}
+
+structured_projection: "StructuredProjection\n\nproperties: Vec<SelectProperty>\nrows: Vec<ProjectedRow>" {
+  shape: rectangle
+}
+
+filesystem_iteration_item: "FilesystemIterationItem\n\nindex\nentry: FilesystemEntry" {
+  shape: rectangle
+}
+
+filesystem_entry: "FilesystemEntry\n\nname\npath\nkind\ncreated\nmodified\nsize" {
+  shape: rectangle
+}
+
+select_property -> projected_value: "determina"
+projected_row -> projected_value: "contiene"
+structured_projection -> select_property: "schema solicitado"
+structured_projection -> projected_row: "filas proyectadas"
+filesystem_iteration_item -> projected_row: "fuente de proyección"
+filesystem_iteration_item -> filesystem_entry: "entry"

@@ -26,6 +26,10 @@ Para filtrado estructurado de resultados ya materializados, la frontera pública
 
 - `Filter(&[FilesystemIterationItem], &FilterExpression)`: conserva únicamente los elementos que cumplen un predicado estructurado.
 
+Para proyección estructurada de propiedades ya materializadas, la frontera pública conceptual incluye:
+
+- `Select(&[FilesystemIterationItem], &[SelectProperty])`: proyecta propiedades estructuradas de cada elemento sin eliminar filas.
+
 Para navegación dentro de un filesystem scope, la frontera pública conceptual incluye:
 
 - `Enter(&FilesystemScope, &Path)`: resuelve una ubicación relativa desde el scope actual y produce un nuevo `FilesystemScope` válido o error.

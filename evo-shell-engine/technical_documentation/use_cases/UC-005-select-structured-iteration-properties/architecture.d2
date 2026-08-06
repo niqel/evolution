@@ -1,0 +1,40 @@
+direction: down
+
+consumer: "Consumidor externo\n\nevo-shell / evo-script / otro componente" {
+  shape: rectangle
+}
+
+use_case: "Use case público\n\ndefinitions/use_cases/select.rs\nSelect(&[FilesystemIterationItem], &[SelectProperty])" {
+  shape: rectangle
+}
+
+agent: "Agent\n\nagents/selector.rs\nselector::select" {
+  shape: rectangle
+}
+
+resolver: "Resolver\n\nresolvers/select.rs\nselect::resolve\n\nproyecta propiedades estructuradas" {
+  shape: rectangle
+}
+
+projection: "Structured Projection\n\nproperties\nrows\nprojected values tipados" {
+  shape: rectangle
+}
+
+properties: "SelectProperty\n\nIndex\nCreated\nModified\nType\nSize\nName\n\nUnsupported(String) para mapping externo" {
+  shape: rectangle
+}
+
+consumer -> use_case: "frontera pública"
+use_case -> agent: "implementado por"
+agent -> resolver: "coordina"
+use_case -> resolver: "recibe colección y propiedades"
+resolver -> properties: "consume propiedades tipadas"
+resolver -> projection: "devuelve proyección estructurada"
+projection -> consumer: "éxito o proyección vacía"
+
+note: "No provider.\nNo parser textual.\nNo filesystem IO.\nNo terminal IO." {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+resolver -> note
