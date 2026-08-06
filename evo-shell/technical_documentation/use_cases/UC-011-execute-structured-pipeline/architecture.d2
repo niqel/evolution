@@ -1,0 +1,44 @@
+direction: down
+
+pipeline: "Structured Pipeline" {
+  shape: rectangle
+}
+
+execute_pipeline: "ExecutePipeline Use Case" {
+  shape: rectangle
+}
+
+pipeline_executor: "pipeline_executor Agent\n\nexecute(...)" {
+  shape: rectangle
+}
+
+shell_context: "Shell context\n\nactive FilesystemScope" {
+  shape: rectangle
+}
+
+engine: "Evo Shell Engine\n\niter / filter / index / take / select / to-*" {
+  shape: rectangle
+}
+
+typed_result: "Typed pipeline result\n\nStructuredItems\nStructuredProjection\nProjectedValue\nValues\nArguments" {
+  shape: rectangle
+}
+
+no_resolver: "No resolver propio" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+no_provider: "No provider propio" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+pipeline -> execute_pipeline: "structured input"
+execute_pipeline -> pipeline_executor: "orquesta"
+pipeline_executor -> shell_context: "reads active scope for Iter"
+pipeline_executor -> engine: "delegates semantics"
+engine -> typed_result: "produces typed state"
+pipeline_executor -> typed_result: "returns"
+pipeline_executor -> no_resolver: "not required"
+pipeline_executor -> no_provider: "not required"

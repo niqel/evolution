@@ -1,0 +1,88 @@
+direction: down
+
+user: "User / Consumer" {
+  shape: person
+}
+
+pipeline_executor: "PipelineExecutor\npipeline_executor::execute" {
+  shape: rectangle
+}
+
+shell_context: "Shell context\nactive FilesystemScope" {
+  shape: rectangle
+}
+
+iter: "Engine Iter" {
+  shape: rectangle
+}
+
+take: "Engine Take" {
+  shape: rectangle
+}
+
+select: "Engine Select" {
+  shape: rectangle
+}
+
+to_value: "Engine ToValue" {
+  shape: rectangle
+}
+
+to_values: "Engine ToValues" {
+  shape: rectangle
+}
+
+to_args: "Engine ToArgs" {
+  shape: rectangle
+}
+
+items: "StructuredItems" {
+  shape: rectangle
+}
+
+projection: "StructuredProjection" {
+  shape: rectangle
+}
+
+scalar: "ProjectedValue" {
+  shape: rectangle
+}
+
+values: "Values" {
+  shape: rectangle
+}
+
+arguments: "Arguments" {
+  shape: rectangle
+}
+
+error: "PipelineExecutionError\nor engine error" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+user -> pipeline_executor: "structured pipeline"
+pipeline_executor -> shell_context: "active scope"
+pipeline_executor -> iter: "Iter"
+shell_context -> iter: "scope for Iter"
+iter -> items: "StructuredItems"
+pipeline_executor -> take: "Take(1)"
+take -> items: "StructuredItems"
+pipeline_executor -> select: "Select(Name)"
+select -> projection: "StructuredProjection"
+pipeline_executor -> to_value: "ToValue"
+to_value -> scalar: "ProjectedValue"
+scalar -> user: "result"
+
+pipeline_executor -> to_values: "ToValues"
+to_values -> values: "Values"
+pipeline_executor -> to_args: "ToArgs"
+to_args -> arguments: "Arguments"
+
+take -> error: "invalid state"
+select -> error: "invalid state"
+to_value -> error: "invalid cardinality"
+to_values -> error: "invalid projection"
+to_args -> error: "invalid projection"
+
+error -> user: "stop immediately"

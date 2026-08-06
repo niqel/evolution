@@ -1,0 +1,46 @@
+direction: right
+
+pipeline: "Pipeline\n\nordered PipelineOperation[]" {
+  shape: rectangle
+}
+
+operation: "PipelineOperation\n\nIter\nFilter(FilterExpression)\nIndex(usize)\nTake(usize)\nSelect(Vec<SelectProperty>)\nToValue\nToValues\nToArgs" {
+  shape: rectangle
+}
+
+shell_context: "Shell context\n\nactive FilesystemScope" {
+  shape: rectangle
+}
+
+state: "PipelineValue\n\nStructuredItems\nStructuredProjection\nProjectedValue\nValues\nArguments" {
+  shape: rectangle
+}
+
+items: "StructuredItems" {
+  shape: rectangle
+}
+
+projection: "StructuredProjection" {
+  shape: rectangle
+}
+
+scalar: "ProjectedValue" {
+  shape: rectangle
+}
+
+values: "Values" {
+  shape: rectangle
+}
+
+arguments: "Arguments" {
+  shape: rectangle
+}
+
+pipeline -> operation: "contains"
+shell_context -> operation: "provides scope for Iter"
+operation -> state: "transitions"
+state -> items: "row operations"
+state -> projection: "select"
+state -> scalar: "to-value"
+state -> values: "to-values"
+state -> arguments: "to-args"

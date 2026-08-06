@@ -1,0 +1,45 @@
+direction: right
+
+actor: "Usuario / Consumer" {
+  shape: person
+}
+
+executor: "Execute Structured Pipeline\n\nPipelineExecutor" {
+  shape: rectangle
+}
+
+ordered: "Pipeline estructurado\n\noperaciones ordenadas" {
+  shape: rectangle
+}
+
+engine: "Evo Shell Engine\n\nsemántica estructurada" {
+  shape: rectangle
+}
+
+result: "Resultado tipado\n\nStructuredItems\nStructuredProjection\nProjectedValue\nValues\nArguments" {
+  shape: rectangle
+}
+
+excluded: "Fuera de alcance\n\nparser textual\nlexer/tokenizer\nlectura multilinea\nsubpipelines\najuste de presentación" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+no_resolver: "Sin resolver propio" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+no_provider: "Sin provider propio" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+actor -> executor: "solicita"
+executor -> ordered: "consume"
+executor -> engine: "delega"
+engine -> result: "produce"
+executor -> result: "propaga"
+executor -> excluded: "no implementa"
+executor -> no_resolver: "no necesita"
+executor -> no_provider: "no necesita"
