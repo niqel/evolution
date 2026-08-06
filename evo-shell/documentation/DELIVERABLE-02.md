@@ -29,7 +29,7 @@ Resumen consolidado de todas las capacidades realmente disponibles en Evo Shell 
 | **Comandos de Ámbito y Navegación** | `scope-fs "<path>"` | Establece de forma explícita el `filesystem_scope` activo. |
 | | `enter <path>` / `enter (...)` | Navega hacia un directorio hijo o padre alterando el scope activo. |
 | **Comandos de Inspección y Control** | `iter` | Produce una iteración estructurada de las entradas del scope activo. |
-| | `clear` / `clear --all` | Limpia la pantalla del terminal (pantalla visible o buffer completo). |
+| | `clear` | Limpia la pantalla completa del terminal (pantalla visible y scrollback). |
 | | `exit` | Finaliza la sesión interactiva de Evo Shell. |
 | **Operaciones de Pipeline** | `filter <expr>` | Filtra entradas estructuradas evaluando predicados lógicos. |
 | | `select <prop1>, <prop2>` | Proyecta propiedades específicas manteniendo el formato estructurado. |

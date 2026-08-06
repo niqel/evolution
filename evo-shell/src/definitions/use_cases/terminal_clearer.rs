@@ -1,8 +1,6 @@
 use std::io;
 
-use crate::definitions::domain::value_objects::terminal_clear_mode::TerminalClearMode;
-
-pub type TerminalClearer = fn(TerminalClearMode) -> Result<(), TerminalClearError>;
+pub type TerminalClearer = fn() -> Result<(), TerminalClearError>;
 
 #[derive(Debug)]
 pub enum TerminalClearError {

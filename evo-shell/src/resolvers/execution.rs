@@ -113,8 +113,8 @@ pub(crate) fn resolve_with(
 
             Ok(ExecutionResult::Copied)
         }
-        Command::Clear(mode) => {
-            clear(mode).map_err(ExecuteError::TerminalClear)?;
+        Command::Clear => {
+            clear().map_err(ExecuteError::TerminalClear)?;
             Ok(ExecutionResult::TerminalCleared)
         }
         Command::Exit => {

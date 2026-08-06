@@ -1,7 +1,6 @@
 use crate::definitions::domain::entities::command::{Command, CommandArgument};
 use crate::definitions::domain::entities::token::Token;
 use crate::definitions::domain::entities::token_stream::TokenStream;
-use crate::definitions::domain::value_objects::terminal_clear_mode::TerminalClearMode;
 use crate::definitions::use_cases::parse::ParseError;
 use crate::definitions::use_cases::tokenize::Tokenize;
 use crate::resolvers::pipeline;
@@ -114,17 +113,13 @@ fn resolve_clear<'a>(
     stream: &mut TokenStream<'a>,
     tokenize: Tokenize,
 ) -> Result<Command<'a>, ParseError<'a>> {
-    let option_token = tokenize(stream).map_err(ParseError::Tokenize)?;
+    let next_token = tokenize(stream).map_err(ParseError::Tokenize)?;
 
-    let Some(option_token) = option_token else {
-        return Ok(Command::Clear(TerminalClearMode::Visible));
-    };
-
-    let Token::Word("--all") = option_token else {
+    if next_token.is_some() {
         return Err(ParseError::UnexpectedToken);
-    };
+    }
 
-    Ok(Command::Clear(TerminalClearMode::All))
+    Ok(Command::Clear)
 }
 
 fn resolve_exit<'a>(

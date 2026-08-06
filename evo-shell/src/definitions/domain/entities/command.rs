@@ -1,5 +1,4 @@
 use crate::definitions::domain::value_objects::pipeline::Pipeline;
-use crate::definitions::domain::value_objects::terminal_clear_mode::TerminalClearMode;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommandArgument<'a> {
@@ -16,7 +15,7 @@ pub enum Command<'a> {
         sources: Vec<CommandArgument<'a>>,
         destination: CommandArgument<'a>,
     },
-    Clear(TerminalClearMode),
+    Clear,
     Exit,
     Pipeline(Pipeline),
     Grouped(Box<Command<'a>>),

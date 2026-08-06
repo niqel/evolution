@@ -18,7 +18,6 @@ pub use definitions::domain::value_objects::pipeline::{
 pub use definitions::domain::value_objects::pipeline_value::{
     PipelineItems, PipelineValue, PipelineValueKind,
 };
-pub use definitions::domain::value_objects::terminal_clear_mode::TerminalClearMode;
 pub use definitions::use_cases::execute::{Execute, ExecuteError, ExecutionResult};
 pub use definitions::use_cases::execute_pipeline::{ExecutePipeline, PipelineExecutionError};
 pub use definitions::use_cases::exiter::Exit;
@@ -67,9 +66,9 @@ mod tests {
         Command, CommandArgument, Execute, ExecuteError, ExecutionResult, Exit, InitializeShell,
         InitializeShellError, Parse, ParseError, Pipeline, PipelineExecutionError,
         PipelineOperation, PipelineOperationKind, PipelineValue, PipelineValueKind,
-        TerminalClearMode, TerminalClearer, Token, TokenStream, Tokenize, TokenizeError, executor,
-        exiter, parser, pipeline_executor, pipeline_result_presenter, shell_initializer,
-        terminal_clearer, tokenizer,
+        TerminalClearer, Token, TokenStream, Tokenize, TokenizeError, executor, exiter, parser,
+        pipeline_executor, pipeline_result_presenter, shell_initializer, terminal_clearer,
+        tokenizer,
     };
 
     struct TestDirectory {
@@ -259,21 +258,30 @@ mod tests {
     }
 
     #[test]
-    fn parser_resolves_clear_command() {
+    fn parser_accepts_clear_without_arguments() {
         let mut stream = TokenStream::new("clear");
 
         let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
 
-        assert_eq!(command, Command::Clear(TerminalClearMode::Visible));
+        assert_eq!(command, Command::Clear);
     }
 
     #[test]
-    fn parser_resolves_clear_all_flag() {
+    fn parser_rejects_clear_all() {
         let mut stream = TokenStream::new("clear --all");
 
-        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
 
-        assert_eq!(command, Command::Clear(TerminalClearMode::All));
+        assert_eq!(result, Err(ParseError::UnexpectedToken));
+    }
+
+    #[test]
+    fn parser_rejects_clear_extra_argument() {
+        let mut stream = TokenStream::new("clear foo");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert_eq!(result, Err(ParseError::UnexpectedToken));
     }
 
     #[test]
@@ -917,65 +925,53 @@ mod tests {
 
     #[test]
     fn terminal_clearer_agent_delegates_to_resolver() {
-        fn resolve(mode: TerminalClearMode, _provide: Provide) -> Result<(), TerminalClearError> {
-            match mode {
-                TerminalClearMode::Visible => Ok(()),
-                TerminalClearMode::All => Err(io::Error::other("all rejected").into()),
-            }
+        fn resolve(provide: Provide) -> Result<(), TerminalClearError> {
+            provide()
         }
 
-        fn provide(_mode: TerminalClearMode) -> Result<(), TerminalClearError> {
+        fn provide() -> Result<(), TerminalClearError> {
             Ok(())
         }
 
-        let result = terminal_clearer::clear_with(TerminalClearMode::Visible, resolve, provide);
+        let result = terminal_clearer::clear_with(resolve, provide);
         assert!(result.is_ok());
-
-        let result = terminal_clearer::clear_with(TerminalClearMode::All, resolve, provide);
-        assert!(matches!(result, Err(TerminalClearError::Io(_))));
     }
 
     #[test]
-    fn terminal_clearer_resolver_delegates_to_provider_and_preserves_mode() {
-        fn provide(mode: TerminalClearMode) -> Result<(), TerminalClearError> {
-            match mode {
-                TerminalClearMode::Visible => Ok(()),
-                TerminalClearMode::All => Err(io::Error::other("all rejected").into()),
-            }
+    fn terminal_clearer_resolver_delegates_to_provider() {
+        fn provide() -> Result<(), TerminalClearError> {
+            Ok(())
         }
 
         let resolve: Resolve = terminal_clearer_resolver::resolve;
 
-        let result = resolve(TerminalClearMode::Visible, provide);
+        let result = resolve(provide);
         assert!(result.is_ok());
-
-        let result = resolve(TerminalClearMode::All, provide);
-        assert!(matches!(result, Err(TerminalClearError::Io(_))));
     }
 
     #[test]
-    fn terminal_clearer_provider_visible_writes_expected_ansi_sequence() {
+    fn clear_uses_full_terminal_clear_sequence() {
         let mut output = Vec::new();
 
-        terminal_clearer_provider::provide_to(&mut output, TerminalClearMode::Visible).unwrap();
-
-        assert_eq!(output, b"\x1b[2J\x1b[H");
-    }
-
-    #[test]
-    fn terminal_clearer_provider_all_writes_expected_ansi_sequence() {
-        let mut output = Vec::new();
-
-        terminal_clearer_provider::provide_to(&mut output, TerminalClearMode::All).unwrap();
+        terminal_clearer_provider::provide_to(&mut output).unwrap();
 
         assert_eq!(output, b"\x1b[2J\x1b[3J\x1b[H");
+    }
+
+    #[test]
+    fn clear_no_longer_uses_visible_only_sequence() {
+        let mut output = Vec::new();
+
+        terminal_clearer_provider::provide_to(&mut output).unwrap();
+
+        assert_ne!(output, b"\x1b[2J\x1b[H");
     }
 
     #[test]
     fn terminal_clearer_provider_propagates_io_error() {
         let mut writer = FailingWriter;
 
-        let result = terminal_clearer_provider::provide_to(&mut writer, TerminalClearMode::Visible);
+        let result = terminal_clearer_provider::provide_to(&mut writer);
 
         assert!(matches!(result, Err(TerminalClearError::Io(_))));
     }
@@ -1251,7 +1247,7 @@ mod tests {
     fn executor_delegates_pipeline_execution_and_returns_typed_pipeline_result() {
         static CALLS: AtomicUsize = AtomicUsize::new(0);
 
-        fn clear(_mode: TerminalClearMode) -> Result<(), TerminalClearError> {
+        fn clear() -> Result<(), TerminalClearError> {
             Ok(())
         }
 
@@ -1282,7 +1278,7 @@ mod tests {
 
     #[test]
     fn executor_propagates_pipeline_execution_error() {
-        fn clear(_mode: TerminalClearMode) -> Result<(), TerminalClearError> {
+        fn clear() -> Result<(), TerminalClearError> {
             Ok(())
         }
 
@@ -1470,11 +1466,8 @@ mod tests {
 
     #[test]
     fn execute_clear_returns_terminal_cleared_without_changing_scope() {
-        fn clear(mode: TerminalClearMode) -> Result<(), TerminalClearError> {
-            match mode {
-                TerminalClearMode::Visible => Ok(()),
-                TerminalClearMode::All => Err(io::Error::other("expected visible").into()),
-            }
+        fn clear() -> Result<(), TerminalClearError> {
+            Ok(())
         }
 
         let directory = TestDirectory::new("clear_execute");
@@ -1483,32 +1476,7 @@ mod tests {
 
         let result = execution::resolve_with(
             &mut shell,
-            Command::Clear(TerminalClearMode::Visible),
-            clear,
-            pipeline_executor::execute,
-        )
-        .unwrap();
-
-        assert!(matches!(result, ExecutionResult::TerminalCleared));
-        assert_eq!(shell.filesystem_scope().path(), previous_path.as_path());
-    }
-
-    #[test]
-    fn execute_clear_all_returns_terminal_cleared_without_changing_scope() {
-        fn clear(mode: TerminalClearMode) -> Result<(), TerminalClearError> {
-            match mode {
-                TerminalClearMode::Visible => Err(io::Error::other("expected all").into()),
-                TerminalClearMode::All => Ok(()),
-            }
-        }
-
-        let directory = TestDirectory::new("clear_all_execute");
-        let mut shell = shell_from_directory(&directory);
-        let previous_path = shell.filesystem_scope().path().to_path_buf();
-
-        let result = execution::resolve_with(
-            &mut shell,
-            Command::Clear(TerminalClearMode::All),
+            Command::Clear,
             clear,
             pipeline_executor::execute,
         )

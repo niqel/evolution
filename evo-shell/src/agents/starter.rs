@@ -1,6 +1,5 @@
 use crate::agents::{shell_initializer, terminal_clearer, welcome_presenter};
 use crate::definitions::domain::entities::shell::Shell;
-use crate::definitions::domain::value_objects::terminal_clear_mode::TerminalClearMode;
 use crate::definitions::use_cases::initialize_shell::InitializeShell;
 use crate::definitions::use_cases::starter::StartError;
 use crate::definitions::use_cases::terminal_clearer::TerminalClearer;
@@ -20,7 +19,7 @@ pub(crate) fn start_with(
     welcome: WelcomePresenter,
 ) -> Result<Shell, StartError> {
     let shell = initialize().map_err(StartError::from)?;
-    clear(TerminalClearMode::Visible).map_err(StartError::from)?;
+    clear().map_err(StartError::from)?;
     welcome().map_err(StartError::from)?;
 
     Ok(shell)
@@ -37,7 +36,6 @@ mod tests {
     use evo_shell_engine::scope_setter;
 
     use crate::definitions::domain::entities::shell::Shell;
-    use crate::definitions::domain::value_objects::terminal_clear_mode::TerminalClearMode;
     use crate::definitions::use_cases::initialize_shell::InitializeShellError;
     use crate::definitions::use_cases::starter::{Start, StartError};
     use crate::definitions::use_cases::terminal_clearer::TerminalClearError;
@@ -82,7 +80,7 @@ mod tests {
     }
 
     #[test]
-    fn start_with_runs_initialize_clear_visible_then_welcome() {
+    fn start_with_runs_initialize_clear_then_welcome() {
         static ORDER: AtomicUsize = AtomicUsize::new(0);
         static DIRECTORY: OnceLock<PathBuf> = OnceLock::new();
 
@@ -92,9 +90,8 @@ mod tests {
             Ok(shell_from_path(path))
         }
 
-        fn clear(mode: TerminalClearMode) -> Result<(), TerminalClearError> {
+        fn clear() -> Result<(), TerminalClearError> {
             assert_eq!(ORDER.fetch_add(1, Ordering::SeqCst), 1);
-            assert!(matches!(mode, TerminalClearMode::Visible));
             Ok(())
         }
 
@@ -125,7 +122,7 @@ mod tests {
             ))
         }
 
-        fn clear(_mode: TerminalClearMode) -> Result<(), TerminalClearError> {
+        fn clear() -> Result<(), TerminalClearError> {
             ORDER.fetch_add(10, Ordering::SeqCst);
             Ok(())
         }
@@ -152,7 +149,7 @@ mod tests {
             Ok(shell_from_path(path))
         }
 
-        fn clear(_mode: TerminalClearMode) -> Result<(), TerminalClearError> {
+        fn clear() -> Result<(), TerminalClearError> {
             ORDER.fetch_add(1, Ordering::SeqCst);
             Err(std::io::Error::other("clear failed").into())
         }
@@ -184,7 +181,7 @@ mod tests {
             Ok(shell_from_path(path))
         }
 
-        fn clear(_mode: TerminalClearMode) -> Result<(), TerminalClearError> {
+        fn clear() -> Result<(), TerminalClearError> {
             ORDER.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
