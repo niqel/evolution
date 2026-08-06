@@ -775,13 +775,13 @@ Ejemplo principal con `copy-to`:
 ```text
 copy-to (
     iter
-    |> filter ext = "txt"
+    |> filter ext equals "txt"
     |> select full_name
     |> to-args
 ), path: "~/repos/documents"
 ```
 
-`filter ext = "txt"` aparece aquí solo como expresión ilustrativa simple.
+`filter ext equals "txt"` aparece aquí solo como expresión ilustrativa simple.
 
 ## Alcance diferido
 
