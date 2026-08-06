@@ -1,0 +1,51 @@
+direction: down
+
+user: "User" {
+  shape: person
+}
+
+tokenizer: "tokenizer::tokenize" {
+  shape: rectangle
+}
+
+parser: "parser::parse" {
+  shape: rectangle
+}
+
+command: "Command::Exit" {
+  shape: rectangle
+}
+
+executor: "executor::execute" {
+  shape: rectangle
+}
+
+agent: "exiter::exit()" {
+  shape: rectangle
+}
+
+result: "ExecutionResult::Exit" {
+  shape: rectangle
+}
+
+run_loop: "run_loop\n\nreturn Ok(())" {
+  shape: rectangle
+}
+
+run: "run\n\nfin normal" {
+  shape: rectangle
+}
+
+main: "main" {
+  shape: rectangle
+}
+
+user -> tokenizer: "exit"
+tokenizer -> parser: "tokens"
+parser -> command: "Command::Exit"
+command -> executor: "execute"
+executor -> agent: "delegate"
+agent -> result: "Exit"
+result -> run_loop: "termina loop"
+run_loop -> run: "return Ok(())"
+run -> main: "process ends normally"

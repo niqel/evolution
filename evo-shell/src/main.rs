@@ -8,6 +8,11 @@ use evo_shell::{
 };
 use evo_shell_engine::IterError;
 
+enum LoopControl {
+    Continue,
+    Exit,
+}
+
 fn main() {
     if let Err(error) = run() {
         eprintln!("{error}");
@@ -33,7 +38,10 @@ fn run_loop(shell: &mut Shell) -> Result<(), RunError> {
             return Ok(());
         };
 
-        handle_input(shell, &input)?;
+        match handle_input(shell, &input)? {
+            LoopControl::Continue => {}
+            LoopControl::Exit => return Ok(()),
+        }
     }
 }
 
@@ -79,9 +87,9 @@ fn read_input() -> io::Result<Option<String>> {
     Ok(Some(input))
 }
 
-fn handle_input(shell: &mut Shell, input: &str) -> io::Result<()> {
+fn handle_input(shell: &mut Shell, input: &str) -> io::Result<LoopControl> {
     if input.trim().is_empty() {
-        return Ok(());
+        return Ok(LoopControl::Continue);
     }
 
     let mut stream = TokenStream::new(input);
@@ -89,7 +97,7 @@ fn handle_input(shell: &mut Shell, input: &str) -> io::Result<()> {
         Ok(command) => command,
         Err(error) => {
             render_parse_error(error);
-            return Ok(());
+            return Ok(LoopControl::Continue);
         }
     };
 
@@ -97,25 +105,29 @@ fn handle_input(shell: &mut Shell, input: &str) -> io::Result<()> {
         Ok(result) => render_execution(shell, result),
         Err(error) => {
             render_execute_error(error);
-            Ok(())
+            Ok(LoopControl::Continue)
         }
     }
 }
 
-fn render_execution(_shell: &Shell, result: ExecutionResult) -> io::Result<()> {
+fn render_execution(_shell: &Shell, result: ExecutionResult) -> io::Result<LoopControl> {
     match result {
-        ExecutionResult::ScopeChanged => render_scope_changed(&mut io::stdout()),
-        ExecutionResult::TerminalCleared => Ok(()),
+        ExecutionResult::ScopeChanged => {
+            render_scope_changed(&mut io::stdout())?;
+            Ok(LoopControl::Continue)
+        }
+        ExecutionResult::TerminalCleared => Ok(LoopControl::Continue),
         ExecutionResult::FilesystemIteration(iteration) => {
             match iteration_presenter::present(iteration) {
-                Ok(()) => Ok(()),
+                Ok(()) => Ok(LoopControl::Continue),
                 Err(iteration_presenter::PresentIterationError::Io(error)) => Err(error),
                 Err(iteration_presenter::PresentIterationError::Iter(error)) => {
                     render_iter_error(error);
-                    Ok(())
+                    Ok(LoopControl::Continue)
                 }
             }
         }
+        ExecutionResult::Exit => Ok(LoopControl::Exit),
     }
 }
 
@@ -194,9 +206,10 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        compact_scope_location, presentation_style, render_scope_changed, reset_after_input_to,
-        write_prompt_to,
+        LoopControl, compact_scope_location, presentation_style, render_execution,
+        render_scope_changed, reset_after_input_to, write_prompt_to,
     };
+    use evo_shell::{ExecutionResult, shell_initializer};
 
     #[test]
     fn compact_scope_location_uses_last_segment_for_deep_path() {
@@ -302,5 +315,14 @@ mod tests {
         render_scope_changed(&mut output).unwrap();
 
         assert!(output.is_empty());
+    }
+
+    #[test]
+    fn render_execution_returns_exit_control_for_exit_result() {
+        let shell = shell_initializer::initialize().unwrap();
+
+        let result = render_execution(&shell, ExecutionResult::Exit).unwrap();
+
+        assert!(matches!(result, LoopControl::Exit));
     }
 }

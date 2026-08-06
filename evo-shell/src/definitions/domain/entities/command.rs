@@ -6,4 +6,5 @@ pub enum Command<'a> {
     Iter,
     Enter(&'a str),
     Clear(TerminalClearMode),
+    Exit,
 }

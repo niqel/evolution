@@ -2,9 +2,11 @@ use std::path::Path;
 
 use evo_shell_engine::{Enter, Iter, SetFilesystemScope, enterer, iterator, scope_setter};
 
+use crate::agents::exiter;
 use crate::definitions::domain::entities::command::Command;
 use crate::definitions::domain::entities::shell::Shell;
 use crate::definitions::use_cases::execute::{ExecuteError, ExecutionResult};
+use crate::definitions::use_cases::exiter::Exit;
 use crate::definitions::use_cases::terminal_clearer::TerminalClearer;
 use crate::terminal_clearer;
 
@@ -41,6 +43,11 @@ pub(crate) fn resolve_with(
         Command::Clear(mode) => {
             clear(mode).map_err(ExecuteError::TerminalClear)?;
             Ok(ExecutionResult::TerminalCleared)
+        }
+        Command::Exit => {
+            let exit: Exit = exiter::exit;
+            exit();
+            Ok(ExecutionResult::Exit)
         }
     }
 }

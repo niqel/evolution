@@ -39,6 +39,7 @@ Esto incluye, entre otros:
 * [US-007 — Unificar la identidad visual de la tabla, los archivos y el prompt](user_stories/US-007-unify-shell-visual-identity.md)
 * [US-008 — Limpiar la terminal](user_stories/US-008-clear-terminal.md)
 * [US-009 — Iniciar Evo Shell con una presentación de bienvenida](user_stories/US-009-start-shell-with-welcome.md)
+* [US-010 — Terminar Evo Shell mediante el comando `exit`](user_stories/US-010-exit-shell.md)
 
 ## Reglas de lenguaje
 

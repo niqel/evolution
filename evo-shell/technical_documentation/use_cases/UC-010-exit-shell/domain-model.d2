@@ -1,0 +1,22 @@
+direction: right
+
+command: "Command\n\nScopeFs(&str)\nIter\nEnter(&str)\nClear(TerminalClearMode)\nExit" {
+  shape: rectangle
+}
+
+result: "ExecutionResult\n\nScopeChanged\nFilesystemIteration(...)\nTerminalCleared\nExit" {
+  shape: rectangle
+}
+
+shell: "Shell\n\ninstancia operativa\nscope activo" {
+  shape: rectangle
+}
+
+loop_control: "No se crea\n\nLoopControl\nbool exiting\nAST genérico" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+command -> result: "Exit"
+result -> shell: "run_loop observa"
+result -> loop_control: "no necesario"

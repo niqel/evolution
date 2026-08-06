@@ -1,0 +1,37 @@
+direction: right
+
+actor: "Usuario" {
+  shape: person
+}
+
+shell: "Evo Shell" {
+  shape: rectangle
+
+  exit: "Salir de la sesión\n\nexit" {
+    shape: oval
+  }
+}
+
+input: "Entrada\n\nexit" {
+  shape: rectangle
+}
+
+output: "Resultado\n\nla sesión termina normalmente\nsin prompt adicional" {
+  shape: rectangle
+}
+
+invalid: "Entradas inválidas\n\nexit now\nexit --force\nexit 0" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+outside: "Fuera de alcance\n\nstd::process::exit\nquit\nlogout\nshutdown\nrestart" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+actor -> shell.exit: "solicita"
+input -> shell.exit: "parse"
+shell.exit -> output: "termina"
+invalid -> shell.exit: "rechazo sintáctico"
+shell.exit -> outside: "no implementa"

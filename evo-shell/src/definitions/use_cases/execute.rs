@@ -12,6 +12,7 @@ pub enum ExecutionResult {
     ScopeChanged,
     FilesystemIteration(FilesystemIteration),
     TerminalCleared,
+    Exit,
 }
 
 #[derive(Debug)]

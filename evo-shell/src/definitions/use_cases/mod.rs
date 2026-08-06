@@ -1,4 +1,5 @@
 pub mod execute;
+pub mod exiter;
 pub mod initialize_shell;
 pub mod parse;
 pub mod starter;

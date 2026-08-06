@@ -5,8 +5,8 @@ mod providers;
 mod resolvers;
 
 pub use agents::{
-    executor, iteration_presenter, parser, shell_initializer, starter, terminal_clearer, tokenizer,
-    welcome_presenter,
+    executor, exiter, iteration_presenter, parser, shell_initializer, starter, terminal_clearer,
+    tokenizer, welcome_presenter,
 };
 pub use definitions::domain::entities::command::Command;
 pub use definitions::domain::entities::shell::Shell;
@@ -14,6 +14,7 @@ pub use definitions::domain::entities::token::Token;
 pub use definitions::domain::entities::token_stream::TokenStream;
 pub use definitions::domain::value_objects::terminal_clear_mode::TerminalClearMode;
 pub use definitions::use_cases::execute::{Execute, ExecuteError, ExecutionResult};
+pub use definitions::use_cases::exiter::Exit;
 pub use definitions::use_cases::initialize_shell::{InitializeShell, InitializeShellError};
 pub use definitions::use_cases::parse::{Parse, ParseError};
 pub use definitions::use_cases::starter::{Start, StartError};
@@ -48,9 +49,10 @@ mod tests {
     use crate::resolvers::terminal_clearer as terminal_clearer_resolver;
     use crate::resolvers::token;
     use crate::{
-        Command, Execute, ExecuteError, ExecutionResult, InitializeShell, InitializeShellError,
-        Parse, ParseError, TerminalClearMode, TerminalClearer, Token, TokenStream, Tokenize,
-        TokenizeError, executor, parser, shell_initializer, terminal_clearer, tokenizer,
+        Command, Execute, ExecuteError, ExecutionResult, Exit, InitializeShell,
+        InitializeShellError, Parse, ParseError, TerminalClearMode, TerminalClearer, Token,
+        TokenStream, Tokenize, TokenizeError, executor, exiter, parser, shell_initializer,
+        terminal_clearer, tokenizer,
     };
 
     struct TestDirectory {
@@ -195,6 +197,42 @@ mod tests {
         let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
 
         assert_eq!(command, Command::Clear(TerminalClearMode::All));
+    }
+
+    #[test]
+    fn parser_resolves_exit_command() {
+        let mut stream = TokenStream::new("exit");
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        assert_eq!(command, Command::Exit);
+    }
+
+    #[test]
+    fn parser_rejects_exit_extra_token() {
+        let mut stream = TokenStream::new("exit now");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(result, Err(ParseError::UnexpectedToken)));
+    }
+
+    #[test]
+    fn parser_rejects_exit_option() {
+        let mut stream = TokenStream::new("exit --force");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(result, Err(ParseError::UnexpectedToken)));
+    }
+
+    #[test]
+    fn parser_rejects_exit_numeric_argument() {
+        let mut stream = TokenStream::new("exit 0");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(result, Err(ParseError::UnexpectedToken)));
     }
 
     #[test]
@@ -458,6 +496,13 @@ mod tests {
         let result = terminal_clearer_provider::provide_to(&mut writer, TerminalClearMode::Visible);
 
         assert!(matches!(result, Err(TerminalClearError::Io(_))));
+    }
+
+    #[test]
+    fn exiter_matches_use_case_function_pointer() {
+        let exit: Exit = exiter::exit;
+
+        let _ = exit;
     }
 
     #[test]
@@ -734,6 +779,18 @@ mod tests {
                 .unwrap();
 
         assert!(matches!(result, ExecutionResult::TerminalCleared));
+        assert_eq!(shell.filesystem_scope().path(), previous_path.as_path());
+    }
+
+    #[test]
+    fn execute_exit_returns_exit_without_changing_scope() {
+        let directory = TestDirectory::new("exit_execute");
+        let mut shell = shell_from_directory(&directory);
+        let previous_path = shell.filesystem_scope().path().to_path_buf();
+
+        let result = execution::resolve_with(&mut shell, Command::Exit, terminal_clearer::clear);
+
+        assert!(matches!(result, Ok(ExecutionResult::Exit)));
         assert_eq!(shell.filesystem_scope().path(), previous_path.as_path());
     }
 

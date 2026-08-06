@@ -24,6 +24,7 @@ pub fn resolve<'a>(
         "iter" => resolve_iter(stream, tokenize),
         "enter" => resolve_enter(stream, tokenize),
         "clear" => resolve_clear(stream, tokenize),
+        "exit" => resolve_exit(stream, tokenize),
         _ => Err(ParseError::UnknownCommand(command_name)),
     }
 }
@@ -100,4 +101,15 @@ fn resolve_clear<'a>(
     }
 
     Ok(Command::Clear(TerminalClearMode::All))
+}
+
+fn resolve_exit<'a>(
+    stream: &mut TokenStream<'a>,
+    tokenize: Tokenize,
+) -> Result<Command<'a>, ParseError<'a>> {
+    if tokenize(stream).map_err(ParseError::Tokenize)?.is_some() {
+        return Err(ParseError::UnexpectedToken);
+    }
+
+    Ok(Command::Exit)
 }

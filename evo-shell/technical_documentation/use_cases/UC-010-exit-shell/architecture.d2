@@ -1,0 +1,70 @@
+direction: down
+
+user: "User" {
+  shape: person
+}
+
+parser: "parser::parse" {
+  shape: rectangle
+}
+
+command: "Command::Exit" {
+  shape: rectangle
+}
+
+executor: "executor::execute" {
+  shape: rectangle
+}
+
+agent: "Agent\nagents/exiter.rs\n\nexiter::exit()\ncoordina" {
+  shape: rectangle
+}
+
+use_case: "Exit Use Case\ndefinitions/use_cases/exiter.rs\n\nExit function pointer" {
+  shape: rectangle
+}
+
+result: "ExecutionResult::Exit" {
+  shape: rectangle
+}
+
+run_loop: "run_loop\n\ntermina cooperativamente" {
+  shape: rectangle
+}
+
+run: "run\n\nreturn Ok(())" {
+  shape: rectangle
+}
+
+main: "main\n\nterminación normal del proceso" {
+  shape: rectangle
+}
+
+no_resolver: "Sin resolver" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+no_provider: "Sin provider" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+engine: "Evo Shell Engine\n\nno participa" {
+  shape: rectangle
+  style.fill: "#f2f2f2"
+}
+
+user -> parser: "exit"
+parser -> command: "Command::Exit"
+command -> executor: "execute"
+executor -> agent: "Exit function pointer"
+agent -> use_case: "use case"
+use_case -> result: "Exit"
+result -> run_loop: "termina loop"
+run_loop -> run: "return Ok(())"
+run -> main: "fin normal"
+
+agent -> no_resolver: "no requiere"
+agent -> no_provider: "no requiere"
+executor -> engine: "no llama"

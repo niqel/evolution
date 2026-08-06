@@ -284,3 +284,4 @@ Casos de uso técnicos:
 * [UC-007 — Unificar la identidad visual de la tabla y el prompt](use_cases/UC-007-unify-shell-visual-identity/)
 * [UC-008 — Limpiar la terminal](use_cases/UC-008-clear-terminal/)
 * [UC-009 — Iniciar Evo Shell con una presentación de bienvenida](use_cases/UC-009-start-shell-with-welcome/)
+* [UC-010 — Terminar Evo Shell mediante el comando `exit`](use_cases/UC-010-exit-shell/)
