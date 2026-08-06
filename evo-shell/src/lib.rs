@@ -378,7 +378,7 @@ mod tests {
                 PipelineOperation::Filter(FilterExpression::comparison(FilterComparison::new(
                     FilterProperty::Size,
                     FilterOperator::GreaterThan,
-                    FilterOperand::single(FilterValue::size(10 * 1024)),
+                    FilterOperand::single(FilterValue::size(10_000)),
                 ))),
                 PipelineOperation::Take(1),
                 PipelineOperation::Select(vec![SelectProperty::Name]),
@@ -1406,6 +1406,35 @@ mod tests {
 
         let rendered = captured_rendered_output();
         assert_eq!(rendered, "beta.txt\n");
+    }
+
+    #[test]
+    fn execute_and_present_parsed_filter_pipeline_size_decimal_output() {
+        let directory = TestDirectory::new("pipeline_filter_size_decimal");
+        fs::write(directory.path.join("exact.bin"), vec![b'a'; 10_000]).unwrap();
+        fs::write(directory.path.join("larger.bin"), vec![b'b'; 10_240]).unwrap();
+        let mut shell = shell_from_directory(&directory);
+        let mut stream =
+            TokenStream::new(r#"iter |> filter size equals 10kb |> select name |> to-values"#);
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let result = executor::execute(&mut shell, command).unwrap();
+        let ExecutionResult::Pipeline(value) = result else {
+            panic!("expected pipeline execution result");
+        };
+
+        clear_captured_output();
+        pipeline_result_presenter::present_with(
+            pipeline_result_presenter_resolver::resolve,
+            capture_rendered,
+            &shell,
+            value,
+        )
+        .unwrap();
+
+        let rendered = captured_rendered_output();
+        assert_eq!(rendered, "exact.bin\n");
+        assert!(!rendered.contains("larger.bin"));
     }
 
     #[test]

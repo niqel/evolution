@@ -200,6 +200,12 @@ filter (type equals "file" or type equals "directory") and size > 10kb
 
 La interpretación conserva la forma escrita de la expresión.
 
+Las unidades textuales de tamaño usan base decimal:
+
+- `kB` = `1_000` bytes;
+- `MB` = `1_000_000` bytes;
+- `GB` = `1_000_000_000` bytes.
+
 ## Compatibilidad
 
 Los comandos simples existentes siguen funcionando sin `filter`.

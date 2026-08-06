@@ -232,9 +232,9 @@ fn parse_size_literal(value: &str) -> Result<u64, ()> {
     let suffix = suffix.to_ascii_lowercase();
     let multiplier = match suffix.as_str() {
         "" | "b" => 1,
-        "kb" => 1024,
-        "mb" => 1024_u64.saturating_mul(1024),
-        "gb" => 1024_u64.saturating_mul(1024).saturating_mul(1024),
+        "kb" => 1_000,
+        "mb" => 1_000_000,
+        "gb" => 1_000_000_000,
         _ => return Err(()),
     };
 
@@ -463,6 +463,92 @@ mod tests {
     }
 
     #[test]
+    fn parses_size_literal_with_kilobytes() {
+        let expression = resolve_expression("size > 1kb").unwrap();
+
+        assert_eq!(
+            expression,
+            comparison(
+                FilterProperty::Size,
+                FilterOperator::GreaterThan,
+                FilterOperand::single(FilterValue::size(1_000))
+            )
+        );
+    }
+
+    #[test]
+    fn parses_size_literal_with_ten_kilobytes() {
+        let expression = resolve_expression("size > 10kb").unwrap();
+
+        assert_eq!(
+            expression,
+            comparison(
+                FilterProperty::Size,
+                FilterOperator::GreaterThan,
+                FilterOperand::single(FilterValue::size(10_000))
+            )
+        );
+    }
+
+    #[test]
+    fn parses_size_literal_with_megabytes() {
+        let expression = resolve_expression("size > 1mb").unwrap();
+
+        assert_eq!(
+            expression,
+            comparison(
+                FilterProperty::Size,
+                FilterOperator::GreaterThan,
+                FilterOperand::single(FilterValue::size(1_000_000))
+            )
+        );
+    }
+
+    #[test]
+    fn parses_size_literal_with_ten_megabytes() {
+        let expression = resolve_expression("size > 10mb").unwrap();
+
+        assert_eq!(
+            expression,
+            comparison(
+                FilterProperty::Size,
+                FilterOperator::GreaterThan,
+                FilterOperand::single(FilterValue::size(10_000_000))
+            )
+        );
+    }
+
+    #[test]
+    fn parses_size_literal_with_gigabytes() {
+        let expression = resolve_expression("size > 1gb").unwrap();
+
+        assert_eq!(
+            expression,
+            comparison(
+                FilterProperty::Size,
+                FilterOperator::GreaterThan,
+                FilterOperand::single(FilterValue::size(1_000_000_000))
+            )
+        );
+    }
+
+    #[test]
+    fn parses_size_literal_without_suffix_or_with_b_suffix() {
+        let bytes = resolve_expression("size > 1000").unwrap();
+        let suffixed = resolve_expression("size > 1000b").unwrap();
+
+        assert_eq!(
+            bytes,
+            comparison(
+                FilterProperty::Size,
+                FilterOperator::GreaterThan,
+                FilterOperand::single(FilterValue::size(1000))
+            )
+        );
+        assert_eq!(bytes, suffixed);
+    }
+
+    #[test]
     fn parses_between_expression() {
         let expression = resolve_expression("size between 10kb, 100kb").unwrap();
 
@@ -471,7 +557,7 @@ mod tests {
             comparison(
                 FilterProperty::Size,
                 FilterOperator::Between,
-                FilterOperand::range(FilterValue::size(10 * 1024), FilterValue::size(100 * 1024))
+                FilterOperand::range(FilterValue::size(10_000), FilterValue::size(100_000))
             )
         );
     }
@@ -485,7 +571,7 @@ mod tests {
             comparison(
                 FilterProperty::Size,
                 FilterOperator::NotBetween,
-                FilterOperand::range(FilterValue::size(10 * 1024), FilterValue::size(100 * 1024))
+                FilterOperand::range(FilterValue::size(10_000), FilterValue::size(100_000))
             )
         );
     }
@@ -507,7 +593,7 @@ mod tests {
                 comparison(
                     FilterProperty::Size,
                     FilterOperator::GreaterThan,
-                    FilterOperand::single(FilterValue::size(10 * 1024))
+                    FilterOperand::single(FilterValue::size(10_000))
                 ),
                 comparison(
                     FilterProperty::Name,

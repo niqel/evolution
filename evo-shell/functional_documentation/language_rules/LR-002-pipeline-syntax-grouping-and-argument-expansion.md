@@ -625,6 +625,14 @@ Interpretación conceptual:
 
 No se agregan propiedades nuevas en esta regla.
 
+Las unidades de tamaño textuales usan base decimal:
+
+- `kB` = `1_000` bytes;
+- `MB` = `1_000_000` bytes;
+- `GB` = `1_000_000_000` bytes.
+
+Las formas textuales equivalentes que el parser acepte para esas unidades conservan esa misma base decimal.
+
 ## index vs filter index
 
 `index 0` y `filter index < 10` no representan la misma capacidad.

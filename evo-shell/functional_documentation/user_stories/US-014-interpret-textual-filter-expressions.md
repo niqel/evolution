@@ -88,6 +88,12 @@ Esta primera versión interpreta literales textuales cuando el contrato textual 
 
 La semántica textual de `created` y `modified` queda diferida si no existe un literal aprobado para representarlas de forma estable.
 
+Las unidades textuales de tamaño usan base decimal:
+
+- `kB` = `1_000` bytes;
+- `MB` = `1_000_000` bytes;
+- `GB` = `1_000_000_000` bytes.
+
 ## Errores observables
 
 Esta historia reconoce como errores de interpretación, entre otros:
