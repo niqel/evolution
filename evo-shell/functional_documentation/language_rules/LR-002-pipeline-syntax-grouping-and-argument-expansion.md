@@ -15,7 +15,10 @@ Su objetivo es describir conceptualmente:
 - resultados estructurados dentro de pipelines;
 - `to-value`;
 - `to-values`;
-- `to-args`.
+- `to-args`;
+- `filter`;
+- operadores comparativos básicos;
+- operadores lógicos básicos.
 
 Esta regla no define la gramática completa de Evo Shell.
 
@@ -330,6 +333,402 @@ Esto solo explica la semántica de un contrato conceptual.
 
 No define una sintaxis de funciones.
 
+## Filter
+
+`filter` evalúa propiedades estructuradas de cada elemento de una secuencia.
+
+Conserva únicamente los elementos que cumplen la expresión.
+
+No convierte los elementos en texto.
+
+No modifica el filesystem.
+
+No cambia el scope.
+
+No reindexa necesariamente en esta regla.
+
+## Propiedades filtrables
+
+Para el scope-fs actual, las propiedades filtrables iniciales son:
+
+- `index`;
+- `created`;
+- `modified`;
+- `type`;
+- `size`;
+- `name`.
+
+Interpretación conceptual:
+
+- `index`: índice estructurado del elemento dentro de la iteración;
+- `created`: fecha y hora de creación cuando existe;
+- `modified`: fecha y hora de modificación cuando existe;
+- `type`: tipo de filesystem entry;
+- `size`: tamaño cuando aplica;
+- `name`: nombre del filesystem entry.
+
+No se agregan propiedades nuevas en esta regla.
+
+## index vs filter index
+
+`index 0` y `filter index < 10` no representan la misma capacidad.
+
+`index 0` usa `0` como argumento del comando `index` para seleccionar por posición.
+
+`filter index < 10` evalúa una condición sobre la propiedad `index` de cada elemento.
+
+Ejemplo conceptual:
+
+```text
+iter
+|> filter index < 10
+```
+
+La expresión conserva conceptualmente todos los elementos cuyo índice sea menor que 10.
+
+## Operadores comparativos
+
+El conjunto inicial aprobado de operadores comparativos es:
+
+- `equals`;
+- `not-equals`;
+- `>`;
+- `<`;
+- `at-least`;
+- `at-most`;
+- `between`;
+- `not-between`.
+
+## equals
+
+La igualdad se expresa únicamente con `equals`.
+
+Ejemplo conceptual:
+
+```text
+filter name equals "README.md"
+```
+
+No se aprueban como equivalentes:
+
+- `=`;
+- `==`;
+- `===`.
+
+## not-equals
+
+La desigualdad se expresa con `not-equals`.
+
+Ejemplo conceptual:
+
+```text
+filter type not-equals "directory"
+```
+
+No se aprueban como equivalentes:
+
+- `!=`;
+- `<>`;
+- `diff`;
+- `differs-from`.
+
+## Mayor y menor
+
+Se mantienen los símbolos simples:
+
+- `>`;
+- `<`.
+
+Ejemplos conceptuales:
+
+```text
+filter size > 10kb
+```
+
+```text
+filter index < 10
+```
+
+No se aprueban como equivalentes:
+
+- `greater-than`;
+- `less-than`.
+
+## at-least
+
+`at-least` representa conceptualmente mayor o igual.
+
+Ejemplo conceptual:
+
+```text
+filter size at-least 50kb
+```
+
+Semánticamente equivale a `>=`, pero `>=` no es sintaxis aprobada.
+
+## at-most
+
+`at-most` representa conceptualmente menor o igual.
+
+Ejemplo conceptual:
+
+```text
+filter size at-most 100kb
+```
+
+Semánticamente equivale a `<=`, pero `<=` no es sintaxis aprobada.
+
+## between
+
+`between` representa un rango inclusivo.
+
+Ejemplo conceptual:
+
+```text
+filter size between 10kb, 100kb
+```
+
+Semánticamente equivale a:
+
+```text
+10kb <= size <= 100kb
+```
+
+Los límites pertenecen al predicado `between`.
+
+La coma en `between 10kb, 100kb` separa los dos límites requeridos por ese predicado.
+
+No se interpreta como dos condiciones independientes de `filter`.
+
+## not-between
+
+`not-between` es la negación exacta de `between`.
+
+Ejemplo conceptual:
+
+```text
+filter size not-between 10kb, 100kb
+```
+
+Si `between` incluye ambos extremos, `not-between` conserva valores menores que `10kb` o mayores que `100kb`.
+
+Los extremos `10kb` y `100kb` no cumplen `not-between`.
+
+## Operadores lógicos
+
+Los únicos operadores lógicos básicos aprobados en esta versión son:
+
+- `and`;
+- `or`.
+
+Ejemplos conceptuales:
+
+```text
+filter type equals "file" and size > 10kb
+```
+
+```text
+filter type equals "directory" or type equals "symlink"
+```
+
+No se aprueban como alternativas:
+
+- `&`;
+- `&&`;
+- `|`;
+- `||`;
+- `!`.
+
+## Encadenamiento
+
+Se permiten cadenas del mismo operador lógico sin paréntesis.
+
+Ejemplo conceptual:
+
+```text
+filter type equals "file"
+    and size > 10kb
+    and size < 1mb
+```
+
+Otro ejemplo conceptual:
+
+```text
+filter ext equals "txt"
+    or ext equals "exe"
+    or ext equals "md"
+```
+
+La indentación sigue siendo visual.
+
+## Mezcla de and y or
+
+Si `and` y `or` aparecen al mismo nivel lógico sin agrupación explícita, la expresión es inválida o ambigua.
+
+Ejemplo no válido:
+
+```text
+A or B and C
+```
+
+Evo Shell no debe asumir automáticamente:
+
+- `A or (B and C)`;
+- `(A or B) and C`.
+
+El usuario debe expresar su intención con paréntesis.
+
+## Agrupación lógica
+
+Se reutiliza la regla general de `(...)`:
+
+la expresión interna se evalúa primero.
+
+Ejemplos válidos:
+
+```text
+filter (A or B) and C
+```
+
+```text
+filter A or (B and C)
+```
+
+Cuando se mezclan operadores lógicos distintos al mismo nivel, los paréntesis son obligatorios.
+
+## Ejemplos de filter
+
+```text
+filter name equals "README.md"
+```
+
+```text
+filter name not-equals "temp.txt"
+```
+
+```text
+filter index < 10
+```
+
+```text
+filter size > 10kb
+```
+
+```text
+filter size at-least 50kb
+```
+
+```text
+filter size at-most 5mb
+```
+
+```text
+filter size between 10kb, 100kb
+```
+
+```text
+filter size not-between 10kb, 100kb
+```
+
+```text
+filter type equals "file" and size > 10kb
+```
+
+```text
+filter (
+    type equals "file"
+    and size between 10kb, 5mb
+)
+```
+
+```text
+filter (
+    type equals "directory"
+    or type equals "symlink"
+)
+```
+
+## filter en pipeline
+
+Ejemplo conceptual:
+
+```text
+iter
+|> filter index < 10
+```
+
+Otro ejemplo conceptual:
+
+```text
+iter
+|> filter (
+    type equals "file"
+    and size between 10kb, 5mb
+)
+|> select full_name
+|> to-args
+```
+
+Interpretación conceptual:
+
+- `iter` produce elementos estructurados;
+- `filter` evalúa el predicado para cada elemento;
+- solo los elementos que cumplen continúan por el pipeline;
+- `select` transforma posteriormente esa salida;
+- `to-args` puede convertir una selección apropiada en argumentos para un consumidor.
+
+## filter + copy-to
+
+Puede mantenerse este ejemplo conceptual:
+
+```text
+copy-to (
+    iter
+    |> filter (
+        type equals "file"
+        and size between 10kb, 5mb
+    )
+    |> select full_name
+    |> to-args
+), path: "~/repos/documents"
+```
+
+No implica que `copy-to` esté implementado.
+
+Solo demuestra composición conceptual.
+
+## Valores no disponibles
+
+La semántica de `filter` sobre valores opcionales queda diferida.
+
+No se define todavía el comportamiento de:
+
+- `created` cuando no existe;
+- `modified` cuando no existe;
+- `size` cuando no aplica.
+
+## Operadores diferidos
+
+Quedan diferidos al menos los siguientes puntos:
+
+- `xor`;
+- `contains`;
+- `not-contains`;
+- `starts-with`;
+- `ends-with`;
+- `matches`;
+- `regex`;
+- `glob`;
+- `in`;
+- `not-in`;
+- short-circuit;
+- reindexado después de `filter`;
+- coerción de tipos;
+- comparación Path/String;
+- validación de unidades;
+- formato formal de fechas;
+- implementación concreta de `filter`.
+
 ## Misma semántica: manual vs pipeline
 
 Estas dos formas deben representar conceptualmente la misma entrada para el comando consumidor:
@@ -384,19 +783,6 @@ copy-to (
 
 `filter ext = "txt"` aparece aquí solo como expresión ilustrativa simple.
 
-## Filtrado fuera de alcance
-
-LR-002 no resuelve la semántica completa de `filter`.
-
-No se define todavía:
-
-- AND;
-- OR;
-- múltiples condiciones;
-- precedencia lógica;
-- coma dentro de expresiones de filtrado;
-- agrupación booleana compleja.
-
 ## Alcance diferido
 
 Quedan diferidos al menos los siguientes puntos:
@@ -407,10 +793,6 @@ Quedan diferidos al menos los siguientes puntos:
 - estructura interna del pipeline;
 - Vec vs iterator vs stream;
 - ejecución lazy o eager;
-- filter avanzado;
-- AND / OR;
-- precedencia;
-- short circuit;
 - redirecciones;
 - stdin/stdout pipes tradicionales;
 - `|` estilo Unix;
@@ -446,6 +828,15 @@ Quedan diferidos al menos los siguientes puntos:
 7. Los resultados de pipelines pueden convertirse explícitamente en escalares, colecciones o argumentos.
 8. Las transformaciones deben ser explícitas: `to-value`, `to-values`, `to-args`.
 9. El comando consumidor no debe distinguir entre argumentos escritos manualmente y argumentos derivados mediante `to-args`.
+10. `filter` trabaja sobre propiedades estructuradas.
+11. Una comparación debe usar la forma aprobada cuando exista.
+12. Evitar múltiples operadores equivalentes para el mismo significado.
+13. `equals` y `not-equals` reemplazan familias como `==`, `===`, `!=`, `<>`.
+14. `<` y `>` se conservan por claridad.
+15. `at-least`, `at-most`, `between` y `not-between` expresan límites de forma legible.
+16. `and` y `or` son palabras, no símbolos.
+17. Mezclar `and` y `or` requiere paréntesis explícitos.
+18. El lenguaje prioriza intención visible sobre precedencia implícita.
 
 ## Fuera de alcance
 
