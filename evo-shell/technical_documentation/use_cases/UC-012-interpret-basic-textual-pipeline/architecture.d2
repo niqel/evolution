@@ -1,0 +1,58 @@
+direction: down
+
+input: "Text input" {
+  shape: rectangle
+}
+
+tokenize: "Tokenize\n(use case existente)" {
+  shape: rectangle
+}
+
+token_stream: "TokenStream" {
+  shape: rectangle
+}
+
+parser_agent: "Parser Agent\nparse(...)" {
+  shape: rectangle
+}
+
+parse_use_case: "Parse Use Case" {
+  shape: rectangle
+}
+
+command_resolver: "Command Resolver" {
+  shape: rectangle
+}
+
+pipeline_resolver: "Pipeline Resolver" {
+  shape: rectangle
+}
+
+command_pipeline: "Command::Pipeline(Pipeline)" {
+  shape: rectangle
+}
+
+simple_command: "Command simple existente" {
+  shape: rectangle
+}
+
+no_executor: "PipelineExecutor no participa" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+no_provider: "No provider" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+input -> tokenize: "textual input"
+tokenize -> token_stream: "produces"
+token_stream -> parser_agent: "consumed by"
+parser_agent -> parse_use_case: "coordinates"
+parse_use_case -> command_resolver: "delegates"
+command_resolver -> pipeline_resolver: "if pipeline stages detected"
+pipeline_resolver -> command_pipeline: "builds"
+command_resolver -> simple_command: "otherwise"
+command_resolver -> no_executor: "does not execute"
+pipeline_resolver -> no_provider: "not required"

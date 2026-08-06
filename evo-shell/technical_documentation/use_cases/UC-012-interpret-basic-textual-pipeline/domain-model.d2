@@ -1,0 +1,51 @@
+direction: right
+
+command: "Command" {
+  shape: rectangle
+}
+
+scope_fs: "ScopeFs(&str)" {
+  shape: rectangle
+}
+
+iter: "Iter" {
+  shape: rectangle
+}
+
+enter: "Enter(&str)" {
+  shape: rectangle
+}
+
+clear: "Clear(TerminalClearMode)" {
+  shape: rectangle
+}
+
+exit: "Exit" {
+  shape: rectangle
+}
+
+pipeline_variant: "Pipeline(Pipeline)" {
+  shape: rectangle
+}
+
+pipeline: "Pipeline\nordered PipelineOperation[]" {
+  shape: rectangle
+}
+
+operation: "PipelineOperation\nIter\nIndex\nTake\nSelect\nToValue\nToValues\nToArgs" {
+  shape: rectangle
+}
+
+select_property: "SelectProperty\nIndex\nCreated\nModified\nType\nSize\nName" {
+  shape: rectangle
+}
+
+command -> scope_fs: "variant"
+command -> iter: "variant"
+command -> enter: "variant"
+command -> clear: "variant"
+command -> exit: "variant"
+command -> pipeline_variant: "variant"
+pipeline_variant -> pipeline: "contains"
+pipeline -> operation: "ordered operations"
+operation -> select_property: "select uses"

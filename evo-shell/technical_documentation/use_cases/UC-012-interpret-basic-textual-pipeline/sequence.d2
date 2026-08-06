@@ -1,0 +1,50 @@
+direction: down
+
+consumer: "Consumer" {
+  shape: person
+}
+
+tokenize: "Tokenize" {
+  shape: rectangle
+}
+
+tokens: "TokenStream" {
+  shape: rectangle
+}
+
+parser: "Parser Agent" {
+  shape: rectangle
+}
+
+parse: "Parse Use Case" {
+  shape: rectangle
+}
+
+command_resolver: "Command Resolver" {
+  shape: rectangle
+}
+
+pipeline_resolver: "Pipeline Resolver" {
+  shape: rectangle
+}
+
+command_pipeline: "Command::Pipeline(Pipeline)" {
+  shape: rectangle
+}
+
+error: "ParseError" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+consumer -> tokenize: "iter |> take 1 |> select name |> to-value"
+tokenize -> tokens: "TokenStream"
+tokens -> parser: "consumed"
+parser -> parse: "parse(...)"
+parse -> command_resolver: "resolve command"
+command_resolver -> pipeline_resolver: "pipeline detected"
+pipeline_resolver -> command_pipeline: "Pipeline"
+command_pipeline -> consumer: "returned"
+
+command_resolver -> error: "unknown operation / missing arg / empty stage"
+error -> consumer: "stop immediately"

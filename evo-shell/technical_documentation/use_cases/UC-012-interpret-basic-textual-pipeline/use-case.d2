@@ -1,0 +1,27 @@
+direction: down
+
+actor: "Shell input consumer" {
+  shape: person
+}
+
+use_case: "Interpret Basic Textual Pipeline" {
+  shape: rectangle
+}
+
+include_parse: "Includes\n- identify pipeline separator\n- resolve stages\n- create typed PipelineOperation\n- preserve order\n- return Command::Pipeline" {
+  shape: rectangle
+}
+
+exclude_execute: "Excludes\n- execute pipeline\n- filter parsing\n- multiline input\n- subpipeline\n- presentation" {
+  shape: rectangle
+}
+
+resolver_note: "No provider\nNo PipelineExecutor" {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+actor -> use_case: "structured textual input"
+use_case -> include_parse: "does"
+use_case -> exclude_execute: "does not"
+use_case -> resolver_note: "architecture"

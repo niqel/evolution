@@ -41,6 +41,7 @@ Esto incluye, entre otros:
 * [US-009 — Iniciar Evo Shell con una presentación de bienvenida](user_stories/US-009-start-shell-with-welcome.md)
 * [US-010 — Terminar Evo Shell mediante el comando `exit`](user_stories/US-010-exit-shell.md)
 * [US-011 — Ejecutar un pipeline estructurado](user_stories/US-011-execute-structured-pipeline.md)
+* [US-012 — Interpretar un pipeline textual básico](user_stories/US-012-interpret-basic-textual-pipeline.md)
 
 ## Reglas de lenguaje
 
