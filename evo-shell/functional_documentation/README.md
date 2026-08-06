@@ -44,3 +44,4 @@ Esto incluye, entre otros:
 ## Reglas de lenguaje
 
 * [LR-001 — Command Arguments and Options](language_rules/LR-001-command-arguments-and-options.md)
+* [LR-002 — Pipeline Syntax, Grouping and Argument Expansion](language_rules/LR-002-pipeline-syntax-grouping-and-argument-expansion.md)
