@@ -11,3 +11,15 @@ pub(crate) fn exit_with(exit: Exit) {
 }
 
 fn noop() {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exiter_matches_use_case_function_pointer() {
+        let exit_fn: Exit = exit;
+
+        let _ = exit_fn;
+    }
+}

@@ -16,3 +16,20 @@ pub fn parse<'a>(
 
     Ok(command)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agents::tokenizer;
+    use crate::definitions::use_cases::parse::Parse;
+
+    #[test]
+    fn parser_matches_parse_function_pointer() {
+        let parse: Parse = parse;
+        let mut stream = TokenStream::new("scope-fs \"/ruta\"");
+
+        let command = parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        assert_eq!(command, Command::ScopeFs("/ruta"));
+    }
+}

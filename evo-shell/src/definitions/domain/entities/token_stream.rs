@@ -26,3 +26,17 @@ impl<'a> TokenStream<'a> {
         self.position = position;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn token_stream_borrows_input_and_starts_at_initial_position() {
+        let input = "scope-fs \"/tmp\"";
+        let stream = TokenStream::new(input);
+
+        assert_eq!(stream.input(), input);
+        assert_eq!(stream.position(), 0);
+    }
+}

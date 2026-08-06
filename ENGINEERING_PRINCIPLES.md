@@ -182,6 +182,93 @@ Una pieza de código debe revisarse si ocurre cualquiera de estos casos:
 - usa un módulo donde en realidad hace falta estado explícito
 - el dominio no puede reconstruirse leyendo nombres y firmas
 
+## Reglas de Composición y Organización
+
+### Resolver y Agent
+
+- **Resolver:**
+  - Recibe valores ya disponibles;
+  - Aplica una transformación, validación o decisión determinista;
+  - Retorna un resultado tipado `Result<T, E>`;
+  - No controla flujo mediante `if`s de negocio dispersos;
+  - Permite encadenamiento mediante `Result` y `?`.
+
+  Forma conceptual:
+  ```text
+  input → resolver → Result<output, error>
+  ```
+  El resolver favorece la composición limpia:
+  ```rust
+  let a = resolver_a::resolve(...)?;
+  let b = resolver_b::resolve(a)?;
+  let c = resolver_c::resolve(b)?;
+  Ok(c)
+  ```
+  `Ok(value)` y `Err(error)` constituyen los dos caminos explícitos de resolución.
+
+- **Agent:**
+  - Coordina acciones;
+  - Encadena resolvers, providers y capacidades;
+  - Expresa el flujo del caso de uso;
+  - Propaga errores tipados mediante `Result` / `?`;
+  - No duplica lógica que pertenece a resolvers;
+  - No se convierte en un "manager" genérico.
+
+  Forma conceptual:
+  ```text
+  Agent → resolver A → provider → resolver B → Result
+  ```
+  El agent representa la **acción** aplicada al **sujeto** (`iterator`, `iteration_advancer`, `pipeline_executor`, `executor`).
+
+### Function Pointer Preference
+
+Para dependencias stateless que representan una sola acción, se prefieren function pointers sobre traits cuando sea suficiente:
+
+```rust
+type Provide = fn(...) -> Result<..., ...>;
+```
+
+Esto permite:
+- módulos y funciones puras;
+- composición directa;
+- testing sencillo sin mocks pesados;
+- evitar structs artificiales usadas como clases.
+
+Se usará `trait` únicamente cuando exista una necesidad real que justifique:
+- múltiples operaciones relacionadas;
+- estado asociado al comportamiento;
+- abstracción o dispatch genérico significativo.
+
+### Structs vs Acciones
+
+- **Structs / Entities / Value Objects:** representan datos, estado e invariantes.
+- **Acciones:** se expresan preferentemente mediante módulos y funciones.
+
+Esta convención evita la creación innecesaria de clases contenedoras en Rust.
+
+### Testing Ownership
+
+Los tests deben vivir junto al componente cuya responsabilidad prueban:
+
+- **Resolver tests:** junto al resolver (en `mod tests` dentro del propio archivo).
+- **Agent tests:** junto al agent (en `mod tests` dentro del propio archivo).
+- **Provider tests:** junto al provider (en `mod tests` dentro del propio archivo).
+- **Entity / Value Object tests:** junto al tipo correspondiente.
+- **Parser / Tokenizer tests:** junto a parser, tokenizer o resolver correspondiente.
+- **Tests de Integración Vertical:** viven exclusivamente en `tests/` del crate (e.g. `evo-shell/tests/`).
+
+`lib.rs` nunca debe utilizarse como depósito global de tests.
+
+### Crate Root / lib.rs Rule
+
+`lib.rs` es el mapa público del crate. Debe contener principalmente:
+
+- declaración de módulos (`mod ...`);
+- reexports (`pub use ...`);
+- documentación indispensable del crate.
+
+No debe contener lógica de negocio, helpers, resolvers, providers, mocks o suites globales de tests. `lib.rs` debe poder leerse como un índice limpio del crate.
+
 ## Aplicación General
 
 Estos principios aplican a:

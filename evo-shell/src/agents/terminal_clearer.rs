@@ -14,3 +14,30 @@ pub fn clear() -> Result<(), TerminalClearError> {
 pub(crate) fn clear_with(resolve: Resolve, provide: Provide) -> Result<(), TerminalClearError> {
     resolve(provide)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::definitions::use_cases::terminal_clearer::TerminalClearer;
+
+    #[test]
+    fn terminal_clearer_clear_matches_use_case_function_pointer() {
+        let clear_fn: TerminalClearer = clear;
+
+        let _ = clear_fn;
+    }
+
+    #[test]
+    fn terminal_clearer_agent_delegates_to_resolver() {
+        fn resolve(provide: Provide) -> Result<(), TerminalClearError> {
+            provide()
+        }
+
+        fn provide() -> Result<(), TerminalClearError> {
+            Ok(())
+        }
+
+        let result = clear_with(resolve, provide);
+        assert!(result.is_ok());
+    }
+}
