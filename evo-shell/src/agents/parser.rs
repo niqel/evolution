@@ -8,5 +8,11 @@ pub fn parse<'a>(
     stream: &mut TokenStream<'a>,
     tokenize: Tokenize,
 ) -> Result<Command<'a>, ParseError<'a>> {
-    command::resolve(stream, tokenize)
+    let command = command::resolve(stream, tokenize)?;
+
+    if tokenize(stream).map_err(ParseError::Tokenize)?.is_some() {
+        return Err(ParseError::UnexpectedToken);
+    }
+
+    Ok(command)
 }

@@ -58,6 +58,7 @@ Los paréntesis dentro de cadenas de texto entre comillas (por ejemplo `"foo (ba
 3. Los paréntesis de expresión agrupada son distintos de los paréntesis utilizados internamente por expresiones lógicas de `filter`. Las expresiones `filter` existentes continúan evaluándose normalmente.
 4. Si se ingresa un paréntesis de cierre `)` sin su correspondiente apertura, la shell reporta un error sintáctico `ParseError::UnexpectedClosingParenthesis`.
 5. Si la entrada finaliza con un grupo abierto `(` sin cerrar y se alcanza EOF, la shell no ejecuta la instrucción parcial.
+6. Se admite la anidación de expresiones agrupadas `((...))`. Cada nivel de agrupación se resuelve contextualmente respetando el balance de paréntesis de su ámbito.
 
 ## Fuera de alcance
 

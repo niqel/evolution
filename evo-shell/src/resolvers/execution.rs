@@ -80,11 +80,6 @@ pub(crate) fn resolve_with(
 fn convert_projected_value_to_location(value: &ProjectedValue) -> Result<String, ExecuteError> {
     match value {
         ProjectedValue::Name(name) => Ok(name.to_string_lossy().into_owned()),
-        ProjectedValue::Index(index) => Ok(index.to_string()),
-        ProjectedValue::Type(kind) => Ok(format!("{kind:?}")),
-        ProjectedValue::Size(size) => Ok(size.map(|v| v.to_string()).unwrap_or_default()),
-        ProjectedValue::Created(_) | ProjectedValue::Modified(_) => {
-            Err(ExecuteError::IncompatibleGroupedArgument)
-        }
+        _ => Err(ExecuteError::IncompatibleGroupedArgument),
     }
 }

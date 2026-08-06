@@ -73,21 +73,13 @@ fn resolve_scope_fs<'a>(
         return Err(ParseError::UnexpectedToken);
     };
 
-    if tokenize(stream).map_err(ParseError::Tokenize)?.is_some() {
-        return Err(ParseError::UnexpectedToken);
-    }
-
     Ok(Command::ScopeFs(path))
 }
 
 fn resolve_iter<'a>(
-    stream: &mut TokenStream<'a>,
-    tokenize: Tokenize,
+    _stream: &mut TokenStream<'a>,
+    _tokenize: Tokenize,
 ) -> Result<Command<'a>, ParseError<'a>> {
-    if tokenize(stream).map_err(ParseError::Tokenize)?.is_some() {
-        return Err(ParseError::UnexpectedToken);
-    }
-
     Ok(Command::Iter)
 }
 
@@ -114,10 +106,6 @@ fn resolve_enter<'a>(
         _ => return Err(ParseError::UnexpectedToken),
     };
 
-    if tokenize(stream).map_err(ParseError::Tokenize)?.is_some() {
-        return Err(ParseError::UnexpectedToken);
-    }
-
     Ok(Command::Enter(argument))
 }
 
@@ -135,21 +123,13 @@ fn resolve_clear<'a>(
         return Err(ParseError::UnexpectedToken);
     };
 
-    if tokenize(stream).map_err(ParseError::Tokenize)?.is_some() {
-        return Err(ParseError::UnexpectedToken);
-    }
-
     Ok(Command::Clear(TerminalClearMode::All))
 }
 
 fn resolve_exit<'a>(
-    stream: &mut TokenStream<'a>,
-    tokenize: Tokenize,
+    _stream: &mut TokenStream<'a>,
+    _tokenize: Tokenize,
 ) -> Result<Command<'a>, ParseError<'a>> {
-    if tokenize(stream).map_err(ParseError::Tokenize)?.is_some() {
-        return Err(ParseError::UnexpectedToken);
-    }
-
     Ok(Command::Exit)
 }
 
@@ -163,10 +143,6 @@ fn resolve_grouped<'a>(
     let Some(Token::RightParen) = closing_token else {
         return Err(ParseError::UnclosedParenthesis);
     };
-
-    if tokenize(stream).map_err(ParseError::Tokenize)?.is_some() {
-        return Err(ParseError::UnexpectedToken);
-    }
 
     Ok(Command::Grouped(Box::new(inner)))
 }

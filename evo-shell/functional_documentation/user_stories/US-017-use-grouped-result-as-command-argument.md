@@ -28,8 +28,8 @@ enter (
 1. **Reconocimiento del argumento agrupado (`command.rs`):** El parser de `enter` identifica un token de apertura `(` en la posición del argumento y resuelve recursivamente la expresión agrupada como `CommandArgument::Grouped(Box<Command>)`.
 2. **Evaluación prioritaria (`execution.rs`):** Antes de ejecutar `enter`, el ejecutor resuelve la expresión interior utilizando el `filesystem_scope` actual y obtiene su `PipelineValue` resultante.
 3. **Conversión y validación de tipo:**
-   - Si la expresión interior produce un valor escalar tipado (`PipelineValue::Value(...)`), se extrae su representación de ruta y se entrega a `enter`.
-   - Si la expresión interior produce un resultado incompatible (múltiples valores `PipelineValue::Values` o argumentos variádicos `PipelineValue::Arguments` sin comando receptor variádico), la shell retorna un error tipado `ExecuteError::IncompatibleGroupedArgument`.
+   - Para `enter`, el resultado agrupado aceptado debe representar un nombre/location compatible (`ProjectedValue::Name(name)`).
+   - Otros tipos escalares no nombrados (como `Index`, `Size`, `Type`, `Created`, `Modified`) o resultados no escalares (`PipelineValue::Values` o `PipelineValue::Arguments`) se rechazan retornando el error tipado `ExecuteError::IncompatibleGroupedArgument`.
 4. **Ejecución y Presentación:**
    - El resultado intermedio de la expresión interior NO se imprime ni se presenta en stdout.
    - `enter` se ejecuta con el argumento resuelto y altera el `filesystem_scope` según su comportamiento estándar.

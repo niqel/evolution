@@ -1109,11 +1109,8 @@ mod tests {
         )
         .unwrap();
 
-        let result = executor::execute(
-            &mut shell,
-            Command::Enter(CommandArgument::Literal("..")),
-        )
-        .unwrap();
+        let result =
+            executor::execute(&mut shell, Command::Enter(CommandArgument::Literal(".."))).unwrap();
 
         assert!(matches!(result, ExecutionResult::ScopeChanged));
         assert_eq!(
