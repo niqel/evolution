@@ -1,0 +1,8 @@
+shape: sequence
+User -> "Parser Agent": parse(input)
+"Parser Agent" -> "Command Resolver": resolve_copy_to(stream)
+"Command Resolver" --> "Parser Agent": Command::CopyTo
+"Parser Agent" -> "Executor Agent": execute(shell, Command::CopyTo)
+"Executor Agent" -> "evo-shell-engine copier": copy(scope, sources, destination)
+"evo-shell-engine copier" --> "Executor Agent": Result<(), CopyError>
+"Executor Agent" --> User: ExecutionResult::Copied

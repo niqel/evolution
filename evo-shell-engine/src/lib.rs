@@ -5,8 +5,8 @@ mod providers;
 mod resolvers;
 
 pub use agents::{
-    argument_expander, enterer, filterer, indexer, iteration_advancer, iterator, scope_setter,
-    selector, taker, value_converter, values_converter,
+    argument_expander, copier, enterer, filterer, indexer, iteration_advancer, iterator,
+    scope_setter, selector, taker, value_converter, values_converter,
 };
 pub use definitions::domain::entities::filesystem_entry::{FilesystemEntry, FilesystemEntryKind};
 pub use definitions::domain::entities::filesystem_iteration::FilesystemIteration;
@@ -22,6 +22,7 @@ pub use definitions::domain::value_objects::select::{
 pub use definitions::domain::value_objects::structured_items::StructuredItems;
 pub use definitions::domain::value_objects::values::Values;
 pub use definitions::use_cases::advance::Advance;
+pub use definitions::use_cases::copy_filesystem_entries::{CopyError, CopyFilesystemEntries};
 pub use definitions::use_cases::enter::Enter;
 pub use definitions::use_cases::filter::{Filter, FilterError};
 pub use definitions::use_cases::index::{Index, IndexError};
@@ -763,5 +764,236 @@ mod tests {
         let result = filesystem_entry::resolve(&mut iteration, next_directory_entry_error);
 
         assert!(matches!(result, Err(IterError::NextEntry(_))));
+    }
+
+    #[test]
+    fn copy_single_file() {
+        use crate::{CopyError, copier};
+
+        let root = TestDirectory::new("copy_single_file");
+        let source_file = root.path().join("a.txt");
+        let dest_dir = root.path().join("backup");
+        fs::write(&source_file, "content").unwrap();
+        fs::create_dir(&dest_dir).unwrap();
+
+        let scope = scope_setter::set(root.path()).unwrap();
+        copier::copy(&scope, &[Path::new("a.txt")], Path::new("backup")).unwrap();
+
+        assert_eq!(
+            fs::read_to_string(dest_dir.join("a.txt")).unwrap(),
+            "content"
+        );
+    }
+
+    #[test]
+    fn copy_multiple_files() {
+        use crate::copier;
+
+        let root = TestDirectory::new("copy_multiple_files");
+        fs::write(root.path().join("a.txt"), "A").unwrap();
+        fs::write(root.path().join("b.txt"), "B").unwrap();
+        let dest_dir = root.path().join("backup");
+        fs::create_dir(&dest_dir).unwrap();
+
+        let scope = scope_setter::set(root.path()).unwrap();
+        copier::copy(
+            &scope,
+            &[Path::new("a.txt"), Path::new("b.txt")],
+            Path::new("backup"),
+        )
+        .unwrap();
+
+        assert_eq!(fs::read_to_string(dest_dir.join("a.txt")).unwrap(), "A");
+        assert_eq!(fs::read_to_string(dest_dir.join("b.txt")).unwrap(), "B");
+    }
+
+    #[test]
+    fn copy_directory_recursively() {
+        use crate::copier;
+
+        let root = TestDirectory::new("copy_dir_recursive");
+        let docs = root.path().join("docs");
+        fs::create_dir(&docs).unwrap();
+        fs::write(docs.join("a.txt"), "A").unwrap();
+        let backup = root.path().join("backup");
+        fs::create_dir(&backup).unwrap();
+
+        let scope = scope_setter::set(root.path()).unwrap();
+        copier::copy(&scope, &[Path::new("docs")], Path::new("backup")).unwrap();
+
+        assert_eq!(
+            fs::read_to_string(backup.join("docs").join("a.txt")).unwrap(),
+            "A"
+        );
+    }
+
+    #[test]
+    fn copy_nested_directory_tree() {
+        use crate::copier;
+
+        let root = TestDirectory::new("copy_nested_dir_tree");
+        let docs = root.path().join("docs");
+        let sub = docs.join("sub");
+        fs::create_dir_all(&sub).unwrap();
+        fs::write(docs.join("a.txt"), "A").unwrap();
+        fs::write(sub.join("b.txt"), "B").unwrap();
+        let backup = root.path().join("backup");
+        fs::create_dir(&backup).unwrap();
+
+        let scope = scope_setter::set(root.path()).unwrap();
+        copier::copy(&scope, &[Path::new("docs")], Path::new("backup")).unwrap();
+
+        let copied_docs = backup.join("docs");
+        assert_eq!(fs::read_to_string(copied_docs.join("a.txt")).unwrap(), "A");
+        assert_eq!(
+            fs::read_to_string(copied_docs.join("sub").join("b.txt")).unwrap(),
+            "B"
+        );
+    }
+
+    #[test]
+    fn destination_must_exist() {
+        use crate::{CopyError, copier};
+
+        let root = TestDirectory::new("dest_must_exist");
+        fs::write(root.path().join("a.txt"), "A").unwrap();
+
+        let scope = scope_setter::set(root.path()).unwrap();
+        let result = copier::copy(&scope, &[Path::new("a.txt")], Path::new("missing"));
+
+        assert!(matches!(result, Err(CopyError::DestinationNotFound(_))));
+    }
+
+    #[test]
+    fn destination_must_be_directory() {
+        use crate::{CopyError, copier};
+
+        let root = TestDirectory::new("dest_must_be_dir");
+        fs::write(root.path().join("a.txt"), "A").unwrap();
+        fs::write(root.path().join("dest_file.txt"), "dest").unwrap();
+
+        let scope = scope_setter::set(root.path()).unwrap();
+        let result = copier::copy(&scope, &[Path::new("a.txt")], Path::new("dest_file.txt"));
+
+        assert!(matches!(result, Err(CopyError::DestinationNotDirectory(_))));
+    }
+
+    #[test]
+    fn existing_target_returns_error() {
+        use crate::{CopyError, copier};
+
+        let root = TestDirectory::new("target_exists_err");
+        fs::write(root.path().join("a.txt"), "A").unwrap();
+        let backup = root.path().join("backup");
+        fs::create_dir(&backup).unwrap();
+        fs::write(backup.join("a.txt"), "existing").unwrap();
+
+        let scope = scope_setter::set(root.path()).unwrap();
+        let result = copier::copy(&scope, &[Path::new("a.txt")], Path::new("backup"));
+
+        assert!(matches!(
+            result,
+            Err(CopyError::DestinationAlreadyExists(_))
+        ));
+    }
+
+    #[test]
+    fn missing_source_returns_error() {
+        use crate::{CopyError, copier};
+
+        let root = TestDirectory::new("missing_src_err");
+        let backup = root.path().join("backup");
+        fs::create_dir(&backup).unwrap();
+
+        let scope = scope_setter::set(root.path()).unwrap();
+        let result = copier::copy(&scope, &[Path::new("missing.txt")], Path::new("backup"));
+
+        assert!(matches!(result, Err(CopyError::SourceNotFound(_))));
+    }
+
+    #[test]
+    fn directory_cannot_be_copied_into_itself() {
+        use crate::{CopyError, copier};
+
+        let root = TestDirectory::new("copy_into_itself");
+        let docs = root.path().join("docs");
+        fs::create_dir(&docs).unwrap();
+
+        let scope = scope_setter::set(root.path()).unwrap();
+        let result = copier::copy(&scope, &[Path::new("docs")], Path::new("docs"));
+
+        assert!(matches!(result, Err(CopyError::RecursiveSelfCopy(_))));
+    }
+
+    #[test]
+    fn directory_cannot_be_copied_inside_itself() {
+        use crate::{CopyError, copier};
+
+        let root = TestDirectory::new("copy_inside_itself");
+        let docs = root.path().join("docs");
+        let sub = docs.join("sub");
+        fs::create_dir_all(&sub).unwrap();
+
+        let scope = scope_setter::set(root.path()).unwrap();
+        let result = copier::copy(&scope, &[Path::new("docs")], Path::new("docs/sub"));
+
+        assert!(matches!(result, Err(CopyError::RecursiveSelfCopy(_))));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unsupported_symlink_does_not_follow_target() {
+        use crate::{CopyError, copier};
+        use std::os::unix::fs::symlink;
+
+        let root = TestDirectory::new("symlink_err");
+        let target = root.path().join("target.txt");
+        let link = root.path().join("link.txt");
+        let backup = root.path().join("backup");
+        fs::write(&target, "target").unwrap();
+        symlink(&target, &link).unwrap();
+        fs::create_dir(&backup).unwrap();
+
+        let scope = scope_setter::set(root.path()).unwrap();
+        let result = copier::copy(&scope, &[Path::new("link.txt")], Path::new("backup"));
+
+        assert!(matches!(result, Err(CopyError::UnsupportedSourceType(_))));
+    }
+
+    #[test]
+    fn fail_fast_on_first_error() {
+        use crate::{CopyError, copier};
+
+        let root = TestDirectory::new("fail_fast");
+        fs::write(root.path().join("valid.txt"), "valid").unwrap();
+        let backup = root.path().join("backup");
+        fs::create_dir(&backup).unwrap();
+
+        let scope = scope_setter::set(root.path()).unwrap();
+        let result = copier::copy(
+            &scope,
+            &[Path::new("invalid.txt"), Path::new("valid.txt")],
+            Path::new("backup"),
+        );
+
+        assert!(matches!(result, Err(CopyError::SourceNotFound(_))));
+        assert!(!backup.join("valid.txt").exists());
+    }
+
+    #[test]
+    fn scope_input_state_not_mutated() {
+        use crate::copier;
+
+        let root = TestDirectory::new("scope_not_mutated");
+        fs::write(root.path().join("a.txt"), "A").unwrap();
+        let backup = root.path().join("backup");
+        fs::create_dir(&backup).unwrap();
+
+        let scope = scope_setter::set(root.path()).unwrap();
+        let initial_path = scope.path().to_path_buf();
+
+        copier::copy(&scope, &[Path::new("a.txt")], Path::new("backup")).unwrap();
+
+        assert_eq!(scope.path(), initial_path.as_path());
     }
 }

@@ -150,9 +150,11 @@ fn parse_operator<'a>(operator: Token<'a>) -> Result<FilterOperator, ParseError<
         Token::Word("and") | Token::Word("or") => Err(ParseError::MissingFilterOperator("and")),
         Token::Word(other) => Err(ParseError::UnknownFilterOperator(other)),
         Token::String(other) => Err(ParseError::UnknownFilterOperator(other)),
-        Token::LeftParen | Token::RightParen | Token::Comma | Token::PipelineSeparator => {
-            Err(ParseError::MissingFilterOperator("operator"))
-        }
+        Token::LeftParen
+        | Token::RightParen
+        | Token::Comma
+        | Token::PipelineSeparator
+        | Token::Colon => Err(ParseError::MissingFilterOperator("operator")),
     }
 }
 
@@ -356,6 +358,7 @@ fn token_text<'a>(token: Token<'a>) -> &'a str {
         Token::Comma => ",",
         Token::LeftParen => "(",
         Token::RightParen => ")",
+        Token::Colon => ":",
     }
 }
 

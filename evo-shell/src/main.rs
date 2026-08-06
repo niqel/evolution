@@ -198,6 +198,7 @@ fn render_execution_with(
             render_scope_changed(&mut io::stdout())?;
             Ok(LoopControl::Continue)
         }
+        ExecutionResult::Copied => Ok(LoopControl::Continue),
         ExecutionResult::TerminalCleared => Ok(LoopControl::Continue),
         ExecutionResult::FilesystemIteration(iteration) => {
             match iteration_presenter::present(iteration) {
@@ -1376,6 +1377,289 @@ mod tests {
 
         assert!(matches!(result, ExecutionResult::ScopeChanged));
         assert_eq!(shell.filesystem_scope().path(), child);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn parses_single_source_copy_to() {
+        use evo_shell::{Command, CommandArgument, TokenStream, parser, tokenizer};
+
+        let mut stream = TokenStream::new("copy-to a.txt, path: backup");
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        assert_eq!(
+            command,
+            Command::CopyTo {
+                sources: vec![CommandArgument::Literal("a.txt")],
+                destination: CommandArgument::Literal("backup"),
+            }
+        );
+    }
+
+    #[test]
+    fn parses_multiple_sources_copy_to() {
+        use evo_shell::{Command, CommandArgument, TokenStream, parser, tokenizer};
+
+        let mut stream = TokenStream::new("copy-to a.txt, b.txt, folder, path: \"/backup\"");
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        assert_eq!(
+            command,
+            Command::CopyTo {
+                sources: vec![
+                    CommandArgument::Literal("a.txt"),
+                    CommandArgument::Literal("b.txt"),
+                    CommandArgument::Literal("folder"),
+                ],
+                destination: CommandArgument::Literal("/backup"),
+            }
+        );
+    }
+
+    #[test]
+    fn parses_named_path_argument() {
+        use evo_shell::{Command, CommandArgument, TokenStream, parser, tokenizer};
+
+        let mut stream = TokenStream::new("copy-to doc.pdf, path: dest");
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let Command::CopyTo { destination, .. } = command else {
+            panic!("expected copy-to command");
+        };
+
+        assert_eq!(destination, CommandArgument::Literal("dest"));
+    }
+
+    #[test]
+    fn parses_quoted_source() {
+        use evo_shell::{Command, CommandArgument, TokenStream, parser, tokenizer};
+
+        let mut stream = TokenStream::new("copy-to \"my file.txt\", path: \"my backup\"");
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        assert_eq!(
+            command,
+            Command::CopyTo {
+                sources: vec![CommandArgument::Literal("my file.txt")],
+                destination: CommandArgument::Literal("my backup"),
+            }
+        );
+    }
+
+    #[test]
+    fn parses_grouped_source_argument() {
+        use evo_shell::{Command, CommandArgument, TokenStream, parser, tokenizer};
+
+        let mut stream = TokenStream::new("copy-to (iter |> to-args), path: backup");
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let Command::CopyTo { sources, .. } = command else {
+            panic!("expected copy-to command");
+        };
+
+        assert_eq!(sources.len(), 1);
+        assert!(matches!(sources[0], CommandArgument::Grouped(_)));
+    }
+
+    #[test]
+    fn rejects_missing_source() {
+        use evo_shell::{ParseError, TokenStream, parser, tokenizer};
+
+        let mut stream = TokenStream::new("copy-to path: backup");
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert_eq!(result, Err(ParseError::MissingSource));
+    }
+
+    #[test]
+    fn rejects_missing_path() {
+        use evo_shell::{ParseError, TokenStream, parser, tokenizer};
+
+        let mut stream = TokenStream::new("copy-to a.txt");
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert_eq!(result, Err(ParseError::ExpectedPath));
+    }
+
+    #[test]
+    fn rejects_unknown_named_argument() {
+        use evo_shell::{ParseError, TokenStream, parser, tokenizer};
+
+        let mut stream = TokenStream::new("copy-to a.txt, target: backup");
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert_eq!(result, Err(ParseError::UnknownNamedArgument("target")));
+    }
+
+    #[test]
+    fn rejects_empty_argument() {
+        use evo_shell::{ParseError, TokenStream, parser, tokenizer};
+
+        let mut stream = TokenStream::new("copy-to");
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert_eq!(result, Err(ParseError::ExpectedPath));
+    }
+
+    #[test]
+    fn test_shell_execution_simple() {
+        use evo_shell::{Command, TokenStream, executor, parser, shell_initializer, tokenizer};
+
+        let root = std::env::temp_dir().join(format!(
+            "evo_shell_exec_simple_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let backup = root.join("backup");
+        std::fs::create_dir_all(&backup).unwrap();
+        std::fs::write(root.join("a.txt"), "hello").unwrap();
+
+        let mut shell = shell_initializer::initialize().unwrap();
+        executor::execute(
+            &mut shell,
+            Command::ScopeFs(root.to_str().expect("temp path should be utf-8")),
+        )
+        .unwrap();
+
+        let mut stream = TokenStream::new("copy-to a.txt, path: backup");
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+        let result = executor::execute(&mut shell, command).unwrap();
+
+        assert!(matches!(result, ExecutionResult::Copied));
+        assert_eq!(
+            shell.filesystem_scope().path(),
+            root.canonicalize().unwrap().as_path()
+        );
+        assert_eq!(
+            std::fs::read_to_string(backup.join("a.txt")).unwrap(),
+            "hello"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_directory_vertical() {
+        use evo_shell::{Command, TokenStream, executor, parser, shell_initializer, tokenizer};
+
+        let root = std::env::temp_dir().join(format!(
+            "evo_shell_dir_vertical_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let docs = root.join("docs");
+        let sub = docs.join("sub");
+        let backup = root.join("backup");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::create_dir_all(&backup).unwrap();
+        std::fs::write(docs.join("a.txt"), "A").unwrap();
+        std::fs::write(sub.join("b.txt"), "B").unwrap();
+
+        let mut shell = shell_initializer::initialize().unwrap();
+        executor::execute(
+            &mut shell,
+            Command::ScopeFs(root.to_str().expect("temp path should be utf-8")),
+        )
+        .unwrap();
+
+        let mut stream = TokenStream::new("copy-to docs, path: backup");
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+        let result = executor::execute(&mut shell, command).unwrap();
+
+        assert!(matches!(result, ExecutionResult::Copied));
+        assert_eq!(
+            std::fs::read_to_string(backup.join("docs").join("a.txt")).unwrap(),
+            "A"
+        );
+        assert_eq!(
+            std::fs::read_to_string(backup.join("docs").join("sub").join("b.txt")).unwrap(),
+            "B"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_to_args_vertical() {
+        use evo_shell::{Command, TokenStream, executor, parser, shell_initializer, tokenizer};
+
+        let root = std::env::temp_dir().join(format!(
+            "evo_shell_to_args_vertical_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let backup = root.join("backup");
+        std::fs::create_dir_all(&backup).unwrap();
+        std::fs::write(root.join("a.txt"), "A").unwrap();
+        std::fs::write(root.join("b.txt"), "B").unwrap();
+
+        let mut shell = shell_initializer::initialize().unwrap();
+        executor::execute(
+            &mut shell,
+            Command::ScopeFs(root.to_str().expect("temp path should be utf-8")),
+        )
+        .unwrap();
+
+        let input = "copy-to (\n    iter |>\n    filter type equals \"file\" |>\n    select name |>\n    to-args\n), path: backup";
+        let mut stream = TokenStream::new(input);
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+        let result = executor::execute(&mut shell, command).unwrap();
+
+        assert!(matches!(result, ExecutionResult::Copied));
+        assert_eq!(std::fs::read_to_string(backup.join("a.txt")).unwrap(), "A");
+        assert_eq!(std::fs::read_to_string(backup.join("b.txt")).unwrap(), "B");
+        assert!(!backup.join("backup").exists());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_filter_directory() {
+        use evo_shell::{Command, TokenStream, executor, parser, shell_initializer, tokenizer};
+
+        let root = std::env::temp_dir().join(format!(
+            "evo_shell_filter_dir_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let docs = root.join("docs");
+        let backup = root.join("backup");
+        std::fs::create_dir_all(&docs).unwrap();
+        std::fs::create_dir_all(&backup).unwrap();
+        std::fs::write(docs.join("a.txt"), "A").unwrap();
+        std::fs::write(root.join("notes.txt"), "notes").unwrap();
+
+        let mut shell = shell_initializer::initialize().unwrap();
+        executor::execute(
+            &mut shell,
+            Command::ScopeFs(root.to_str().expect("temp path should be utf-8")),
+        )
+        .unwrap();
+
+        let input = "copy-to (\n    iter |>\n    filter type equals \"directory\" |>\n    filter name equals \"docs\" |>\n    select name |>\n    to-args\n), path: backup";
+        let mut stream = TokenStream::new(input);
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+        let result = executor::execute(&mut shell, command).unwrap();
+
+        assert!(matches!(result, ExecutionResult::Copied));
+        assert_eq!(
+            std::fs::read_to_string(backup.join("docs").join("a.txt")).unwrap(),
+            "A"
+        );
+        assert!(!backup.join("notes.txt").exists());
 
         let _ = std::fs::remove_dir_all(&root);
     }

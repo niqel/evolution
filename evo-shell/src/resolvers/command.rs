@@ -42,6 +42,7 @@ pub fn resolve<'a>(
         "scope-fs" => resolve_scope_fs(stream, tokenize),
         "iter" => resolve_iter(stream, tokenize),
         "enter" => resolve_enter(stream, tokenize),
+        "copy-to" => resolve_copy_to(stream, tokenize),
         "clear" => resolve_clear(stream, tokenize),
         "exit" => resolve_exit(stream, tokenize),
         "take" | "index" | "select" | "to-value" | "to-values" | "to-args" | "filter" => {
@@ -145,4 +146,84 @@ fn resolve_grouped<'a>(
     };
 
     Ok(Command::Grouped(Box::new(inner)))
+}
+
+fn resolve_copy_to<'a>(
+    stream: &mut TokenStream<'a>,
+    tokenize: Tokenize,
+) -> Result<Command<'a>, ParseError<'a>> {
+    let mut sources = Vec::new();
+    let mut destination = None;
+
+    loop {
+        let token = tokenize(stream).map_err(ParseError::Tokenize)?;
+
+        let Some(token) = token else {
+            break;
+        };
+
+        if let Token::Word("path") = token {
+            let next_pos = stream.position();
+            let next_token = tokenize(stream).map_err(ParseError::Tokenize)?;
+            if matches!(next_token, Some(Token::Colon)) {
+                let dest_token = tokenize(stream).map_err(ParseError::Tokenize)?;
+                let Some(dest_token) = dest_token else {
+                    return Err(ParseError::ExpectedPath);
+                };
+
+                destination = Some(parse_command_argument(dest_token, stream, tokenize)?);
+                break;
+            }
+            stream.advance_to(next_pos);
+        } else if let Token::Word(other_named) = token {
+            let next_pos = stream.position();
+            let next_token = tokenize(stream).map_err(ParseError::Tokenize)?;
+            if matches!(next_token, Some(Token::Colon)) {
+                return Err(ParseError::UnknownNamedArgument(other_named));
+            }
+            stream.advance_to(next_pos);
+        }
+
+        let arg = parse_command_argument(token, stream, tokenize)?;
+        sources.push(arg);
+
+        let comma_pos = stream.position();
+        let comma_token = tokenize(stream).map_err(ParseError::Tokenize)?;
+        if matches!(comma_token, Some(Token::Comma)) {
+            continue;
+        }
+        stream.advance_to(comma_pos);
+    }
+
+    let Some(destination) = destination else {
+        return Err(ParseError::ExpectedPath);
+    };
+
+    if sources.is_empty() {
+        return Err(ParseError::MissingSource);
+    }
+
+    Ok(Command::CopyTo {
+        sources,
+        destination,
+    })
+}
+
+fn parse_command_argument<'a>(
+    token: Token<'a>,
+    stream: &mut TokenStream<'a>,
+    tokenize: Tokenize,
+) -> Result<CommandArgument<'a>, ParseError<'a>> {
+    match token {
+        Token::LeftParen => {
+            let inner = resolve(stream, tokenize)?;
+            let closing = tokenize(stream).map_err(ParseError::Tokenize)?;
+            let Some(Token::RightParen) = closing else {
+                return Err(ParseError::UnclosedParenthesis);
+            };
+            Ok(CommandArgument::Grouped(Box::new(inner)))
+        }
+        Token::Word(location) | Token::String(location) => Ok(CommandArgument::Literal(location)),
+        _ => Err(ParseError::UnexpectedToken),
+    }
 }

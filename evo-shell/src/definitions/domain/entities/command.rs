@@ -12,6 +12,10 @@ pub enum Command<'a> {
     ScopeFs(&'a str),
     Iter,
     Enter(CommandArgument<'a>),
+    CopyTo {
+        sources: Vec<CommandArgument<'a>>,
+        destination: CommandArgument<'a>,
+    },
     Clear(TerminalClearMode),
     Exit,
     Pipeline(Pipeline),

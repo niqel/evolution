@@ -17,6 +17,7 @@ Esta carpeta contiene el diseño técnico derivado de la documentación funciona
 * [UC-008 — Convertir una proyección estructurada en un valor escalar](use_cases/UC-008-convert-structured-projection-to-value/README.md)
 * [UC-009 — Convertir una proyección estructurada en una colección de valores](use_cases/UC-009-convert-structured-projection-to-values/README.md)
 * [UC-010 — Expandir una proyección estructurada en argumentos posicionales](use_cases/UC-010-expand-structured-projection-to-arguments/README.md)
+* [UC-011 — Copy filesystem entries to a destination](use_cases/UC-011-copy-filesystem-entries/README.md)
 
 Aquí pueden vivir diagramas de casos de uso, diagramas de arquitectura, diagramas de secuencia, modelo técnico del dominio y documentación de definitions, borrowed, entities y firmas importantes cuando sea necesario.
 

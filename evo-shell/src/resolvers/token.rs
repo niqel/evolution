@@ -25,6 +25,11 @@ pub fn resolve<'a>(stream: &mut TokenStream<'a>) -> Result<Option<Token<'a>>, To
         return Err(TokenizeError::UnexpectedCharacter);
     }
 
+    if remaining.starts_with(':') {
+        stream.advance_to(start + ':'.len_utf8());
+        return Ok(Some(Token::Colon));
+    }
+
     if remaining.starts_with(',') {
         stream.advance_to(start + ','.len_utf8());
         return Ok(Some(Token::Comma));
@@ -91,6 +96,7 @@ fn resolve_word<'a>(
             || character == ')'
             || character == '>'
             || character == '<'
+            || character == ':'
         {
             break;
         }

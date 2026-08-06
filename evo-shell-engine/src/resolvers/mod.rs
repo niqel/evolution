@@ -1,3 +1,4 @@
+pub mod filesystem_copy;
 pub mod filesystem_entry;
 pub mod filesystem_iteration;
 pub mod filesystem_path;

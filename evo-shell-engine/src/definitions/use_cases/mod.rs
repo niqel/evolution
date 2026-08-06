@@ -1,4 +1,5 @@
 pub mod advance;
+pub mod copy_filesystem_entries;
 pub mod enter;
 pub mod filter;
 pub mod index;

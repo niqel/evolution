@@ -47,6 +47,7 @@ Esto incluye, entre otros:
 * [US-015 — Continuar un pipeline textual en múltiples líneas](user_stories/US-015-continue-textual-pipeline-across-multiple-lines.md)
 * [US-016 — Agrupar y evaluar una expresión mediante paréntesis](user_stories/US-016-group-and-evaluate-expression-using-parentheses.md)
 * [US-017 — Usar el resultado de una expresión agrupada como argumento de un comando](user_stories/US-017-use-grouped-result-as-command-argument.md)
+* [US-018 — Copiar archivos y directorios mediante copy-to](user_stories/US-018-copy-files-and-directories-using-copy-to.md)
 
 ## Reglas de lenguaje
 

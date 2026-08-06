@@ -1,0 +1,6 @@
+direction: right
+User -> "Parser Agent"
+"Parser Agent" -> "Command Resolver"
+"Command Resolver" -> "Command::CopyTo"
+"Command::CopyTo" -> "Executor Agent"
+"Executor Agent" -> "evo-shell-engine copier"

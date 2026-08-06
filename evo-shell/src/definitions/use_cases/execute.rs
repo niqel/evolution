@@ -1,4 +1,4 @@
-use evo_shell_engine::{FilesystemIteration, IterError, ScopeError};
+use evo_shell_engine::{CopyError, FilesystemIteration, IterError, ScopeError};
 
 use crate::definitions::domain::entities::command::Command;
 use crate::definitions::domain::entities::shell::Shell;
@@ -16,6 +16,7 @@ pub enum ExecutionResult {
     TerminalCleared,
     Exit,
     Pipeline(PipelineValue),
+    Copied,
 }
 
 #[derive(Debug)]
@@ -25,6 +26,8 @@ pub enum ExecuteError {
     TerminalClear(TerminalClearError),
     Pipeline(PipelineExecutionError),
     IncompatibleGroupedArgument,
+    Copy(CopyError),
+    MissingSource,
 }
 
 impl From<PipelineExecutionError> for ExecuteError {

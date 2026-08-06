@@ -17,3 +17,4 @@ La documentación funcional describe qué debe hacer el producto y por qué, sin
 * [US-007 — Convertir una proyección estructurada en un valor escalar](user_stories/US-007-convert-structured-projection-to-value.md)
 * [US-008 — Convertir una proyección estructurada en una colección de valores](user_stories/US-008-convert-structured-projection-to-values.md)
 * [US-009 — Expandir una proyección estructurada en argumentos posicionales](user_stories/US-009-expand-structured-projection-to-arguments.md)
+* [US-010 — Copy filesystem entries to a destination](user_stories/US-010-copy-filesystem-entries.md)

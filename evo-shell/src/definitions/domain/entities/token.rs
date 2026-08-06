@@ -6,4 +6,5 @@ pub enum Token<'a> {
     Comma,
     LeftParen,
     RightParen,
+    Colon,
 }

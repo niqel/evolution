@@ -35,4 +35,6 @@ pub enum ParseError<'a> {
     UnexpectedClosingParenthesis,
     UnclosedParenthesis,
     AmbiguousLogicalExpression,
+    MissingSource,
+    UnknownNamedArgument(&'a str),
 }

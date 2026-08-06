@@ -60,6 +60,59 @@ pub(crate) fn resolve_with(
             shell.replace_filesystem_scope(filesystem_scope);
             Ok(ExecutionResult::ScopeChanged)
         }
+        Command::CopyTo {
+            sources,
+            destination,
+        } => {
+            let dest_path_buf: std::path::PathBuf = match destination {
+                CommandArgument::Literal(loc) => std::path::PathBuf::from(loc),
+                CommandArgument::Grouped(inner) => {
+                    let result = resolve_with(shell, *inner, clear, execute_pipeline)?;
+                    match result {
+                        ExecutionResult::Pipeline(PipelineValue::Value(val)) => {
+                            std::path::PathBuf::from(convert_projected_value_to_location(&val)?)
+                        }
+                        _ => return Err(ExecuteError::IncompatibleGroupedArgument),
+                    }
+                }
+            };
+
+            let mut resolved_sources = Vec::new();
+
+            for src in sources {
+                match src {
+                    CommandArgument::Literal(loc) => {
+                        resolved_sources.push(std::path::PathBuf::from(loc));
+                    }
+                    CommandArgument::Grouped(inner) => {
+                        let result = resolve_with(shell, *inner, clear, execute_pipeline)?;
+                        match result {
+                            ExecutionResult::Pipeline(PipelineValue::Value(val)) => {
+                                let loc = convert_projected_value_to_location(&val)?;
+                                resolved_sources.push(std::path::PathBuf::from(loc));
+                            }
+                            ExecutionResult::Pipeline(PipelineValue::Arguments(args)) => {
+                                for val in args.items() {
+                                    let loc = convert_projected_value_to_location(val)?;
+                                    resolved_sources.push(std::path::PathBuf::from(loc));
+                                }
+                            }
+                            _ => return Err(ExecuteError::IncompatibleGroupedArgument),
+                        }
+                    }
+                }
+            }
+
+            if resolved_sources.is_empty() {
+                return Err(ExecuteError::MissingSource);
+            }
+
+            let source_refs: Vec<&Path> = resolved_sources.iter().map(|p| p.as_path()).collect();
+            evo_shell_engine::copier::copy(shell.filesystem_scope(), &source_refs, &dest_path_buf)
+                .map_err(ExecuteError::Copy)?;
+
+            Ok(ExecutionResult::Copied)
+        }
         Command::Clear(mode) => {
             clear(mode).map_err(ExecuteError::TerminalClear)?;
             Ok(ExecutionResult::TerminalCleared)

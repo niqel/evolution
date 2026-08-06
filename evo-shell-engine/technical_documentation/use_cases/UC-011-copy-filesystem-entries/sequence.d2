@@ -1,0 +1,6 @@
+shape: sequence
+Client -> "Copier Agent": copy(scope, sources, destination)
+"Copier Agent" -> "Filesystem Copy Resolver": resolve(scope, sources, destination)
+"Filesystem Copy Resolver" -> "std::fs Provider": validate & copy entries
+"Filesystem Copy Resolver" --> "Copier Agent": Result<(), CopyError>
+"Copier Agent" --> Client: Result<(), CopyError>

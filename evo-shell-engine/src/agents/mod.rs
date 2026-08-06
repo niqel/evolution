@@ -1,4 +1,5 @@
 pub mod argument_expander;
+pub mod copier;
 pub mod enterer;
 pub mod filterer;
 pub mod indexer;

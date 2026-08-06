@@ -185,7 +185,7 @@ fn next_word_token<'a>(
         Token::String(word) => Err(ParseError::InvalidPipelineArgument(word)),
         Token::PipelineSeparator => Err(ParseError::MissingPipelineArgument(stage_name)),
         Token::Comma => Err(ParseError::MissingPipelineArgument(stage_name)),
-        Token::LeftParen | Token::RightParen => {
+        Token::LeftParen | Token::RightParen | Token::Colon => {
             Err(ParseError::UnexpectedPipelineArgument(stage_name))
         }
     }
