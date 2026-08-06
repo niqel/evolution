@@ -4,7 +4,7 @@ use std::path::{Component, Path};
 
 use evo_shell::{
     ExecuteError, ExecutionResult, ParseError, PipelineResultPresentError, PresentPipelineResult,
-    Shell, StartError, Token, TokenStream, executor, iteration_presenter, parser,
+    Shell, StartError, Token, TokenStream, TokenizeError, executor, iteration_presenter, parser,
     pipeline_result_presenter, presentation_style, starter, tokenizer,
 };
 use evo_shell_engine::IterError;
@@ -12,6 +12,24 @@ use evo_shell_engine::IterError;
 enum LoopControl {
     Continue,
     Exit,
+}
+
+#[derive(Debug)]
+pub enum ReadInputError {
+    Io(io::Error),
+    Tokenize(TokenizeError),
+}
+
+impl From<io::Error> for ReadInputError {
+    fn from(error: io::Error) -> Self {
+        Self::Io(error)
+    }
+}
+
+impl From<TokenizeError> for ReadInputError {
+    fn from(error: TokenizeError) -> Self {
+        Self::Tokenize(error)
+    }
 }
 
 fn main() {
@@ -31,11 +49,17 @@ fn run_loop(shell: &mut Shell) -> Result<(), RunError> {
     loop {
         write_prompt(shell)?;
 
-        let input = read_input()?;
-
-        let Some(input) = input else {
-            println!();
-            return Ok(());
+        let input = match read_input() {
+            Ok(Some(input)) => input,
+            Ok(None) => {
+                println!();
+                return Ok(());
+            }
+            Err(ReadInputError::Tokenize(error)) => {
+                render_parse_error(ParseError::Tokenize(error));
+                continue;
+            }
+            Err(ReadInputError::Io(error)) => return Err(RunError::Io(error)),
         };
 
         match handle_input(shell, &input)? {
@@ -82,7 +106,7 @@ fn reset_after_input_to(writer: &mut impl Write) -> io::Result<()> {
     write!(writer, "{}", presentation_style::RESET)
 }
 
-fn read_input() -> io::Result<Option<String>> {
+fn read_input() -> Result<Option<String>, ReadInputError> {
     let mut stdin = io::stdin().lock();
     let mut stdout = io::stdout();
     read_input_from(&mut stdin, &mut stdout)
@@ -91,7 +115,7 @@ fn read_input() -> io::Result<Option<String>> {
 fn read_input_from(
     reader: &mut impl io::BufRead,
     writer: &mut impl Write,
-) -> io::Result<Option<String>> {
+) -> Result<Option<String>, ReadInputError> {
     let mut accumulated = String::new();
     let bytes_read = reader.read_line(&mut accumulated)?;
 
@@ -102,7 +126,7 @@ fn read_input_from(
     reset_after_input_to(writer)?;
     writer.flush()?;
 
-    while requires_continuation(&accumulated) {
+    while requires_continuation(&accumulated)? {
         write_continuation_prompt_to(writer)?;
         writer.flush()?;
         let mut line = String::new();
@@ -118,13 +142,13 @@ fn read_input_from(
     Ok(Some(accumulated))
 }
 
-fn requires_continuation(input: &str) -> bool {
+fn requires_continuation(input: &str) -> Result<bool, TokenizeError> {
     let mut stream = TokenStream::new(input);
     let mut last_token = None;
-    while let Ok(Some(token)) = tokenizer::tokenize(&mut stream) {
+    while let Some(token) = tokenizer::tokenize(&mut stream)? {
         last_token = Some(token);
     }
-    matches!(last_token, Some(Token::PipelineSeparator))
+    Ok(matches!(last_token, Some(Token::PipelineSeparator)))
 }
 
 fn handle_input(shell: &mut Shell, input: &str) -> io::Result<LoopControl> {
@@ -262,9 +286,9 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::{
-        LoopControl, compact_scope_location, presentation_style, read_input_from, render_execution,
-        render_execution_with, render_scope_changed, requires_continuation, reset_after_input_to,
-        write_prompt_to,
+        LoopControl, ReadInputError, compact_scope_location, presentation_style, read_input_from,
+        render_execution, render_execution_with, render_scope_changed, requires_continuation,
+        reset_after_input_to, write_prompt_to,
     };
     use evo_shell::{
         Command, ExecutionResult, PipelineResultPresentError, PipelineValue, TokenStream, executor,
@@ -693,5 +717,56 @@ mod tests {
         assert_eq!(format!("{res_single:?}"), format!("{res_multi:?}"));
 
         let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn continuation_detection_propagates_unterminated_quote_error() {
+        use evo_shell::TokenizeError;
+
+        let input = "iter |> \"unterminated";
+        let result = requires_continuation(input);
+
+        assert_eq!(result, Err(TokenizeError::UnterminatedString));
+    }
+
+    #[test]
+    fn standalone_unterminated_quote_is_not_treated_as_complete_input() {
+        use evo_shell::TokenizeError;
+
+        let input = "\"unterminated";
+        let result = requires_continuation(input);
+
+        assert_eq!(result, Err(TokenizeError::UnterminatedString));
+    }
+
+    #[test]
+    fn valid_trailing_pipeline_separator_still_requests_continuation() {
+        let input = "iter |>";
+        let result = requires_continuation(input);
+
+        assert_eq!(result, Ok(true));
+    }
+
+    #[test]
+    fn quoted_pipeline_separator_still_does_not_request_continuation() {
+        let input = "filter name equals \"foo |> bar\"";
+        let result = requires_continuation(input);
+
+        assert_eq!(result, Ok(false));
+    }
+
+    #[test]
+    fn read_input_from_propagates_tokenize_error() {
+        use evo_shell::TokenizeError;
+
+        let mut input = std::io::Cursor::new(b"iter |>\n\"unterminated\n");
+        let mut output = Vec::new();
+
+        let result = read_input_from(&mut input, &mut output);
+
+        assert!(matches!(
+            result,
+            Err(ReadInputError::Tokenize(TokenizeError::UnterminatedString))
+        ));
     }
 }
