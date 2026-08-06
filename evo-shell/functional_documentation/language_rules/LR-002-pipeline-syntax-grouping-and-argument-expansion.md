@@ -775,6 +775,11 @@ Los únicos operadores lógicos básicos aprobados en esta versión son:
 - `and`;
 - `or`.
 
+`and` y `or` se evalúan de izquierda a derecha con short-circuit:
+
+- `and` devuelve `false` en cuanto una condición resulta `false`;
+- `or` devuelve `true` en cuanto una condición resulta `true`.
+
 Ejemplos conceptuales:
 
 ```text
@@ -975,7 +980,6 @@ Quedan diferidos al menos los siguientes puntos:
 - `glob`;
 - `in`;
 - `not-in`;
-- short-circuit;
 - reindexado después de `filter`;
 - coerción de tipos;
 - comparación Path/String;
@@ -1089,8 +1093,9 @@ Quedan diferidos al menos los siguientes puntos:
 14. `<` y `>` se conservan por claridad.
 15. `at-least`, `at-most`, `between` y `not-between` expresan límites de forma legible.
 16. `and` y `or` son palabras, no símbolos.
-17. Mezclar `and` y `or` requiere paréntesis explícitos.
-18. El lenguaje prioriza intención visible sobre precedencia implícita.
+17. `and` y `or` se evalúan de izquierda a derecha con short-circuit.
+18. Mezclar `and` y `or` requiere paréntesis explícitos.
+19. El lenguaje prioriza intención visible sobre precedencia implícita.
 
 ## Fuera de alcance
 

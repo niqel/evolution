@@ -24,7 +24,7 @@ expression: "FilterExpression\nComparison / And / Or" {
   shape: rectangle
 }
 
-evaluation: "por cada elemento\n1. leer propiedad\n2. evaluar predicado\n3. conservar o descartar" {
+evaluation: "por cada elemento\n1. leer propiedad\n2. evaluar predicado de izquierda a derecha\n3. short-circuit cuando corresponda\n4. conservar o descartar" {
   shape: rectangle
 }
 
@@ -47,7 +47,7 @@ evaluation -> result: "si el predicado es verdadero"
 evaluation -> error: "si la expresión es inválida o falta un valor comparable"
 result -> consumer: "éxito / colección vacía"
 
-note: "No short-circuit definido aquí.\nLa semántica textual aprobada vive en LR-002." {
+note: "Short-circuit definido por LR-002.\nLa semántica textual aprobada vive en LR-002." {
   shape: rectangle
   style.fill: "#fff7e6"
 }

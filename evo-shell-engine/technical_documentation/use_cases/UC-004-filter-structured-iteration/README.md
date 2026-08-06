@@ -41,6 +41,7 @@ Filter(&[FilesystemIterationItem], &FilterExpression)
 - `filter` no proyecta propiedades.
 - `filter` no modifica el filesystem.
 - `filter` no modifica el scope.
+- `and` y `or` se evalúan de izquierda a derecha con short-circuit.
 - 0 elementos es un resultado válido.
 - `null` no forma parte de la semántica visible.
 
@@ -51,6 +52,8 @@ La operación puede fallar si:
 - la propiedad no es soportada;
 - el operador no es compatible con la propiedad;
 - falta un valor comparable requerido por la expresión.
+
+Una rama que ya no necesita evaluarse no puede producir error.
 
 `NoMatches` no es un error.
 

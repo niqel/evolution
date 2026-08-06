@@ -40,8 +40,12 @@ La documentación funcional del lenguaje definirá la sintaxis textual de Evo Sh
 12. `filter` soporta `at-least` y `at-most` cuando la propiedad lo permite.
 13. `filter` soporta `between` y `not-between` cuando la propiedad lo permite.
 14. `filter` soporta `and` y `or`.
-15. Mezclar `and` y `or` sin agrupación explícita no debe llegar al engine como una expresión ambigua.
-16. `filter` no usa `null`.
+15. `and` y `or` se evalúan de izquierda a derecha con short-circuit.
+16. En `and`, una condición `false` detiene la evaluación y el resultado es `false`.
+17. En `or`, una condición `true` detiene la evaluación y el resultado es `true`.
+18. Mezclar `and` y `or` sin agrupación explícita no debe llegar al engine como una expresión ambigua.
+19. Una rama no necesaria no puede producir efectos ni error porque no se evalúa.
+20. `filter` no usa `null`.
 
 ## Ejemplo
 

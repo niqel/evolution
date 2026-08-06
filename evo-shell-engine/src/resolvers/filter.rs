@@ -27,22 +27,22 @@ fn evaluate_expression(
     match expression {
         FilterExpression::Comparison(comparison) => evaluate_comparison(item, comparison),
         FilterExpression::And(expressions) => {
-            let mut result = true;
-
             for expression in expressions {
-                result &= evaluate_expression(item, expression)?;
+                if !evaluate_expression(item, expression)? {
+                    return Ok(false);
+                }
             }
 
-            Ok(result)
+            Ok(true)
         }
         FilterExpression::Or(expressions) => {
-            let mut result = false;
-
             for expression in expressions {
-                result |= evaluate_expression(item, expression)?;
+                if evaluate_expression(item, expression)? {
+                    return Ok(true);
+                }
             }
 
-            Ok(result)
+            Ok(false)
         }
     }
 }
@@ -360,6 +360,17 @@ mod tests {
         ]
     }
 
+    fn readme_only_items() -> Vec<FilesystemIterationItem> {
+        vec![item(
+            0,
+            "README.md",
+            FilesystemEntryKind::File,
+            Some(time(10)),
+            Some(time(20)),
+            Some(10),
+        )]
+    }
+
     fn sized_items() -> Vec<FilesystemIterationItem> {
         vec![
             item(
@@ -458,6 +469,14 @@ mod tests {
             FilterProperty::Size,
             FilterOperator::NotBetween,
             FilterOperand::range(FilterValue::size(lower), FilterValue::size(upper)),
+        ))
+    }
+
+    fn unsupported_property_expression() -> FilterExpression {
+        FilterExpression::comparison(FilterComparison::new(
+            FilterProperty::unsupported("unsupported"),
+            FilterOperator::Equals,
+            FilterOperand::single(FilterValue::name("ignored")),
         ))
     }
 
@@ -571,6 +590,32 @@ mod tests {
     }
 
     #[test]
+    fn and_short_circuits_when_first_branch_is_false() {
+        let items = sample_items();
+        let expression = FilterExpression::and(vec![
+            name_equals("does-not-exist"),
+            unsupported_property_expression(),
+        ]);
+
+        let result = resolve(&items, &expression).unwrap();
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn and_evaluates_second_branch_when_first_is_true() {
+        let items = sample_items();
+        let expression = FilterExpression::and(vec![
+            kind_equals(FilesystemEntryKind::File),
+            name_equals("src"),
+        ]);
+
+        let result = resolve(&items, &expression).unwrap();
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
     fn or_expression_combines_predicates() {
         let items = sample_items();
         let expression =
@@ -581,6 +626,63 @@ mod tests {
         assert_eq!(result.len(), 2);
         assert!(std::ptr::eq(result[0], &items[0]));
         assert!(std::ptr::eq(result[1], &items[2]));
+    }
+
+    #[test]
+    fn or_short_circuits_when_first_branch_is_true() {
+        let items = readme_only_items();
+        let expression = FilterExpression::or(vec![
+            name_equals("README.md"),
+            unsupported_property_expression(),
+        ]);
+
+        let result = resolve(&items, &expression).unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].index(), 0);
+    }
+
+    #[test]
+    fn or_evaluates_second_branch_when_first_is_false() {
+        let items = sample_items();
+        let expression = FilterExpression::or(vec![
+            name_equals("does-not-exist"),
+            name_equals("README.md"),
+        ]);
+
+        let result = resolve(&items, &expression).unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].index(), 0);
+    }
+
+    #[test]
+    fn and_chain_short_circuits_before_third_branch() {
+        let items = readme_only_items();
+        let expression = FilterExpression::and(vec![
+            kind_equals(FilesystemEntryKind::File),
+            name_equals("does-not-exist"),
+            unsupported_property_expression(),
+        ]);
+
+        let result = resolve(&items, &expression).unwrap();
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn or_chain_short_circuits_before_third_branch() {
+        let items = readme_only_items();
+        let expression = FilterExpression::or(vec![
+            name_equals("does-not-exist"),
+            name_equals("README.md"),
+            unsupported_property_expression(),
+        ]);
+
+        let result = resolve(&items, &expression).unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].index(), 0);
     }
 
     #[test]
