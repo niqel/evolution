@@ -9,6 +9,8 @@ Su objetivo es describir conceptualmente:
 - pipelines con `|>`;
 - continuación multilínea;
 - agrupación mediante paréntesis;
+- selección puntual de elementos con `index`;
+- limitación de secuencias con `take`;
 - argumentos posicionales;
 - argumentos nombrados;
 - coma como separador de argumentos;
@@ -49,6 +51,10 @@ Interpretación conceptual:
 El resultado de una etapa entra conceptualmente como entrada de la siguiente.
 
 Los pipelines transportan datos estructurados, no texto sintáctico.
+
+Una colección vacía es un resultado válido.
+
+La ausencia de elementos no significa automáticamente error.
 
 ## Continuación multilínea
 
@@ -218,12 +224,15 @@ No se fija aquí si la implementación interna será una lista, un iterador, un 
 
 `to-value` tiene semántica escalar.
 
+`to-value` exige exactamente 1 fila y 1 propiedad.
+
 Conceptualmente:
 
-- una fila;
-- una columna;
-
-pueden transformarse en un único valor.
+- 1 fila × 1 propiedad -> valor escalar;
+- 0 filas × 1 propiedad -> error;
+- 2+ filas × 1 propiedad -> error;
+- 1 fila × 0 propiedades -> error;
+- 1 fila × 2+ propiedades -> error.
 
 Ejemplo conceptual:
 
@@ -242,9 +251,13 @@ Resultado conceptual:
 
 `to-value` no debe interpretarse como una transformación de colección.
 
+`to-value` no devuelve null.
+
+`to-value` no convierte automáticamente una colección vacía en un valor.
+
 ## to-values
 
-`to-values` representa la transformación de una selección de una columna con múltiples filas en una colección estructurada de valores.
+`to-values` representa la transformación de una selección de una propiedad sobre múltiples elementos en una colección estructurada de valores.
 
 Ejemplo conceptual:
 
@@ -264,6 +277,10 @@ colección:
 ```
 
 `to-values` no implica expansión como argumentos.
+
+`to-values` acepta una colección vacía válida y produce una colección vacía válida.
+
+`to-values` exige una sola propiedad proyectada.
 
 ## to-args
 
@@ -295,19 +312,30 @@ Produce expansión semántica de argumentos.
 
 No es obligatorio pasar antes por `to-values`.
 
+`to-args` acepta una colección vacía válida y produce cero argumentos.
+
+`to-args` trabaja sobre una sola propiedad proyectada en este entregable.
+
 ## Relación entre to-value, to-values y to-args
 
 La relación conceptual aprobada es:
 
 - `to-value`:
-  - una fila + una columna;
-  - valor escalar.
+  - exactamente 1 fila + 1 propiedad;
+  - valor escalar;
+  - 0 filas -> error;
+  - 2+ filas -> error;
+  - 2+ propiedades -> error.
 - `to-values`:
-  - múltiples filas + una columna;
-  - colección de valores.
+  - 0..N filas + 1 propiedad;
+  - colección de valores;
+  - 0 filas -> colección vacía válida.
+  - 2+ propiedades -> error.
 - `to-args`:
-  - múltiples filas + una columna;
-  - expansión de valores como argumentos posicionales.
+  - 0..N filas + 1 propiedad;
+  - expansión de valores como argumentos posicionales;
+  - 0 filas -> cero argumentos.
+  - 2+ propiedades -> fuera del contrato básico / error.
 
 `to-args` no es un alias de `to-values`.
 
@@ -351,6 +379,10 @@ No reindexa necesariamente en esta regla.
 `filter` reduce elementos, no propiedades.
 
 La propiedad utilizada para evaluar el filtro no se convierte automáticamente en la salida del pipeline.
+
+`filter` puede producir 0, 1 o N elementos.
+
+Los 0 elementos constituyen una colección vacía válida.
 
 ## Select
 
@@ -431,6 +463,10 @@ No se inventa `None`.
 
 `select` es una proyección, no un filtro.
 
+`select` puede operar sobre una colección vacía válida.
+
+La ausencia de filas no se convierte por sí sola en error si la proyección solicitada es válida para la estructura recibida.
+
 ## Filter y select
 
 `filter` y `select` resuelven problemas distintos.
@@ -492,6 +528,78 @@ No se aprueba todavía `select 0` ni `select 0, 3`.
 La selección por número de propiedad queda diferida.
 
 Para esta versión, `select` trabaja exclusivamente con nombres de propiedades.
+
+## Index
+
+`index N` selecciona un elemento específico según su índice o posición dentro de la secuencia estructurada recibida.
+
+Ejemplo conceptual:
+
+```text
+iter
+|> index 0
+```
+
+`index 0` selecciona específicamente el elemento correspondiente al índice 0.
+
+`index` no es equivalente a `filter index < 10`.
+
+`index` selecciona un elemento puntual.
+
+`filter index < 10` evalúa una condición sobre la propiedad `index` de múltiples elementos.
+
+`index` puede fallar si no existe un elemento en la posición solicitada.
+
+No se aprueban múltiples índices en esta versión.
+
+## Take
+
+`take N` limita una secuencia a como máximo N elementos.
+
+Ejemplos conceptuales:
+
+```text
+take 1
+```
+
+```text
+take 10
+```
+
+```text
+take 100
+```
+
+Semánticamente:
+
+- colección con 0 elementos |> `take 10` -> 0 elementos;
+- colección con 1 elemento |> `take 10` -> 1 elemento;
+- colección con 5 elementos |> `take 10` -> 5 elementos;
+- colección con 20 elementos |> `take 10` -> 10 elementos.
+
+`take N` no exige que existan N elementos.
+
+`take 1` garantiza como máximo un elemento, no su existencia.
+
+`take 1` y `index 0` no son conceptualmente idénticos.
+
+`index 0` expresa selección puntual del elemento de índice 0.
+
+`take 1` expresa limitación a como máximo el primer elemento disponible.
+
+`take` sobre una colección vacía produce una colección vacía válida.
+
+`first` no forma parte de la sintaxis aprobada de esta regla.
+
+## Resultado vacío
+
+Una colección vacía es un resultado válido.
+
+La ausencia de elementos no significa automáticamente error.
+
+No se introduce `null` para representar una colección vacía.
+
+Resultado vacío y error son conceptos distintos.
 
 ## Propiedades filtrables
 
