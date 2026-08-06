@@ -56,5 +56,6 @@ pub(crate) fn resolve_with(
             let result = execute_pipeline(shell, pipeline).map_err(ExecuteError::Pipeline)?;
             Ok(ExecutionResult::Pipeline(result))
         }
+        Command::Grouped(inner) => resolve_with(shell, *inner, clear, execute_pipeline),
     }
 }

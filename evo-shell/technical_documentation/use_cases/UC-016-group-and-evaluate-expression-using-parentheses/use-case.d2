@@ -1,0 +1,16 @@
+direction: down
+
+user: "User" {
+  shape: person
+}
+
+uc16: "UC-016: Group and Evaluate Expression Using Parentheses" {
+  shape: oval
+}
+
+shell: "Evo Shell Interactive Loop" {
+  shape: rectangle
+}
+
+user -> uc16: "inputs grouped expression (...)"
+uc16 -> shell: "evaluates inner expression and yields typed result"

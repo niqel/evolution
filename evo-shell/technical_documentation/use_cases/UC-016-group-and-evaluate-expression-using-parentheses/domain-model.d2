@@ -1,0 +1,12 @@
+direction: down
+
+command: "Command" {
+  shape: rectangle
+}
+
+command_grouped: "Command::Grouped" {
+  shape: rectangle
+  inner: "Box<Command>"
+}
+
+command -> command_grouped: "variant"

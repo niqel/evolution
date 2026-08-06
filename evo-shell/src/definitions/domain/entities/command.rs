@@ -9,4 +9,5 @@ pub enum Command<'a> {
     Clear(TerminalClearMode),
     Exit,
     Pipeline(Pipeline),
+    Grouped(Box<Command<'a>>),
 }

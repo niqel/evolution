@@ -1,0 +1,27 @@
+direction: down
+
+user: "User" {
+  shape: person
+}
+
+shell: "Evo Shell (main)" {
+  shape: rectangle
+}
+
+parser: "Parser Agent" {
+  shape: rectangle
+}
+
+executor: "Executor Agent" {
+  shape: rectangle
+}
+
+presenter: "Presenter Agent" {
+  shape: rectangle
+}
+
+user -> shell: "(iter |> take 1 |> select name |> to-value)"
+shell -> parser: "parse(input)"
+parser -> executor: "Command::Grouped(Pipeline)"
+executor -> presenter: "evaluates inner pipeline"
+presenter -> user: "only.txt"

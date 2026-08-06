@@ -1,0 +1,31 @@
+direction: down
+
+input: "Text input with (...)" {
+  shape: rectangle
+}
+
+input_collector: "Input Collector\n(tracks parens balance)" {
+  shape: rectangle
+}
+
+parser: "Parser Agent" {
+  shape: rectangle
+}
+
+command_grouped: "Command::Grouped(Box<Command>)" {
+  shape: rectangle
+}
+
+executor: "Executor Agent" {
+  shape: rectangle
+}
+
+result: "ExecutionResult" {
+  shape: rectangle
+}
+
+input -> input_collector: "full text"
+input_collector -> parser: "parse(...)"
+parser -> command_grouped: "builds"
+command_grouped -> executor: "execute(...)"
+executor -> result: "evaluates inner command"

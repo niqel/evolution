@@ -145,10 +145,20 @@ fn read_input_from(
 fn requires_continuation(input: &str) -> Result<bool, TokenizeError> {
     let mut stream = TokenStream::new(input);
     let mut last_token = None;
+    let mut open_parens: usize = 0;
+
     while let Some(token) = tokenizer::tokenize(&mut stream)? {
+        match token {
+            Token::LeftParen => open_parens += 1,
+            Token::RightParen => {
+                open_parens = open_parens.saturating_sub(1);
+            }
+            _ => {}
+        }
         last_token = Some(token);
     }
-    Ok(matches!(last_token, Some(Token::PipelineSeparator)))
+
+    Ok(open_parens > 0 || matches!(last_token, Some(Token::PipelineSeparator)))
 }
 
 fn handle_input(shell: &mut Shell, input: &str) -> io::Result<LoopControl> {
@@ -768,5 +778,177 @@ mod tests {
             result,
             Err(ReadInputError::Tokenize(TokenizeError::UnterminatedString))
         ));
+    }
+
+    #[test]
+    fn open_parenthesis_requests_continuation() {
+        let input = "(\niter |> take 1";
+        let result = requires_continuation(input);
+
+        assert_eq!(result, Ok(true));
+    }
+
+    #[test]
+    fn balanced_parentheses_complete_input() {
+        let input = "(iter |> take 1)";
+        let result = requires_continuation(input);
+
+        assert_eq!(result, Ok(false));
+    }
+
+    #[test]
+    fn parenthesis_inside_quoted_string_does_not_open_group() {
+        let input = "filter name equals \"(README)\"";
+        let result = requires_continuation(input);
+
+        assert_eq!(result, Ok(false));
+    }
+
+    #[test]
+    fn filter_parentheses_continue_working() {
+        use evo_shell::{Command, TokenStream, parser, tokenizer};
+
+        let input = r#"iter |> filter (name equals "a" or name equals "b")"#;
+        let mut stream = TokenStream::new(input);
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+        assert!(matches!(command, Command::Pipeline(_)));
+    }
+
+    #[test]
+    fn grouped_pipeline_parses() {
+        use evo_shell::{Command, TokenStream, parser, tokenizer};
+
+        let input = "(iter |> take 1 |> select name |> to-value)";
+        let mut stream = TokenStream::new(input);
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+        assert!(matches!(command, Command::Grouped(_)));
+    }
+
+    #[test]
+    fn grouped_pipeline_evaluates_to_same_value_as_inner_pipeline() {
+        let directory = std::env::temp_dir().join(format!(
+            "evo_shell_grouped_eval_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        std::fs::write(directory.join("only.txt"), "only").unwrap();
+
+        let mut shell_grouped = shell_initializer::initialize().unwrap();
+        executor::execute(
+            &mut shell_grouped,
+            Command::ScopeFs(directory.to_str().expect("temp path should be utf-8")),
+        )
+        .unwrap();
+
+        let mut shell_inner = shell_initializer::initialize().unwrap();
+        executor::execute(
+            &mut shell_inner,
+            Command::ScopeFs(directory.to_str().expect("temp path should be utf-8")),
+        )
+        .unwrap();
+
+        let mut stream_grouped = TokenStream::new("(iter |> take 1 |> select name |> to-value)");
+        let cmd_grouped = parser::parse(&mut stream_grouped, tokenizer::tokenize).unwrap();
+        let res_grouped = executor::execute(&mut shell_grouped, cmd_grouped).unwrap();
+
+        let mut stream_inner = TokenStream::new("iter |> take 1 |> select name |> to-value");
+        let cmd_inner = parser::parse(&mut stream_inner, tokenizer::tokenize).unwrap();
+        let res_inner = executor::execute(&mut shell_inner, cmd_inner).unwrap();
+
+        assert_eq!(format!("{res_grouped:?}"), format!("{res_inner:?}"));
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn multiline_grouped_pipeline_works() {
+        let input_text = "(\n    iter |>\n    take 1 |>\n    select name |>\n    to-value\n)";
+        let mut input = std::io::Cursor::new(input_text.as_bytes());
+        let mut output = Vec::new();
+
+        let result = read_input_from(&mut input, &mut output).unwrap();
+
+        assert_eq!(result.as_deref(), Some(input_text));
+    }
+
+    #[test]
+    fn unmatched_closing_parenthesis_returns_parse_error() {
+        use evo_shell::{ParseError, TokenStream, parser, tokenizer};
+
+        let mut stream = TokenStream::new(")");
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert_eq!(result, Err(ParseError::UnexpectedClosingParenthesis));
+    }
+
+    #[test]
+    fn eof_with_open_group_does_not_execute_partial_expression() {
+        let mut input = std::io::Cursor::new(b"(\niter |> take 1");
+        let mut output = Vec::new();
+
+        let result = read_input_from(&mut input, &mut output).unwrap();
+
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn vertical_grouped_pipeline_test() {
+        thread_local! {
+            static CAPTURED: RefCell<String> = const { RefCell::new(String::new()) };
+        }
+
+        fn present_for_test(
+            _shell: &evo_shell::Shell,
+            value: PipelineValue,
+        ) -> Result<(), PipelineResultPresentError> {
+            CAPTURED.with(|captured| {
+                let mut captured = captured.borrow_mut();
+                captured.clear();
+
+                if let PipelineValue::Value(ProjectedValue::Name(name)) = value {
+                    captured.push_str(&name.to_string_lossy());
+                    captured.push('\n');
+                }
+            });
+
+            Ok(())
+        }
+
+        let directory = std::env::temp_dir().join(format!(
+            "evo_shell_vertical_grouped_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        std::fs::write(directory.join("only.txt"), "only").unwrap();
+
+        let mut shell = shell_initializer::initialize().unwrap();
+        executor::execute(
+            &mut shell,
+            Command::ScopeFs(directory.to_str().expect("temp path should be utf-8")),
+        )
+        .unwrap();
+
+        let multiline_input = "(\n    iter |>\n    take 1 |>\n    select name |>\n    to-value\n)";
+        let mut stream = TokenStream::new(multiline_input);
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+        let result = executor::execute(&mut shell, command).unwrap();
+
+        let loop_control = render_execution_with(&shell, result, present_for_test).unwrap();
+        let rendered = CAPTURED.with(|captured| captured.borrow().clone());
+
+        assert!(matches!(loop_control, LoopControl::Continue));
+        assert_eq!(rendered, "only.txt\n");
+
+        let _ = std::fs::remove_dir_all(&directory);
     }
 }

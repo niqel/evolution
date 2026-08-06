@@ -16,10 +16,15 @@ pub fn resolve<'a>(
         return Err(ParseError::ExpectedCommand);
     };
 
+    if matches!(command_token, Token::LeftParen) {
+        return resolve_grouped(stream, tokenize);
+    }
+
     let Token::Word(command_name) = command_token else {
         return match command_token {
             Token::PipelineSeparator => Err(ParseError::UnexpectedPipelineSeparator),
             Token::Comma => Err(ParseError::EmptyPipelineStage),
+            Token::RightParen => Err(ParseError::UnexpectedClosingParenthesis),
             _ => Err(ParseError::InvalidCommandToken(command_token)),
         };
     };
@@ -138,4 +143,22 @@ fn resolve_exit<'a>(
     }
 
     Ok(Command::Exit)
+}
+
+fn resolve_grouped<'a>(
+    stream: &mut TokenStream<'a>,
+    tokenize: Tokenize,
+) -> Result<Command<'a>, ParseError<'a>> {
+    let inner = resolve(stream, tokenize)?;
+
+    let closing_token = tokenize(stream).map_err(ParseError::Tokenize)?;
+    let Some(Token::RightParen) = closing_token else {
+        return Err(ParseError::UnclosedParenthesis);
+    };
+
+    if tokenize(stream).map_err(ParseError::Tokenize)?.is_some() {
+        return Err(ParseError::UnexpectedToken);
+    }
+
+    Ok(Command::Grouped(Box::new(inner)))
 }

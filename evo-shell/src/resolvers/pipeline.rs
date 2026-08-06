@@ -34,6 +34,7 @@ pub fn resolve<'a>(
 
                 operations.push(resolve_stage(stage_name, stream, tokenize)?);
             }
+            Token::RightParen => break,
             Token::Comma => return Err(ParseError::UnexpectedPipelineArgument(first_stage)),
             _ => return Err(ParseError::UnexpectedPipelineArgument(first_stage)),
         }
@@ -97,7 +98,7 @@ fn resolve_select<'a>(
         let next_token = peek(stream, tokenize)?;
 
         match next_token {
-            None | Some(Token::PipelineSeparator) => break,
+            None | Some(Token::PipelineSeparator) | Some(Token::RightParen) => break,
             Some(Token::Comma) => {
                 let _ = tokenize(stream).map_err(ParseError::Tokenize)?;
                 properties.push(parse_select_property(next_word_token(
@@ -198,7 +199,7 @@ fn ensure_no_stage_arguments<'a>(
     let next_token = peek(stream, tokenize)?;
 
     match next_token {
-        None | Some(Token::PipelineSeparator) => Ok(()),
+        None | Some(Token::PipelineSeparator) | Some(Token::RightParen) => Ok(()),
         Some(_) => Err(ParseError::UnexpectedPipelineArgument(stage_name)),
     }
 }
