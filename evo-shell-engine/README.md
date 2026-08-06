@@ -22,6 +22,14 @@ Para iteración de filesystem, la frontera pública conceptual se compone de:
 - `Iter(&FilesystemScope)`: inicia una `FilesystemIteration`;
 - `Advance(&mut FilesystemIteration)`: avanza la iteración lazy y produce el siguiente `FilesystemEntry`, fin de iteración o error.
 
+Para filtrado estructurado de resultados ya materializados, la frontera pública conceptual incluye:
+
+- `Filter(&[FilesystemIterationItem], &FilterExpression)`: conserva únicamente los elementos que cumplen un predicado estructurado.
+
+Para navegación dentro de un filesystem scope, la frontera pública conceptual incluye:
+
+- `Enter(&FilesystemScope, &Path)`: resuelve una ubicación relativa desde el scope actual y produce un nuevo `FilesystemScope` válido o error.
+
 El engine no depende conceptualmente de prompt, terminal, lexer, parser, AST, sintaxis de Evo Script ni UI.
 
 Documentación:

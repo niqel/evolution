@@ -1,0 +1,55 @@
+direction: down
+
+consumer: "Consumidor externo\n\nevo-shell / evo-script / otro componente" {
+  shape: rectangle
+}
+
+use_case: "Use case público\n\ndefinitions/use_cases/filter.rs\nFilter(&[FilesystemIterationItem], &FilterExpression)" {
+  shape: rectangle
+}
+
+agent: "Agent\n\nagents/filterer.rs\nfilterer::filter" {
+  shape: rectangle
+}
+
+resolver: "Resolver\n\nresolvers/filter.rs\nfilter::resolve\n\nevalúa expresiones estructuradas" {
+  shape: rectangle
+}
+
+items: "&[FilesystemIterationItem]\n\ncolección materializada\n0..N elementos" {
+  shape: rectangle
+}
+
+expression: "&FilterExpression\n\nComparison / And / Or" {
+  shape: rectangle
+}
+
+result: "Resultado estructurado\n\nVec<&FilesystemIterationItem>\n0..N elementos filtrados" {
+  shape: rectangle
+}
+
+filter_expression: "Domain value object\n\nFilterExpression\nFilterComparison\nFilterProperty\nFilterOperator\nFilterOperand\nFilterValue" {
+  shape: rectangle
+}
+
+filesystem_iteration_item: "Domain entity\n\nFilesystemIterationItem\nindex + entry" {
+  shape: rectangle
+}
+
+consumer -> use_case: "frontera pública"
+use_case -> agent: "implementado por"
+agent -> resolver: "coordina"
+items -> use_case: "entrada prestada"
+expression -> use_case: "entrada prestada"
+use_case -> resolver: "recibe colección y expresión"
+resolver -> filter_expression: "consume tipos estructurados"
+resolver -> filesystem_iteration_item: "lee index + entry"
+resolver -> result: "devuelve elementos aceptados"
+result -> consumer: "éxito o colección vacía"
+
+note: "No provider.\nNo parser textual.\nNo filesystem IO.\nNo terminal IO." {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+resolver -> note

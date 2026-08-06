@@ -1,0 +1,30 @@
+direction: right
+
+consumidor: "Consumidor" {
+  shape: person
+}
+
+engine: "Evo Shell Engine" {
+  shape: rectangle
+
+  filtrar: "Filtrar iteración estructurada" {
+    shape: oval
+  }
+}
+
+entrada: "colección estructurada\nexpresión estructurada" {
+  shape: rectangle
+}
+
+resultado: "colección filtrada\n0..N elementos" {
+  shape: rectangle
+}
+
+error: "FilterError" {
+  shape: rectangle
+}
+
+consumidor -> engine.filtrar: solicita
+entrada -> engine.filtrar: recibe
+engine.filtrar -> resultado: éxito
+engine.filtrar -> error: fallo semántico

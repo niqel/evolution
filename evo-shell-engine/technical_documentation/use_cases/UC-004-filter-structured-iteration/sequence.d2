@@ -1,0 +1,55 @@
+direction: down
+
+consumer: "consumidor externo\n\nevo-shell / evo-script" {
+  shape: rectangle
+}
+
+use_case: "Filter(&[FilesystemIterationItem], &FilterExpression)" {
+  shape: rectangle
+}
+
+agent: "filterer::filter" {
+  shape: rectangle
+}
+
+resolver: "filter::resolve" {
+  shape: rectangle
+}
+
+items: "colección estructurada\n0..N FilesystemIterationItem" {
+  shape: rectangle
+}
+
+expression: "FilterExpression\nComparison / And / Or" {
+  shape: rectangle
+}
+
+evaluation: "por cada elemento\n1. leer propiedad\n2. evaluar predicado\n3. conservar o descartar" {
+  shape: rectangle
+}
+
+result: "resultado estructurado\n0..N elementos filtrados" {
+  shape: rectangle
+}
+
+error: "FilterError\npropiedad inválida\noperador incompatible\nvalor comparable faltante" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+consumer -> use_case: "invoca"
+items -> use_case: "entrada prestada"
+expression -> use_case: "entrada prestada"
+use_case -> agent: "implementado por"
+agent -> resolver: "coordina"
+resolver -> evaluation: "itera elementos"
+evaluation -> result: "si el predicado es verdadero"
+evaluation -> error: "si la expresión es inválida o falta un valor comparable"
+result -> consumer: "éxito / colección vacía"
+
+note: "No short-circuit definido aquí.\nLa semántica textual aprobada vive en LR-002." {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+resolver -> note

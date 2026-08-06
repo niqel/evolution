@@ -1,0 +1,48 @@
+direction: right
+
+filter_expression: "FilterExpression\n\nComparison / And / Or" {
+  shape: rectangle
+}
+
+filter_comparison: "FilterComparison\n\nproperty\noperator\noperand" {
+  shape: rectangle
+}
+
+filter_property: "FilterProperty\n\nIndex\nCreated\nModified\nType\nSize\nName\n\nUnsupported(String) para mapping externo" {
+  shape: rectangle
+}
+
+filter_operator: "FilterOperator\n\nequals\nnot-equals\n>\n<\nat-least\nat-most\nbetween\nnot-between" {
+  shape: rectangle
+}
+
+filter_operand: "FilterOperand\n\nSingle(FilterValue)\nRange { lower, upper }" {
+  shape: rectangle
+}
+
+filter_value: "FilterValue\n\nIndex(usize)\nTime(SystemTime)\nType(FilesystemEntryKind)\nSize(u64)\nName(OsString)" {
+  shape: rectangle
+}
+
+filesystem_iteration_item: "FilesystemIterationItem\n\nindex\nentry: FilesystemEntry" {
+  shape: rectangle
+}
+
+filesystem_entry: "FilesystemEntry\n\nname\npath\nkind\ncreated\nmodified\nsize" {
+  shape: rectangle
+}
+
+filesystem_entry_kind: "FilesystemEntryKind\n\nFile\nDirectory\nSymlink\nOther" {
+  shape: rectangle
+}
+
+filter_expression -> filter_comparison: "Comparison"
+filter_expression -> filter_expression: "And / Or" { style.stroke: "#bbbbbb"; }
+filter_comparison -> filter_property: "property"
+filter_comparison -> filter_operator: "operator"
+filter_comparison -> filter_operand: "operand"
+filter_operand -> filter_value: "single / range"
+filter_value -> filesystem_entry_kind: "Type"
+filter_value -> filesystem_entry: "size / created / modified / name"
+filesystem_iteration_item -> filter_property: "index"
+filesystem_iteration_item -> filesystem_entry: "entry"
