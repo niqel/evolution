@@ -1,0 +1,15 @@
+direction: right
+
+consumer -> present_pipeline_result: "ExecutionResult::Pipeline(PipelineValue)"
+present_pipeline_result -> pipeline_result_presenter_agent: "PresentPipelineResult"
+pipeline_result_presenter_agent -> pipeline_result_resolver: "resolve"
+pipeline_result_resolver -> terminal_provider: "provide"
+terminal_provider -> stdout: "write"
+
+pipeline_result_presenter_agent: { label: "Pipeline Result Presenter Agent" }
+pipeline_result_resolver: { label: "Pipeline Result Resolver" }
+terminal_provider: { label: "Terminal Provider" }
+stdout: { label: "stdout" }
+
+note_no_resolver: { label: "Resolver propio: sí" }
+note_no_provider: { label: "Provider propio: sí" }

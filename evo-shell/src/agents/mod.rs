@@ -3,6 +3,7 @@ pub mod exiter;
 pub mod iteration_presenter;
 pub mod parser;
 pub mod pipeline_executor;
+pub mod pipeline_result_presenter;
 pub mod shell_initializer;
 pub mod starter;
 pub mod terminal_clearer;

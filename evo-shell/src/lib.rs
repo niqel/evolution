@@ -5,8 +5,8 @@ mod providers;
 mod resolvers;
 
 pub use agents::{
-    executor, exiter, iteration_presenter, parser, pipeline_executor, shell_initializer, starter,
-    terminal_clearer, tokenizer, welcome_presenter,
+    executor, exiter, iteration_presenter, parser, pipeline_executor, pipeline_result_presenter,
+    shell_initializer, starter, terminal_clearer, tokenizer, welcome_presenter,
 };
 pub use definitions::domain::entities::command::Command;
 pub use definitions::domain::entities::shell::Shell;
@@ -24,6 +24,9 @@ pub use definitions::use_cases::execute_pipeline::{ExecutePipeline, PipelineExec
 pub use definitions::use_cases::exiter::Exit;
 pub use definitions::use_cases::initialize_shell::{InitializeShell, InitializeShellError};
 pub use definitions::use_cases::parse::{Parse, ParseError};
+pub use definitions::use_cases::pipeline_result_presenter::{
+    PipelineResultPresentError, PresentPipelineResult,
+};
 pub use definitions::use_cases::starter::{Start, StartError};
 pub use definitions::use_cases::terminal_clearer::{TerminalClearError, TerminalClearer};
 pub use definitions::use_cases::tokenize::{Tokenize, TokenizeError};

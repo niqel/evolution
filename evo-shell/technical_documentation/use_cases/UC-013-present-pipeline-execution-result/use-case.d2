@@ -1,0 +1,15 @@
+direction: down
+
+actor -> use_case: "present pipeline result"
+use_case -> agent: "coordina"
+agent -> resolver: "resolve"
+resolver -> provider: "provide"
+
+use_case: { label: "Present Pipeline Result" }
+agent: { label: "Pipeline Result Presenter Agent" }
+resolver: { label: "Resolver" }
+provider: { label: "Provider" }
+
+exclude_1: { label: "No ejecuta pipeline" }
+exclude_2: { label: "No modifica shell" }
+exclude_3: { label: "No modifica filesystem" }

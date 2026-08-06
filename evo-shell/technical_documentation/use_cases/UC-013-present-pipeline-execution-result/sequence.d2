@@ -1,0 +1,15 @@
+direction: right
+
+executor -> pipeline_executor: "ExecutionResult::Pipeline(PipelineValue)"
+pipeline_executor -> main_loop: "PipelineValue"
+main_loop -> pipeline_result_presenter: "present"
+pipeline_result_presenter -> resolver: "resolve"
+resolver -> provider: "rendered text"
+provider -> stdout: "write"
+main_loop -> continue: "Continue"
+
+pipeline_result_presenter: { label: "Pipeline Result Presenter" }
+resolver: { label: "Resolver" }
+provider: { label: "Provider" }
+stdout: { label: "stdout" }
+continue: { label: "Continue" }

@@ -287,3 +287,4 @@ Casos de uso técnicos:
 * [UC-010 — Terminar Evo Shell mediante el comando `exit`](use_cases/UC-010-exit-shell/)
 * [UC-011 — Ejecutar un pipeline estructurado](use_cases/UC-011-execute-structured-pipeline/)
 * [UC-012 — Interpretar un pipeline textual básico](use_cases/UC-012-interpret-basic-textual-pipeline/)
+* [UC-013 — Presentar el resultado de un pipeline ejecutado](use_cases/UC-013-present-pipeline-execution-result/)

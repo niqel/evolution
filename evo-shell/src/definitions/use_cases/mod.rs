@@ -3,6 +3,7 @@ pub mod execute_pipeline;
 pub mod exiter;
 pub mod initialize_shell;
 pub mod parse;
+pub mod pipeline_result_presenter;
 pub mod starter;
 pub mod terminal_clearer;
 pub mod tokenize;

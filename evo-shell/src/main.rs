@@ -3,8 +3,9 @@ use std::io::{self, Write};
 use std::path::{Component, Path};
 
 use evo_shell::{
-    ExecuteError, ExecutionResult, ParseError, Shell, StartError, TokenStream, executor,
-    iteration_presenter, parser, presentation_style, starter, tokenizer,
+    ExecuteError, ExecutionResult, ParseError, PipelineResultPresentError, PresentPipelineResult,
+    Shell, StartError, TokenStream, executor, iteration_presenter, parser,
+    pipeline_result_presenter, presentation_style, starter, tokenizer,
 };
 use evo_shell_engine::IterError;
 
@@ -110,7 +111,15 @@ fn handle_input(shell: &mut Shell, input: &str) -> io::Result<LoopControl> {
     }
 }
 
-fn render_execution(_shell: &Shell, result: ExecutionResult) -> io::Result<LoopControl> {
+fn render_execution(shell: &Shell, result: ExecutionResult) -> io::Result<LoopControl> {
+    render_execution_with(shell, result, pipeline_result_presenter::present)
+}
+
+fn render_execution_with(
+    shell: &Shell,
+    result: ExecutionResult,
+    present_pipeline_result: PresentPipelineResult,
+) -> io::Result<LoopControl> {
     match result {
         ExecutionResult::ScopeChanged => {
             render_scope_changed(&mut io::stdout())?;
@@ -127,7 +136,12 @@ fn render_execution(_shell: &Shell, result: ExecutionResult) -> io::Result<LoopC
                 }
             }
         }
-        ExecutionResult::Pipeline(_pipeline) => Ok(LoopControl::Continue),
+        ExecutionResult::Pipeline(pipeline) => {
+            present_pipeline_result(shell, pipeline).map_err(|error| match error {
+                PipelineResultPresentError::Io(error) => error,
+            })?;
+            Ok(LoopControl::Continue)
+        }
         ExecutionResult::Exit => Ok(LoopControl::Exit),
     }
 }
@@ -204,13 +218,19 @@ impl From<io::Error> for RunError {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
     use std::path::Path;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::{
         LoopControl, compact_scope_location, presentation_style, render_execution,
-        render_scope_changed, reset_after_input_to, write_prompt_to,
+        render_execution_with, render_scope_changed, reset_after_input_to, write_prompt_to,
     };
-    use evo_shell::{ExecutionResult, shell_initializer};
+    use evo_shell::{
+        Command, ExecutionResult, PipelineResultPresentError, PipelineValue, TokenStream, executor,
+        parser, shell_initializer, tokenizer,
+    };
+    use evo_shell_engine::ProjectedValue;
 
     #[test]
     fn compact_scope_location_uses_last_segment_for_deep_path() {
@@ -325,5 +345,96 @@ mod tests {
         let result = render_execution(&shell, ExecutionResult::Exit).unwrap();
 
         assert!(matches!(result, LoopControl::Exit));
+    }
+
+    #[test]
+    fn render_execution_delegates_pipeline_results_to_presenter() {
+        static CALLS: AtomicUsize = AtomicUsize::new(0);
+        let shell = shell_initializer::initialize().unwrap();
+
+        let result = render_execution_with(
+            &shell,
+            ExecutionResult::Pipeline(PipelineValue::Value(ProjectedValue::name("only.txt"))),
+            |shell, value| {
+                assert!(shell.filesystem_scope().path().is_dir());
+                CALLS.fetch_add(1, Ordering::SeqCst);
+                assert!(matches!(value, PipelineValue::Value(_)));
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert!(matches!(result, LoopControl::Continue));
+        assert_eq!(CALLS.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn render_execution_propagates_pipeline_presenter_error_as_io_error() {
+        let shell = shell_initializer::initialize().unwrap();
+        let result = render_execution_with(
+            &shell,
+            ExecutionResult::Pipeline(PipelineValue::Value(ProjectedValue::name("only.txt"))),
+            |_shell, _value| {
+                Err(PipelineResultPresentError::Io(std::io::Error::other(
+                    "boom",
+                )))
+            },
+        );
+
+        assert!(matches!(result, Err(error) if error.kind() == std::io::ErrorKind::Other));
+    }
+
+    #[test]
+    fn vertical_pipeline_parse_execute_and_present_writes_only_typed_value() {
+        thread_local! {
+            static CAPTURED: RefCell<String> = const { RefCell::new(String::new()) };
+        }
+
+        fn present_for_test(
+            _shell: &evo_shell::Shell,
+            value: PipelineValue,
+        ) -> Result<(), PipelineResultPresentError> {
+            CAPTURED.with(|captured| {
+                let mut captured = captured.borrow_mut();
+                captured.clear();
+
+                if let PipelineValue::Value(ProjectedValue::Name(name)) = value {
+                    captured.push_str(&name.to_string_lossy());
+                    captured.push('\n');
+                }
+            });
+
+            Ok(())
+        }
+
+        let directory = std::env::temp_dir().join(format!(
+            "evo_shell_vertical_pipeline_present_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        std::fs::write(directory.join("only.txt"), "only").unwrap();
+
+        let mut shell = shell_initializer::initialize().unwrap();
+        executor::execute(
+            &mut shell,
+            Command::ScopeFs(directory.to_str().expect("temp path should be utf-8")),
+        )
+        .unwrap();
+
+        let mut stream = TokenStream::new("iter |> take 1 |> select name |> to-value");
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+        let result = executor::execute(&mut shell, command).unwrap();
+
+        let loop_control = render_execution_with(&shell, result, present_for_test).unwrap();
+        let rendered = CAPTURED.with(|captured| captured.borrow().clone());
+
+        assert!(matches!(loop_control, LoopControl::Continue));
+        assert_eq!(rendered, "only.txt\n");
+
+        let _ = std::fs::remove_dir_all(&directory);
     }
 }

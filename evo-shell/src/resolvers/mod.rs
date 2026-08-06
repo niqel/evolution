@@ -1,6 +1,7 @@
 pub mod command;
 pub mod execution;
 pub mod pipeline;
+pub mod pipeline_result_presenter;
 pub mod shell;
 pub mod terminal_clearer;
 pub mod token;

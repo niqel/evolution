@@ -1,0 +1,18 @@
+direction: down
+
+PipelineValue -> StructuredItems
+PipelineValue -> StructuredProjection
+PipelineValue -> Value
+PipelineValue -> Values
+PipelineValue -> Arguments
+
+StructuredItems -> IterationPresentation
+StructuredProjection -> TabularPresentation
+Value -> ScalarPresentation
+Values -> LinePresentation
+Arguments -> LinePresentation
+
+IterationPresentation: { label: "Presentation of structured iteration" }
+TabularPresentation: { label: "Tabular presentation" }
+ScalarPresentation: { label: "Scalar presentation" }
+LinePresentation: { label: "Line-by-line presentation" }
