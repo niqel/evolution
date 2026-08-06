@@ -4,7 +4,7 @@ consumer: "consumidor externo\n\nevo-shell / evo-script" {
   shape: rectangle
 }
 
-use_case: "Filter(&[FilesystemIterationItem], &FilterExpression)" {
+use_case: "Filter(StructuredItems<'a>, &FilterExpression)" {
   shape: rectangle
 }
 
@@ -16,7 +16,7 @@ resolver: "filter::resolve" {
   shape: rectangle
 }
 
-items: "colección estructurada\n0..N FilesystemIterationItem" {
+items: "StructuredItems<'a>\n0..N FilesystemIterationItem" {
   shape: rectangle
 }
 

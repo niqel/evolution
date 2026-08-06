@@ -3,21 +3,22 @@ use crate::definitions::domain::entities::filesystem_iteration_item::FilesystemI
 use crate::definitions::domain::value_objects::filter::{
     FilterComparison, FilterExpression, FilterOperand, FilterOperator, FilterProperty, FilterValue,
 };
+use crate::definitions::domain::value_objects::structured_items::StructuredItems;
 use crate::definitions::use_cases::filter::FilterError;
 
 pub fn resolve<'a>(
-    items: &'a [FilesystemIterationItem],
+    items: StructuredItems<'a>,
     expression: &FilterExpression,
-) -> Result<Vec<&'a FilesystemIterationItem>, FilterError> {
+) -> Result<StructuredItems<'a>, FilterError> {
     let mut filtered = Vec::new();
 
-    for item in items {
+    for item in items.iter() {
         if evaluate_expression(item, expression)? {
             filtered.push(item);
         }
     }
 
-    Ok(filtered)
+    Ok(StructuredItems::new(filtered))
 }
 
 fn evaluate_expression(
@@ -286,6 +287,7 @@ mod tests {
         FilterComparison, FilterExpression, FilterOperand, FilterOperator, FilterProperty,
         FilterValue,
     };
+    use crate::definitions::domain::value_objects::structured_items::StructuredItems;
     use crate::definitions::use_cases::filter::Filter;
     use std::ffi::OsString;
     use std::path::PathBuf;
@@ -358,6 +360,14 @@ mod tests {
                 Some(5),
             ),
         ]
+    }
+
+    fn structured_items<'a>(items: &'a [FilesystemIterationItem]) -> StructuredItems<'a> {
+        StructuredItems::from_slice(items)
+    }
+
+    fn empty_items<'a>() -> StructuredItems<'a> {
+        StructuredItems::new(Vec::new())
     }
 
     fn readme_only_items() -> Vec<FilesystemIterationItem> {
@@ -485,15 +495,15 @@ mod tests {
         let filter_case: Filter = filterer::filter;
         let items = sample_items();
 
-        let result = filter_case(&items, &name_equals("README.md")).unwrap();
+        let result = filter_case(structured_items(&items), &name_equals("README.md")).unwrap();
 
         assert_eq!(result.len(), 1);
-        assert!(std::ptr::eq(result[0], &items[0]));
+        assert!(std::ptr::eq(result.items()[0], &items[0]));
     }
 
     #[test]
     fn empty_collection_returns_empty_success() {
-        let result = resolve(&[], &name_equals("README.md")).unwrap();
+        let result = resolve(empty_items(), &name_equals("README.md")).unwrap();
 
         assert!(result.is_empty());
     }
@@ -502,7 +512,7 @@ mod tests {
     fn no_matches_returns_empty_success() {
         let items = sample_items();
 
-        let result = resolve(&items, &name_equals("does-not-exist.md")).unwrap();
+        let result = resolve(structured_items(&items), &name_equals("does-not-exist.md")).unwrap();
 
         assert!(result.is_empty());
     }
@@ -511,19 +521,23 @@ mod tests {
     fn filter_preserves_complete_elements_as_borrowed_references() {
         let items = sample_items();
 
-        let result = resolve(&items, &kind_equals(FilesystemEntryKind::File)).unwrap();
+        let result = resolve(
+            structured_items(&items),
+            &kind_equals(FilesystemEntryKind::File),
+        )
+        .unwrap();
 
         assert_eq!(result.len(), 3);
-        assert!(std::ptr::eq(result[0], &items[0]));
-        assert!(std::ptr::eq(result[1], &items[2]));
-        assert!(std::ptr::eq(result[2], &items[3]));
+        assert!(std::ptr::eq(result.items()[0], &items[0]));
+        assert!(std::ptr::eq(result.items()[1], &items[2]));
+        assert!(std::ptr::eq(result.items()[2], &items[3]));
     }
 
     #[test]
     fn not_equals_on_name_excludes_only_the_matching_item() {
         let items = sample_items();
 
-        let result = resolve(&items, &name_not_equals("temp.txt")).unwrap();
+        let result = resolve(structured_items(&items), &name_not_equals("temp.txt")).unwrap();
 
         assert_eq!(result.len(), 3);
         assert!(result.iter().all(|item| item.entry().name() != "temp.txt"));
@@ -533,8 +547,8 @@ mod tests {
     fn index_comparisons_respect_position() {
         let items = sample_items();
 
-        let less_than_two = resolve(&items, &index_lt(2)).unwrap();
-        let greater_than_one = resolve(&items, &index_gt(1)).unwrap();
+        let less_than_two = resolve(structured_items(&items), &index_lt(2)).unwrap();
+        let greater_than_one = resolve(structured_items(&items), &index_gt(1)).unwrap();
 
         assert_eq!(less_than_two.len(), 2);
         assert_eq!(greater_than_one.len(), 2);
@@ -548,8 +562,8 @@ mod tests {
     fn size_comparisons_respect_numeric_boundaries() {
         let items = sized_items();
 
-        let at_least = resolve(&items, &size_at_least(10)).unwrap();
-        let at_most = resolve(&items, &size_at_most(10)).unwrap();
+        let at_least = resolve(structured_items(&items), &size_at_least(10)).unwrap();
+        let at_most = resolve(structured_items(&items), &size_at_most(10)).unwrap();
 
         assert_eq!(at_least.len(), 2);
         assert_eq!(at_most.len(), 2);
@@ -567,8 +581,8 @@ mod tests {
     fn between_and_not_between_cover_inclusive_bounds() {
         let items = sized_items();
 
-        let between = resolve(&items, &size_between(10, 30)).unwrap();
-        let not_between = resolve(&items, &size_not_between(10, 30)).unwrap();
+        let between = resolve(structured_items(&items), &size_between(10, 30)).unwrap();
+        let not_between = resolve(structured_items(&items), &size_not_between(10, 30)).unwrap();
 
         assert_eq!(between.len(), 2);
         assert_eq!(between[0].index(), 0);
@@ -583,7 +597,7 @@ mod tests {
         let expression =
             FilterExpression::and(vec![kind_equals(FilesystemEntryKind::File), size_gt(10)]);
 
-        let result = resolve(&items, &expression).unwrap();
+        let result = resolve(structured_items(&items), &expression).unwrap();
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].index(), 2);
@@ -597,7 +611,7 @@ mod tests {
             unsupported_property_expression(),
         ]);
 
-        let result = resolve(&items, &expression).unwrap();
+        let result = resolve(structured_items(&items), &expression).unwrap();
 
         assert!(result.is_empty());
     }
@@ -610,7 +624,7 @@ mod tests {
             name_equals("src"),
         ]);
 
-        let result = resolve(&items, &expression).unwrap();
+        let result = resolve(structured_items(&items), &expression).unwrap();
 
         assert!(result.is_empty());
     }
@@ -621,7 +635,7 @@ mod tests {
         let expression =
             FilterExpression::or(vec![name_equals("README.md"), name_equals("notes.txt")]);
 
-        let result = resolve(&items, &expression).unwrap();
+        let result = resolve(structured_items(&items), &expression).unwrap();
 
         assert_eq!(result.len(), 2);
         assert!(std::ptr::eq(result[0], &items[0]));
@@ -636,7 +650,7 @@ mod tests {
             unsupported_property_expression(),
         ]);
 
-        let result = resolve(&items, &expression).unwrap();
+        let result = resolve(structured_items(&items), &expression).unwrap();
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].index(), 0);
@@ -650,7 +664,7 @@ mod tests {
             name_equals("README.md"),
         ]);
 
-        let result = resolve(&items, &expression).unwrap();
+        let result = resolve(structured_items(&items), &expression).unwrap();
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].index(), 0);
@@ -665,7 +679,7 @@ mod tests {
             unsupported_property_expression(),
         ]);
 
-        let result = resolve(&items, &expression).unwrap();
+        let result = resolve(structured_items(&items), &expression).unwrap();
 
         assert!(result.is_empty());
     }
@@ -679,7 +693,7 @@ mod tests {
             unsupported_property_expression(),
         ]);
 
-        let result = resolve(&items, &expression).unwrap();
+        let result = resolve(structured_items(&items), &expression).unwrap();
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].index(), 0);
@@ -693,7 +707,7 @@ mod tests {
             kind_equals(FilesystemEntryKind::File),
         ]);
 
-        let result = resolve(&items, &expression).unwrap();
+        let result = resolve(structured_items(&items), &expression).unwrap();
 
         assert_eq!(result.len(), 2);
         assert!(std::ptr::eq(result[0], &items[0]));
@@ -709,7 +723,7 @@ mod tests {
             FilterOperand::single(FilterValue::name("README.md")),
         ));
 
-        let result = resolve(&items, &expression);
+        let result = resolve(structured_items(&items), &expression);
 
         assert!(
             matches!(result, Err(FilterError::UnsupportedProperty(property)) if property == "mystery")
@@ -725,7 +739,7 @@ mod tests {
             FilterOperand::range(FilterValue::name("a"), FilterValue::name("z")),
         ));
 
-        let result = resolve(&items, &expression);
+        let result = resolve(structured_items(&items), &expression);
 
         assert!(matches!(
             result,
@@ -748,7 +762,7 @@ mod tests {
         )];
         let expression = size_gt(0);
 
-        let result = resolve(&items, &expression);
+        let result = resolve(structured_items(&items), &expression);
 
         assert!(matches!(
             result,
@@ -756,6 +770,21 @@ mod tests {
                 property: FilterProperty::Size
             })
         ));
+    }
+
+    #[test]
+    fn filter_result_can_feed_take_without_reconstruction() {
+        let items = sample_items();
+        let filtered = resolve(
+            structured_items(&items),
+            &kind_equals(FilesystemEntryKind::File),
+        )
+        .unwrap();
+        let taken = crate::resolvers::take::resolve(filtered, 2);
+
+        assert_eq!(taken.len(), 2);
+        assert!(std::ptr::eq(taken[0], &items[0]));
+        assert!(std::ptr::eq(taken[1], &items[2]));
     }
 
     fn size_gt(value: u64) -> FilterExpression {

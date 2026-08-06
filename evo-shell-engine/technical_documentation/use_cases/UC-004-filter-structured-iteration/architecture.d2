@@ -4,7 +4,7 @@ consumer: "Consumidor externo\n\nevo-shell / evo-script / otro componente" {
   shape: rectangle
 }
 
-use_case: "Use case público\n\ndefinitions/use_cases/filter.rs\nFilter(&[FilesystemIterationItem], &FilterExpression)" {
+use_case: "Use case público\n\ndefinitions/use_cases/filter.rs\nFilter(StructuredItems<'a>, &FilterExpression)" {
   shape: rectangle
 }
 
@@ -16,7 +16,7 @@ resolver: "Resolver\n\nresolvers/filter.rs\nfilter::resolve\n\nevalúa expresion
   shape: rectangle
 }
 
-items: "&[FilesystemIterationItem]\n\ncolección materializada\n0..N elementos" {
+items: "StructuredItems<'a>\n\ncolección materializada\n0..N elementos" {
   shape: rectangle
 }
 
@@ -24,7 +24,7 @@ expression: "&FilterExpression\n\nComparison / And / Or" {
   shape: rectangle
 }
 
-result: "Resultado estructurado\n\nVec<&FilesystemIterationItem>\n0..N elementos filtrados" {
+result: "Resultado estructurado\n\nStructuredItems<'a>\n0..N elementos filtrados" {
   shape: rectangle
 }
 

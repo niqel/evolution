@@ -1,0 +1,45 @@
+direction: down
+
+consumer: "consumidor externo\n\nevo-shell / evo-script" {
+  shape: rectangle
+}
+
+use_case: "Index(StructuredItems<'a>, usize)" {
+  shape: rectangle
+}
+
+agent: "indexer::index" {
+  shape: rectangle
+}
+
+resolver: "index::resolve" {
+  shape: rectangle
+}
+
+items: "StructuredItems<'a>\ncolección prestada de filas" {
+  shape: rectangle
+}
+
+result: "StructuredItems<'a>\n1 elemento o error" {
+  shape: rectangle
+}
+
+error: "IndexError\nnot found / ambiguous" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+consumer -> use_case: "invoca"
+items -> use_case: "entrada prestada"
+use_case -> agent: "implementado por"
+agent -> resolver: "coordina"
+resolver -> result: "busca un elemento exacto"
+resolver -> error: "si no existe o es ambiguo"
+result -> consumer: "éxito"
+
+note: "No provider.\nNo parser textual.\nNo proyección.\nNo reindexado." {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+resolver -> note

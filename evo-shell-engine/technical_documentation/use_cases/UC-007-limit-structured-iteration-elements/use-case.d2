@@ -1,0 +1,16 @@
+direction: down
+
+use_case: "Take\nLimitar una secuencia a como máximo N elementos" {
+  shape: rectangle
+}
+
+input: "StructuredItems<'a>\nusize" {
+  shape: rectangle
+}
+
+output: "StructuredItems<'a>\n0..N elementos" {
+  shape: rectangle
+}
+
+use_case -> input: "entrada"
+input -> output: "conserva como máximo N"

@@ -1,0 +1,12 @@
+direction: down
+
+structured_items: "StructuredItems<'a>\ncolección prestada de FilesystemIterationItem" {
+  shape: rectangle
+}
+
+count: "usize\nlímite máximo" {
+  shape: rectangle
+}
+
+structured_items -> count: "conserva como máximo"
+count -> structured_items: "resultado 0..N"

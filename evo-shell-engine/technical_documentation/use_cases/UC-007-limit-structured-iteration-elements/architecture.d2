@@ -1,0 +1,39 @@
+direction: down
+
+consumer: "consumidor externo\n\nevo-shell / evo-script" {
+  shape: rectangle
+}
+
+use_case: "Take(StructuredItems<'a>, usize)" {
+  shape: rectangle
+}
+
+agent: "taker::take" {
+  shape: rectangle
+}
+
+resolver: "take::resolve" {
+  shape: rectangle
+}
+
+items: "StructuredItems<'a>\ncolección prestada de filas" {
+  shape: rectangle
+}
+
+result: "StructuredItems<'a>\n0..N elementos" {
+  shape: rectangle
+}
+
+consumer -> use_case: "invoca"
+items -> use_case: "entrada prestada"
+use_case -> agent: "implementado por"
+agent -> resolver: "coordina"
+resolver -> result: "limita la colección"
+result -> consumer: "éxito"
+
+note: "No provider.\nNo parser textual.\nNo reindexado.\nNo error por vacío." {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+resolver -> note

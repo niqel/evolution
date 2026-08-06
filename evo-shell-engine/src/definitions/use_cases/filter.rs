@@ -1,10 +1,10 @@
-use crate::definitions::domain::entities::filesystem_iteration_item::FilesystemIterationItem;
 use crate::definitions::domain::value_objects::filter::FilterExpression;
+use crate::definitions::domain::value_objects::structured_items::StructuredItems;
 
 pub type Filter = for<'a> fn(
-    items: &'a [FilesystemIterationItem],
+    items: StructuredItems<'a>,
     expression: &FilterExpression,
-) -> Result<Vec<&'a FilesystemIterationItem>, FilterError>;
+) -> Result<StructuredItems<'a>, FilterError>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FilterError {

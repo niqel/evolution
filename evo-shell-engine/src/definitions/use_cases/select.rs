@@ -1,8 +1,8 @@
-use crate::definitions::domain::entities::filesystem_iteration_item::FilesystemIterationItem;
 use crate::definitions::domain::value_objects::select::{SelectProperty, StructuredProjection};
+use crate::definitions::domain::value_objects::structured_items::StructuredItems;
 
-pub type Select = fn(
-    items: &[FilesystemIterationItem],
+pub type Select = for<'a> fn(
+    items: StructuredItems<'a>,
     properties: &[SelectProperty],
 ) -> Result<StructuredProjection, SelectError>;
 

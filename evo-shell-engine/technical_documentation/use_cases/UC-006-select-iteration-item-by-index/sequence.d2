@@ -1,0 +1,33 @@
+direction: down
+
+consumer: "consumidor" {
+  shape: rectangle
+}
+
+use_case: "Index(StructuredItems<'a>, usize)" {
+  shape: rectangle
+}
+
+agent: "indexer::index" {
+  shape: rectangle
+}
+
+resolver: "index::resolve" {
+  shape: rectangle
+}
+
+found: "StructuredItems<'a>\n1 elemento" {
+  shape: rectangle
+}
+
+error: "IndexError" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+consumer -> use_case: "invoca"
+use_case -> agent: "coordina"
+agent -> resolver: "delegación"
+resolver -> found: "si existe el índice"
+resolver -> error: "si no existe o no es inequívoco"
+found -> consumer: "retorna éxito"

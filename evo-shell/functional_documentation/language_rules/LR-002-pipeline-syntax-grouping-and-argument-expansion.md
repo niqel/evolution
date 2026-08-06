@@ -587,6 +587,8 @@ Semánticamente:
 
 `take 1` expresa limitación a como máximo el primer elemento disponible.
 
+`take 0` es válido y produce una colección vacía.
+
 `take` sobre una colección vacía produce una colección vacía válida.
 
 `first` no forma parte de la sintaxis aprobada de esta regla.

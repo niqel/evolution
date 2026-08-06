@@ -1,0 +1,27 @@
+direction: down
+
+consumer: "consumidor" {
+  shape: rectangle
+}
+
+use_case: "Take(StructuredItems<'a>, usize)" {
+  shape: rectangle
+}
+
+agent: "taker::take" {
+  shape: rectangle
+}
+
+resolver: "take::resolve" {
+  shape: rectangle
+}
+
+result: "StructuredItems<'a>\n0..N elementos" {
+  shape: rectangle
+}
+
+consumer -> use_case: "invoca"
+use_case -> agent: "coordina"
+agent -> resolver: "delegación"
+resolver -> result: "limita y conserva orden"
+result -> consumer: "retorna éxito"

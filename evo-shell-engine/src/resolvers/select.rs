@@ -2,17 +2,18 @@ use crate::definitions::domain::entities::filesystem_iteration_item::FilesystemI
 use crate::definitions::domain::value_objects::select::{
     ProjectedRow, ProjectedValue, SelectProperty, StructuredProjection,
 };
+use crate::definitions::domain::value_objects::structured_items::StructuredItems;
 use crate::definitions::use_cases::select::SelectError;
 
-pub fn resolve(
-    items: &[FilesystemIterationItem],
+pub fn resolve<'a>(
+    items: StructuredItems<'a>,
     properties: &[SelectProperty],
 ) -> Result<StructuredProjection, SelectError> {
     let selected_properties = validate_properties(properties)?;
 
     let mut rows = Vec::with_capacity(items.len());
 
-    for item in items {
+    for item in items.iter() {
         rows.push(ProjectedRow::new(project_row(item, &selected_properties)));
     }
 
@@ -68,7 +69,12 @@ mod tests {
         FilesystemEntry, FilesystemEntryKind,
     };
     use crate::definitions::domain::entities::filesystem_iteration_item::FilesystemIterationItem;
+    use crate::definitions::domain::value_objects::filter::{
+        FilterComparison, FilterExpression, FilterOperand, FilterOperator, FilterProperty,
+        FilterValue,
+    };
     use crate::definitions::domain::value_objects::select::{ProjectedValue, SelectProperty};
+    use crate::definitions::domain::value_objects::structured_items::StructuredItems;
     use crate::definitions::use_cases::select::Select;
     use std::ffi::OsString;
     use std::path::PathBuf;
@@ -135,6 +141,14 @@ mod tests {
         ]
     }
 
+    fn structured_items<'a>(items: &'a [FilesystemIterationItem]) -> StructuredItems<'a> {
+        StructuredItems::from_slice(items)
+    }
+
+    fn empty_items<'a>() -> StructuredItems<'a> {
+        StructuredItems::new(Vec::new())
+    }
+
     fn select_name() -> Vec<SelectProperty> {
         vec![SelectProperty::Name]
     }
@@ -178,19 +192,27 @@ mod tests {
         ]
     }
 
+    fn name_equals(value: &str) -> FilterExpression {
+        FilterExpression::comparison(FilterComparison::new(
+            FilterProperty::Name,
+            FilterOperator::Equals,
+            FilterOperand::single(FilterValue::name(value)),
+        ))
+    }
+
     #[test]
     fn selector_matches_use_case_function_pointer() {
         let select_case: Select = selector::select;
         let items = sample_items();
 
-        let projection = select_case(&items, &select_name()).unwrap();
+        let projection = select_case(structured_items(&items), &select_name()).unwrap();
 
         assert_eq!(projection.rows().len(), 3);
     }
 
     #[test]
     fn empty_input_returns_empty_projection() {
-        let projection = resolve(&[], &select_name()).unwrap();
+        let projection = resolve(empty_items(), &select_name()).unwrap();
 
         assert!(projection.rows().is_empty());
         assert_eq!(projection.properties(), &[SelectProperty::Name]);
@@ -199,7 +221,7 @@ mod tests {
     #[test]
     fn select_name_projects_single_property_without_strings_everywhere() {
         let items = sample_items();
-        let projection = resolve(&items, &select_name()).unwrap();
+        let projection = resolve(structured_items(&items), &select_name()).unwrap();
 
         assert_eq!(projection.properties(), &[SelectProperty::Name]);
         assert_eq!(projection.rows().len(), 3);
@@ -220,7 +242,7 @@ mod tests {
     #[test]
     fn select_index_projects_existing_indices() {
         let items = sample_items();
-        let projection = resolve(&items, &select_index()).unwrap();
+        let projection = resolve(structured_items(&items), &select_index()).unwrap();
 
         assert_eq!(projection.rows().len(), 3);
         assert_eq!(projection.rows()[0].values()[0], ProjectedValue::Index(0));
@@ -231,7 +253,7 @@ mod tests {
     #[test]
     fn select_type_projects_entry_kind() {
         let items = sample_items();
-        let projection = resolve(&items, &select_type()).unwrap();
+        let projection = resolve(structured_items(&items), &select_type()).unwrap();
 
         assert_eq!(
             projection.rows()[0].values()[0],
@@ -246,7 +268,7 @@ mod tests {
     #[test]
     fn select_size_preserves_optional_absence_without_error() {
         let items = sample_items();
-        let projection = resolve(&items, &select_size()).unwrap();
+        let projection = resolve(structured_items(&items), &select_size()).unwrap();
 
         assert_eq!(projection.rows().len(), 3);
         assert_eq!(
@@ -263,7 +285,7 @@ mod tests {
     #[test]
     fn select_created_preserves_optional_absence_without_error() {
         let items = sample_items();
-        let projection = resolve(&items, &select_created()).unwrap();
+        let projection = resolve(structured_items(&items), &select_created()).unwrap();
 
         assert_eq!(
             projection.rows()[2].values()[0],
@@ -274,7 +296,7 @@ mod tests {
     #[test]
     fn select_modified_preserves_optional_absence_without_error() {
         let items = sample_items();
-        let projection = resolve(&items, &select_modified()).unwrap();
+        let projection = resolve(structured_items(&items), &select_modified()).unwrap();
 
         assert_eq!(
             projection.rows()[2].values()[0],
@@ -285,7 +307,7 @@ mod tests {
     #[test]
     fn select_name_size_preserves_property_order() {
         let items = sample_items();
-        let projection = resolve(&items, &select_name_size()).unwrap();
+        let projection = resolve(structured_items(&items), &select_name_size()).unwrap();
 
         assert_eq!(
             projection.properties(),
@@ -303,7 +325,7 @@ mod tests {
     #[test]
     fn select_size_name_preserves_requested_order() {
         let items = sample_items();
-        let projection = resolve(&items, &select_size_name()).unwrap();
+        let projection = resolve(structured_items(&items), &select_size_name()).unwrap();
 
         assert_eq!(
             projection.properties(),
@@ -321,7 +343,7 @@ mod tests {
     #[test]
     fn select_preserves_row_order() {
         let items = sample_items();
-        let projection = resolve(&items, &select_name()).unwrap();
+        let projection = resolve(structured_items(&items), &select_name()).unwrap();
 
         assert_eq!(
             projection.rows()[0].values()[0],
@@ -342,7 +364,7 @@ mod tests {
         let items = sample_items();
         let properties = vec![SelectProperty::unsupported("mystery")];
 
-        let result = resolve(&items, &properties);
+        let result = resolve(structured_items(&items), &properties);
 
         assert!(matches!(
             result,
@@ -353,7 +375,7 @@ mod tests {
     #[test]
     fn select_multiple_properties_preserves_types_without_stringifying() {
         let items = sample_items();
-        let projection = resolve(&items, &select_multiple()).unwrap();
+        let projection = resolve(structured_items(&items), &select_multiple()).unwrap();
 
         assert_eq!(projection.properties().len(), 6);
         assert!(matches!(
@@ -380,5 +402,37 @@ mod tests {
             projection.rows()[0].values()[5],
             ProjectedValue::Name(_)
         ));
+    }
+
+    #[test]
+    fn filter_result_can_feed_select_without_reconstruction() {
+        let items = sample_items();
+        let filtered =
+            crate::resolvers::filter::resolve(structured_items(&items), &name_equals("README.md"))
+                .unwrap();
+        let projection = resolve(filtered, &select_name()).unwrap();
+
+        assert_eq!(projection.rows().len(), 1);
+        assert_eq!(
+            projection.rows()[0].values()[0],
+            ProjectedValue::Name(OsString::from("README.md"))
+        );
+    }
+
+    #[test]
+    fn take_result_can_feed_select_without_reconstruction() {
+        let items = sample_items();
+        let taken = crate::resolvers::take::resolve(structured_items(&items), 2);
+        let projection = resolve(taken, &select_name()).unwrap();
+
+        assert_eq!(projection.rows().len(), 2);
+        assert_eq!(
+            projection.rows()[0].values()[0],
+            ProjectedValue::Name(OsString::from("README.md"))
+        );
+        assert_eq!(
+            projection.rows()[1].values()[0],
+            ProjectedValue::Name(OsString::from("src"))
+        );
     }
 }

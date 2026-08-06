@@ -1,6 +1,8 @@
 pub mod enterer;
 pub mod filterer;
+pub mod indexer;
 pub mod iteration_advancer;
 pub mod iterator;
 pub mod scope_setter;
 pub mod selector;
+pub mod taker;

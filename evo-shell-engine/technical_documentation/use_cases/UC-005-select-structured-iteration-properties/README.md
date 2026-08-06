@@ -17,7 +17,7 @@ La operación es pura respecto al filesystem y al scope.
 La capacidad pública conceptual es:
 
 ```text
-Select(&[FilesystemIterationItem], &[SelectProperty])
+Select(StructuredItems<'a>, &[SelectProperty])
 ```
 
 ## Precondiciones
