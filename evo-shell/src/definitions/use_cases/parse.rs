@@ -16,4 +16,11 @@ pub enum ParseError<'a> {
     UnexpectedToken,
     UnknownCommand(&'a str),
     InvalidCommandToken(Token<'a>),
+    UnexpectedPipelineSeparator,
+    EmptyPipelineStage,
+    UnknownPipelineOperation(&'a str),
+    MissingPipelineArgument(&'a str),
+    InvalidPipelineArgument(&'a str),
+    UnsupportedSelectProperty(&'a str),
+    UnexpectedPipelineArgument(&'a str),
 }

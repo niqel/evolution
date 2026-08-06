@@ -39,8 +39,8 @@ mod tests {
     use std::time::SystemTime;
 
     use evo_shell_engine::{
-        FilesystemEntryKind, IterError, ScopeError, SetFilesystemScope, iteration_advancer,
-        scope_setter,
+        FilesystemEntryKind, IterError, ScopeError, SelectProperty, SetFilesystemScope,
+        iteration_advancer, scope_setter,
     };
 
     use crate::definitions::contracts::current_directory::{
@@ -57,9 +57,9 @@ mod tests {
     use crate::resolvers::token;
     use crate::{
         Command, Execute, ExecuteError, ExecutionResult, Exit, InitializeShell,
-        InitializeShellError, Parse, ParseError, TerminalClearMode, TerminalClearer, Token,
-        TokenStream, Tokenize, TokenizeError, executor, exiter, parser, shell_initializer,
-        terminal_clearer, tokenizer,
+        InitializeShellError, Parse, ParseError, PipelineOperation, TerminalClearMode,
+        TerminalClearer, Token, TokenStream, Tokenize, TokenizeError, executor, exiter, parser,
+        shell_initializer, terminal_clearer, tokenizer,
     };
 
     struct TestDirectory {
@@ -161,6 +161,27 @@ mod tests {
     }
 
     #[test]
+    fn token_resolver_recognizes_pipeline_separator() {
+        let mut stream = TokenStream::new("iter |> take");
+        token::resolve(&mut stream).unwrap();
+
+        let token = token::resolve(&mut stream).unwrap();
+
+        assert_eq!(token, Some(Token::PipelineSeparator));
+    }
+
+    #[test]
+    fn token_resolver_recognizes_comma_as_separate_token() {
+        let mut stream = TokenStream::new("select name, size");
+        token::resolve(&mut stream).unwrap();
+        token::resolve(&mut stream).unwrap();
+
+        let token = token::resolve(&mut stream).unwrap();
+
+        assert_eq!(token, Some(Token::Comma));
+    }
+
+    #[test]
     fn unterminated_quote_returns_tokenize_error() {
         let mut stream = TokenStream::new("scope-fs \"/tmp");
         token::resolve(&mut stream).unwrap();
@@ -216,6 +237,186 @@ mod tests {
     }
 
     #[test]
+    fn parser_resolves_basic_pipeline_to_value() {
+        let mut stream = TokenStream::new("iter |> take 1 |> select name |> to-value");
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let Command::Pipeline(pipeline) = command else {
+            panic!("expected pipeline command");
+        };
+
+        assert_eq!(
+            pipeline.operations(),
+            &[
+                PipelineOperation::Iter,
+                PipelineOperation::Take(1),
+                PipelineOperation::Select(vec![SelectProperty::Name]),
+                PipelineOperation::ToValue,
+            ]
+        );
+    }
+
+    #[test]
+    fn parser_resolves_pipeline_with_multiple_select_properties() {
+        let mut stream = TokenStream::new("iter |> select name, size |> to-values");
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let Command::Pipeline(pipeline) = command else {
+            panic!("expected pipeline command");
+        };
+
+        assert_eq!(
+            pipeline.operations(),
+            &[
+                PipelineOperation::Iter,
+                PipelineOperation::Select(vec![SelectProperty::Name, SelectProperty::Size]),
+                PipelineOperation::ToValues,
+            ]
+        );
+    }
+
+    #[test]
+    fn parser_resolves_pipeline_with_compact_select_comma() {
+        let mut stream = TokenStream::new("iter |> select name,size |> to-values");
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let Command::Pipeline(pipeline) = command else {
+            panic!("expected pipeline command");
+        };
+
+        assert_eq!(
+            pipeline.operations(),
+            &[
+                PipelineOperation::Iter,
+                PipelineOperation::Select(vec![SelectProperty::Name, SelectProperty::Size]),
+                PipelineOperation::ToValues,
+            ]
+        );
+    }
+
+    #[test]
+    fn parser_preserves_duplicate_select_properties() {
+        let mut stream = TokenStream::new("iter |> select name, name |> to-values");
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let Command::Pipeline(pipeline) = command else {
+            panic!("expected pipeline command");
+        };
+
+        assert_eq!(
+            pipeline.operations(),
+            &[
+                PipelineOperation::Iter,
+                PipelineOperation::Select(vec![SelectProperty::Name, SelectProperty::Name]),
+                PipelineOperation::ToValues,
+            ]
+        );
+    }
+
+    #[test]
+    fn parser_resolves_pipeline_to_args() {
+        let mut stream = TokenStream::new("iter |> select name |> to-args");
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let Command::Pipeline(pipeline) = command else {
+            panic!("expected pipeline command");
+        };
+
+        assert_eq!(
+            pipeline.operations(),
+            &[
+                PipelineOperation::Iter,
+                PipelineOperation::Select(vec![SelectProperty::Name]),
+                PipelineOperation::ToArgs,
+            ]
+        );
+    }
+
+    #[test]
+    fn parser_accepts_pipeline_without_spaces_around_separator() {
+        let mut stream = TokenStream::new("iter|>take 1|>select name|>to-value");
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let Command::Pipeline(pipeline) = command else {
+            panic!("expected pipeline command");
+        };
+
+        assert_eq!(
+            pipeline.operations(),
+            &[
+                PipelineOperation::Iter,
+                PipelineOperation::Take(1),
+                PipelineOperation::Select(vec![SelectProperty::Name]),
+                PipelineOperation::ToValue,
+            ]
+        );
+    }
+
+    #[test]
+    fn parser_resolves_pipeline_with_index_stage() {
+        let mut stream = TokenStream::new("iter |> index 0 |> select name |> to-value");
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let Command::Pipeline(pipeline) = command else {
+            panic!("expected pipeline command");
+        };
+
+        assert_eq!(
+            pipeline.operations(),
+            &[
+                PipelineOperation::Iter,
+                PipelineOperation::Index(0),
+                PipelineOperation::Select(vec![SelectProperty::Name]),
+                PipelineOperation::ToValue,
+            ]
+        );
+    }
+
+    #[test]
+    fn parser_resolves_pipeline_with_take_zero() {
+        let mut stream = TokenStream::new("iter |> take 0 |> select name |> to-values");
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let Command::Pipeline(pipeline) = command else {
+            panic!("expected pipeline command");
+        };
+
+        assert_eq!(
+            pipeline.operations(),
+            &[
+                PipelineOperation::Iter,
+                PipelineOperation::Take(0),
+                PipelineOperation::Select(vec![SelectProperty::Name]),
+                PipelineOperation::ToValues,
+            ]
+        );
+    }
+
+    #[test]
+    fn parser_accepts_syntactically_valid_but_semantically_invalid_pipeline() {
+        let mut stream = TokenStream::new("iter |> to-value");
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let Command::Pipeline(pipeline) = command else {
+            panic!("expected pipeline command");
+        };
+
+        assert_eq!(
+            pipeline.operations(),
+            &[PipelineOperation::Iter, PipelineOperation::ToValue]
+        );
+    }
+
+    #[test]
     fn parser_rejects_exit_extra_token() {
         let mut stream = TokenStream::new("exit now");
 
@@ -240,6 +441,159 @@ mod tests {
         let result = parser::parse(&mut stream, tokenizer::tokenize);
 
         assert!(matches!(result, Err(ParseError::UnexpectedToken)));
+    }
+
+    #[test]
+    fn parser_rejects_trailing_pipeline_separator() {
+        let mut stream = TokenStream::new("iter |>");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(
+            result,
+            Err(ParseError::UnexpectedPipelineSeparator)
+        ));
+    }
+
+    #[test]
+    fn parser_rejects_empty_pipeline_stage() {
+        let mut stream = TokenStream::new("iter |> |> take 1");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(result, Err(ParseError::EmptyPipelineStage)));
+    }
+
+    #[test]
+    fn parser_rejects_leading_pipeline_separator() {
+        let mut stream = TokenStream::new("|> iter");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(
+            result,
+            Err(ParseError::UnexpectedPipelineSeparator)
+        ));
+    }
+
+    #[test]
+    fn parser_rejects_unknown_pipeline_operation() {
+        let mut stream = TokenStream::new("iter |> foo");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(
+            result,
+            Err(ParseError::UnknownPipelineOperation("foo"))
+        ));
+    }
+
+    #[test]
+    fn parser_rejects_take_without_argument() {
+        let mut stream = TokenStream::new("iter |> take");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(
+            result,
+            Err(ParseError::MissingPipelineArgument("take"))
+        ));
+    }
+
+    #[test]
+    fn parser_rejects_take_with_invalid_argument() {
+        let mut stream = TokenStream::new("iter |> take hello");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(
+            result,
+            Err(ParseError::InvalidPipelineArgument("take"))
+        ));
+    }
+
+    #[test]
+    fn parser_rejects_take_with_negative_argument() {
+        let mut stream = TokenStream::new("iter |> take -1");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(
+            result,
+            Err(ParseError::InvalidPipelineArgument("take"))
+        ));
+    }
+
+    #[test]
+    fn parser_rejects_index_without_argument() {
+        let mut stream = TokenStream::new("iter |> index");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(
+            result,
+            Err(ParseError::MissingPipelineArgument("index"))
+        ));
+    }
+
+    #[test]
+    fn parser_rejects_index_with_invalid_argument() {
+        let mut stream = TokenStream::new("iter |> index hello");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(
+            result,
+            Err(ParseError::InvalidPipelineArgument("index"))
+        ));
+    }
+
+    #[test]
+    fn parser_rejects_select_without_properties() {
+        let mut stream = TokenStream::new("iter |> select");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(
+            result,
+            Err(ParseError::MissingPipelineArgument("select"))
+        ));
+    }
+
+    #[test]
+    fn parser_rejects_invalid_select_property() {
+        let mut stream = TokenStream::new("iter |> select foo");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(
+            result,
+            Err(ParseError::UnsupportedSelectProperty("foo"))
+        ));
+    }
+
+    #[test]
+    fn parser_rejects_to_value_with_argument() {
+        let mut stream = TokenStream::new("iter |> to-value extra");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(
+            result,
+            Err(ParseError::UnexpectedPipelineArgument("to-value"))
+        ));
+    }
+
+    #[test]
+    fn parser_rejects_filter_pipeline_textually_in_this_story() {
+        let mut stream = TokenStream::new("iter |> filter name equals \"x\"");
+
+        let result = parser::parse(&mut stream, tokenizer::tokenize);
+
+        assert!(matches!(
+            result,
+            Err(ParseError::UnknownPipelineOperation("filter"))
+        ));
     }
 
     #[test]

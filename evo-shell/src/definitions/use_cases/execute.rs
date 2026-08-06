@@ -20,4 +20,5 @@ pub enum ExecuteError {
     Scope(ScopeError),
     Iter(IterError),
     TerminalClear(TerminalClearError),
+    PipelineNotIntegrated,
 }

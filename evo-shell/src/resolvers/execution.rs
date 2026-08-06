@@ -49,5 +49,6 @@ pub(crate) fn resolve_with(
             exit();
             Ok(ExecutionResult::Exit)
         }
+        Command::Pipeline(_) => Err(ExecuteError::PipelineNotIntegrated),
     }
 }

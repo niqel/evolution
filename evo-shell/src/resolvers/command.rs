@@ -4,6 +4,7 @@ use crate::definitions::domain::entities::token_stream::TokenStream;
 use crate::definitions::domain::value_objects::terminal_clear_mode::TerminalClearMode;
 use crate::definitions::use_cases::parse::ParseError;
 use crate::definitions::use_cases::tokenize::Tokenize;
+use crate::resolvers::pipeline;
 
 pub fn resolve<'a>(
     stream: &mut TokenStream<'a>,
@@ -16,8 +17,21 @@ pub fn resolve<'a>(
     };
 
     let Token::Word(command_name) = command_token else {
-        return Err(ParseError::InvalidCommandToken(command_token));
+        return match command_token {
+            Token::PipelineSeparator => Err(ParseError::UnexpectedPipelineSeparator),
+            Token::Comma => Err(ParseError::EmptyPipelineStage),
+            _ => Err(ParseError::InvalidCommandToken(command_token)),
+        };
     };
+
+    let position = stream.position();
+    let next_token = tokenize(stream).map_err(ParseError::Tokenize)?;
+    let has_pipeline_separator = matches!(next_token, Some(Token::PipelineSeparator));
+    stream.advance_to(position);
+
+    if has_pipeline_separator {
+        return resolve_pipeline(stream, tokenize, command_name);
+    }
 
     match command_name {
         "scope-fs" => resolve_scope_fs(stream, tokenize),
@@ -25,8 +39,19 @@ pub fn resolve<'a>(
         "enter" => resolve_enter(stream, tokenize),
         "clear" => resolve_clear(stream, tokenize),
         "exit" => resolve_exit(stream, tokenize),
+        "take" | "index" | "select" | "to-value" | "to-values" | "to-args" | "filter" => {
+            resolve_pipeline(stream, tokenize, command_name)
+        }
         _ => Err(ParseError::UnknownCommand(command_name)),
     }
+}
+
+fn resolve_pipeline<'a>(
+    stream: &mut TokenStream<'a>,
+    tokenize: Tokenize,
+    stage_name: &'a str,
+) -> Result<Command<'a>, ParseError<'a>> {
+    pipeline::resolve(stream, tokenize, stage_name).map(Command::Pipeline)
 }
 
 fn resolve_scope_fs<'a>(
@@ -73,6 +98,7 @@ fn resolve_enter<'a>(
 
     let location = match location_token {
         Token::Word(location) | Token::String(location) => location,
+        _ => return Err(ParseError::UnexpectedToken),
     };
 
     if tokenize(stream).map_err(ParseError::Tokenize)?.is_some() {

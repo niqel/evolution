@@ -2,4 +2,6 @@
 pub enum Token<'a> {
     Word(&'a str),
     String(&'a str),
+    PipelineSeparator,
+    Comma,
 }

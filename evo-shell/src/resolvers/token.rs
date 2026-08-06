@@ -16,6 +16,20 @@ pub fn resolve<'a>(stream: &mut TokenStream<'a>) -> Result<Option<Token<'a>>, To
         return resolve_string(stream, start, remaining);
     }
 
+    if remaining.starts_with("|>") {
+        stream.advance_to(start + 2);
+        return Ok(Some(Token::PipelineSeparator));
+    }
+
+    if remaining.starts_with('|') {
+        return Err(TokenizeError::UnexpectedCharacter);
+    }
+
+    if remaining.starts_with(',') {
+        stream.advance_to(start + ','.len_utf8());
+        return Ok(Some(Token::Comma));
+    }
+
     resolve_word(stream, start, remaining)
 }
 
@@ -46,7 +60,7 @@ fn resolve_word<'a>(
             return Err(TokenizeError::UnexpectedCharacter);
         }
 
-        if character.is_whitespace() {
+        if character.is_whitespace() || character == '|' || character == ',' {
             break;
         }
 
