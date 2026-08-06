@@ -1,0 +1,22 @@
+direction: down
+
+structured_projection: "StructuredProjection\nproperties: Vec<SelectProperty>\nrows: Vec<ProjectedRow>" {
+  shape: rectangle
+}
+
+projected_row: "ProjectedRow\nvalues: Vec<ProjectedValue>" {
+  shape: rectangle
+}
+
+projected_value: "ProjectedValue\nIndex / Created / Modified / Type / Size / Name" {
+  shape: rectangle
+}
+
+to_value_error: "ToValueError\nNoRows\nMultipleRows\nNoProperties\nMultipleProperties\nInconsistentRowWidth" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+structured_projection -> projected_row: "contiene"
+projected_row -> projected_value: "contiene"
+structured_projection -> to_value_error: "si no cumple la cardinalidad"

@@ -1,0 +1,33 @@
+direction: down
+
+consumer: "consumidor" {
+  shape: rectangle
+}
+
+use_case: "ToValue(StructuredProjection)" {
+  shape: rectangle
+}
+
+agent: "value_converter::convert" {
+  shape: rectangle
+}
+
+resolver: "to_value::resolve" {
+  shape: rectangle
+}
+
+value: "ProjectedValue" {
+  shape: rectangle
+}
+
+error: "ToValueError" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+consumer -> use_case: "invoca"
+use_case -> agent: "coordina"
+agent -> resolver: "delegación"
+resolver -> value: "si existe exactamente 1x1"
+resolver -> error: "si la cardinalidad falla"
+value -> consumer: "retorna éxito"

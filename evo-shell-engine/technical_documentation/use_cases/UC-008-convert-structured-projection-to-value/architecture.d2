@@ -1,0 +1,45 @@
+direction: down
+
+consumer: "Consumidor externo\n\nevo-shell / evo-script / otro componente" {
+  shape: rectangle
+}
+
+use_case: "ToValue(StructuredProjection)" {
+  shape: rectangle
+}
+
+agent: "value_converter::convert" {
+  shape: rectangle
+}
+
+resolver: "to_value::resolve" {
+  shape: rectangle
+}
+
+projection: "StructuredProjection\n1 fila x 1 propiedad" {
+  shape: rectangle
+}
+
+value: "ProjectedValue\nvalor escalar tipado" {
+  shape: rectangle
+}
+
+error: "ToValueError\ncardinalidad inválida" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+consumer -> use_case: "invoca"
+use_case -> agent: "implementado por"
+projection -> use_case: "entrada prestada"
+agent -> resolver: "coordina"
+resolver -> value: "extrae el único valor"
+resolver -> error: "si la cardinalidad no cumple"
+value -> consumer: "éxito"
+
+note: "No provider.\nNo parser textual.\nNo filesystem IO.\nNo terminal IO." {
+  shape: rectangle
+  style.fill: "#fff7e6"
+}
+
+resolver -> note

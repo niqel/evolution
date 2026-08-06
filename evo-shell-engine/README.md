@@ -29,6 +29,9 @@ Para operaciones estructuradas sobre filas ya materializadas, la frontera públi
 - `Index(StructuredItems<'a>, usize) -> Result<StructuredItems<'a>, IndexError>`: selecciona un único elemento por índice estructurado.
 - `Take(StructuredItems<'a>, usize) -> StructuredItems<'a>`: limita la colección a como máximo N elementos preservando el orden.
 - `Select(StructuredItems<'a>, &[SelectProperty]) -> Result<StructuredProjection, SelectError>`: proyecta propiedades estructuradas de cada elemento sin eliminar filas.
+- `ToValue(StructuredProjection) -> Result<ProjectedValue, ToValueError>`: convierte una proyección de 1 fila y 1 propiedad en un valor escalar tipado.
+- `ToValues(StructuredProjection) -> Result<Values, ToValuesError>`: convierte una proyección de una propiedad en una colección tipada de valores.
+- `ToArgs(StructuredProjection) -> Result<Arguments, ToArgsError>`: expande una proyección de una propiedad en argumentos posicionales estructurados.
 
 Para navegación dentro de un filesystem scope, la frontera pública conceptual incluye:
 

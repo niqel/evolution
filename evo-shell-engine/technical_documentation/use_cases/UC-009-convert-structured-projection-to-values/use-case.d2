@@ -1,0 +1,22 @@
+direction: down
+
+use_case: "ToValues\nConvertir proyección estructurada en una colección de valores" {
+  shape: rectangle
+}
+
+input: "StructuredProjection" {
+  shape: rectangle
+}
+
+output: "Values" {
+  shape: rectangle
+}
+
+error: "ToValuesError" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+use_case -> input: "entrada"
+input -> output: "si hay exactamente 1 propiedad"
+input -> error: "si la cardinalidad no cumple"

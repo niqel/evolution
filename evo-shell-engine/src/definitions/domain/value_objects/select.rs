@@ -69,6 +69,14 @@ impl ProjectedRow {
     pub fn values(&self) -> &[ProjectedValue] {
         &self.values
     }
+
+    pub fn into_values(self) -> Vec<ProjectedValue> {
+        self.values
+    }
+
+    pub fn len(&self) -> usize {
+        self.values.len()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,5 +96,21 @@ impl StructuredProjection {
 
     pub fn rows(&self) -> &[ProjectedRow] {
         &self.rows
+    }
+
+    pub fn property_count(&self) -> usize {
+        self.properties.len()
+    }
+
+    pub fn row_count(&self) -> usize {
+        self.rows.len()
+    }
+
+    pub fn into_rows(self) -> Vec<ProjectedRow> {
+        self.rows
+    }
+
+    pub fn into_properties(self) -> Vec<SelectProperty> {
+        self.properties
     }
 }

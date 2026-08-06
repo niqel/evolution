@@ -14,3 +14,6 @@ La documentación funcional describe qué debe hacer el producto y por qué, sin
 * [US-004 — Seleccionar propiedades estructuradas de una iteración](user_stories/US-004-select-structured-iteration-properties.md)
 * [US-005 — Seleccionar un elemento estructurado por índice](user_stories/US-005-select-iteration-item-by-index.md)
 * [US-006 — Limitar una iteración estructurada a como máximo N elementos](user_stories/US-006-limit-structured-iteration-elements.md)
+* [US-007 — Convertir una proyección estructurada en un valor escalar](user_stories/US-007-convert-structured-projection-to-value.md)
+* [US-008 — Convertir una proyección estructurada en una colección de valores](user_stories/US-008-convert-structured-projection-to-values.md)
+* [US-009 — Expandir una proyección estructurada en argumentos posicionales](user_stories/US-009-expand-structured-projection-to-arguments.md)

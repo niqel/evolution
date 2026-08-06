@@ -1,0 +1,22 @@
+direction: down
+
+structured_projection: "StructuredProjection\nproperties: Vec<SelectProperty>\nrows: Vec<ProjectedRow>" {
+  shape: rectangle
+}
+
+arguments: "Arguments\nitems: Vec<ProjectedValue>" {
+  shape: rectangle
+}
+
+projected_value: "ProjectedValue\nIndex / Created / Modified / Type / Size / Name" {
+  shape: rectangle
+}
+
+to_args_error: "ToArgsError\nInvalidPropertyCount\nInconsistentRowWidth" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+structured_projection -> projected_value: "produce 0..N"
+arguments -> projected_value: "contiene"
+structured_projection -> to_args_error: "si no cumple la cardinalidad"

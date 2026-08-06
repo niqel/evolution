@@ -1,0 +1,33 @@
+direction: down
+
+consumer: "consumidor" {
+  shape: rectangle
+}
+
+use_case: "ToArgs(StructuredProjection)" {
+  shape: rectangle
+}
+
+agent: "argument_expander::expand" {
+  shape: rectangle
+}
+
+resolver: "to_args::resolve" {
+  shape: rectangle
+}
+
+arguments: "Arguments" {
+  shape: rectangle
+}
+
+error: "ToArgsError" {
+  shape: rectangle
+  style.fill: "#fff0f0"
+}
+
+consumer -> use_case: "invoca"
+use_case -> agent: "coordina"
+agent -> resolver: "delegación"
+resolver -> arguments: "si existe 1 propiedad"
+resolver -> error: "si la cardinalidad falla"
+arguments -> consumer: "retorna éxito"
