@@ -87,3 +87,4 @@ Documentación:
 
 - [functional_documentation/](functional_documentation/)
 - [technical_documentation/](technical_documentation/)
+- [Current implemented capabilities / Deliverable 02](documentation/DELIVERABLE-02.md)
