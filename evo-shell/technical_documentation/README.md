@@ -289,3 +289,4 @@ Casos de uso técnicos:
 * [UC-012 — Interpretar un pipeline textual básico](use_cases/UC-012-interpret-basic-textual-pipeline/)
 * [UC-013 — Presentar el resultado de un pipeline ejecutado](use_cases/UC-013-present-pipeline-execution-result/)
 * [UC-014 — Interpretar expresiones textuales de `filter`](use_cases/UC-014-interpret-textual-filter-expressions/)
+* [UC-015 — Recolectar entrada textual multilínea de pipeline](use_cases/UC-015-collect-multiline-pipeline-input/)

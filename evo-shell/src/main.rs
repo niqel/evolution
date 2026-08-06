@@ -4,7 +4,7 @@ use std::path::{Component, Path};
 
 use evo_shell::{
     ExecuteError, ExecutionResult, ParseError, PipelineResultPresentError, PresentPipelineResult,
-    Shell, StartError, TokenStream, executor, iteration_presenter, parser,
+    Shell, StartError, Token, TokenStream, executor, iteration_presenter, parser,
     pipeline_result_presenter, presentation_style, starter, tokenizer,
 };
 use evo_shell_engine::IterError;
@@ -31,10 +31,9 @@ fn run_loop(shell: &mut Shell) -> Result<(), RunError> {
     loop {
         write_prompt(shell)?;
 
-        let input = read_input();
-        reset_after_input()?;
+        let input = read_input()?;
 
-        let Some(input) = input? else {
+        let Some(input) = input else {
             println!();
             return Ok(());
         };
@@ -67,10 +66,16 @@ fn write_prompt_to(writer: &mut impl Write, path: &Path) -> io::Result<()> {
     )
 }
 
-fn reset_after_input() -> io::Result<()> {
-    let mut stdout = io::stdout();
-    reset_after_input_to(&mut stdout)?;
-    stdout.flush()
+fn write_continuation_prompt_to(writer: &mut impl Write) -> io::Result<()> {
+    write!(
+        writer,
+        "{}...{} {}>{} {}",
+        presentation_style::PROMPT_SCOPE_STYLE,
+        presentation_style::RESET,
+        presentation_style::PROMPT_SCOPE_STYLE,
+        presentation_style::RESET,
+        presentation_style::FILE_STYLE,
+    )
 }
 
 fn reset_after_input_to(writer: &mut impl Write) -> io::Result<()> {
@@ -78,14 +83,48 @@ fn reset_after_input_to(writer: &mut impl Write) -> io::Result<()> {
 }
 
 fn read_input() -> io::Result<Option<String>> {
-    let mut input = String::new();
-    let bytes_read = io::stdin().read_line(&mut input)?;
+    let mut stdin = io::stdin().lock();
+    let mut stdout = io::stdout();
+    read_input_from(&mut stdin, &mut stdout)
+}
+
+fn read_input_from(
+    reader: &mut impl io::BufRead,
+    writer: &mut impl Write,
+) -> io::Result<Option<String>> {
+    let mut accumulated = String::new();
+    let bytes_read = reader.read_line(&mut accumulated)?;
 
     if bytes_read == 0 {
         return Ok(None);
     }
 
-    Ok(Some(input))
+    reset_after_input_to(writer)?;
+    writer.flush()?;
+
+    while requires_continuation(&accumulated) {
+        write_continuation_prompt_to(writer)?;
+        writer.flush()?;
+        let mut line = String::new();
+        let bytes = reader.read_line(&mut line)?;
+        if bytes == 0 {
+            return Ok(None);
+        }
+        reset_after_input_to(writer)?;
+        writer.flush()?;
+        accumulated.push_str(&line);
+    }
+
+    Ok(Some(accumulated))
+}
+
+fn requires_continuation(input: &str) -> bool {
+    let mut stream = TokenStream::new(input);
+    let mut last_token = None;
+    while let Ok(Some(token)) = tokenizer::tokenize(&mut stream) {
+        last_token = Some(token);
+    }
+    matches!(last_token, Some(Token::PipelineSeparator))
 }
 
 fn handle_input(shell: &mut Shell, input: &str) -> io::Result<LoopControl> {
@@ -223,14 +262,15 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::{
-        LoopControl, compact_scope_location, presentation_style, render_execution,
-        render_execution_with, render_scope_changed, reset_after_input_to, write_prompt_to,
+        LoopControl, compact_scope_location, presentation_style, read_input_from, render_execution,
+        render_execution_with, render_scope_changed, requires_continuation, reset_after_input_to,
+        write_prompt_to,
     };
     use evo_shell::{
         Command, ExecutionResult, PipelineResultPresentError, PipelineValue, TokenStream, executor,
         parser, shell_initializer, tokenizer,
     };
-    use evo_shell_engine::ProjectedValue;
+    use evo_shell_engine::{ProjectedValue, SelectProperty};
 
     #[test]
     fn compact_scope_location_uses_last_segment_for_deep_path() {
@@ -434,6 +474,223 @@ mod tests {
 
         assert!(matches!(loop_control, LoopControl::Continue));
         assert_eq!(rendered, "only.txt\n");
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn single_line_input_without_pipeline_separator_does_not_request_continuation() {
+        let mut input = std::io::Cursor::new(b"iter\n");
+        let mut output = Vec::new();
+
+        let result = read_input_from(&mut input, &mut output).unwrap();
+
+        assert_eq!(result.as_deref(), Some("iter\n"));
+        assert!(output.is_empty() || output == presentation_style::RESET.as_bytes());
+    }
+
+    #[test]
+    fn line_ending_with_pipeline_separator_requests_continuation() {
+        let mut input = std::io::Cursor::new(b"iter |>\ntake 1\n");
+        let mut output = Vec::new();
+
+        let result = read_input_from(&mut input, &mut output).unwrap();
+
+        assert_eq!(result.as_deref(), Some("iter |>\ntake 1\n"));
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("..."));
+    }
+
+    #[test]
+    fn multiline_pipeline_combines_multiple_lines_into_single_input() {
+        let mut input =
+            std::io::Cursor::new(b"iter |>\n    take 1 |>\n    select name |>\n    to-value\n");
+        let mut output = Vec::new();
+
+        let result = read_input_from(&mut input, &mut output).unwrap();
+
+        assert_eq!(
+            result.as_deref(),
+            Some("iter |>\n    take 1 |>\n    select name |>\n    to-value\n")
+        );
+    }
+
+    #[test]
+    fn trailing_whitespace_after_pipeline_separator_still_requires_continuation() {
+        let mut input = std::io::Cursor::new(b"iter |>    \ntake 1\n");
+        let mut output = Vec::new();
+
+        let result = read_input_from(&mut input, &mut output).unwrap();
+
+        assert_eq!(result.as_deref(), Some("iter |>    \ntake 1\n"));
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("..."));
+    }
+
+    #[test]
+    fn pipeline_separator_inside_quoted_string_does_not_trigger_continuation() {
+        let mut input = std::io::Cursor::new(b"filter name equals \"foo |> bar\"\n");
+        let mut output = Vec::new();
+
+        let result = read_input_from(&mut input, &mut output).unwrap();
+
+        assert_eq!(
+            result.as_deref(),
+            Some("filter name equals \"foo |> bar\"\n")
+        );
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(!output_str.contains("..."));
+    }
+
+    #[test]
+    fn complete_multiline_input_parses_as_command_pipeline() {
+        use evo_shell::{Command, PipelineOperation, TokenStream, parser, tokenizer};
+
+        let multiline = "iter |>\n    take 1 |>\n    select name |>\n    to-value";
+        let mut stream = TokenStream::new(multiline);
+
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+
+        let Command::Pipeline(pipeline) = command else {
+            panic!("expected pipeline command");
+        };
+        assert_eq!(
+            pipeline.operations(),
+            &[
+                PipelineOperation::Iter,
+                PipelineOperation::Take(1),
+                PipelineOperation::Select(vec![SelectProperty::Name]),
+                PipelineOperation::ToValue,
+            ]
+        );
+    }
+
+    #[test]
+    fn vertical_multiline_pipeline_parse_execute_and_present_writes_only_typed_value() {
+        use evo_shell::{
+            Command, PipelineResultPresentError, PipelineValue, executor, parser,
+            shell_initializer, tokenizer,
+        };
+
+        thread_local! {
+            static CAPTURED: RefCell<String> = const { RefCell::new(String::new()) };
+        }
+
+        fn present_for_test(
+            _shell: &evo_shell::Shell,
+            value: PipelineValue,
+        ) -> Result<(), PipelineResultPresentError> {
+            CAPTURED.with(|captured| {
+                let mut captured = captured.borrow_mut();
+                captured.clear();
+
+                if let PipelineValue::Value(ProjectedValue::Name(name)) = value {
+                    captured.push_str(&name.to_string_lossy());
+                    captured.push('\n');
+                }
+            });
+
+            Ok(())
+        }
+
+        let directory = std::env::temp_dir().join(format!(
+            "evo_shell_multiline_vertical_pipeline_present_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        std::fs::write(directory.join("only.txt"), "only").unwrap();
+
+        let mut shell = shell_initializer::initialize().unwrap();
+        executor::execute(
+            &mut shell,
+            Command::ScopeFs(directory.to_str().expect("temp path should be utf-8")),
+        )
+        .unwrap();
+
+        let mut input =
+            std::io::Cursor::new(b"iter |>\n    take 1 |>\n    select name |>\n    to-value\n");
+        let mut output = Vec::new();
+        let multiline_input = read_input_from(&mut input, &mut output).unwrap().unwrap();
+
+        let mut stream = TokenStream::new(&multiline_input);
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+        let result = executor::execute(&mut shell, command).unwrap();
+
+        let loop_control = render_execution_with(&shell, result, present_for_test).unwrap();
+        let rendered = CAPTURED.with(|captured| captured.borrow().clone());
+
+        assert!(matches!(loop_control, LoopControl::Continue));
+        assert_eq!(rendered, "only.txt\n");
+
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn simple_commands_continue_working_without_multiline() {
+        use evo_shell::{Command, TokenStream, parser, tokenizer};
+
+        let mut input = std::io::Cursor::new(b"exit\n");
+        let mut output = Vec::new();
+
+        let result = read_input_from(&mut input, &mut output).unwrap();
+
+        assert_eq!(result.as_deref(), Some("exit\n"));
+
+        let mut stream = TokenStream::new("exit");
+        let command = parser::parse(&mut stream, tokenizer::tokenize).unwrap();
+        assert_eq!(command, Command::Exit);
+    }
+
+    #[test]
+    fn multiline_filter_pipeline_produces_identical_result_to_single_line() {
+        use evo_shell::{Command, TokenStream, executor, parser, shell_initializer, tokenizer};
+
+        let directory = std::env::temp_dir().join(format!(
+            "evo_shell_multiline_filter_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        std::fs::write(directory.join("alpha.txt"), "alpha").unwrap();
+        std::fs::write(directory.join("beta.txt"), "beta").unwrap();
+
+        let mut shell_single = shell_initializer::initialize().unwrap();
+        executor::execute(
+            &mut shell_single,
+            Command::ScopeFs(directory.to_str().expect("temp path should be utf-8")),
+        )
+        .unwrap();
+
+        let mut shell_multi = shell_initializer::initialize().unwrap();
+        executor::execute(
+            &mut shell_multi,
+            Command::ScopeFs(directory.to_str().expect("temp path should be utf-8")),
+        )
+        .unwrap();
+
+        let single_line = r#"iter |> filter name equals "alpha.txt" |> select name |> to-values"#;
+        let mut input = std::io::Cursor::new(
+            b"iter |>\nfilter name equals \"alpha.txt\" |>\nselect name |>\nto-values\n",
+        );
+        let mut output = Vec::new();
+        let multiline = read_input_from(&mut input, &mut output).unwrap().unwrap();
+
+        let mut stream_single = TokenStream::new(single_line);
+        let cmd_single = parser::parse(&mut stream_single, tokenizer::tokenize).unwrap();
+        let res_single = executor::execute(&mut shell_single, cmd_single).unwrap();
+
+        let mut stream_multi = TokenStream::new(&multiline);
+        let cmd_multi = parser::parse(&mut stream_multi, tokenizer::tokenize).unwrap();
+        let res_multi = executor::execute(&mut shell_multi, cmd_multi).unwrap();
+
+        assert_eq!(format!("{res_single:?}"), format!("{res_multi:?}"));
 
         let _ = std::fs::remove_dir_all(&directory);
     }

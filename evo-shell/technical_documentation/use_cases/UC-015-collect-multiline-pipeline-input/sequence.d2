@@ -1,0 +1,37 @@
+direction: down
+
+user: "User" {
+  shape: person
+}
+
+shell: "Evo Shell (main)" {
+  shape: rectangle
+}
+
+parser: "Parser Agent" {
+  shape: rectangle
+}
+
+executor: "Executor Agent" {
+  shape: rectangle
+}
+
+pipeline_executor: "PipelineExecutor Agent" {
+  shape: rectangle
+}
+
+presenter: "Presenter Agent" {
+  shape: rectangle
+}
+
+user -> shell: "iter |>"
+shell -> user: "... > (continuation prompt)"
+user -> shell: "filter type equals file |>"
+shell -> user: "... > (continuation prompt)"
+user -> shell: "take 1 |> select name |> to-value"
+shell -> shell: "combines full input text"
+shell -> parser: "parse(full_input)"
+parser -> executor: "Command::Pipeline"
+executor -> pipeline_executor: "execute_pipeline(...)"
+pipeline_executor -> presenter: "present(...)"
+presenter -> user: "result output"

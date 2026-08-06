@@ -44,6 +44,7 @@ Esto incluye, entre otros:
 * [US-012 — Interpretar un pipeline textual básico](user_stories/US-012-interpret-basic-textual-pipeline.md)
 * [US-013 — Presentar el resultado de un pipeline ejecutado](user_stories/US-013-present-pipeline-execution-result.md)
 * [US-014 — Interpretar expresiones textuales de `filter`](user_stories/US-014-interpret-textual-filter-expressions.md)
+* [US-015 — Continuar un pipeline textual en múltiples líneas](user_stories/US-015-continue-textual-pipeline-across-multiple-lines.md)
 
 ## Reglas de lenguaje
 

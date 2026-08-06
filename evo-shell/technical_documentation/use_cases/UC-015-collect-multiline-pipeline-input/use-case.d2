@@ -1,0 +1,16 @@
+direction: down
+
+user: "User" {
+  shape: person
+}
+
+uc15: "UC-015: Collect Multiline Pipeline Input" {
+  shape: oval
+}
+
+shell: "Evo Shell Interactive Loop" {
+  shape: rectangle
+}
+
+user -> uc15: "inputs multiline pipeline"
+uc15 -> shell: "accumulates lines and parses unified command"

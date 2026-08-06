@@ -1,0 +1,47 @@
+direction: down
+
+user: "User" {
+  shape: person
+}
+
+input_collector: "Input Collector\n(read_input loop)" {
+  shape: rectangle
+}
+
+tokenizer: "Tokenizer\n(tokenize check)" {
+  shape: rectangle
+}
+
+token_stream: "TokenStream" {
+  shape: rectangle
+}
+
+parser: "Parser Agent\nparse(...)" {
+  shape: rectangle
+}
+
+command: "Command::Pipeline" {
+  shape: rectangle
+}
+
+executor: "Executor Agent" {
+  shape: rectangle
+}
+
+pipeline_executor: "PipelineExecutor Agent" {
+  shape: rectangle
+}
+
+presenter: "PipelineResultPresenter Agent" {
+  shape: rectangle
+}
+
+user -> input_collector: "inputs lines"
+input_collector -> tokenizer: "checks trailing PipelineSeparator"
+tokenizer -> input_collector: "requires continuation?"
+input_collector -> token_stream: "full unified input string"
+token_stream -> parser: "parse(...)"
+parser -> command: "produces"
+command -> executor: "execute(...)"
+executor -> pipeline_executor: "execute_pipeline(...)"
+pipeline_executor -> presenter: "present(...)"

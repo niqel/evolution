@@ -1,0 +1,23 @@
+direction: down
+
+multiline_input: "MultilineInput" {
+  shape: rectangle
+  lines: "accumulated string"
+}
+
+continuation_prompt: "ContinuationPrompt" {
+  shape: rectangle
+  text: "... > "
+}
+
+token_stream: "TokenStream" {
+  shape: rectangle
+}
+
+command: "Command" {
+  shape: rectangle
+}
+
+multiline_input -> continuation_prompt: "triggers on trailing |>"
+multiline_input -> token_stream: "passes complete text"
+token_stream -> command: "parsed into"
