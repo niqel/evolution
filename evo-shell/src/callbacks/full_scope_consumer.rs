@@ -51,20 +51,9 @@ fn write_path(
 }
 
 fn trim_leading_slashes(s: &str) -> &str {
-    let mut bytes = s.as_bytes();
-    while let [b'/', rest @ ..] = bytes {
-        bytes = rest;
-    }
-    unsafe { core::str::from_utf8_unchecked(bytes) }
+    s.trim_start_matches('/')
 }
 
 fn trim_slashes(s: &str) -> &str {
-    let mut bytes = s.as_bytes();
-    while let [b'/', rest @ ..] = bytes {
-        bytes = rest;
-    }
-    while let [rest @ .., b'/'] = bytes {
-        bytes = rest;
-    }
-    unsafe { core::str::from_utf8_unchecked(bytes) }
+    s.trim_matches('/')
 }
