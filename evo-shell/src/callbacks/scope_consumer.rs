@@ -1,17 +1,19 @@
 use crate::definitions::callbacks::consume_scope;
 use crate::definitions::contracts::write_terminal;
+use crate::definitions::value_objects::scope::Scope;
 use crate::resolvers::terminal_writer;
 
-pub fn consume(
-    write: write_terminal::Write,
-    scope_type: &str,
-    location: &str,
-) -> Result<(), consume_scope::Error> {
+pub fn consume(write: write_terminal::Write, scope: Scope<'_>) -> Result<(), consume_scope::Error> {
+    let location = match scope.item {
+        Some(item) => item,
+        None => scope.source,
+    };
+
     let last_segment = extract_last_segment(location);
 
     terminal_writer::resolve(write, "scope-")
         .map_err(|_| consume_scope::Error::TerminalUnavailable)?;
-    terminal_writer::resolve(write, scope_type)
+    terminal_writer::resolve(write, scope.scope_type)
         .map_err(|_| consume_scope::Error::TerminalUnavailable)?;
     terminal_writer::resolve(write, " ").map_err(|_| consume_scope::Error::TerminalUnavailable)?;
     terminal_writer::resolve(write, "…/").map_err(|_| consume_scope::Error::TerminalUnavailable)?;

@@ -1,5 +1,6 @@
 use evo_shell::definitions::callbacks::consume_scope;
 use evo_shell::definitions::contracts::{provide_scope, write_terminal};
+use evo_shell::definitions::value_objects::scope::Scope;
 use evo_shell::resolvers::scope_resolver;
 
 fn mock_write(_content: &str) -> Result<(), write_terminal::Error> {
@@ -8,8 +9,7 @@ fn mock_write(_content: &str) -> Result<(), write_terminal::Error> {
 
 fn mock_consume(
     _write: write_terminal::Write,
-    _scope_type: &str,
-    _location: &str,
+    _scope: Scope<'_>,
 ) -> Result<(), consume_scope::Error> {
     Ok(())
 }
@@ -18,7 +18,14 @@ fn mock_provide_success(
     consume: consume_scope::Consume,
     write: write_terminal::Write,
 ) -> Result<Result<(), consume_scope::Error>, provide_scope::Error> {
-    Ok(consume(write, "fs", "/downloads"))
+    let scope = Scope {
+        scope_type: "fs",
+        server: "test-server",
+        user: "test-user",
+        source: "/",
+        item: Some("/downloads"),
+    };
+    Ok(consume(write, scope))
 }
 
 fn mock_provide_scope_error(
