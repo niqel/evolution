@@ -1,10 +1,10 @@
 use crate::support::terminal_capture;
-use evo_shell::callbacks::full_scope_consumer;
-use evo_shell::definitions::callbacks::consume_scope;
-use evo_shell::definitions::value_objects::scope::Scope;
+use evo_shell::definitions::continuations::consume_scope;
+use evo_shell::definitions::structs::borrowed::scope::Scope;
+use evo_shell::handlers::full_scope_handler;
 
 #[test]
-fn full_scope_consumer_db_with_item() {
+fn full_scope_handler_db_with_item() {
     let scope = Scope {
         scope_type: "db",
         server: "sql-server",
@@ -13,13 +13,13 @@ fn full_scope_consumer_db_with_item() {
         item: Some("trabajadores"),
     };
     let (result, output) =
-        terminal_capture::run_with_capture(|write| full_scope_consumer::consume(write, scope));
+        terminal_capture::run_with_capture(|write| full_scope_handler::handle(write, scope));
     assert_eq!(result, Ok(()));
     assert_eq!(output, "sql-server/gustavo/miBaseDatos/trabajadores\n");
 }
 
 #[test]
-fn full_scope_consumer_db_without_item() {
+fn full_scope_handler_db_without_item() {
     let scope = Scope {
         scope_type: "db",
         server: "sql-server",
@@ -28,13 +28,13 @@ fn full_scope_consumer_db_without_item() {
         item: None,
     };
     let (result, output) =
-        terminal_capture::run_with_capture(|write| full_scope_consumer::consume(write, scope));
+        terminal_capture::run_with_capture(|write| full_scope_handler::handle(write, scope));
     assert_eq!(result, Ok(()));
     assert_eq!(output, "sql-server/gustavo/miBaseDatos\n");
 }
 
 #[test]
-fn full_scope_consumer_fs_root_source_with_item() {
+fn full_scope_handler_fs_root_source_with_item() {
     let scope = Scope {
         scope_type: "fs",
         server: "niqel-pc",
@@ -43,13 +43,13 @@ fn full_scope_consumer_fs_root_source_with_item() {
         item: Some("/home/niqel504/repos/evolution"),
     };
     let (result, output) =
-        terminal_capture::run_with_capture(|write| full_scope_consumer::consume(write, scope));
+        terminal_capture::run_with_capture(|write| full_scope_handler::handle(write, scope));
     assert_eq!(result, Ok(()));
     assert_eq!(output, "niqel-pc/niqel504/home/niqel504/repos/evolution\n");
 }
 
 #[test]
-fn full_scope_consumer_translates_writer_error() {
+fn full_scope_handler_translates_writer_error() {
     let scope = Scope {
         scope_type: "fs",
         server: "niqel-pc",
@@ -57,7 +57,6 @@ fn full_scope_consumer_translates_writer_error() {
         source: "/",
         item: Some("/home/niqel504/repos/evolution"),
     };
-    let result =
-        terminal_capture::run_with_fail(|write| full_scope_consumer::consume(write, scope));
+    let result = terminal_capture::run_with_fail(|write| full_scope_handler::handle(write, scope));
     assert_eq!(result, Err(consume_scope::Error::TerminalUnavailable));
 }

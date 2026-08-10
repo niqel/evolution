@@ -1,9 +1,9 @@
-use crate::definitions::callbacks::consume_scope;
+use crate::definitions::continuations::consume_scope;
 use crate::definitions::contracts::write_terminal;
-use crate::definitions::value_objects::scope::Scope;
+use crate::definitions::structs::borrowed::scope::Scope;
 use crate::resolvers::terminal_writer;
 
-pub fn consume(write: write_terminal::Write, scope: Scope<'_>) -> Result<(), consume_scope::Error> {
+pub fn handle(write: write_terminal::Write, scope: Scope<'_>) -> Result<(), consume_scope::Error> {
     terminal_writer::resolve(write, scope.server)
         .map_err(|_| consume_scope::Error::TerminalUnavailable)?;
     terminal_writer::resolve(write, "/").map_err(|_| consume_scope::Error::TerminalUnavailable)?;

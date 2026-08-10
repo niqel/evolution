@@ -1,6 +1,6 @@
-use evo_shell::definitions::callbacks::consume_scope;
+use evo_shell::definitions::continuations::consume_scope;
 use evo_shell::definitions::contracts::{provide_scope, write_terminal};
-use evo_shell::definitions::value_objects::scope::Scope;
+use evo_shell::definitions::structs::borrowed::scope::Scope;
 use evo_shell::resolvers::scope_resolver;
 
 fn mock_write(_content: &str) -> Result<(), write_terminal::Error> {

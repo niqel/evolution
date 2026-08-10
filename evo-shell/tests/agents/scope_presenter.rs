@@ -1,8 +1,8 @@
 use evo_shell::agents::scope_presenter;
-use evo_shell::definitions::callbacks::consume_scope;
+use evo_shell::definitions::continuations::consume_scope;
 use evo_shell::definitions::contracts::{provide_scope, write_terminal};
+use evo_shell::definitions::structs::borrowed::scope::Scope;
 use evo_shell::definitions::use_cases::present_scope;
-use evo_shell::definitions::value_objects::scope::Scope;
 
 fn mock_write_success(_content: &str) -> Result<(), write_terminal::Error> {
     Ok(())

@@ -1,10 +1,10 @@
 use crate::support::terminal_capture;
-use evo_shell::callbacks::scope_consumer;
-use evo_shell::definitions::callbacks::consume_scope;
-use evo_shell::definitions::value_objects::scope::Scope;
+use evo_shell::definitions::continuations::consume_scope;
+use evo_shell::definitions::structs::borrowed::scope::Scope;
+use evo_shell::handlers::scope_handler;
 
 #[test]
-fn scope_consumer_writes_fragments_in_order() {
+fn scope_handler_writes_fragments_in_order() {
     let scope = Scope {
         scope_type: "fs",
         server: "test-server",
@@ -13,13 +13,13 @@ fn scope_consumer_writes_fragments_in_order() {
         item: Some("/home/user/downloads"),
     };
     let (result, output) =
-        terminal_capture::run_with_capture(|write| scope_consumer::consume(write, scope));
+        terminal_capture::run_with_capture(|write| scope_handler::handle(write, scope));
     assert_eq!(result, Ok(()));
     assert_eq!(output, "scope-fs …/downloads>");
 }
 
 #[test]
-fn scope_consumer_handles_root_location() {
+fn scope_handler_handles_root_location() {
     let scope = Scope {
         scope_type: "fs",
         server: "test-server",
@@ -28,13 +28,13 @@ fn scope_consumer_handles_root_location() {
         item: None,
     };
     let (result, output) =
-        terminal_capture::run_with_capture(|write| scope_consumer::consume(write, scope));
+        terminal_capture::run_with_capture(|write| scope_handler::handle(write, scope));
     assert_eq!(result, Ok(()));
     assert_eq!(output, "scope-fs …/>");
 }
 
 #[test]
-fn scope_consumer_translates_writer_error() {
+fn scope_handler_translates_writer_error() {
     let scope = Scope {
         scope_type: "fs",
         server: "test-server",
@@ -42,6 +42,6 @@ fn scope_consumer_translates_writer_error() {
         source: "/",
         item: Some("/home/user/downloads"),
     };
-    let result = terminal_capture::run_with_fail(|write| scope_consumer::consume(write, scope));
+    let result = terminal_capture::run_with_fail(|write| scope_handler::handle(write, scope));
     assert_eq!(result, Err(consume_scope::Error::TerminalUnavailable));
 }

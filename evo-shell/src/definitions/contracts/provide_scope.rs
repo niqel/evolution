@@ -1,4 +1,4 @@
-use crate::definitions::callbacks::consume_scope;
+use crate::definitions::continuations::consume_scope;
 use crate::definitions::contracts::write_terminal;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

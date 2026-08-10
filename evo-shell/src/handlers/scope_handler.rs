@@ -1,9 +1,9 @@
-use crate::definitions::callbacks::consume_scope;
+use crate::definitions::continuations::consume_scope;
 use crate::definitions::contracts::write_terminal;
-use crate::definitions::value_objects::scope::Scope;
+use crate::definitions::structs::borrowed::scope::Scope;
 use crate::resolvers::terminal_writer;
 
-pub fn consume(write: write_terminal::Write, scope: Scope<'_>) -> Result<(), consume_scope::Error> {
+pub fn handle(write: write_terminal::Write, scope: Scope<'_>) -> Result<(), consume_scope::Error> {
     let location = match scope.item {
         Some(item) => item,
         None => scope.source,
