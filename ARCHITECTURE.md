@@ -145,16 +145,19 @@ Dentro de una aplicación ejecutándose bajo `evo-runtime`, la interfaz gráfica
 
 El runtime resuelve y proporciona las capacidades necesarias a la aplicación de forma dinámica según su necesidad.
 
-### Resolución de Capacidades:
-```text
-app solicita Sum → runtime resuelve capability → evo-shell Sum Use Case → Summator Agent → Arithmetic Collaborator
-```
-*(El runtime resuelve y conecta la capacidad, pero no realiza la suma).*
+### Resolución y Flujo de Capacidades:
 
+**Operaciones Puras de Dominio (ej. Suma):**
 ```text
-app solicita CopyTo → runtime resuelve capability → evo-shell CopyTo → Agent → Resolver → Contract → Provider
+Sum Use Case → Summator Agent → Summator Collaborator → (optional pure Tools)
 ```
-*(El runtime resuelve y conecta la capacidad, pero no realiza la copia de archivos).*
+*(El Use Case define la firma y su propio tipo Error. El Agent coordina. El Collaborator ejecuta la lógica y produce directamente el Result).*
+
+**Operaciones con Frontera Técnica de Infraestructura (ej. Copia):**
+```text
+CopyTo Use Case → Copier Agent → Copy Resolver → Copy Contract → Copy Provider
+```
+*(El Resolver cruza la frontera técnica con la infraestructura externa implementada por el Provider).*
 
 - **Principio *Capability Unavailable*:** Si una capacidad requerida no está disponible en el entorno (ej. ausencia de terminal en un entorno puramente gráfico), la solicitud responde con un error semántico de indisponibilidad sin invalidar el entorno global de `evo-runtime`.
 - **Ownership de Estado Externo**: Las aplicaciones y el runtime no duplican persistentemente el estado visual que pertenece a la infraestructura física (ej. el scrollback o renderizado de la terminal física lo mantiene el Provider de terminal).
@@ -206,7 +209,9 @@ evo-apps (UI / CLI) → repository / store → descarga scripts .evo → ejecuci
 
 - **Portabilidad OS**: La semántica de las aplicaciones `.evo`, de `evo-script` y de `evo-shell` es idéntica entre Linux y Windows. Las diferencias específicas corresponden a los hosts y Providers concretos (`Linux Provider` / `Windows Provider`).
 - **Diseño Orientado a Funciones**: Uso de funciones puras, punteros de función (`fn`), enums y structs de datos. Se eliminan clases de servicio, administradores (*managers*), objetos stateful y despacho dinámico (`dyn`).
+- **Use Case es dueño de su resultado semántico**: Cada Use Case define su firma (`fn`) y su propio tipo `Error` cuando la acción puede fallar. No existen tipos de error globales compartidos entre Use Cases independientes.
 - **Agent = Orchestration Only**: Un Agent coordina, encadena pasos, pasa argumentos/capabilities y propaga `Result`. Un Agent **NO** valida datos, implementa reglas matemáticas/dominio, ejecuta operaciones internas ni interpreta errores técnicos.
-- **Result no implica Resolver (*Result does not imply Resolver*)**: La existencia de un `Resolver` depende de la presencia de una frontera técnica externa con un `Contract`/`Provider`, **no** de la posibilidad de que una operación devuelva `Err`. Las operaciones puras internas que pueden fallar (ej. overflow) devuelven su `Result` directamente desde un Collaborator o Tool a través del Agent sin requerir Resolver.
+- **Semántica de Collaborator y Nombres de Sujeto**: Un Collaborator es un sujeto interno que colabora con un Agent. Cuando comparten el mismo sujeto (`agents/summator.rs` y `collaborators/summator.rs`), el Agent expone la función con el verbo de la acción pública (ej. `sum()`) y el Collaborator expone la función `collaborate()`. No se requieren traits ni despacho dinámico.
+- **Result no implica Resolver (*Result does not imply Resolver*)**: La existencia de un `Resolver` depende de la presencia de una frontera técnica externa con un `Contract`/`Provider`, **no** de la posibilidad de que una operación devuelva `Err`. Las operaciones puras internas que pueden fallar (ej. overflow) devuelven su `Result` directamente desde un Collaborator a través del Agent sin requerir Resolver.
 - **Nota de Migración Pendiente**: `expression_evaluator` y `NumberBinding` residen temporalmente dentro de `evo-shell` debido al proceso de descubrimiento incremental, pero pertenecen a `evo-script` y serán migrados en una etapa posterior.
 - **Estrategia de Testing**: Código de producción limpio en `src/` (sin `#[cfg(test)] mod tests`) y verificación externa en la suite `tests/`.

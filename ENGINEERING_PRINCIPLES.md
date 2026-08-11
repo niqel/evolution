@@ -150,6 +150,15 @@ Según la arquitectura del proyecto, ese objeto puede representarse como entidad
 
 No se debe crear una `struct Lavadora` si no existe estado, coordinación o comportamiento persistente que la justifique.
 
+## Sujeto Agente a Través de Roles Arquitectónicos
+
+El concepto de sujeto agente puede reutilizarse a lo largo de distintas capas o roles arquitectónicos cuando representan al mismo sujeto funcional.
+
+- El espacio de nombres o directorio distingue el rol arquitectónico (`agents/summator.rs` vs `collaborators/summator.rs`).
+- El Agent conserva el verbo de la acción pública (ej. `summator::sum(...)`).
+- El Collaborator expone `collaborate()` como verbo de su rol interno (`collaborators::summator::collaborate(...)`).
+- Esta convención arquitectónica no exige la creación de traits, interfaces ficticias ni despacho dinámico.
+
 ## Regla de Diseño
 
 Antes de crear una pieza nueva, deben responderse estas preguntas:

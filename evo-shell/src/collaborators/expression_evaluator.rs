@@ -1,6 +1,7 @@
-use crate::collaborators::arithmetic;
+use crate::collaborators::{arithmetic, divider, multiplier, subtractor, summator};
 use crate::definitions::structs::borrowed::number_binding::NumberBinding;
 use crate::definitions::types::number::Number;
+use crate::definitions::use_cases::{divide, multiply, subtract, sum};
 use core::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,6 +14,51 @@ pub enum Error {
     MissingClosingParenthesis,
     UnknownIdentifier,
     InvalidNumber,
+}
+
+impl From<sum::Error> for Error {
+    fn from(err: sum::Error) -> Self {
+        match err {
+            sum::Error::UnsupportedTypes => Error::Arithmetic(arithmetic::Error::UnsupportedTypes),
+            sum::Error::Overflow => Error::Arithmetic(arithmetic::Error::Overflow),
+        }
+    }
+}
+
+impl From<subtract::Error> for Error {
+    fn from(err: subtract::Error) -> Self {
+        match err {
+            subtract::Error::UnsupportedTypes => {
+                Error::Arithmetic(arithmetic::Error::UnsupportedTypes)
+            }
+            subtract::Error::Overflow => Error::Arithmetic(arithmetic::Error::Overflow),
+        }
+    }
+}
+
+impl From<multiply::Error> for Error {
+    fn from(err: multiply::Error) -> Self {
+        match err {
+            multiply::Error::UnsupportedTypes => {
+                Error::Arithmetic(arithmetic::Error::UnsupportedTypes)
+            }
+            multiply::Error::Overflow => Error::Arithmetic(arithmetic::Error::Overflow),
+        }
+    }
+}
+
+impl From<divide::Error> for Error {
+    fn from(err: divide::Error) -> Self {
+        match err {
+            divide::Error::UnsupportedTypes => {
+                Error::Arithmetic(arithmetic::Error::UnsupportedTypes)
+            }
+            divide::Error::Overflow => Error::Arithmetic(arithmetic::Error::Overflow),
+            divide::Error::DivisionByZero => {
+                Error::Arithmetic(arithmetic::Error::DivisionByZero)
+            }
+        }
+    }
 }
 
 fn resolve_identifier(ident: &str, bindings: &[NumberBinding<'_>]) -> Result<Number, Error> {
@@ -194,10 +240,7 @@ fn parse_suffix<'a>(
                 _ => unreachable!(),
             };
 
-            return match res {
-                Ok(num) => Some(Ok((num, rem))),
-                Err(err) => Some(Err(err)),
-            };
+            return Some(res.map(|num| (num, rem)));
         }
     }
     None
@@ -303,14 +346,13 @@ fn parse_binary<'a>(
         let (right, next_rest) = parse_binary(after_op, prec + 1, bindings)?;
 
         let res = match op_char {
-            b'+' => arithmetic::sum(left, right),
-            b'-' => arithmetic::subtract(left, right),
-            b'*' => arithmetic::multiply(left, right),
-            b'/' => arithmetic::divide(left, right),
-            b'%' => arithmetic::remainder(left, right),
+            b'+' => summator::collaborate(left, right)?,
+            b'-' => subtractor::collaborate(left, right)?,
+            b'*' => multiplier::collaborate(left, right)?,
+            b'/' => divider::collaborate(left, right)?,
+            b'%' => arithmetic::remainder(left, right).map_err(Error::Arithmetic)?,
             _ => unreachable!(),
-        }
-        .map_err(Error::Arithmetic)?;
+        };
 
         left = res;
         rest = next_rest;
