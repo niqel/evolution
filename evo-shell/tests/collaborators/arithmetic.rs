@@ -234,6 +234,24 @@ fn stable_type_result_preservation() {
 }
 
 #[test]
+fn negate_behavior() {
+    assert_eq!(arithmetic::negate(Number::I8(5)), Ok(Number::I8(-5)));
+    assert_eq!(
+        arithmetic::negate(Number::I8(i8::MIN)),
+        Err(Error::Overflow)
+    );
+    assert_eq!(
+        arithmetic::negate(Number::U8(5)),
+        Err(Error::UnsupportedTypes)
+    );
+    assert_eq!(
+        arithmetic::negate(Number::U8(0)),
+        Err(Error::UnsupportedTypes)
+    );
+    assert_eq!(arithmetic::negate(Number::F64(2.5)), Ok(Number::F64(-2.5)));
+}
+
+#[test]
 fn number_size_of_check() {
     let size = std::mem::size_of::<Number>();
     assert!(size > 0);

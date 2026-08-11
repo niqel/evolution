@@ -192,11 +192,9 @@ pub fn negate(value: Number) -> Result<Number, Error> {
         Number::I32(a) => a.checked_neg().map(Number::I32).ok_or(Error::Overflow),
         Number::I64(a) => a.checked_neg().map(Number::I64).ok_or(Error::Overflow),
         Number::I128(a) => a.checked_neg().map(Number::I128).ok_or(Error::Overflow),
-        Number::U8(a) => a.checked_neg().map(Number::U8).ok_or(Error::Overflow),
-        Number::U16(a) => a.checked_neg().map(Number::U16).ok_or(Error::Overflow),
-        Number::U32(a) => a.checked_neg().map(Number::U32).ok_or(Error::Overflow),
-        Number::U64(a) => a.checked_neg().map(Number::U64).ok_or(Error::Overflow),
-        Number::U128(a) => a.checked_neg().map(Number::U128).ok_or(Error::Overflow),
+        Number::U8(_) | Number::U16(_) | Number::U32(_) | Number::U64(_) | Number::U128(_) => {
+            Err(Error::UnsupportedTypes)
+        }
         Number::F32(a) => Ok(Number::F32(-a)),
         Number::F64(a) => Ok(Number::F64(-a)),
     }
