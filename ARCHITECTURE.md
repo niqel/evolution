@@ -1,482 +1,168 @@
-# ARCHITECTURE
+# Arquitectura del Proyecto Evolution
 
-## Propósito
-
-Este documento define una arquitectura genérica para resolver proyectos de forma consistente.
-
-La meta no es crear capas por costumbre. La meta es separar responsabilidades de manera defendible.
+Este documento especifica la arquitectura del proyecto **Evolution**, definiendo los límites conceptuales entre los proyectos/crates (`evo-script`, `evo-shell`, `providers`, `evo-shell-cli`) y la organización interna del motor semántico `evo-shell`.
 
 ---
 
-## Principio General
+## 1. Visión General y Fronteras del Sistema
 
-La arquitectura sigue una dirección simple:
+El sistema Evolution procesa solicitudes desde el texto escrito por el usuario hasta su ejecución en infraestructura física siguiendo un flujo unidireccional y desacoplado:
 
 ```text
-agent
-  ↓
-resolver
-  ↓
-contract
-  ↓
-provider
-
-(tool → opcional)
+                         USER SOURCE
+                              │
+                              ▼
+                         evo-script
+                syntax / rules / language
+                              │
+                         semantic intent
+                              │
+                              ▼
+                     evo-shell Use Cases
+                              │
+                              ▼
+                           Agents
+                         /         \
+                        /           \
+             pure internal        needs external
+                  │                    │
+                  ▼                    ▼
+             Collaborator          Resolver
+                                       │
+                                    Contract
+                                       │
+                                    Provider
+                                       │
+                                external world
 ```
 
-El flujo debe conservar esa dirección.
+### Roles de los Componentes en la Frontera
 
-La filosofía general es:
-
-- operar sobre préstamos cuando sea suficiente
-- evitar paquetes intermedios innecesarios
-- materializar solo cuando agrega capacidad real
-- mantener responsabilidades pequeñas y defendibles
+- **`evo-script`**: Es el dueño del lenguaje de programación Evo. Responsable de la gramática, sintaxis, parsing, tokenización, operadores, funciones sintácticas, reglas de asociatividad, precedencia de operadores y agrupación sintáctica.
+- **`evo-shell`**: Es el motor semántico de ejecución `no_std`. No conoce la gramática textual ni el parsing del lenguaje. Recibe intenciones semánticas puras expresadas mediante Use Cases públicos e independizadas de la infraestructura externa.
+- **`Contracts` / `Providers`**: Los Contracts definen la firma de las capacidades externas necesarias (filesystem, terminal, base de datos, tiempo, procesos). Los Providers implementan la interacción concreta contra la infraestructura física.
+- **`evo-shell-cli`**: Es el *Composition Root* ejecutable que ensambla la entrada/salida del usuario, invoca a `evo-script`, conecta los Use Cases públicos de `evo-shell` con los Providers concretos e inicia la ejecución.
 
 ---
 
-## Agent
+## 2. Responsabilidades de `evo-script`
 
-Un `agent` representa un caso de uso específico del sistema.
+`evo-script` representa exclusivamente el lenguaje de programación Evo.
 
-Sigue la regla del sujeto agente.
+### Alcance Exclusivo de `evo-script`:
+- **Sintaxis y Gramática**: Análisis léxico y sintáctico del código fuente.
+- **Identificadores y Literales**: Reconocimiento textual de constantes y variables (ej. `"42"`, `"2.5f32"`, `"quantity"`, `"price"`).
+- **Operadores y Simbología**: Definición de símbolos del lenguaje (ej. `"+"`, `"-"`, `*`, `"/"`, `"%"`, `"|>"`, `"( )"`).
+- **Nombres de Comandos y Pipes**: Palabras clave como `"copy-to"`, `"move-to"`, `"select"`, `"filter"`, `"iter"`, `"rename"`.
+- **Precedencia y Reglas de Expresión**: Determinación del orden operacional de evaluación (ej. en `quantity * price + tax`, decide que la multiplicación se evalúa antes que la suma).
+- **Errores Sintácticos**: Diagnósticos del lenguaje como token inesperado, fin de expresión inesperado o paréntesis sin cerrar.
 
-Ejemplos:
-
-- lavadora → lava
-- licuadora → licua
-- report_generator → genera reportes
-
-Un `agent`:
-
-- coordina un caso de uso
-- organiza el flujo internamente como pipeline
-- solo trabaja con `resolvers`
-- no implementa resolución fina
-- no usa `providers` directamente
-
-Puede:
-
-- iniciar flujo
-- seleccionar resolvers
-- terminar ejecución
-
-No puede:
-
-- consultar infraestructura
-- transformar datos arbitrariamente
-- resolver por sí mismo
+### Aislamiento de `evo-script`:
+- `evo-script` **NO debe conocer la estructura interna** de `evo-shell` (`agents`, `resolvers`, `collaborators`, `contracts`, `providers`, `handlers`).
+- `evo-script` interactúa exclusivamente con `evo-shell` invocando sus **Use Cases públicos** (`definitions/use_cases`).
+- `evo-script` delega la ejecución semántica de operaciones físicas o matemáticas puras hacia los Use Cases correspondientes.
 
 ---
 
-## Use Cases Entre Proyectos
+## 3. Responsabilidades de `evo-shell`
 
-Cuando dos proyectos necesitan comunicarse, no deben compartir `resolvers` internos.
+`evo-shell` es la frontera y motor semántico de ejecución del sistema.
 
-La comunicación entre proyectos debe hacerse mediante `use_cases`.
-
-Un `use_case` representa una capacidad pública específica del sistema.
-
-Regla:
-
-- un `use_case` define una sola acción pública
-- un `agent` implementa ese `use_case`
-- otros proyectos dependen del `use_case`, no del `agent` concreto
-- los `resolvers` permanecen internos al proyecto
-
-Ejemplo conceptual:
-
-```rust
-pub trait UseCaseLavadora {
-    fn lavar(&self, ropa: &mut Ropa);
-}
-```
-
-Implementación:
-
-```rust
-pub struct Lavadora;
-
-impl UseCaseLavadora for Lavadora {
-    fn lavar(&self, ropa: &mut Ropa) {
-        // flujo interno con resolvers
-    }
-}
-```
-
-Relación:
-
-```text
-otro proyecto
-    ↓
-use_case
-    ↓
-agent
-    ↓
-resolver
-    ↓
-contract
-    ↓
-provider
-```
-
-No es correcto:
-
-```text
-otro proyecto -> resolver interno
-```
-
-Porque el `resolver` forma parte de la mecánica interna del sistema y no de su frontera pública.
+### Características de `evo-shell`:
+- **Core `#![no_std]`**: Diseñado con cero asignación dinámica en heap (`no alloc`, `no Vec`, `no String`, `no Box`, `no dyn`).
+- **Independiente de la Sintaxis**: `evo-shell` no contiene parsers, tokenizadores ni AST.
+- **Traducción Semántica**: Mientras `evo-script` interpreta el texto `"+"` o `"copy-to"`, `evo-shell` recibe y ejecuta el caso de uso `add(left, right)` o `copy_to(origin, destination)`.
 
 ---
 
-## Resolver
+## 4. Arquitectura Interna de `evo-shell`
 
-Un `resolver` decide si existe una forma operable para continuar.
+### Mapeo Definición $\rightarrow$ Implementación
 
-Para resolver:
-
-- usa contratos
-- consume datos del provider mediante contratos
-- evita copias innecesarias
-- puede usar `tools`
-
-Resultado esperado:
-
-```text
-resolved
-not_resolved
-```
-
-Puede:
-
-- inspeccionar
-- resolver
-- devolver imposibilidad explícita
-
-No puede:
-
-- coordinar casos de uso
-- convertirse en provider
-- crear ownership innecesario
-
-Forma esperada:
-
-```text
-resolver.resolve(...)
-```
-
-
-### Regla de Alcance
-
-Un `resolver` debe resolver una sola condición o transición necesaria para que el caso de uso pueda continuar.
-
-Su responsabilidad no es ejecutar todo el caso de uso, sino responder una pregunta operativa concreta, por ejemplo:
-
-- ¿el origen es válido y accesible?
-- ¿el destino permite la operación?
-- ¿la copia pudo realizarse?
-- ¿el origen puede eliminarse después de una copia confirmada?
-
-El nombre del módulo expresa qué resuelve. Dentro del módulo, la operación pública puede conservar una forma uniforme:
-
-```rust
-resolver_origen::resolve(...)
-resolver_destino::resolve(...)
-resolver_copia::resolve(...)
-```
-
-La identidad semántica pertenece al módulo. La función `resolve` expresa la acción común de todos los resolvers.
-
-Un resolver:
-
-- habilita o rechaza un paso del flujo
-- devuelve un resultado explícito
-- usa contratos para solicitar capacidades externas
-- no coordina resolvers anteriores o posteriores
-
-Distinción:
-
-```text
-agent      → coordina el caso de uso
-resolver   → habilita o rechaza un paso
-contract   → define una capacidad externa
-provider   → ejecuta contra infraestructura real
-tool       → transforma o calcula
-```
-
-### Ejemplo: Copiar un Archivo
-
-El caso de uso público es copiar un archivo desde un origen hacia un destino.
-
-El sujeto agente es el módulo `copiador`:
-
-```text
-copiador::copiar(origen, destino)
-```
-
-El agente no consulta directamente el sistema de archivos ni realiza por sí mismo cada operación. Coordina una cadena de resolvers:
-
-```text
-copiador::copiar(origen, destino)
-    ↓
-resolver_origen::resolve(origen)
-    ↓
-resolver_destino::resolve(destino)
-    ↓
-resolver_copia::resolve(origen, destino)
-```
-
-Responsabilidades:
-
-- `resolver_origen` confirma que el origen representa un archivo operable
-- `resolver_destino` confirma que el destino acepta la operación
-- `resolver_copia` solicita la copia y confirma su resultado
-
-Cada resolver usa contratos del sistema de archivos. Un provider implementa esos contratos mediante la infraestructura real, por ejemplo `std::fs`.
-
-```text
-copiador
-   ↓
-resolvers
-   ↓
-file_system contract
-   ↓
-std_file_system provider
-   ↓
-std::fs
-```
-
-La operación de copiar conserva el archivo original.
-
-Si el caso de uso también elimina el origen después de confirmar la copia, entonces semánticamente ya no es un `copiador`, sino un `movedor`:
-
-```text
-movedor::mover(origen, destino)
-    ↓
-resolver_origen::resolve(origen)
-    ↓
-resolver_destino::resolve(destino)
-    ↓
-resolver_copia::resolve(origen, destino)
-    ↓
-resolver_eliminacion::resolve(origen)
-```
-
-El resolver de eliminación solo puede ejecutarse después de que la copia haya sido confirmada. El agente conserva la responsabilidad de coordinar ese orden.
+| Capa de Definición (`definitions/`) | Capa de Implementación | Responsabilidad Principal |
+|---|---|---|
+| `definitions/use_cases/` | `agents/` | Frontera pública y coordinación del caso de uso. |
+| `definitions/contracts/` | `providers/` | Firma de capacidad externa e implementación de infraestructura. |
+| `definitions/continuations/` | `handlers/` | Firma de trabajo prestado y su procesador. |
+| *Interno* | `resolvers/` | Resolución determinista de límites técnicos. |
+| *Interno* | `collaborators/` | Lógica de dominio pura interna y reutilizable. |
+| *Interno* | `tools/` | Operaciones puras pequeñas y utilitarias. |
 
 ---
 
-## Contract
+### Use Case
+Definición pública de una operación semántica pura. Es el único punto de entrada expuesto a otros crates como `evo-script`.
+- **Forma:** Expresado mediante firmas de función o punteros de función (`fn`).
+- **Ejemplos:** `copy_to`, `move_to`, `rename`, `delete`, `trash`, `create_file`, `create_dir`, `add`, `subtract`, `multiply`, `divide`, `remainder`, `negate`.
 
-Un `contract` define qué se espera del exterior.
+### Agent
+Coordinador e implementador de un Use Case.
+- Recibe la intención semántica del Use Case.
+- Coordina el flujo operacional.
+- Invoca un `Resolver` si se requiere interactuar con una frontera técnica o infraestructura externa.
+- Invoca un `Collaborator` o `Tool` directamente cuando ejecuta lógica interna pura sin fronteras externas.
+- **Reglas:**
+  - **No `Agent -> Agent`**: Los agentes no dependen de otros agentes; comparten colaboraciones y capacidades.
+  - **`Agent -> Collaborator` permitido**: Cuando el flujo es puramente interno y no requiere resolución externa (ej. `add` Use Case $\rightarrow$ `calculator` Agent $\rightarrow$ `arithmetic` Collaborator).
 
-No implementa.
+### Resolver
+Paso determinista que ejecuta y traduce operaciones a través de una frontera técnica.
+- Consume una capacidad definida por un `Contract`.
+- Ejecuta la capacidad técnica del Provider.
+- Traduce los resultados técnicos o errores de infraestructura a respuestas semánticas del dominio.
+- **Regla:** No se crean Resolvers para operaciones puramente matemáticas o internas (ej. `add(2, 2)` no usa Resolver porque no hay infraestructura externa).
 
-No coordina.
+### Contract
+Firma que especifica una capacidad requerida del mundo exterior.
+- Declarado mediante punteros de función (`fn`) sin estado (*stateless*).
+- No implementa lógica de infraestructura.
 
-Solo define capacidades externas.
+### Provider
+Implementación concreta de un `Contract` contra infraestructura real fuera del core.
+- Ejemplos de dominios de Providers: `filesystem`, `database`, `network`, `operating_system`, `clock`, `process`, `terminal`.
+- **Terminal como Provider**: La terminal es infraestructura física externa. Se modela conceptualmente como `terminal Contract` $\rightarrow$ `terminal Provider`.
 
-Se agrupa en:
+### Collaborator
+Lógica interna cohesionada, pura y reutilizable.
+- Cero I/O físico, cero infraestructura, cero Provider/Contract.
+- Puede ser consumido directamente por Agents o por Resolvers.
+- Ejemplo: `collaborators::arithmetic` (ejecuta operaciones numéricas escalares checked).
 
-- inputs
-- outputs
-- actions
-- events
-
-Puede:
-
-- definir comportamiento esperado
-- expresar capacidades
-
-No puede:
-
-- ejecutar lógica
-- hablar con tecnología real
-
----
-
-## Provider
-
-Un `provider` implementa contratos.
-
-Es quien habla con el mundo real.
-
-Puede:
-
-- leer
-- escribir
-- ejecutar
-- emitir
-
-No puede:
-
-- decidir flujo
-- definir reglas del dominio
-- coordinar casos de uso
+### Continuation & Handler
+Mecanismo para procesamiento con ventana de préstamo (*borrowing window*).
+- **Continuation** (`definitions/continuations/`): Define el puntero de función para procesar datos sin transferir ownership.
+- **Handler** (`handlers/`): Implementación concreta que procesa la vista prestada durante la llamada del Provider.
+- Ejemplos: `consume_scope` $\rightarrow$ `scope_handler`, `report_copy_progress` $\rightarrow$ `copy_progress_handler`.
 
 ---
 
-## Tool (Opcional)
+## 5. Diseño Orientado a Funciones (*Function-Oriented Design*)
 
-Una `tool` es una herramienta puntual.
-
-Solo existe cuando una operación específica merece identidad propia.
-
-Puede:
-
-- transformar
-- calcular
-- normalizar
-
-No puede:
-
-- coordinar
-- resolver flujo
+Evolution aplica un paradigma estrictamente enfocado en funciones puras y tipos de datos:
+- **Estructuras de Datos y Enums**: Contienen datos y estados semánticos (ej. `Number`, `NumberBinding`, `Scope<'a>`).
+- **Funciones y Pointers (`fn`)**: Expresan comportamiento, contratos y transferencias de control.
+- **Construcciones Evitadas**: Se eliminan clases de servicio, administradores (*managers*), patrones orientados a objetos, `traits` de un solo método por ceremonia, objetos con estado dinámico y despacho dinámico (`dyn`).
 
 ---
 
-## Ownership y Préstamo
+## 6. Manejo de Datos, Ownership y Borrowed Structs
 
-La vida del dato pertenece a quien lo crea.
-
-Reglas:
-
-- si no eres dueño → usa préstamo
-- no prolongues lifetimes artificialmente
-- materializa solo cuando haga falta independencia real
+1. **Ownership de backing data**: La propiedad del dato reside en el componente que lo crea o en el Provider de infraestructura.
+2. **Borrowed Structs**: Estructuras del dominio cuyos datos son referencias con lifetimes explícitos (ej. `Scope<'a>`, `NumberBinding<'b>`).
+3. **Immutability por Defecto**: Préstamos inmutables (`&T`) para lectura e inspección; préstamos mutables (`&mut T`) solo si se modifica el recurso prestado para devolverlo al dueño.
 
 ---
 
+## 7. Aclaraciones y Notas de Migración Pendiente
 
-## Borrowed en Rust
-
-En esta arquitectura, `borrowed` significa una representación no dueña.
-
-Un `borrowed` puede ser:
-
-- `&str`
-- `&[T]`
-- `&T`
-- `&mut T`
-- una view con lifetime
-- un handle con lifetime
-- un slice semántico del dominio
-
-Un slice es una forma posible de borrowed, pero no todos los borrowed son slices.
-
-Se usa borrowed inmutable cuando el sistema solo necesita leer, inspeccionar o resolver.
-
-Se usa borrowed mutable cuando la operación debe modificar el recurso prestado y devolverlo al mismo dueño.
-
-Regla:
-
-- si solo lees → `&T`
-- si modificas → `&mut T`
-- si necesitas conservar → ownership
-
-
-## Failure Is Not Flow
-
-Separar siempre:
-
-- bug interno → se corrige
-- violación externa → se rechaza
-- estado válido → se modela
+### Dominio Numérico vs Interpretación de Expresiones
+- **`Number` y `arithmetic` en `evo-shell`**: `evo-shell` posee la representación escalar en ejecución `Number` y las funciones puras `add`, `subtract`, `multiply`, `divide`, `remainder`, `negate`.
+- **`expression_evaluator` y `NumberBinding`**: La interpretación de expresiones escritas (`"2 + 3 * 4"`), parsing léxico, reglas de precedencia, evaluación de paréntesis y resolución de identificadores textuales corresponden a `evo-script`. El código de `expression_evaluator` y `NumberBinding` reside temporalmente en `evo-shell` por razones de descubrimiento incremental y será migrado a `evo-script` en una etapa posterior.
 
 ---
 
-## Layout Sugerido
+## 8. Estrategia de Testing
 
-La estructura puede separar las definiciones de las implementaciones para que la dirección de dependencias sea visible desde el árbol del proyecto:
-
-```text
-src/
-├── definitions/
-│   ├── use_cases/
-│   │   └── copy_file.rs
-│   ├── contracts/
-│   │   └── file_system.rs
-│   └── domain/
-│       ├── borrowed/
-│       │   └── file_view.rs
-│       └── entities/
-├── agents/
-│   └── copier.rs
-├── resolvers/
-│   ├── origin_resolver.rs
-│   ├── destination_resolver.rs
-│   └── copy_resolver.rs
-├── tools/
-└── providers/
-    └── std_file_system.rs
-```
-
-Lectura arquitectónica:
-
-```text
-definitions/use_cases/copy_file.rs
-    ↓ implementado por
-agents/copier.rs
-    ↓ coordina
-resolvers/*
-    ↓ consumen capacidades definidas en
-definitions/contracts/file_system.rs
-    ↓ implementado por
-providers/std_file_system.rs
-    ↓ usa
-std::fs
-```
-
-### definitions/
-
-Contiene aquello que el sistema necesita definir sin implementarlo:
-
-- firmas públicas de `use_cases`
-- firmas de capacidades externas o `contracts`
-- representaciones del dominio
-- vistas prestadas en `borrowed`
-- entidades con ownership cuando son necesarias
-
-Para Evo-script, estas definiciones pueden expresarse mediante firmas de funciones y function pointers, sin requerir `trait`, `dyn` ni genéricos de comportamiento.
-
-### use_cases/
-
-Contiene las fronteras públicas que otros componentes o proyectos pueden consumir.
-
-Un `use_case` define una sola acción pública. El agente correspondiente implementa esa firma.
-
-Ejemplo conceptual:
-
-```rust
-pub type CopyFile = fn(
-    origin: &Path,
-    destination: &Path,
-) -> Result<(), CopyError>;
-```
-
-### contracts/
-
-Contiene las firmas de las capacidades que los resolvers requieren del exterior.
-
-El provider implementa esas firmas mediante funciones concretas.
-
-### domain/borrowed/
-
-Define las formas mínimas en que los datos propiedad de un provider son prestados al sistema.
-
-Regla:
-
-- si basta préstamo → `borrowed`
-- si se necesita independencia real → `entities`
-
----
-
-## Resumen
-
-- el `use_case` expone una acción pública entre proyectos
-- el `agent` coordina e implementa el caso de uso
-- el `resolver` decide
-- el `contract` define
-- el `provider` implementa
-- la `tool` ayuda
+- **Código de Producción Limpio**: Todos los archivos en `src/` están exentos de bloques `#[cfg(test)] mod tests { ... }`.
+- **Verificación Externa**: Todos los unit tests e integration tests residen en la suite externa `tests/`.
+- **Principios del Tester**: Las pruebas verifican la validez de los contratos y las invariantes del sistema sin introducir ceremonia ni código de test dentro de la entrega de producción.
