@@ -184,3 +184,20 @@ pub fn remainder(left: Number, right: Number) -> Result<Number, Error> {
         Err(Error::UnsupportedTypes)
     }
 }
+
+pub fn negate(value: Number) -> Result<Number, Error> {
+    match value {
+        Number::I8(a) => a.checked_neg().map(Number::I8).ok_or(Error::Overflow),
+        Number::I16(a) => a.checked_neg().map(Number::I16).ok_or(Error::Overflow),
+        Number::I32(a) => a.checked_neg().map(Number::I32).ok_or(Error::Overflow),
+        Number::I64(a) => a.checked_neg().map(Number::I64).ok_or(Error::Overflow),
+        Number::I128(a) => a.checked_neg().map(Number::I128).ok_or(Error::Overflow),
+        Number::U8(a) => a.checked_neg().map(Number::U8).ok_or(Error::Overflow),
+        Number::U16(a) => a.checked_neg().map(Number::U16).ok_or(Error::Overflow),
+        Number::U32(a) => a.checked_neg().map(Number::U32).ok_or(Error::Overflow),
+        Number::U64(a) => a.checked_neg().map(Number::U64).ok_or(Error::Overflow),
+        Number::U128(a) => a.checked_neg().map(Number::U128).ok_or(Error::Overflow),
+        Number::F32(a) => Ok(Number::F32(-a)),
+        Number::F64(a) => Ok(Number::F64(-a)),
+    }
+}
