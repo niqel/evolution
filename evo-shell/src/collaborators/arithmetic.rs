@@ -107,7 +107,7 @@ macro_rules! impl_int_op {
     };
 }
 
-pub fn add(left: Number, right: Number) -> Result<Number, Error> {
+pub fn sum(left: Number, right: Number) -> Result<Number, Error> {
     if is_same_integer_type(left, right) {
         impl_int_op!(left, right, checked_add).ok_or(Error::Overflow)
     } else if is_integer(left) && is_integer(right) {

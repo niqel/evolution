@@ -303,7 +303,7 @@ fn parse_binary<'a>(
         let (right, next_rest) = parse_binary(after_op, prec + 1, bindings)?;
 
         let res = match op_char {
-            b'+' => arithmetic::add(left, right),
+            b'+' => arithmetic::sum(left, right),
             b'-' => arithmetic::subtract(left, right),
             b'*' => arithmetic::multiply(left, right),
             b'/' => arithmetic::divide(left, right),

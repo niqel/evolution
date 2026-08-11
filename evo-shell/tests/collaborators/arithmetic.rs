@@ -4,23 +4,23 @@ use evo_shell::definitions::types::number::Number;
 #[test]
 fn same_integer_type_add_signed() {
     assert_eq!(
-        arithmetic::add(Number::I8(10), Number::I8(20)),
+        arithmetic::sum(Number::I8(10), Number::I8(20)),
         Ok(Number::I8(30))
     );
     assert_eq!(
-        arithmetic::add(Number::I16(100), Number::I16(200)),
+        arithmetic::sum(Number::I16(100), Number::I16(200)),
         Ok(Number::I16(300))
     );
     assert_eq!(
-        arithmetic::add(Number::I32(1000), Number::I32(2000)),
+        arithmetic::sum(Number::I32(1000), Number::I32(2000)),
         Ok(Number::I32(3000))
     );
     assert_eq!(
-        arithmetic::add(Number::I64(10000), Number::I64(20000)),
+        arithmetic::sum(Number::I64(10000), Number::I64(20000)),
         Ok(Number::I64(30000))
     );
     assert_eq!(
-        arithmetic::add(Number::I128(100000), Number::I128(200000)),
+        arithmetic::sum(Number::I128(100000), Number::I128(200000)),
         Ok(Number::I128(300000))
     );
 }
@@ -28,23 +28,23 @@ fn same_integer_type_add_signed() {
 #[test]
 fn same_integer_type_add_unsigned() {
     assert_eq!(
-        arithmetic::add(Number::U8(10), Number::U8(20)),
+        arithmetic::sum(Number::U8(10), Number::U8(20)),
         Ok(Number::U8(30))
     );
     assert_eq!(
-        arithmetic::add(Number::U16(100), Number::U16(200)),
+        arithmetic::sum(Number::U16(100), Number::U16(200)),
         Ok(Number::U16(300))
     );
     assert_eq!(
-        arithmetic::add(Number::U32(1000), Number::U32(2000)),
+        arithmetic::sum(Number::U32(1000), Number::U32(2000)),
         Ok(Number::U32(3000))
     );
     assert_eq!(
-        arithmetic::add(Number::U64(10000), Number::U64(20000)),
+        arithmetic::sum(Number::U64(10000), Number::U64(20000)),
         Ok(Number::U64(30000))
     );
     assert_eq!(
-        arithmetic::add(Number::U128(100000), Number::U128(200000)),
+        arithmetic::sum(Number::U128(100000), Number::U128(200000)),
         Ok(Number::U128(300000))
     );
 }
@@ -52,19 +52,19 @@ fn same_integer_type_add_unsigned() {
 #[test]
 fn float_addition() {
     assert_eq!(
-        arithmetic::add(Number::F32(1.5), Number::F32(2.5)),
+        arithmetic::sum(Number::F32(1.5), Number::F32(2.5)),
         Ok(Number::F32(4.0))
     );
     assert_eq!(
-        arithmetic::add(Number::F64(1.5), Number::F64(2.5)),
+        arithmetic::sum(Number::F64(1.5), Number::F64(2.5)),
         Ok(Number::F64(4.0))
     );
     assert_eq!(
-        arithmetic::add(Number::F32(1.5), Number::F64(2.5)),
+        arithmetic::sum(Number::F32(1.5), Number::F64(2.5)),
         Ok(Number::F64(4.0))
     );
     assert_eq!(
-        arithmetic::add(Number::F64(1.5), Number::F32(2.5)),
+        arithmetic::sum(Number::F64(1.5), Number::F32(2.5)),
         Ok(Number::F64(4.0))
     );
 }
@@ -72,15 +72,15 @@ fn float_addition() {
 #[test]
 fn mixed_integer_float_addition() {
     assert_eq!(
-        arithmetic::add(Number::I32(10), Number::F64(2.5)),
+        arithmetic::sum(Number::I32(10), Number::F64(2.5)),
         Ok(Number::F64(12.5))
     );
     assert_eq!(
-        arithmetic::add(Number::F64(2.5), Number::I32(10)),
+        arithmetic::sum(Number::F64(2.5), Number::I32(10)),
         Ok(Number::F64(12.5))
     );
     assert_eq!(
-        arithmetic::add(Number::U8(10), Number::F32(2.5)),
+        arithmetic::sum(Number::U8(10), Number::F32(2.5)),
         Ok(Number::F32(12.5))
     );
 }
@@ -156,11 +156,11 @@ fn remainder_examples() {
 #[test]
 fn integer_overflow_errors() {
     assert_eq!(
-        arithmetic::add(Number::U8(255), Number::U8(1)),
+        arithmetic::sum(Number::U8(255), Number::U8(1)),
         Err(Error::Overflow)
     );
     assert_eq!(
-        arithmetic::add(Number::I8(127), Number::I8(1)),
+        arithmetic::sum(Number::I8(127), Number::I8(1)),
         Err(Error::Overflow)
     );
     assert_eq!(
@@ -192,11 +192,11 @@ fn division_by_zero_and_overflow_errors() {
 #[test]
 fn unsupported_integer_mix_errors() {
     assert_eq!(
-        arithmetic::add(Number::I8(1), Number::I16(2)),
+        arithmetic::sum(Number::I8(1), Number::I16(2)),
         Err(Error::UnsupportedTypes)
     );
     assert_eq!(
-        arithmetic::add(Number::I32(1), Number::U32(2)),
+        arithmetic::sum(Number::I32(1), Number::U32(2)),
         Err(Error::UnsupportedTypes)
     );
     assert_eq!(
@@ -228,7 +228,7 @@ fn float_ieee754_behavior() {
 #[test]
 fn stable_type_result_preservation() {
     assert_eq!(
-        arithmetic::add(Number::F64(2.5), Number::F64(2.5)),
+        arithmetic::sum(Number::F64(2.5), Number::F64(2.5)),
         Ok(Number::F64(5.0))
     );
 }

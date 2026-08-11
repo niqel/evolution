@@ -147,7 +147,7 @@ El runtime resuelve y proporciona las capacidades necesarias a la aplicación de
 
 ### Resolución de Capacidades:
 ```text
-app solicita Add → runtime resuelve capability → evo-shell Add Use Case → calculator Agent → arithmetic Collaborator
+app solicita Sum → runtime resuelve capability → evo-shell Sum Use Case → Summator Agent → Arithmetic Collaborator
 ```
 *(El runtime resuelve y conecta la capacidad, pero no realiza la suma).*
 
