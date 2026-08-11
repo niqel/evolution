@@ -1,4 +1,3 @@
-pub mod about_presenter;
 pub mod copier;
 pub mod deleter;
 pub mod directory_creator;
@@ -9,6 +8,7 @@ pub mod mover;
 pub mod multiplier;
 pub mod renamer;
 pub mod scope_presenter;
+pub mod shell_reporter;
 pub mod subtractor;
 pub mod summator;
 pub mod trasher;

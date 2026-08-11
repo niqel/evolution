@@ -3,7 +3,7 @@ use crate::definitions::contracts::write_terminal;
 use crate::definitions::use_cases::present_about;
 use crate::resolvers::terminal_writer;
 
-pub fn present(write: write_terminal::Write) -> Result<(), present_about::Error> {
+pub fn report(write: write_terminal::Write) -> Result<(), present_about::Error> {
     terminal_writer::resolve(write, about_content::NAME)
         .map_err(|_| present_about::Error::TerminalUnavailable)?;
     terminal_writer::resolve(write, "\nVersion ")
