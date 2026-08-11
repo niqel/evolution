@@ -1,6 +1,8 @@
 pub mod about_presenter;
 pub mod copier;
 pub mod deleter;
+pub mod directory_creator;
+pub mod file_creator;
 pub mod full_scope_presenter;
 pub mod mover;
 pub mod renamer;
