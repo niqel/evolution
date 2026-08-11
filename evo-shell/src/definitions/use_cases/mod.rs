@@ -1,5 +1,7 @@
 pub mod copy_to;
+pub mod delete;
 pub mod present_about;
 pub mod present_full_scope;
 pub mod present_scope;
+pub mod trash;
 pub mod welcome;
