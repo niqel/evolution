@@ -9,8 +9,6 @@ pub fn move_to(
     origin: &str,
     destination: &str,
 ) -> Result<(), move_to::Error> {
-    match move_resolver::resolve(capability, report_progress, origin, destination) {
-        Ok(()) => Ok(()),
-        Err(move_resolver::Error::Unavailable) => Err(move_to::Error::MoveUnavailable),
-    }
+    move_resolver::resolve(capability, report_progress, origin, destination)
+        .map_err(|_| move_to::Error::MoveUnavailable)
 }

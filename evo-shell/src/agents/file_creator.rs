@@ -6,10 +6,6 @@ pub fn create_file(
     capability: create_file::CreateFile,
     target: &str,
 ) -> Result<(), create_file_use_case::Error> {
-    match create_file_resolver::resolve(capability, target) {
-        Ok(()) => Ok(()),
-        Err(create_file_resolver::Error::Unavailable) => {
-            Err(create_file_use_case::Error::CreateFileUnavailable)
-        }
-    }
+    create_file_resolver::resolve(capability, target)
+        .map_err(|_| create_file_use_case::Error::CreateFileUnavailable)
 }

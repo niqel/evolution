@@ -9,8 +9,6 @@ pub fn copy(
     origin: &str,
     destination: &str,
 ) -> Result<(), copy_to::Error> {
-    match copy_resolver::resolve(capability, report_progress, origin, destination) {
-        Ok(()) => Ok(()),
-        Err(copy_resolver::Error::Unavailable) => Err(copy_to::Error::CopyUnavailable),
-    }
+    copy_resolver::resolve(capability, report_progress, origin, destination)
+        .map_err(|_| copy_to::Error::CopyUnavailable)
 }

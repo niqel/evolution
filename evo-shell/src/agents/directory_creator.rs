@@ -6,10 +6,6 @@ pub fn create_dir(
     capability: create_dir::CreateDir,
     target: &str,
 ) -> Result<(), create_dir_use_case::Error> {
-    match create_dir_resolver::resolve(capability, target) {
-        Ok(()) => Ok(()),
-        Err(create_dir_resolver::Error::Unavailable) => {
-            Err(create_dir_use_case::Error::CreateDirUnavailable)
-        }
-    }
+    create_dir_resolver::resolve(capability, target)
+        .map_err(|_| create_dir_use_case::Error::CreateDirUnavailable)
 }

@@ -8,11 +8,8 @@ pub fn present(
     provide: provide_scope::Provide,
     write: write_terminal::Write,
 ) -> Result<(), present_scope::Error> {
-    let continuation = scope_handler::handle;
-
-    match scope_resolver::resolve(provide, continuation, write) {
-        Ok(()) => Ok(()),
-        Err(scope_resolver::Error::Scope(_)) => Err(present_scope::Error::ScopeUnavailable),
-        Err(scope_resolver::Error::Terminal(_)) => Err(present_scope::Error::TerminalUnavailable),
-    }
+    scope_resolver::resolve(provide, scope_handler::handle, write).map_err(|err| match err {
+        scope_resolver::Error::Scope(_) => present_scope::Error::ScopeUnavailable,
+        scope_resolver::Error::Terminal(_) => present_scope::Error::TerminalUnavailable,
+    })
 }

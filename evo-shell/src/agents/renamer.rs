@@ -7,8 +7,6 @@ pub fn rename(
     target: &str,
     new_name: &str,
 ) -> Result<(), rename_use_case::Error> {
-    match rename_resolver::resolve(capability, target, new_name) {
-        Ok(()) => Ok(()),
-        Err(rename_resolver::Error::Unavailable) => Err(rename_use_case::Error::RenameUnavailable),
-    }
+    rename_resolver::resolve(capability, target, new_name)
+        .map_err(|_| rename_use_case::Error::RenameUnavailable)
 }
