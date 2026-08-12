@@ -1,6 +1,6 @@
-# Especificación Semántica de Evo-Script
+# Especificación Semántica y Sintáctica de Evo-Script
 
-Este documento especifica la arquitectura y reglas semánticas de **Evo-Script**, el lenguaje de programación, automatización y consulta de Evolution.
+Este documento especifica la arquitectura, reglas semánticas y sintaxis oficial de **Evo-Script**, el lenguaje de programación, automatización y consulta de Evolution.
 
 ---
 
@@ -8,31 +8,281 @@ Este documento especifica la arquitectura y reglas semánticas de **Evo-Script**
 
 Evolution establece una separación rígida de responsabilidades entre el lenguaje y las capacidades del entorno:
 
-* **Evo-Script es dueño del lenguaje**: Responsable de la sintaxis, tokenización, parsing, sistema de tipos, operadores, evaluación de expresiones, proyectores (`select`), filtros (`filter`), construcción de campos (`new`), conversión a escalares (`to-value`), tuberías (`|>`) y la semántica lazy de iteración.
+* **Evo-Script es dueño del lenguaje**: Responsable de la sintaxis, tokenización, parsing, sistema de tipos, operadores, evaluación de expresiones, predicados (`equals`, `between`, `contains`), conectivos lógicos (`and`, `or`), proyectores (`select`), construcción de campos (`new`), transformaciones (`append`, `take`), conversión a escalares (`to-value`), tuberías (`|>`) y la semántica lazy de iteración.
 * **Evo-Shell expone capacidades del sistema**: Responsable del contexto de trabajo (`Scope`), operaciones de sistema de archivos (`copy-to`, `move-to`, `rename`, `delete`, `trash`), terminal, procesos y red.
 
 ---
 
-## 2. Ejemplo Canónico de Pipeline
+## 2. Ejemplo Canónico de Pipeline y Expresiones
 
-El siguiente script ilustra el modelo semántico central de Evo-Script:
+El siguiente script ilustra el modelo sintáctico y semántico oficial de Evo-Script:
 
 ```text
 scope ../documents>
 
-filter ext equals "txt"
-|> select name, size, new size_big(15 + (size |> to-value))
+filter size equals(85)
+    and (
+        modified between(date_start, date_end)
+        or name contains("report")
+    )
+|> select name,
+          size,
+          modified,
+          new full-name(
+              "Melendez Villarreal "
+              |> append(name |> to-value)
+          )
+|> take(5)
 |> iter
 |> print
 ```
 
+### Explicación Paso por Paso del Ejemplo Canónico:
+
+1. **`scope ../documents>`**: Establece `../documents` como el contexto de trabajo activo (*current working context*).
+2. **`filter ...`**: Aplica un filtro lazy que requiere que `size` sea igual a `85` **Y** que simultáneamente se cumpla la agrupación entre paréntesis: que `modified` esté entre las fechas `date_start` y `date_end`, **O** que `name` contenga el texto `"report"`.
+3. **`select ...`**: Proyecta los campos `name`, `size` y `modified` para cada registro.
+4. **`new full-name(...)`**: Declara explícitamente un nuevo campo calculado llamado `full-name`.
+5. **`name |> to-value`**: Extrae el valor escalar del campo `name`.
+6. **`"Melendez Villarreal " |> append(...)`**: Pasa como entrada implícita la cadena `"Melendez Villarreal "` a la transformación `append`, la cual concatena el escalar extraído de `name`.
+7. **`|> take(5)`**: Limita el flujo de forma lazy a los primeros 5 elementos.
+8. **`|> iter`**: Emite e itera los registros transformados elemento a elemento (*item by item*).
+9. **`|> print`**: Consume cada elemento emitido e imprime su contenido.
+
 ---
 
-## 3. Semántica del Pipeline de Ejecución
+## 3. Reglas Sintácticas Generales
+
+### A. Argumentos Siempre Delimitados con Paréntesis `()`
+
+Toda operación que reciba argumentos explícitos escritos en el código debe utilizar **siempre** paréntesis.
+
+* **Correcto**:
+  ```text
+  equals(85)
+  between(date_start, date_end)
+  contains("report")
+  append(value)
+  take(5)
+  range(1, 10)
+  ```
+* **Inválido / No permitido**:
+  ```text
+  equals 85
+  between date_start, date_end
+  contains "report"
+  take 5
+  ```
+
+### B. Uso de Comas
+
+Las comas `,` se utilizan exclusivamente:
+1. Para separar argumentos dentro de una lista delimitada por paréntesis: `between(date_start, date_end)`, `range(1, 10)`.
+2. Para separar los campos proyectados dentro de una declaración `select`: `select name, size, modified`.
+
+Las comas **NO** representan operadores lógicos. Nunca debe escribirse `filter A, B` queriendo significar `A and B`. Las condiciones lógicas se combinan explícitamente mediante `and` y `or`.
+
+---
+
+## 4. Predicados y Operadores Lógicos (`and` / `or`)
+
+### A. Estructura de un Predicado
+
+Un predicado evalúa una condición sobre un sujeto y produce conceptualmente un valor booleano (`bool`).
+
+```text
+subject predicate(arguments)
+```
+
+* **Ejemplos**:
+  ```text
+  size equals(85)
+  modified between(date_start, date_end)
+  name contains("report")
+  ```
+* **Descomposición conceptual**:
+  - `subject`: `size`
+  - `predicate`: `equals`
+  - `argument`: `85`
+  - `result`: `bool`
+
+*Nota*: Los predicados como `equals`, `between` y `contains` son semántica propia de Evo-Script y no llamadas a Evo-Shell. La sintaxis oficial es la forma declarativa `sujeto predicado(argumentos)`, no funciones infix como `equals(size, 85)`.
+
+### B. Conectivos Lógicos `and` y `or`
+
+* `and`: Conjunción lógica.
+* `or`: Disyunción lógica.
+
+Es válido encadenar múltiples condiciones usando exclusivamente `and`:
+```text
+filter size equals(85)
+    and ext equals("txt")
+    and name contains("report")
+```
+
+O encadenar múltiples condiciones usando exclusivamente `or`:
+```text
+filter ext equals("txt")
+    or ext equals("md")
+    or ext equals("evo")
+```
+
+### C. Regla Estricta de Precedencia Lógica (Agrupación Obligatoria)
+
+> **Regla de Diseño**: Evo-Script **NO** define prioridad de precedencia implícita entre `and` y `or`.
+
+Cuando una expresión combina operadores `and` y `or`, la prioridad debe declararse **obligatoriamente mediante paréntesis**.
+
+* **Válido (Conjunción con Disyunción agrupada)**:
+  ```text
+  filter size equals(85)
+      and (
+          modified between(date_start, date_end)
+          or name contains("report")
+      )
+  ```
+  *Semántica*: `A and (B or C)`
+
+* **Válido (Disyunción con Conjunción agrupada)**:
+  ```text
+  filter (
+          size equals(85)
+          and modified between(date_start, date_end)
+      )
+      or name contains("report")
+  ```
+  *Semántica*: `(A and B) or C`
+
+* **Inválido / Ambiguo (Prohibido)**:
+  ```text
+  filter A and B or C
+  filter A or B and C
+  ```
+
+---
+
+## 5. Operaciones de Tubería (`|>`) y Distinción Predicado vs Transformación
+
+### A. Diferencia entre Predicado y Transformación
+
+* **Predicado**: Evalúa una condición sobre un sujeto y produce `bool`.
+  ```text
+  subject predicate(arguments)  → bool
+  ```
+* **Transformación**: Modifica, proyecta o procesa una entrada enviada a través de la tubería `|>`. Produce un nuevo valor o flujo transformado.
+  ```text
+  value |> transformation
+  value |> transformation(arguments)
+  ```
+
+### B. Tuberías Sin Argumentos Extra
+
+Una operación que no requiere argumentos explícitos adicionales y consume únicamente la entrada del pipe **NO utiliza paréntesis**:
+
+```text
+name |> to-value
+items |> iter
+items |> print
+```
+
+* **Forma correcta**: `|> to-value`, `|> iter`, `|> print`
+* **Forma incorrecta**: `|> to-value()`, `|> iter()`, `|> print()`
+
+### C. Tuberías Con Argumentos Extra
+
+Si una operación consume la entrada del pipe Y ADEMÁS requiere argumentos explícitos adicionales, dichos argumentos **deben encerrarse entre paréntesis**:
+
+```text
+items |> take(5)
+
+"Melendez Villarreal " |> append(name |> to-value)
+```
+
+### D. Regla Oficial de `append`
+
+`append` es una **TRANSFORMACIÓN**, no un predicado.
+
+* **Sintaxis Oficial**:
+  ```text
+  "Melendez Villarreal "
+  |> append(name |> to-value)
+  ```
+* **Entrada implícita del pipe**: `"Melendez Villarreal "`
+* **Argumento explícito**: `name |> to-value` (que evalúa al escalar `"Gustavo"`)
+* **Resultado**: `"Melendez Villarreal Gustavo"`
+
+---
+
+## 6. Predicados Específicos y Construcciones
+
+### A. `between(lower, upper)`
+
+`between` es un **PREDICADO** que comprueba pertenencia a un intervalo y devuelve `bool`.
+
+```text
+subject between(lower, upper) → bool
+```
+
+* **Ejemplo**:
+  ```text
+  modified between(date_start, date_end)
+  size between(100, 5000)
+  ```
+* *(Nota: La semántica detallada de límites inclusivos/exclusivos o rangos abiertos se definirá en especificaciones posteriores).*
+
+### B. `range(from, to)`
+
+`range` es una **CONSTRUCCIÓN** que genera un rango de elementos. **NO es un predicado** y no devuelve `bool`.
+
+```text
+range(from, to) → Range
+```
+
+* **Ejemplo**:
+  ```text
+  range(1, 10)
+  |> iter
+  |> print
+  ```
+* **Diferencia clave**:
+  - `size between(1, 10)` $\rightarrow$ evalúa si `size` está en el rango $\rightarrow$ produce `bool`.
+  - `range(1, 10)` $\rightarrow$ genera una secuencia/rango $\rightarrow$ produce objeto `Range`.
+* *(Nota: La semántica inclusiva/exclusiva y representación interna de `Range` se definirán en posteriores commits).*
+
+### C. `take(count)`
+
+`take` es una transformación de flujo lazy que limita la salida a los primeros `count` elementos.
+
+```text
+stream |> take(5)
+```
+
+---
+
+## 7. Proyección y Creación de Campos (`new`)
+
+Para crear un nuevo campo derivado en una proyección `select`, se requiere la sintaxis explícita `new`:
+
+```text
+new nombre-campo(expresión)
+```
+
+* **Ejemplo**:
+  ```text
+  new full-name(
+      "Melendez Villarreal "
+      |> append(name |> to-value)
+  )
+  ```
+* No se admite la palabra clave `as` ni la creación de campos calculados anónimos/sin nombre.
+
+---
+
+## 8. Semántica del Pipeline de Ejecución
 
 ### A. Contexto Activo (`Scope`)
 
-La instrucción `scope ../documents>` establece el contexto o ámbito de trabajo activo (*current working context*).
+La instrucción `scope ../documents>` establece el contexto de trabajo activo (*current working context*).
 
 ```text
 scope
@@ -40,159 +290,28 @@ scope
 current working context
 ```
 
-* En este ejemplo, `../documents` define el origen de datos sobre el que operan las expresiones siguientes.
-* **Diferencia conceptual con SQL (`FROM`)**: Mientras `FROM` debe especificarse en cada consulta individual, `Scope` pertenece al contexto persistente de ejecución. Establecido un `Scope`, las operaciones subsecuentes operan sobre él sin recalificar constantemente la ruta o recurso.
-* `Scope` es una abstracción general y no está restringido exclusivamente a carpetas de sistema de archivos.
+* `Scope` pertenece al entorno persistente de ejecución y no está restringido al sistema de archivos.
 
 ### B. Filtrado Lazy (`filter`)
 
-La declaración `filter ext equals "txt"` define una transformación condicional lazy.
+La declaración `filter ...` define una transformación condicional lazy. No lee todo el origen ni asigna memoria masiva al declararse.
 
-* **Propósito**: Filtra el flujo dejando pasar únicamente aquellos elementos cuya propiedad `ext` sea igual a `"txt"`.
-* **Procesamiento Lazy**: `filter` **no materializa el Scope al declararse**. No lee el directorio completo, no crea colecciones intermediate ni asigna vectores en memoria. Simplemente añade una etapa de filtrado a la composición del pipeline.
+### C. Distinción `Selection != Scalar` y Operador `to-value`
 
-```text
-Scope → Filter(ext equals "txt")
-```
-
-### C. Proyección de Campos (`select`) y la Regla `new`
-
-La expresión `|> select name, size, new size_big(15 + (size |> to-value))` define la forma proyectada de cada registro que fluye por el pipeline.
-
-* Mantiene campos existentes del origen (`name`, `size`).
-* **Regla de `new`**: Para crear un nuevo campo derivado en la proyección, se requiere la palabra clave explícita `new`:
-
-```text
-new nombre_campo(expresión)
-```
-
-```text
-new
- ├── nombre de campo = size_big
- └── expresión de valor = 15 + (size |> to-value)
-```
-
-* **Intención de diseño**: Evitar alias ambiguos o implícitos (ej. `expresión as campo`). La creación de un nuevo campo debe ser explícita y proporcionar tanto el nombre del campo como la expresión delimitada que calcula su contenido. No se permiten campos proyectados sin nombre.
-* `select` forma parte de la composición lazy y no fuerza la carga completa de datos.
-
-### D. Distinción `Selection != Scalar` y Operador `to-value`
-
-Evo-Script establece como regla formal que **seleccionar un campo no equivale automáticamente a obtener su valor escalar**.
-
-```text
-select size
-```
-
-* La selección de `size` produce conceptualmente una estructura/columna proyectada. Aun cuando una selección contenga 1 fila y 1 columna, sigue siendo una estructura de datos y no un valor numérico/escalar directo.
-* Para realizar operaciones aritméticas o de comparación con valores literales, se requiere la transición explícita a escalar mediante `to-value`:
+Seleccionar un campo (`select size`) produce una estructura proyectada. Para obtener el valor escalar usable en expresiones o transformaciones se exige la extracción explícita:
 
 ```text
 size |> to-value
 ```
 
-```text
-selection / field
-       ↓
-   to-value
-       ↓
- scalar value
-```
+### D. Iteración (`iter`) y Consumidor (`print`)
 
-* Esta regla preserva la distinción formal entre:
-  1. **Colección** (*Collection*)
-  2. **Registro** (*Row / Item*)
-  3. **Selección / Campo** (*Column / Field Selection*)
-  4. **Valor Escalar** (*Scalar Value*)
-
-### E. Evaluación de Expresiones con Paréntesis
-
-En la expresión `15 + (size |> to-value)`, los paréntesis establecen el orden de evaluación:
-
-1. Evalúa la sub-expresión `size |> to-value` para extraer el valor escalar del campo `size`.
-2. Suma el literal `15` al escalar resultante mediante el operador de adición de Evo-Script.
-
-```text
-size → to-value → scalar → 15 + scalar
-```
-
-### F. Iteración (`iter`) y Consumidor (`print`)
-
-* **`iter` (Punto de Iteración)**: La instrucción `|> iter` habilita el recorrido e itineración secuencial elemento a elemento (*item by item*). `iter` **no tiene responsabilidad de presentación** (no implica terminal, pantalla, UI ni render) ni de materialización (`Vec` / `collect`).
-* **`print` (Consumidor)**: La instrucción `|> print` actúa como un consumidor final que recibe los elementos emitidos por la iteración y los envía a la salida.
-* **Separación `iter != print`**: `print` es un consumidor independiente. Si se le pasa un escalar directo (ej. `print "Gustavo"`), no requiere una tubería de iteración `iter`.
+* **`iter`**: Emite e itera elementos uno a uno (*item by item*). No realiza presentación gráfica ni materialización.
+* **`print`**: Consumidor final independiente. Puede consumir elementos de `iter` o escalares directos (`print "Gustavo"`).
 
 ---
 
-## 4. Operadores y Evaluación Aritmética en Evo-Script
-
-Los operadores aritméticos (`+`, `-`, `*`, `/`, `%`) y lógicos son responsabilidad exclusiva de **Evo-Script**.
-
-```text
-Evo-Script
-    ↓
-interpreta la expresión sintáctica
-    ↓
-conoce los tipos concretos
-    ↓
-aplica el operador correspondiente
-```
-
-* `15 + 20` es interpretado y resuelto internamente por el motor de expresiones de Evo-Script.
-* **Evo-Shell no recibe ni interpreta operadores sintácticos** como `"sum"`, `"+"`, `"divide"`. Evo-Shell solo expone capacidades semánticas de entorno y sistema.
-
----
-
-## 5. Sistema de Tipos e Interoperabilidad con Rust
-
-Evo-Script preserva tipos concretos compatibles directamente con los tipos nativos de Rust:
-
-* **Enteros firmados**: `i8`, `i16`, `i32`, `i64`, `i128`
-* **Enteros no firmados**: `u8`, `u16`, `u32`, `u64`, `u128`
-* **Punto flotante**: `f32`, `f64`
-
-### Aliases de Conveniencia (Azúcar Sintáctico):
-Evo-Script proporciona dos alias básicos para simplicidad:
-* `int` $\equiv$ `i32` (ejemplo: `let age: int = 25` equivale a usar `i32`).
-* `float` $\equiv$ `f64` (ejemplo: `let value: float = 2.5` equivale a usar `f64`).
-
-Usuarios que requieran precisión concreta (ej. `f32`, `u64`, `i8`) pueden especificar el tipo numérico directamente.
-
-### Ausencia de `Number` Universal en la Arquitectura Objetivo:
-* La interoperabilidad entre Evo-Script y Rust **no utiliza un enum universal `Number`** (`I8(...)`, `I32(...)`, `F64(...)`).
-* La arquitectura objetivo conserva la identidad de tipos concretos de Rust.
-* *(Nota: El tipo `Number` que residía temporalmente en `evo-shell` ha sido completamente removido de `evo-shell`).*
-* Preservar tipos concretos permite que Evo-Script pueda interoperar de forma eficiente con motores y librerías de Rust fuertemente tipadas sin forzar empaquetado dinámico o conversiones universales.
-
----
-
-## 6. Modelo de Ejecución Lazy Item por Item
-
-Evo-Script no ejecuta pipelines mediante carga masiva en memoria (*read-all*) ni creación de vectores intermedios:
-
-```text
-source / provider
-      ↓
-   next item
-      ↓
-    filter
-      ↓
-    select
-      ↓
-     iter
-      ↓
-   consumer
-```
-
-### Flujo Traza por Elemento:
-```text
-item #1 ──► filter (pasa)      ──► select ──► iter ──► print
-item #2 ──► filter (rechazado)
-item #3 ──► filter (pasa)      ──► select ──► iter ──► print
-```
-
----
-
-## 7. Separación Clara Evo-Script vs Evo-Shell
+## 9. Separación Clara Evo-Script vs Evo-Shell
 
 ```text
                    Evo-Script
@@ -200,14 +319,14 @@ item #3 ──► filter (pasa)      ──► select ──► iter ──► p
 language semantics
 syntax
 types
-operators
+operators (+ - * / %)
+predicates (equals, between, contains)
+logical connectors (and, or, grouping)
 expressions
-filter
-select
-new
-to-value
-pipes
-lazy iteration semantics
+filter / select / new
+to-value / append / take / range
+pipes (|>)
+lazy iteration semantics (iter)
 
                      │
                      │ uses capabilities
@@ -221,6 +340,6 @@ filesystem
 terminal
 process
 network
-copy / move / rename / delete
+copy / move / rename / delete / trash
 etc.
 ```
