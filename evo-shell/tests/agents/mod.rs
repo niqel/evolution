@@ -1,15 +1,11 @@
 pub mod copier;
 pub mod deleter;
 pub mod directory_creator;
-pub mod divider;
 pub mod file_creator;
 pub mod full_scope_presenter;
 pub mod mover;
-pub mod multiplier;
 pub mod renamer;
 pub mod scope_presenter;
 pub mod shell_reporter;
-pub mod subtractor;
-pub mod summator;
 pub mod trasher;
 pub mod welcomer;

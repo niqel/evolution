@@ -160,7 +160,7 @@ Usuarios que requieran precisión concreta (ej. `f32`, `u64`, `i8`) pueden espec
 ### Ausencia de `Number` Universal en la Arquitectura Objetivo:
 * La interoperabilidad entre Evo-Script y Rust **no utiliza un enum universal `Number`** (`I8(...)`, `I32(...)`, `F64(...)`).
 * La arquitectura objetivo conserva la identidad de tipos concretos de Rust.
-* *(Nota: El tipo `Number` que reside temporalmente en `evo-shell` es código transitorio de la arquitectura anterior y se eliminará en un commit de limpieza posterior).*
+* *(Nota: El tipo `Number` que residía temporalmente en `evo-shell` ha sido completamente removido de `evo-shell`).*
 * Preservar tipos concretos permite que Evo-Script pueda interoperar de forma eficiente con motores y librerías de Rust fuertemente tipadas sin forzar empaquetado dinámico o conversiones universales.
 
 ---

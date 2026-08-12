@@ -166,9 +166,8 @@ Use Case → Agent → Collaborator → (optional pure Tools)
 ```
 *(El Use Case define la firma y su propio tipo Error. El Agent coordina. El Collaborator ejecuta la lógica).*
 
-> **Nota sobre el Código Aritmético Actual:**
-> Los Use Cases aritméticos (`sum.rs`, `subtract.rs`, `multiply.rs`, `divide.rs`), Agents (`summator.rs`, etc.), Collaborators (`summator.rs`, etc.) y el tipo `Number` actualmente presentes físicamente en `evo-shell` representan **código transitorio del diseño anterior**.
-> Los operadores aritméticos del lenguaje (`+`, `-`, `*`, `/`, `%`) pertenecen conceptualmente a `evo-script`. El código transitorio aritmético en `evo-shell` será removido en un commit de limpieza posterior.
+> **Nota de Separación Arquitectónica:**
+> Las responsabilidades de lenguaje relativas a operadores aritméticos (`+`, `-`, `*`, `/`, `%`), expresiones sintácticas y tipos numéricos de la arquitectura anterior han sido completamente removidas de `evo-shell`. Pertenecen exclusivamente a `evo-script`.
 
 - **Principio *Capability Unavailable*:** Si una capacidad requerida no está disponible en el entorno (ej. ausencia de terminal en un entorno puramente gráfico), la solicitud responde con un error semántico de indisponibilidad sin invalidar el entorno global de `evo-runtime`.
 - **Ownership de Estado Externo**: Las aplicaciones y el runtime no duplican persistentemente el estado visual que pertenece a la infraestructura física (ej. la terminal física mantiene su propio render/scrollback).
