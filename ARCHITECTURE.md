@@ -1,6 +1,6 @@
 # Arquitectura del Proyecto Evolution
 
-Este documento especifica la arquitectura del proyecto **Evolution**, definiendo la topología de ejecución alojada en `evo-runtime`, los límites conceptuales entre los proyectos/crates (`evo-script`, `evo-shell`, `evo-runtime`, `providers`, `evo-shell-cli`, `evo-ui`, `evo-apps`), el modelo de aplicaciones `.evo` y la organización interna del motor semántico `evo-shell`.
+Este documento especifica la arquitectura del proyecto **Evolution**, definiendo la topología de ejecución alojada en `evo-runtime`, los límites conceptuales entre los proyectos/crates (`evo-script`, `evo-shell`, `evo-runtime`, `providers`, `evo-shell-cli`, `evo-ui`, `evo-apps`), el modelo de aplicaciones `.evo` y la organización interna del motor semántico de capacidades `evo-shell`.
 
 ---
 
@@ -20,27 +20,41 @@ Para evitar ambigüedades arquitectónicas, este documento distingue formalmente
 ### Diagrama de Topología de Ejecución por Aplicación
 
 ```text
-                evo-runtime
-              execution host
-                    │
-             app execution
-                    │
-               *.evo app
-                    │
-          ┌─────────┴─────────┐
-          │                   │
-         UI                 CLI / AI
-          │                   │
-          └─────────┬─────────┘
-                    ▼
-            shared app behavior
-                evo-script
-                    │
-            semantic capability
-                    │
-                evo-shell
-                    │
-                Providers
+                    evo-runtime
+                 execution host
+                       │
+                   app.evo
+                       │
+                       ▼
+                  evo-script
+        ┌─────────────────────────────┐
+        │ language                    │
+        │ syntax                      │
+        │ types                       │
+        │ operators (+ - * / %)       │
+        │ expressions                 │
+        │ filter / select / new       │
+        │ to-value                    │
+        │ pipes (|>)                  │
+        │ lazy iteration semantics    │
+        └─────────────────────────────┘
+                       │
+                       │ uses capabilities
+                       ▼
+                   evo-shell
+        ┌─────────────────────────────┐
+        │ scope                       │
+        │ filesystem                  │
+        │ terminal                    │
+        │ copy / move / rename        │
+        │ delete / trash              │
+        │ processes                   │
+        │ network                     │
+        │ system capabilities         │
+        └─────────────────────────────┘
+                       │
+                       ▼
+                   Providers
 ```
 
 > *Nota:* Este diagrama representa responsabilidades conceptuales dentro del entorno mantenido por el runtime. No significa que `evo-runtime` contenga físicamente el código de la UI, CLI, `evo-script` o `evo-shell`, sino que **aloja y mantiene el contexto** en el cual esas piezas colaboran.
@@ -85,7 +99,7 @@ Evolution utiliza una estrategia de instalación de runtime compartida combinada
 ### Lo que `evo-runtime` NO implementa (Principio *No God Runtime*):
 - NO es responsable de gramática, sintaxis, parsing ni reglas de `evo-script`.
 - NO implementa la lógica funcional propia de la aplicación.
-- NO implementa las capacidades semánticas de `evo-shell` (ej. no realiza directamente operaciones aritméticas ni de filesystem).
+- NO implementa las capacidades semánticas de `evo-shell` (ej. no realiza directamente operaciones de filesystem o procesos).
 - NO implementa interfaces físicas (UI, terminal) ni Providers de infraestructura física.
 
 ---
@@ -98,13 +112,10 @@ Un archivo `.evo` representa código/script ejecutable interpretado por `evo-scr
 ```text
 OS / launcher → evo-runtime → isolated application execution → app.evo
 ```
-*(Se descarta la representación `app.evo → evo-runtime` que sugería que la aplicación era un cliente externo llamando al runtime).*
 
 ### Estructura de Aplicación:
-- Una aplicación puede ser un script trivial (ej. `calculator.evo`) o un paquete de aplicación con múltiples scripts y recursos (ej. directorio con `app.evo`, `player.evo`, `resources/`).
+- Una aplicación puede ser un script trivial (ej. `script.evo`) o un paquete de aplicación con múltiples scripts y recursos (ej. directorio con `app.evo`, `player.evo`, `resources/`).
 - **El caso de `evo-shell-cli.evo`**: La consola interactiva de Evolution se define como una aplicación Evolution (`evo-shell-cli.evo`) alojada por `evo-runtime`, que hace uso de la superficie CLI, interpreta `evo-script` y ejecuta capacidades semánticas mediante `evo-shell`.
-
-> *Decisión de diseño pendiente:* El formato físico final de `.evo` (fuente textual, IR, bytecode, compresión, cifrado, firma) y la extensión o formato del paquete de aplicación (*application package*) se definirán en commits posteriores.
 
 ---
 
@@ -132,11 +143,7 @@ Dentro de una aplicación ejecutándose bajo `evo-runtime`, la interfaz gráfica
 
 ### Principios de Superficie:
 1. **Misma Lógica Funcional**: La UI gráfica y la CLI textual no tienen implementaciones de negocio separadas; ambas invocan exactamente la misma capacidad funcional expresada en `evo-script` y provista por `evo-shell`.
-   - *Ejemplo conceptual (Music):* El botón `[Play]` de la UI y el comando `music play "song.flac"` de la CLI invocan la misma capacidad de reproducción.
-2. **Orientación a Automatización y Agentes de IA**: Exponer capacidades funcionales en superficies textuales/scriptables permite que:
-   - Usuarios humanos interactúen mediante la UI.
-   - Usuarios avanzados y administradores ejecuten scripts y CLI.
-   - **Agentes de IA y automatización** invoquen comandos deterministas sin requerir automatización visual frágil basada en clicks o coordenadas.
+2. **Orientación a Automatización y Agentes de IA**: Exponer capacidades funcionales en superficies textuales/scriptables permite que usuarios humanos, scripts y **agentes de IA** invoquen comandos deterministas.
    - *Principio:* *"Visual interaction is a surface; functional capability remains scriptable."*
 
 ---
@@ -145,30 +152,30 @@ Dentro de una aplicación ejecutándose bajo `evo-runtime`, la interfaz gráfica
 
 El runtime resuelve y proporciona las capacidades necesarias a la aplicación de forma dinámica según su necesidad.
 
-### Resolución y Flujo de Capacidades:
+### Flujo de Capacidades Semánticas y de Infraestructura:
 
-**Operaciones Puras de Dominio (ej. Suma):**
-```text
-Sum Use Case → Summator Agent → Summator Collaborator → (optional pure Tools)
-```
-*(El Use Case define la firma y su propio tipo Error. El Agent coordina. El Collaborator ejecuta la lógica y produce directamente el Result).*
-
-**Operaciones con Frontera Técnica de Infraestructura (ej. Copia):**
+**Operaciones del Sistema / Entorno (ej. Copia):**
 ```text
 CopyTo Use Case → Copier Agent → Copy Resolver → Copy Contract → Copy Provider
 ```
 *(El Resolver cruza la frontera técnica con la infraestructura externa implementada por el Provider).*
 
-- **Principio *Capability Unavailable*:** Si una capacidad requerida no está disponible en el entorno (ej. ausencia de terminal en un entorno puramente gráfico), la solicitud responde con un error semántico de indisponibilidad sin invalidar el entorno global de `evo-runtime`.
-- **Ownership de Estado Externo**: Las aplicaciones y el runtime no duplican persistentemente el estado visual que pertenece a la infraestructura física (ej. el scrollback o renderizado de la terminal física lo mantiene el Provider de terminal).
+**Operaciones Puras Internas de Dominio en evo-shell:**
+```text
+Use Case → Agent → Collaborator → (optional pure Tools)
+```
+*(El Use Case define la firma y su propio tipo Error. El Agent coordina. El Collaborator ejecuta la lógica).*
 
-> *Decisión de diseño pendiente:* El mecanismo concreto de resolución de capacidades se diseñará posteriormente. No se introducen prematuramente registras, contenedores de servicios ni mapas dinámicos.
+> **Nota sobre el Código Aritmético Actual:**
+> Los Use Cases aritméticos (`sum.rs`, `subtract.rs`, `multiply.rs`, `divide.rs`), Agents (`summator.rs`, etc.), Collaborators (`summator.rs`, etc.) y el tipo `Number` actualmente presentes físicamente en `evo-shell` representan **código transitorio del diseño anterior**.
+> Los operadores aritméticos del lenguaje (`+`, `-`, `*`, `/`, `%`) pertenecen conceptualmente a `evo-script`. El código transitorio aritmético en `evo-shell` será removido en un commit de limpieza posterior.
+
+- **Principio *Capability Unavailable*:** Si una capacidad requerida no está disponible en el entorno (ej. ausencia de terminal en un entorno puramente gráfico), la solicitud responde con un error semántico de indisponibilidad sin invalidar el entorno global de `evo-runtime`.
+- **Ownership de Estado Externo**: Las aplicaciones y el runtime no duplican persistentemente el estado visual que pertenece a la infraestructura física (ej. la terminal física mantiene su propio render/scrollback).
 
 ---
 
 ## 8. Dependencias de Código y Crates
-
-A diferencia de la topología de ejecución, el diagrama de dependencias de código muestra qué módulos compilados conocen la API pública de otros crates:
 
 ```text
 evo-shell-cli ─────┐
@@ -211,7 +218,10 @@ evo-apps (UI / CLI) → repository / store → descarga scripts .evo → ejecuci
 - **Diseño Orientado a Funciones**: Uso de funciones puras, punteros de función (`fn`), enums y structs de datos. Se eliminan clases de servicio, administradores (*managers*), objetos stateful y despacho dinámico (`dyn`).
 - **Use Case es dueño de su resultado semántico**: Cada Use Case define su firma (`fn`) y su propio tipo `Error` cuando la acción puede fallar. No existen tipos de error globales compartidos entre Use Cases independientes.
 - **Agent = Orchestration Only**: Un Agent coordina, encadena pasos, pasa argumentos/capabilities y propaga `Result`. Un Agent **NO** valida datos, implementa reglas matemáticas/dominio, ejecuta operaciones internas ni interpreta errores técnicos.
-- **Semántica de Collaborator y Nombres de Sujeto**: Un Collaborator es un sujeto interno que colabora con un Agent. Cuando comparten el mismo sujeto (`agents/summator.rs` y `collaborators/summator.rs`), el Agent expone la función con el verbo de la acción pública (ej. `sum()`) y el Collaborator expone la función `collaborate()`. No se requieren traits ni despacho dinámico.
-- **Result no implica Resolver (*Result does not imply Resolver*)**: La existencia de un `Resolver` depende de la presencia de una frontera técnica externa con un `Contract`/`Provider`, **no** de la posibilidad de que una operación devuelva `Err`. Las operaciones puras internas que pueden fallar (ej. overflow) devuelven su `Result` directamente desde un Collaborator a través del Agent sin requerir Resolver.
-- **Separación entre Parsing y Ejecución Semántica**: `evo-shell` no interpreta ni analiza sintaxis fuente de Evo-Script. El análisis textual (*parsing*), tokenización, sintaxis de expresiones, identificadores y mapeos de variables (*bindings*) pertenecen a `evo-script`. `evo-shell` expone exclusivamente capacidades semánticas puras (ej. `Sum`, `Subtract`, `Multiply`, `Divide`).
+- **Semántica de Collaborator y Nombres de Sujeto**: Un Collaborator es un sujeto interno que colabora con un Agent. Cuando comparten el mismo sujeto (`agents/<subject>.rs` y `collaborators/<subject>.rs`), el Agent expone la función con el verbo de la acción pública y el Collaborator expone la función `collaborate()`. No se requieren traits ni despacho dinámico.
+- **Result no implica Resolver (*Result does not imply Resolver*)**: La existencia de un `Resolver` depende de la presencia de una frontera técnica externa con un `Contract`/`Provider`, **no** de la posibilidad de que una operación devuelva `Err`.
+- **Separación entre Lenguaje y Capacidades del Sistema**:
+  - `evo-script` es dueño de la sintaxis, tokenización, parsing, expresiones, operadores (`+`, `-`, `*`, `/`, `%`), tipos (`i32`, `f64`, etc.), `filter`, `select`, `new`, `to-value`, tuberías (`|>`) y semántica de iteración lazy (`iter`).
+  - `evo-shell` es dueño de las capacidades semánticas de entorno/sistema (`scope`, filesystem, terminal, `copy-to`, `move-to`, `rename`, `delete`, `trash`, procesos, red).
+  - Los operadores del lenguaje no se modelan como Use Cases de `evo-shell`.
 - **Estrategia de Testing**: Código de producción limpio en `src/` (sin `#[cfg(test)] mod tests`) y verificación externa en la suite `tests/`.
