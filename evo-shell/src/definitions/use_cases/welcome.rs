@@ -1,6 +1,3 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Error {
-    TerminalUnavailable,
-}
+use crate::definitions::structs::borrowed::welcome_information::WelcomeInformation;
 
-pub type Welcome = fn() -> Result<(), Error>;
+pub type Welcome = fn() -> WelcomeInformation<'static>;

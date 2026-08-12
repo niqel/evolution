@@ -7,4 +7,3 @@ pub mod mover;
 pub mod renamer;
 pub mod scope_presenter;
 pub mod trasher;
-pub mod welcomer;
