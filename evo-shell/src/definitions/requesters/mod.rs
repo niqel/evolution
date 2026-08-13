@@ -3,6 +3,7 @@ pub mod copy_requester;
 pub mod create_dir_requester;
 pub mod create_file_requester;
 pub mod delete_requester;
+pub mod enumerate_filesystem_requester;
 pub mod filesystem_item_requester;
 pub mod move_requester;
 pub mod rename_requester;
