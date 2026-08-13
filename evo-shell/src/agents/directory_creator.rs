@@ -1,11 +1,7 @@
 use crate::definitions::contracts::create_dir;
-use crate::definitions::use_cases::create_dir as create_dir_use_case;
+use crate::definitions::requesters::create_dir_requester;
 use crate::resolvers::create_dir_resolver;
 
-pub fn create_dir(
-    capability: create_dir::CreateDir,
-    target: &str,
-) -> Result<(), create_dir_use_case::Error> {
-    create_dir_resolver::resolve(capability, target)
-        .map_err(|_| create_dir_use_case::Error::CreateDirUnavailable)
+pub fn create(create: create_dir::CreateDir, target: &str, request: create_dir_requester::Request) {
+    create_dir_resolver::resolve(create, target, request);
 }

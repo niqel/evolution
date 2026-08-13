@@ -12,6 +12,7 @@ fn mock_create_dir_unavailable(_target: &str) -> Result<(), create_dir::Error> {
 }
 
 static CAPTURED_TARGET: Mutex<Option<String>> = Mutex::new(None);
+static CAPTURED_RESULT: Mutex<Option<Result<(), create_dir_use_case::Error>>> = Mutex::new(None);
 
 fn mock_create_dir_capture_target(target: &str) -> Result<(), create_dir::Error> {
     let mut guard = CAPTURED_TARGET.lock().unwrap_or_else(|e| e.into_inner());
@@ -19,33 +20,69 @@ fn mock_create_dir_capture_target(target: &str) -> Result<(), create_dir::Error>
     Ok(())
 }
 
+fn mock_request(result: Result<(), create_dir_use_case::Error>) {
+    let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = Some(result);
+}
+
 #[test]
 fn directory_creator_success() {
-    assert_eq!(
-        directory_creator::create_dir(mock_create_dir_success, "documents"),
-        Ok(())
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+
+    directory_creator::create(
+        mock_create_dir_success,
+        "/tmp/evolution/projects/example",
+        mock_request,
     );
+
+    let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(*guard, Some(Ok(())));
 }
 
 #[test]
 fn directory_creator_translates_error() {
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+
+    directory_creator::create(
+        mock_create_dir_unavailable,
+        "/tmp/evolution/projects/example",
+        mock_request,
+    );
+
+    let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
     assert_eq!(
-        directory_creator::create_dir(mock_create_dir_unavailable, "documents"),
-        Err(create_dir_use_case::Error::CreateDirUnavailable)
+        *guard,
+        Some(Err(create_dir_use_case::Error::CreateDirUnavailable))
     );
 }
 
 #[test]
 fn directory_creator_transports_target() {
     {
-        let mut guard = CAPTURED_TARGET.lock().unwrap_or_else(|e| e.into_inner());
-        *guard = None;
+        let mut guard_target = CAPTURED_TARGET.lock().unwrap_or_else(|e| e.into_inner());
+        *guard_target = None;
+        let mut guard_result = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard_result = None;
     }
 
-    let result =
-        directory_creator::create_dir(mock_create_dir_capture_target, "projects/evolution");
-    assert_eq!(result, Ok(()));
+    directory_creator::create(
+        mock_create_dir_capture_target,
+        "/tmp/evolution/projects/example",
+        mock_request,
+    );
 
-    let guard = CAPTURED_TARGET.lock().unwrap_or_else(|e| e.into_inner());
-    assert_eq!(guard.as_deref(), Some("projects/evolution"));
+    let guard_target = CAPTURED_TARGET.lock().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(
+        guard_target.as_deref(),
+        Some("/tmp/evolution/projects/example")
+    );
+
+    let guard_result = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(*guard_result, Some(Ok(())));
 }

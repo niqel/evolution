@@ -1,10 +1,12 @@
 use crate::definitions::contracts::create_dir;
+use crate::definitions::requesters::create_dir_requester;
+use crate::definitions::use_cases::create_dir as create_dir_use_case;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Error {
-    Unavailable,
-}
-
-pub fn resolve(capability: create_dir::CreateDir, target: &str) -> Result<(), Error> {
-    capability(target).map_err(|create_dir::Error::Unavailable| Error::Unavailable)
+pub fn resolve(
+    create: create_dir::CreateDir,
+    target: &str,
+    request: create_dir_requester::Request,
+) {
+    let result = create(target).map_err(|_| create_dir_use_case::Error::CreateDirUnavailable);
+    request(result);
 }
