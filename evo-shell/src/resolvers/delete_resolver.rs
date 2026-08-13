@@ -1,10 +1,8 @@
 use crate::definitions::contracts::delete;
+use crate::definitions::requesters::delete_requester;
+use crate::definitions::use_cases::delete as delete_use_case;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Error {
-    Unavailable,
-}
-
-pub fn resolve(capability: delete::Delete, target: &str) -> Result<(), Error> {
-    capability(target).map_err(|delete::Error::Unavailable| Error::Unavailable)
+pub fn resolve(delete_operation: delete::Delete, target: &str, request: delete_requester::Request) {
+    let result = delete_operation(target).map_err(|_| delete_use_case::Error::DeleteUnavailable);
+    request(result);
 }

@@ -1,6 +1,7 @@
-use crate::definitions::structs::borrowed::shell_information::ShellInformation;
+use crate::definitions::requesters::shell_information_requester;
 use crate::tools::shell_information;
 
-pub fn collaborate() -> ShellInformation<'static> {
-    shell_information::get()
+pub fn collaborate(request: shell_information_requester::Request) {
+    let information = shell_information::get();
+    request(information);
 }

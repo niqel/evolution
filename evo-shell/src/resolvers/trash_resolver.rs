@@ -1,10 +1,8 @@
 use crate::definitions::contracts::trash;
+use crate::definitions::requesters::trash_requester;
+use crate::definitions::use_cases::trash as trash_use_case;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Error {
-    Unavailable,
-}
-
-pub fn resolve(capability: trash::Trash, target: &str) -> Result<(), Error> {
-    capability(target).map_err(|trash::Error::Unavailable| Error::Unavailable)
+pub fn resolve(trash_operation: trash::Trash, target: &str, request: trash_requester::Request) {
+    let result = trash_operation(target).map_err(|_| trash_use_case::Error::TrashUnavailable);
+    request(result);
 }

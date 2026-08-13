@@ -35,7 +35,7 @@ fn mock_move_with_progress(
 ) -> Result<(), move_item::Error> {
     progress(TransferProgress {
         total_bytes: Some(100),
-        copied_bytes: 50,
+        transferred_bytes: 50,
     });
     Ok(())
 }
@@ -112,7 +112,7 @@ fn move_resolver_transports_progress_requester() {
         *guard_prog,
         vec![TransferProgress {
             total_bytes: Some(100),
-            copied_bytes: 50,
+            transferred_bytes: 50,
         }]
     );
 }

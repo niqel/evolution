@@ -19,29 +19,85 @@ fn mock_trash_capture_target(target: &str) -> Result<(), trash::Error> {
     Ok(())
 }
 
+static CAPTURED_RESULT: Mutex<Option<Result<(), trash_use_case::Error>>> = Mutex::new(None);
+
+fn mock_final_request(result: Result<(), trash_use_case::Error>) {
+    let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = Some(result);
+}
+
+#[test]
+fn trasher_implements_trash() {
+    let trash_op: trash_use_case::Trash = trasher::trash;
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+    trash_op("file.txt", mock_final_request, mock_trash_success);
+    {
+        let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard, Some(Ok(())));
+    }
+
+    let trash_const: trash_use_case::Trash = trasher::TRASH;
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+    trash_const("file.txt", mock_final_request, mock_trash_success);
+    {
+        let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard, Some(Ok(())));
+    }
+}
+
 #[test]
 fn trasher_success() {
-    assert_eq!(trasher::trash(mock_trash_success, "file.txt"), Ok(()));
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+
+    trasher::trash("file.txt", mock_final_request, mock_trash_success);
+
+    let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(*guard, Some(Ok(())));
 }
 
 #[test]
 fn trasher_translates_trash_error() {
-    assert_eq!(
-        trasher::trash(mock_trash_unavailable, "file.txt"),
-        Err(trash_use_case::Error::TrashUnavailable)
-    );
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+
+    trasher::trash("file.txt", mock_final_request, mock_trash_unavailable);
+
+    let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(*guard, Some(Err(trash_use_case::Error::TrashUnavailable)));
 }
 
 #[test]
 fn trasher_transports_target() {
     {
-        let mut guard = CAPTURED_TARGET.lock().unwrap_or_else(|e| e.into_inner());
-        *guard = None;
+        let mut guard_target = CAPTURED_TARGET.lock().unwrap_or_else(|e| e.into_inner());
+        *guard_target = None;
+        let mut guard_res = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard_res = None;
     }
 
-    let result = trasher::trash(mock_trash_capture_target, "documents/file.txt");
-    assert_eq!(result, Ok(()));
+    trasher::trash(
+        "documents/file.txt",
+        mock_final_request,
+        mock_trash_capture_target,
+    );
 
-    let guard = CAPTURED_TARGET.lock().unwrap_or_else(|e| e.into_inner());
-    assert_eq!(guard.as_deref(), Some("documents/file.txt"));
+    {
+        let guard_res = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard_res, Some(Ok(())));
+    }
+    {
+        let guard_target = CAPTURED_TARGET.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(guard_target.as_deref(), Some("documents/file.txt"));
+    }
 }

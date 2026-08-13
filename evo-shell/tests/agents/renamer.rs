@@ -19,35 +19,109 @@ fn mock_rename_capture_args(target: &str, new_name: &str) -> Result<(), rename::
     Ok(())
 }
 
+static CAPTURED_RESULT: Mutex<Option<Result<(), rename_use_case::Error>>> = Mutex::new(None);
+
+fn mock_final_request(result: Result<(), rename_use_case::Error>) {
+    let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = Some(result);
+}
+
+#[test]
+fn renamer_implements_rename() {
+    let rename_op: rename_use_case::Rename = renamer::rename;
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+    rename_op(
+        "videos/gatito.mp4",
+        "michi.mp4",
+        mock_final_request,
+        mock_rename_success,
+    );
+    {
+        let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard, Some(Ok(())));
+    }
+
+    let rename_const: rename_use_case::Rename = renamer::RENAME;
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+    rename_const(
+        "videos/gatito.mp4",
+        "michi.mp4",
+        mock_final_request,
+        mock_rename_success,
+    );
+    {
+        let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard, Some(Ok(())));
+    }
+}
+
 #[test]
 fn renamer_success() {
-    assert_eq!(
-        renamer::rename(mock_rename_success, "videos/gatito.mp4", "michi.mp4"),
-        Ok(())
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+
+    renamer::rename(
+        "videos/gatito.mp4",
+        "michi.mp4",
+        mock_final_request,
+        mock_rename_success,
     );
+
+    let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(*guard, Some(Ok(())));
 }
 
 #[test]
 fn renamer_translates_rename_error() {
-    assert_eq!(
-        renamer::rename(mock_rename_unavailable, "videos/gatito.mp4", "michi.mp4"),
-        Err(rename_use_case::Error::RenameUnavailable)
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+
+    renamer::rename(
+        "videos/gatito.mp4",
+        "michi.mp4",
+        mock_final_request,
+        mock_rename_unavailable,
     );
+
+    let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(*guard, Some(Err(rename_use_case::Error::RenameUnavailable)));
 }
 
 #[test]
 fn renamer_transports_arguments() {
     {
-        let mut guard = CAPTURED_ARGS.lock().unwrap_or_else(|e| e.into_inner());
-        *guard = None;
+        let mut guard_args = CAPTURED_ARGS.lock().unwrap_or_else(|e| e.into_inner());
+        *guard_args = None;
+        let mut guard_res = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard_res = None;
     }
 
-    let result = renamer::rename(mock_rename_capture_args, "videos/gatito.mp4", "michi.mp4");
-    assert_eq!(result, Ok(()));
-
-    let guard = CAPTURED_ARGS.lock().unwrap_or_else(|e| e.into_inner());
-    assert_eq!(
-        guard.as_ref(),
-        Some(&("videos/gatito.mp4".to_string(), "michi.mp4".to_string()))
+    renamer::rename(
+        "videos/gatito.mp4",
+        "michi.mp4",
+        mock_final_request,
+        mock_rename_capture_args,
     );
+
+    {
+        let guard_res = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard_res, Some(Ok(())));
+    }
+    {
+        let guard_args = CAPTURED_ARGS.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(
+            guard_args.as_ref(),
+            Some(&("videos/gatito.mp4".to_string(), "michi.mp4".to_string()))
+        );
+    }
 }

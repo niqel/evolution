@@ -19,29 +19,85 @@ fn mock_delete_capture_target(target: &str) -> Result<(), delete::Error> {
     Ok(())
 }
 
+static CAPTURED_RESULT: Mutex<Option<Result<(), delete_use_case::Error>>> = Mutex::new(None);
+
+fn mock_final_request(result: Result<(), delete_use_case::Error>) {
+    let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = Some(result);
+}
+
+#[test]
+fn deleter_implements_delete() {
+    let delete_op: delete_use_case::Delete = deleter::delete;
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+    delete_op("file.txt", mock_final_request, mock_delete_success);
+    {
+        let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard, Some(Ok(())));
+    }
+
+    let delete_const: delete_use_case::Delete = deleter::DELETE;
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+    delete_const("file.txt", mock_final_request, mock_delete_success);
+    {
+        let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard, Some(Ok(())));
+    }
+}
+
 #[test]
 fn deleter_success() {
-    assert_eq!(deleter::delete(mock_delete_success, "file.txt"), Ok(()));
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+
+    deleter::delete("file.txt", mock_final_request, mock_delete_success);
+
+    let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(*guard, Some(Ok(())));
 }
 
 #[test]
 fn deleter_translates_delete_error() {
-    assert_eq!(
-        deleter::delete(mock_delete_unavailable, "file.txt"),
-        Err(delete_use_case::Error::DeleteUnavailable)
-    );
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+
+    deleter::delete("file.txt", mock_final_request, mock_delete_unavailable);
+
+    let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(*guard, Some(Err(delete_use_case::Error::DeleteUnavailable)));
 }
 
 #[test]
 fn deleter_transports_target() {
     {
-        let mut guard = CAPTURED_TARGET.lock().unwrap_or_else(|e| e.into_inner());
-        *guard = None;
+        let mut guard_target = CAPTURED_TARGET.lock().unwrap_or_else(|e| e.into_inner());
+        *guard_target = None;
+        let mut guard_res = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard_res = None;
     }
 
-    let result = deleter::delete(mock_delete_capture_target, "documents/file.txt");
-    assert_eq!(result, Ok(()));
+    deleter::delete(
+        "documents/file.txt",
+        mock_final_request,
+        mock_delete_capture_target,
+    );
 
-    let guard = CAPTURED_TARGET.lock().unwrap_or_else(|e| e.into_inner());
-    assert_eq!(guard.as_deref(), Some("documents/file.txt"));
+    {
+        let guard_res = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard_res, Some(Ok(())));
+    }
+    {
+        let guard_target = CAPTURED_TARGET.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(guard_target.as_deref(), Some("documents/file.txt"));
+    }
 }

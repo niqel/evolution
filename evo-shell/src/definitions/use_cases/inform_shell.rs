@@ -1,3 +1,3 @@
-use crate::definitions::structs::borrowed::shell_information::ShellInformation;
+use crate::definitions::requesters::shell_information_requester;
 
-pub type Inform = fn() -> ShellInformation<'static>;
+pub type Inform = fn(shell_information_requester::Request);

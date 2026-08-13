@@ -47,15 +47,15 @@ fn mock_copy_with_progress_events(
 ) -> Result<(), copy::Error> {
     progress(TransferProgress {
         total_bytes: Some(1000),
-        copied_bytes: 0,
+        transferred_bytes: 0,
     });
     progress(TransferProgress {
         total_bytes: Some(1000),
-        copied_bytes: 500,
+        transferred_bytes: 500,
     });
     progress(TransferProgress {
         total_bytes: Some(1000),
-        copied_bytes: 1000,
+        transferred_bytes: 1000,
     });
     Ok(())
 }
@@ -200,15 +200,15 @@ fn copier_delivers_progress_events() {
         vec![
             TransferProgress {
                 total_bytes: Some(1000),
-                copied_bytes: 0,
+                transferred_bytes: 0,
             },
             TransferProgress {
                 total_bytes: Some(1000),
-                copied_bytes: 500,
+                transferred_bytes: 500,
             },
             TransferProgress {
                 total_bytes: Some(1000),
-                copied_bytes: 1000,
+                transferred_bytes: 1000,
             },
         ]
     );

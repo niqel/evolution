@@ -1,10 +1,12 @@
 use crate::definitions::contracts::create_file;
+use crate::definitions::requesters::create_file_requester;
+use crate::definitions::use_cases::create_file as create_file_use_case;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Error {
-    Unavailable,
-}
-
-pub fn resolve(capability: create_file::CreateFile, target: &str) -> Result<(), Error> {
-    capability(target).map_err(|create_file::Error::Unavailable| Error::Unavailable)
+pub fn resolve(
+    create: create_file::CreateFile,
+    target: &str,
+    request: create_file_requester::Request,
+) {
+    let result = create(target).map_err(|_| create_file_use_case::Error::CreateFileUnavailable);
+    request(result);
 }

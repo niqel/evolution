@@ -19,32 +19,92 @@ fn mock_create_file_capture_target(target: &str) -> Result<(), create_file::Erro
     Ok(())
 }
 
+static CAPTURED_RESULT: Mutex<Option<Result<(), create_file_use_case::Error>>> = Mutex::new(None);
+
+fn mock_final_request(result: Result<(), create_file_use_case::Error>) {
+    let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = Some(result);
+}
+
+#[test]
+fn file_creator_implements_create_file() {
+    let create: create_file_use_case::CreateFile = file_creator::create_file;
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+    create("notes.txt", mock_final_request, mock_create_file_success);
+    {
+        let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard, Some(Ok(())));
+    }
+
+    let create_const: create_file_use_case::CreateFile = file_creator::CREATE;
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+    create_const("notes.txt", mock_final_request, mock_create_file_success);
+    {
+        let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard, Some(Ok(())));
+    }
+}
+
 #[test]
 fn file_creator_success() {
-    assert_eq!(
-        file_creator::create_file(mock_create_file_success, "notes.txt"),
-        Ok(())
-    );
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+
+    file_creator::create_file("notes.txt", mock_final_request, mock_create_file_success);
+
+    let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(*guard, Some(Ok(())));
 }
 
 #[test]
 fn file_creator_translates_error() {
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+
+    file_creator::create_file(
+        "notes.txt",
+        mock_final_request,
+        mock_create_file_unavailable,
+    );
+
+    let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
     assert_eq!(
-        file_creator::create_file(mock_create_file_unavailable, "notes.txt"),
-        Err(create_file_use_case::Error::CreateFileUnavailable)
+        *guard,
+        Some(Err(create_file_use_case::Error::CreateFileUnavailable))
     );
 }
 
 #[test]
 fn file_creator_transports_target() {
     {
-        let mut guard = CAPTURED_TARGET.lock().unwrap_or_else(|e| e.into_inner());
-        *guard = None;
+        let mut guard_target = CAPTURED_TARGET.lock().unwrap_or_else(|e| e.into_inner());
+        *guard_target = None;
+        let mut guard_res = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard_res = None;
     }
 
-    let result = file_creator::create_file(mock_create_file_capture_target, "documents/notes.txt");
-    assert_eq!(result, Ok(()));
+    file_creator::create_file(
+        "documents/notes.txt",
+        mock_final_request,
+        mock_create_file_capture_target,
+    );
 
-    let guard = CAPTURED_TARGET.lock().unwrap_or_else(|e| e.into_inner());
-    assert_eq!(guard.as_deref(), Some("documents/notes.txt"));
+    {
+        let guard_res = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard_res, Some(Ok(())));
+    }
+    {
+        let guard_target = CAPTURED_TARGET.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(guard_target.as_deref(), Some("documents/notes.txt"));
+    }
 }
