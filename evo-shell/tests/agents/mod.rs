@@ -3,6 +3,7 @@ pub mod copier;
 pub mod deleter;
 pub mod directory_creator;
 pub mod file_creator;
+pub mod filesystem_enumerator;
 pub mod mover;
 pub mod renamer;
 pub mod scope_responder;
