@@ -2,6 +2,7 @@ pub mod copy;
 pub mod create_dir;
 pub mod create_file;
 pub mod delete;
+pub mod enumerate_filesystem;
 pub mod move_item;
 pub mod provide_scope;
 pub mod rename;
