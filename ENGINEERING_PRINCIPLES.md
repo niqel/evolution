@@ -2,214 +2,442 @@
 
 ## Propósito
 
-Este documento define principios de diseño reutilizables para todos los proyectos.
+Este documento define principios de diseño reutilizables para los proyectos Evolution.
 
-No describe una tecnología específica ni un framework. Describe una forma de pensar, nombrar y estructurar software.
+No describe un framework específico. Describe una forma de pensar, nombrar, dividir responsabilidades y expresar dependencias en código.
 
-## Principio Base
+---
 
-Todo proyecto debe construirse sobre principios SOLID.
+## 1. Principio Base
 
-De todos ellos, el Principio de Responsabilidad Única es indispensable:
+Todo diseño debe buscar responsabilidades claras, dependencias explícitas y semántica legible.
 
-- cada módulo debe tener una responsabilidad dominante
-- cada función debe expresar una acción clara
-- cada tipo debe representar una entidad comprensible del dominio
-- si una pieza intenta hacer demasiadas cosas, debe dividirse
+El Principio de Responsabilidad Única es indispensable:
 
-## Responsabilidad Única
+- cada módulo debe tener una responsabilidad dominante;
+- cada función debe expresar una acción clara;
+- cada tipo debe representar una entidad, vista, resultado o contrato comprensible;
+- si una pieza tiene varios motivos principales de cambio, debe dividirse.
 
-Una pieza de software tiene responsabilidad única cuando su motivo de cambio principal es uno solo.
+La responsabilidad única también es una regla de lenguaje: si el nombre de una pieza no permite explicar qué hace, probablemente su frontera no está bien definida.
 
-Esto implica:
+---
 
-- un módulo no debe mezclar lógica de dominio con interfaz, persistencia, red o coordinación externa si no es su función principal
-- una función no debe ocultar varias transformaciones independientes
-- un tipo no debe existir como contenedor genérico de comportamientos inconexos
+## 2. Transparencia Semántica
 
-La responsabilidad única no es solo una regla de arquitectura. También es una regla de lenguaje.
+Los nombres deben acercarse al dominio real y no únicamente a la mecánica técnica.
 
-Si el nombre de una pieza no deja claro qué hace, probablemente su responsabilidad no está bien definida.
+Se prefieren nombres funcionales, módulos pequeños, verbos precisos y firmas que permitan reconstruir el flujo del sistema.
 
-## Sujeto Agente
+Se evitan nombres como `Manager`, `Helper`, `Utils`, `Thing` o contenedores genéricos sin responsabilidad defendible.
 
-Se adopta el concepto de sujeto agente como criterio de diseño.
+---
 
-En lingüística, un nombre de agente puede derivarse de un verbo para designar al sujeto que realiza una acción.
+## 3. Sujeto Agente
 
-Ejemplos:
-
-- licuar -> licuadora
-- correr -> corredor
-- secar -> secadora
-- profesar -> profesor
-- construir -> constructor
-- to blend -> blender
-- to print -> printer
-- to generate -> generator
-
-En software, este concepto se usa para nombrar módulos, tipos, comandos y componentes como sujetos conceptuales definidos por la acción dominante que realizan.
-
-Regla:
-
-- si una pieza recibe un nombre de sujeto agente, debe tener una acción principal clara y defendible
-
-Ejemplos:
-
-- `Generator` genera
-- `Printer` imprime
-- `Disipador` disipa
-- `VolumeController` controla volumen
-
-Si una pieza no puede justificar su nombre por una acción dominante, su diseño debe revisarse.
-
-El sujeto agente no obliga a crear una `struct`, una clase o un objeto con estado.
-
-Puede expresarse como módulo, tipo, comando, script o componente, según la frontera real que necesite el sistema.
-
-## Relación Entre Objeto, Acción y Sujeto Agente
-
-Se considera útil la siguiente relación semántica:
+Se adopta el concepto de **sujeto agente** como criterio de diseño.
 
 ```text
-objeto + acción -> sujeto agente
+objeto + acción → sujeto agente
 ```
 
-Ejemplos conceptuales:
+Ejemplos:
 
-- ropa + lavar -> lavadora
-- audio + enrutar -> router de audio
-- stream + mover -> movedor de streams
-- sink + seleccionar -> selector de sink
+- ropa + lavar → lavadora;
+- audio + enrutar → router de audio;
+- archivo + copiar → copier;
+- archivo + renombrar → renamer.
 
-Esta relación ayuda a diseñar componentes cuyo nombre revele:
+Si una pieza recibe un nombre de sujeto agente, debe tener una acción principal clara y defendible.
 
-- qué recibe
-- qué transforma
-- cuál es su función principal
+Un sujeto agente no obliga a crear una clase o `struct`. Puede expresarse como módulo, función, comando, script o componente.
 
-En este documento, el objeto de esa relación se entiende primero como una pieza semántica del dominio, no necesariamente como una entidad poseída por el sistema.
+---
 
-En algunos proyectos, ese objeto podrá ser una entidad propia. En otros, podrá ser un préstamo externo, una vista o una capacidad mínima definida por contrato o especificación.
+## 4. Módulo Antes que Objeto Artificial
 
-## Inspiración Lingüística
+Cuando una responsabilidad no posee estado propio ni identidad de instancia, un módulo puede ser suficiente.
 
-Parte de la inspiración de este enfoque proviene del uso de compuestos funcionales en persa, donde la relación entre objeto y acción puede formar una identidad semántica clara para el sujeto agente o herramienta.
+No debe crearse una `struct` únicamente para imitar una clase de servicio.
 
-En este documento, esa idea se adopta como referencia conceptual para mejorar la claridad de nombres, módulos y responsabilidades en software, no como una regla lingüística estricta.
+Un tipo con estado se justifica cuando el estado, ownership o invariantes pertenecen realmente a esa entidad.
 
-## Principio de Transparencia Semántica
+---
 
-Los nombres del sistema deben acercarse al dominio real y no solo a la mecánica técnica.
+## 5. Firmas como Contratos Arquitectónicos
 
-Se prefiere:
+Una firma de función puede ser una frontera arquitectónica completa.
 
-- nombres que expresen función
-- módulos pequeños y semánticamente cerrados
-- verbos claros para las operaciones
-- tipos que representen entidades del dominio
-
-Se evita:
-
-- nombres genéricos como `Manager`, `Helper`, `Utils`, `Thing`, `DataProcessor`
-- módulos que solo agrupan código sin identidad semántica
-- estructuras creadas solo por costumbre si un módulo basta
-
-## Módulo Como Sujeto Agente
-
-No toda responsabilidad necesita representarse como una `struct`.
-
-Cuando no existe estado propio, una responsabilidad puede vivir correctamente en un módulo.
-
-El módulo puede actuar como sujeto agente semántico del dominio.
-
-Ejemplo:
+Cuando una operación puede expresarse mediante un puntero de función, se prefiere esa forma antes que introducir una jerarquía de interfaces ficticia.
 
 ```rust
-mod lavadora {
-    pub struct Ropa {
-        pub limpia: bool,
-        pub material: String,
-    }
-
-    pub fn lavar(prenda: &mut Ropa) {
-        prenda.limpia = true;
-    }
-}
+pub type Operation = fn(Input, Request, Contract);
 ```
 
-Lectura semántica:
+Esto permite que el compilador verifique cantidad de argumentos, orden, tipos, lifetimes y retorno.
 
-- `Ropa` es la entidad que recibe la transformación
-- `lavar` es la acción
-- `lavadora` es el contexto funcional que da identidad al acto
+---
 
-La existencia del módulo ya establece una frontera de responsabilidad.
+## 6. Use Case como Firma Completa
 
-Según la arquitectura del proyecto, ese objeto puede representarse como entidad propia o como recurso prestado bajo una forma mínima suficiente para la operación.
+Un Use Case define la operación completa que el sistema ofrece.
 
-No se debe crear una `struct Lavadora` si no existe estado, coordinación o comportamiento persistente que la justifique.
+Debe declarar todo lo necesario para ejecutar esa operación:
 
-## Sujeto Agente a Través de Roles Arquitectónicos
+- parámetros semánticos;
+- Requesters;
+- Contracts requeridos;
+- resultado de control cuando corresponda;
+- Error semántico propio cuando la operación pueda fallar.
 
-El concepto de sujeto agente puede reutilizarse a lo largo de distintas capas o roles arquitectónicos cuando representan al mismo sujeto funcional.
+No debe existir una dependencia escondida que el Agent necesite pero que el Use Case omita.
 
-- El espacio de nombres o directorio distingue el rol arquitectónico (`agents/summator.rs` vs `collaborators/summator.rs`).
-- El Agent conserva el verbo de la acción pública (ej. `summator::sum(...)`).
-- El Collaborator expone `collaborate()` como verbo de su rol interno (`collaborators::summator::collaborate(...)`).
-- Esta convención arquitectónica no exige la creación de traits, interfaces ficticias ni despacho dinámico.
+---
 
-## Regla de Diseño
+## 7. Agent Implementa Exactamente el Use Case
 
-Antes de crear una pieza nueva, deben responderse estas preguntas:
+El Agent es el punto de entrada de una operación y debe implementar exactamente la firma del Use Case.
 
-1. ¿Cuál es la acción dominante?
-2. ¿Qué entidad recibe la acción?
-3. ¿El sujeto agente necesita estado o solo un contexto semántico?
-4. ¿El nombre refleja claramente su responsabilidad?
-5. ¿La pieza tiene un solo motivo principal de cambio?
+```rust
+pub fn execute(/* exact use case signature */) {
+    // orchestration only
+}
 
-Si estas preguntas no tienen respuesta clara, el diseño todavía no está listo.
+pub const EXECUTE: use_case::Execute = execute;
+```
 
-## Convenciones Recomendadas
+El binding es un invariante arquitectónico comprobado por el compilador.
 
-- usar nombres con carga semántica real
-- preferir módulos pequeños antes que contenedores genéricos
-- crear tipos solo cuando agreguen identidad o invariantes reales
-- usar funciones con verbos precisos
-- evitar abstracciones vacías
-- revisar si cada nombre puede explicarse desde el verbo que le da origen
+---
 
-## Criterio de Revisión
+## 8. Agent = Orchestration Only
 
-Una pieza de código debe revisarse si ocurre cualquiera de estos casos:
+Un Agent coordina; no absorbe responsabilidades de otras capas.
 
-- su nombre no explica lo que hace
-- hace más de una cosa principal
-- mezcla responsabilidades de distintos niveles
-- usa una `struct` donde bastaría un módulo
-- usa un módulo donde en realidad hace falta estado explícito
-- el dominio no puede reconstruirse leyendo nombres y firmas
+Puede transportar argumentos, Requesters y Contracts, y decidir qué Collaborator o Resolver participa.
 
-## Aplicación General
+No debe implementar infraestructura, traducir errores técnicos que pertenecen al Resolver, materializar datos de otro owner, interpretar sintaxis ni convertirse en un `Manager` disfrazado.
 
-Estos principios aplican a:
+---
 
-- scripts
-- crates
-- CLIs
-- herramientas internas
-- automatización
-- utilidades de sistema
+## 9. Requester = Capacidad de Responder
 
-## Síntesis
+Un Requester representa la capacidad de entregar una respuesta al consumidor.
 
-La arquitectura no solo se organiza con tipos y dependencias. También se organiza con gramática.
+```rust
+pub type Request = fn(Result<(), Error>);
+```
 
-Un buen diseño puede leerse como una relación clara entre:
+Para vistas prestadas:
 
-- entidad
-- acción
-- sujeto agente
+```rust
+pub type Request = for<'a> fn(View<'a>);
+```
 
-Cuando el nombre, la responsabilidad y el comportamiento coinciden, el sistema gana claridad, mantenibilidad y coherencia.
+> Los componentes intermedios transportan la capacidad de responder, no la respuesta.
+
+---
+
+## 10. Materialization Ownership
+
+El componente que posee los datos debe materializar cualquier vista prestada derivada de ellos.
+
+```text
+owner
+  │
+  ├─ materialize View<'a>
+  ├─ request(view)
+  └─ borrow ends
+```
+
+> El Requester viaja hasta el materializador.
+
+---
+
+## 11. Borrowing Antes que Ownership Artificial
+
+Cuando un consumidor únicamente necesita observar un dato durante un lifetime válido, se prefiere borrowing explícito.
+
+Un valor owned se justifica cuando necesita sobrevivir al owner original, almacenarse, transferirse realmente o representar ownership semánticamente real.
+
+---
+
+## 12. Contract = Frontera Técnica Requerida
+
+Un Contract define la operación mínima que se espera de infraestructura externa.
+
+Un Contract define una firma; no implementa infraestructura, no posee recursos externos y no es un service locator.
+
+La palabra *capability* puede describir conceptualmente una operación disponible, pero no obliga a crear un objeto genérico `Capability`.
+
+---
+
+## 13. Provider = Realización Física
+
+El Provider implementa la operación técnica concreta y posee, cuando corresponde, el recurso o estado externo.
+
+```text
+semantic Contract
+       ▲
+       │ compatible function
+technical Provider
+```
+
+Los detalles técnicos del Provider no deben filtrarse hacia el Use Case.
+
+---
+
+## 14. Resolver Solo para Fronteras Técnicas
+
+Un Resolver existe cuando una operación cruza una frontera técnica externa.
+
+Puede invocar el Contract, adaptar datos técnicos, traducir Error técnico → Error semántico, transportar un Requester hacia el Provider y entregar el resultado semántico final mediante Requester.
+
+> Result does not imply Resolver.
+
+---
+
+## 15. Evitar Errors Intermedios sin Semántica
+
+Si un Resolver solo transforma:
+
+```text
+Contract::Error
+      ↓
+UseCase::Error
+```
+
+no debe introducir además `Resolver::Error` sin información semántica nueva.
+
+---
+
+## 16. Collaborator = Trabajo Interno
+
+Un Collaborator realiza trabajo interno que no cruza una frontera técnica externa.
+
+Puede materializar una vista, usar Tools, ejecutar lógica interna e invocar el Requester cuando él es el materializador.
+
+Un Collaborator no debe invocar a otro Collaborator directamente. La coordinación pertenece al Agent.
+
+---
+
+## 17. Tool = Operación Interna Reutilizable
+
+Un Tool debe ser pequeño, reusable y ajeno a la orquestación.
+
+No conoce Agents, Requesters, Providers, Use Cases ni infraestructura externa.
+
+Un Tool no debe convertirse en un `Utils` genérico.
+
+---
+
+## 18. Control y Datos Viajan en Direcciones Diferentes
+
+```text
+CONTROL
+caller → Use Case → Agent → Resolver / Collaborator
+```
+
+```text
+DATOS
+materializer / boundary → Requester → consumer
+```
+
+No es obligatorio que la respuesta recorra en sentido inverso todas las capas por las que llegó el control.
+
+---
+
+## 19. Una Operación Puede Tener Varias Rutas de Respuesta
+
+Una transferencia puede tener progreso 0..N veces y un resultado final exactamente una vez.
+
+```text
+Provider
+   ├────► progress Requester
+   ├────► progress Requester
+   │
+   └────► Result
+              │
+              ▼
+           Resolver
+              │
+              └────► final Requester
+```
+
+Cada ruta debe tener una semántica clara.
+
+---
+
+## 20. Tipos Compartidos Solo Cuando el Concepto es Compartido
+
+Dos operaciones pueden reutilizar un tipo únicamente cuando comparten realmente el mismo concepto semántico.
+
+```text
+Copy ─┐
+      ├─► TransferProgress
+Move ─┘
+```
+
+No debe compartirse un tipo solo porque tenga los mismos campos si su nombre pertenece semánticamente a otro flujo.
+
+---
+
+## 21. No Duplicar Objetivos Semánticos
+
+Si dos Use Cases, Agents y Collaborators producen exactamente el mismo dato con la misma intención, debe revisarse si realmente existen dos operaciones distintas.
+
+Nombres distintos no prueban responsabilidades distintas.
+
+---
+
+## 22. No Crear Abstracciones por Costumbre
+
+No deben introducirse automáticamente traits, `dyn`, jerarquías de interfaces, wrappers de servicios, factories, service locators o genéricos de comportamiento.
+
+Una abstracción se justifica cuando representa una variación real que el sistema necesita modelar.
+
+Para operaciones estáticas y conocidas, un puntero `fn` puede ofrecer una frontera más pequeña y explícita.
+
+---
+
+## 23. Traits y Despacho Dinámico Deben Tener una Razón Real
+
+Antes de introducir `trait` o `dyn` debe existir una razón concreta, como polimorfismo real en runtime o implementaciones heterogéneas con identidad/estado propio.
+
+Si una firma `fn` expresa completamente la operación, se prefiere la solución más pequeña.
+
+---
+
+## 24. Evitar Transporte Innecesario
+
+No se deben crear objetos únicamente para atravesar capas.
+
+Evitar ownership, clonados y allocations artificiales cuando un Requester y borrowing expresan correctamente el flujo.
+
+---
+
+## 25. Errores Pertenecen a su Semántica
+
+- el Contract define errores técnicos de su frontera;
+- el Use Case define errores semánticos de la operación;
+- el Resolver traduce entre ambos cuando corresponde.
+
+No deben compartirse errores globales entre operaciones independientes solo por conveniencia.
+
+---
+
+## 26. Presentación No Pertenece al Dominio
+
+La respuesta semántica no debe incorporar texto ya formateado para terminal, widgets, píxeles, estilos o detalles de una UI concreta.
+
+La presentación final pertenece al consumidor.
+
+---
+
+## 27. Separar Lenguaje de Operaciones del Sistema
+
+La capa de lenguaje posee sintaxis, parser, operadores, expresiones, tipos y transformaciones del lenguaje.
+
+La capa de operaciones posee filesystem, red, procesos, scope y otras acciones del entorno.
+
+Un operador del lenguaje no debe convertirse en Use Case de infraestructura.
+
+---
+
+## 28. Dependencias Apuntan hacia Definiciones, no Implementaciones Físicas
+
+Una operación semántica puede conocer el tipo de un Contract requerido, pero no el Provider concreto.
+
+```text
+Use Case
+   │
+   └── Contract type
+
+Provider
+   └── compatible implementation
+```
+
+---
+
+## 29. Testing como Verificación de Arquitectura
+
+Los tests también pueden verificar invariantes arquitectónicos.
+
+```rust
+let operation: use_case::Operation = agent::operation;
+let operation_const: use_case::Operation = agent::OPERATION;
+```
+
+También deben comprobar transporte de argumentos, traducción de errores, entrega por Requester y eventos de progreso cuando corresponda.
+
+---
+
+## 30. Validación Proporcional al Cambio
+
+Una modificación pequeña no requiere ejecutar siempre toda la suite si existen filtros confiables.
+
+Se recomienda:
+
+- compilación global del workspace;
+- formatting global;
+- tests filtrados del flujo afectado;
+- suite completa cuando el alcance o riesgo lo justifiquen.
+
+La validación debe ser suficiente, no ritual.
+
+---
+
+## 31. Criterio de Diseño Antes de Crear una Pieza
+
+Antes de crear una nueva pieza deben responderse estas preguntas:
+
+1. ¿Cuál es su acción dominante?
+2. ¿Qué entidad o vista recibe esa acción?
+3. ¿Quién posee los datos?
+4. ¿Quién materializa la respuesta?
+5. ¿Existe una frontera técnica externa?
+6. ¿Necesita Resolver o solo Collaborator?
+7. ¿Necesita ownership o basta borrowing?
+8. ¿La operación requiere un Requester?
+9. ¿Hay una variación real que justifique una abstracción adicional?
+10. ¿El nombre permite explicar la responsabilidad sin leer la implementación?
+
+---
+
+## 32. Criterio de Revisión
+
+Una pieza debe revisarse si:
+
+- su nombre no explica su función;
+- mezcla coordinación e infraestructura;
+- un Agent contiene lógica ajena;
+- un Resolver existe sin frontera técnica;
+- un Collaborator llama a otro Collaborator;
+- aparece un Error intermedio sin semántica propia;
+- una vista borrowed se vuelve owned solo para atravesar capas;
+- dos flujos tienen el mismo objetivo con nombres diferentes;
+- un tipo compartido pertenece semánticamente a solo uno de sus consumidores;
+- una abstracción existe únicamente por costumbre.
+
+---
+
+## 33. Síntesis
+
+```text
+Use Case
+   defines the complete operation
+       │
+       ▼
+Agent
+   orchestrates exactly that operation
+       │
+       ├──► Collaborator ───► Requester
+       │
+       └──► Resolver ─► Contract ─► Provider
+                       │             │
+                       │             └─ materialized response/progress
+                       │
+                       └─ semantic result ─► Requester
+```
+
+> Definir explícitamente la operación, mantener ownership donde pertenece, transportar la capacidad de responder y crear solo las abstracciones que representan una diferencia real.

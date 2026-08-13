@@ -1,74 +1,80 @@
 # Arquitectura del Proyecto Evolution
 
-Este documento especifica la arquitectura del proyecto **Evolution**, definiendo la topología de ejecución alojada en `evo-runtime`, los límites conceptuales entre los proyectos/crates (`evo-script`, `evo-shell`, `evo-runtime`, `providers`, `evo-shell-cli`, `evo-ui`, `evo-apps`), el modelo de aplicaciones `.evo` y la organización interna del motor semántico de capacidades `evo-shell`.
+Este documento especifica la arquitectura del proyecto **Evolution**, distinguiendo la topología de ejecución alojada en `evo-runtime`, los límites entre crates y la organización interna de `evo-shell`.
+
+La arquitectura actual es deliberadamente orientada a funciones: los Use Cases definen firmas completas mediante punteros de función, los Agents implementan exactamente esas firmas, los Requesters transportan la capacidad de responder y los Contracts expresan las operaciones técnicas que deben realizar los Providers.
 
 ---
 
 ## 1. Topología de Ejecución vs Dependencias de Crates
 
-Para evitar ambigüedades arquitectónicas, este documento distingue formalmente entre:
+Evolution distingue formalmente dos dimensiones diferentes:
 
-1. **Topología de Ejecución**: Quién aloja, mantiene el ciclo de vida y ejecuta a quién en tiempo de ejecución.
-2. **Dependencias de Código / Crates**: Qué módulo conoce o depende conceptualmente del código de cuál durante la compilación.
+1. **Topología de ejecución**: quién aloja, mantiene el ciclo de vida y ejecuta una aplicación.
+2. **Dependencias de código / crates**: qué proyecto conoce a cuál durante la compilación.
+
+Estas dimensiones no deben confundirse. Una relación de ejecución no implica necesariamente una dependencia directa de código, y una dependencia de crate no implica IPC, red ni un servicio externo.
 
 ---
 
-## 2. Topología de Ejecución (`evo-runtime` como Execution Host)
+## 2. Topología de Ejecución
 
-`evo-runtime` **no es una biblioteca o servicio externo llamado por las aplicaciones**, ni tampoco un paso lineal posterior en un pipeline. `evo-runtime` es el **entorno de ejecución (*Execution Host*)** que rodea y mantiene viva la ejecución de una aplicación Evolution.
-
-### Diagrama de Topología de Ejecución por Aplicación
+`evo-runtime` es el **Execution Host** de las aplicaciones Evolution.
 
 ```text
                     evo-runtime
                  execution host
                        │
-                   app.evo
+                    app.evo
                        │
                        ▼
                   evo-script
         ┌─────────────────────────────┐
         │ language                    │
-        │ syntax                      │
+        │ syntax / tokenization       │
+        │ parser                      │
         │ types                       │
-        │ operators (+ - * / %)       │
         │ expressions                 │
+        │ operators                   │
+        │ predicates                  │
         │ filter / select / new       │
-        │ to-value                    │
+        │ to-value / append / take    │
         │ pipes (|>)                  │
         │ lazy iteration semantics    │
         └─────────────────────────────┘
                        │
-                       │ uses capabilities
+              uses environment operations
                        ▼
                    evo-shell
         ┌─────────────────────────────┐
         │ scope                       │
         │ filesystem                  │
-        │ terminal                    │
         │ copy / move / rename        │
-        │ delete / trash              │
-        │ processes                   │
+        │ create / delete / trash     │
+        │ terminal / processes        │
         │ network                     │
-        │ system capabilities         │
+        │ system environment          │
         └─────────────────────────────┘
                        │
                        ▼
                    Providers
+                       │
+                       ▼
+                       OS
 ```
 
-> *Nota:* Este diagrama representa responsabilidades conceptuales dentro del entorno mantenido por el runtime. No significa que `evo-runtime` contenga físicamente el código de la UI, CLI, `evo-script` o `evo-shell`, sino que **aloja y mantiene el contexto** en el cual esas piezas colaboran.
+`evo-runtime` aloja el contexto de ejecución; no absorbe las responsabilidades de `evo-script`, `evo-shell` ni de los Providers.
 
 ---
 
-## 3. Instalación Compartida de Runtime vs Procesos de Aplicación
+## 3. Instalación Compartida y Aislamiento por Aplicación
 
-Evolution utiliza una estrategia de instalación de runtime compartida combinada con aislamiento de ejecución por aplicación.
+Evolution utiliza una instalación compartida del runtime con ejecuciones aisladas por aplicación.
 
 ```text
                shared evo-runtime installation
                          │
-              host / supervisor
+                  host / supervisor
                          │
           ┌──────────────┼──────────────┐
           ▼              ▼              ▼
@@ -77,104 +83,507 @@ Evolution utiliza una estrategia de instalación de runtime compartida combinada
       shell.evo       music.evo       ui.evo
 ```
 
-### Principios de Aislamiento e Instalación:
-1. **Un solo `evo-runtime` instalado**: Existe una única instalación/implementación compartida del runtime en el sistema. Las aplicaciones `.evo` reutilizan esa instalación común y **no empaquetan una copia completa del runtime**.
-2. **Aislamiento por proceso**: Reutilizar una instalación común de `evo-runtime` **no significa** ejecutar todas las aplicaciones en el mismo proceso del sistema operativo ni compartir estado entre ellas. Cada aplicación dispone de su propia ejecución y proceso aislado.
-3. **Host / Supervisor**: `evo-runtime` incluye conceptualmente una faceta de host/supervisor encargada de descubrir aplicaciones, gestionar su ciclo de vida, lanzar instancias aisladas y resolver capacidades. *(Su topología física concreta —daemon, servicio de sistema, proceso residente o launcher— se diseñará posteriormente).*
+Principios:
+
+- existe una implementación compartida de `evo-runtime`;
+- cada aplicación mantiene su propio contexto de ejecución;
+- compartir runtime no implica compartir estado de aplicación;
+- la forma física del host/supervisor podrá evolucionar sin alterar las fronteras semánticas descritas aquí.
 
 ---
 
-## 4. Responsabilidades de `evo-runtime` como Host
+## 4. Responsabilidades de `evo-runtime`
 
-`evo-runtime` no es simplemente una API consumida externamente; es el entorno que mantiene el contexto de vida de una aplicación Evolution.
+`evo-runtime` es responsable de:
 
-### Responsabilidades Conceptuales del Host Runtime:
-- Iniciar la ejecución de un script o paquete `.evo`.
-- Crear, alojar y mantener el contexto de ejecución aislado de la aplicación.
-- Gestionar el ciclo de vida (*lifecycle*) de la aplicación.
-- Proporcionar acceso y resolver capacidades de infraestructura bajo demanda.
-- Mantener el aislamiento estricto respecto a otras aplicaciones en ejecución.
-- Finalizar y liberar el contexto cuando la aplicación termina.
+- iniciar una aplicación o script `.evo`;
+- crear y mantener su contexto de ejecución;
+- gestionar lifecycle y aislamiento;
+- componer las operaciones requeridas por la aplicación;
+- resolver las implementaciones de infraestructura disponibles;
+- finalizar y liberar el contexto al terminar la aplicación.
 
-### Lo que `evo-runtime` NO implementa (Principio *No God Runtime*):
-- NO es responsable de gramática, sintaxis, parsing ni reglas de `evo-script`.
-- NO implementa la lógica funcional propia de la aplicación.
-- NO implementa las capacidades semánticas de `evo-shell` (ej. no realiza directamente operaciones de filesystem o procesos).
-- NO implementa interfaces físicas (UI, terminal) ni Providers de infraestructura física.
+### Principio No-God-Runtime
+
+`evo-runtime` NO:
+
+- define la gramática de `evo-script`;
+- parsea expresiones de lenguaje;
+- implementa las operaciones semánticas de `evo-shell`;
+- implementa directamente filesystem, red, procesos o terminal;
+- contiene lógica funcional propia de una aplicación;
+- reemplaza a los Providers.
 
 ---
 
 ## 5. Modelo de Aplicaciones `.evo`
 
-Un archivo `.evo` representa código/script ejecutable interpretado por `evo-script` y ejecutado dentro del contexto proporcionado por `evo-runtime`.
+Un archivo `.evo` representa código interpretado por `evo-script` dentro de un contexto mantenido por `evo-runtime`.
 
-### Topología de Alojamiento:
 ```text
-OS / launcher → evo-runtime → isolated application execution → app.evo
+OS / launcher
+     │
+     ▼
+evo-runtime
+     │
+     ▼
+isolated application execution
+     │
+     ▼
+   app.evo
 ```
 
-### Estructura de Aplicación:
-- Una aplicación puede ser un script trivial (ej. `script.evo`) o un paquete de aplicación con múltiples scripts y recursos (ej. directorio con `app.evo`, `player.evo`, `resources/`).
-- **El caso de `evo-shell-cli.evo`**: La consola interactiva de Evolution se define como una aplicación Evolution (`evo-shell-cli.evo`) alojada por `evo-runtime`, que hace uso de la superficie CLI, interpreta `evo-script` y ejecuta capacidades semánticas mediante `evo-shell`.
+Una aplicación puede ser desde un único script hasta un paquete con varios scripts y recursos.
 
----
-
-## 6. Lógica Funcional Única y Superficies UI / CLI / AI
-
-Dentro de una aplicación ejecutándose bajo `evo-runtime`, la interfaz gráfica (UI) y la interfaz de consola (CLI) pertenecen a la superficie de interacción de la aplicación.
+La UI, CLI o una interfaz para agentes de IA son **superficies de interacción**. No deben duplicar la lógica funcional de la aplicación.
 
 ```text
                  evo-runtime
                       │
                  music.evo
                       │
-             shared app logic
-                  evo-script
+               evo-script logic
                  /         \
                 /           \
-              UI            CLI / AI
-              │              │
-           [Play]      music play ...
-              │              │
-              └──────┬───────┘
-                     ▼
-             same capability
+              UI          CLI / AI
+                \           /
+                 \         /
+                  ▼       ▼
+                same semantic operation
 ```
 
-### Principios de Superficie:
-1. **Misma Lógica Funcional**: La UI gráfica y la CLI textual no tienen implementaciones de negocio separadas; ambas invocan exactamente la misma capacidad funcional expresada en `evo-script` y provista por `evo-shell`.
-2. **Orientación a Automatización y Agentes de IA**: Exponer capacidades funcionales en superficies textuales/scriptables permite que usuarios humanos, scripts y **agentes de IA** invoquen comandos deterministas.
-   - *Principio:* *"Visual interaction is a surface; functional capability remains scriptable."*
+> Visual interaction is a surface; functional behavior remains scriptable.
 
 ---
 
-## 7. Resolución Dinámica de Capacidades (*Capabilities On-Demand*)
+## 6. Separación `evo-script` / `evo-shell`
 
-El runtime resuelve y proporciona las capacidades necesarias a la aplicación de forma dinámica según su necesidad.
+### `evo-script` es dueño del lenguaje
 
-### Flujo de Capacidades Semánticas y de Infraestructura:
+Incluye:
 
-**Operaciones del Sistema / Entorno (ej. Copia):**
-```text
-CopyTo Use Case → Copier Agent → Copy Resolver → Copy Contract → Copy Provider
-```
-*(El Resolver cruza la frontera técnica con la infraestructura externa implementada por el Provider).*
+- sintaxis;
+- tokenización;
+- parsing;
+- tipos;
+- expresiones;
+- operadores;
+- predicados;
+- `filter`;
+- `select`;
+- `new`;
+- `to-value`;
+- transformaciones como `append` y `take`;
+- pipes `|>`;
+- semántica de iteración lazy.
 
-**Operaciones Puras Internas de Dominio en evo-shell:**
-```text
-Use Case → Agent → Collaborator → (optional pure Tools)
-```
-*(El Use Case define la firma y su propio tipo Error. El Agent coordina. El Collaborator ejecuta la lógica).*
+### `evo-shell` es dueño de las operaciones semánticas del entorno
 
-> **Nota de Separación Arquitectónica:**
-> Las responsabilidades de lenguaje relativas a operadores aritméticos (`+`, `-`, `*`, `/`, `%`), expresiones sintácticas y tipos numéricos de la arquitectura anterior han sido completamente removidas de `evo-shell`. Pertenecen exclusivamente a `evo-script`.
+Incluye conceptos como:
 
-- **Principio *Capability Unavailable*:** Si una capacidad requerida no está disponible en el entorno (ej. ausencia de terminal en un entorno puramente gráfico), la solicitud responde con un error semántico de indisponibilidad sin invalidar el entorno global de `evo-runtime`.
-- **Ownership de Estado Externo**: Las aplicaciones y el runtime no duplican persistentemente el estado visual que pertenece a la infraestructura física (ej. la terminal física mantiene su propio render/scrollback).
+- scope;
+- filesystem;
+- create;
+- copy;
+- move;
+- rename;
+- delete;
+- trash;
+- procesos;
+- red;
+- otras operaciones del entorno del sistema.
+
+`evo-shell` no contiene parser, gramática ni operadores del lenguaje.
 
 ---
 
-## 8. Dependencias de Código y Crates
+## 7. Organización Interna de `evo-shell`
+
+La estructura conceptual actual es:
+
+```text
+evo-shell/src/
+├── agents/
+├── collaborators/
+├── definitions/
+│   ├── contracts/
+│   ├── requesters/
+│   ├── structs/
+│   └── use_cases/
+├── resolvers/
+└── tools/
+```
+
+Las antiguas categorías `handlers` y `continuations` fueron eliminadas. No forman parte de la arquitectura vigente.
+
+---
+
+## 8. Definitions
+
+`definitions/` contiene tipos y firmas semánticas. No implementa la operación.
+
+### 8.1 Use Cases
+
+Un Use Case define la **firma completa** de una operación.
+
+Puede incluir:
+
+- argumentos semánticos;
+- Requesters;
+- Contracts requeridos;
+- resultado de control cuando corresponda;
+- Error semántico propio.
+
+Ejemplo conceptual:
+
+```rust
+pub type Create = for<'target> fn(
+    &'target str,
+    create_requester::Request,
+    create_contract::Create,
+);
+```
+
+El Use Case no es documentación informal: su tipo es una restricción de compilación real.
+
+### 8.2 Requesters
+
+Un Requester es un puntero de función que define **cómo entregar una respuesta** al consumidor final.
+
+```rust
+pub type Request = fn(Result<(), create_file::Error>);
+```
+
+Para vistas prestadas se utiliza un HRTB cuando el materializador debe elegir el lifetime:
+
+```rust
+pub type Request = for<'a> fn(View<'a>);
+```
+
+Principio:
+
+> Los componentes intermedios transportan la capacidad de responder (`Requester`), no la respuesta.
+
+### 8.3 Contracts
+
+Un Contract define la operación técnica que `evo-shell` espera de infraestructura externa.
+
+```rust
+pub type Delete = for<'target> fn(
+    &'target str,
+) -> Result<(), Error>;
+```
+
+Un Contract:
+
+- pertenece a las definiciones de `evo-shell`;
+- no es un Provider;
+- no posee el recurso externo;
+- expresa únicamente la firma mínima requerida.
+
+### 8.4 Structs
+
+Los structs representan datos semánticos, entidades o vistas.
+
+Cuando un valor puede ser prestado, se prefiere expresar explícitamente el lifetime en lugar de crear ownership intermedio innecesario.
+
+---
+
+## 9. Agent = Implementación Exacta del Use Case
+
+Todo Use Case tiene un Agent como punto de entrada.
+
+El Agent debe implementar exactamente la firma definida por el Use Case.
+
+La relación se hace explícita con un binding tipado de producción:
+
+```rust
+pub fn delete(
+    target: &str,
+    request: delete_requester::Request,
+    delete_operation: delete::Delete,
+) {
+    delete_resolver::resolve(
+        delete_operation,
+        target,
+        request,
+    );
+}
+
+pub const DELETE: delete_use_case::Delete = delete;
+```
+
+La constante tipada obliga al compilador a verificar cantidad de parámetros, orden, tipos, lifetimes y retorno.
+
+### Responsabilidad del Agent
+
+El Agent coordina, transporta argumentos, Requesters y Contracts, y decide qué Resolver o Collaborator participa.
+
+El Agent NO implementa infraestructura, no traduce errores técnicos, no materializa vistas ajenas, no introduce DTOs de transporte innecesarios y no interpreta sintaxis.
+
+---
+
+## 10. Collaborators
+
+Un Collaborator realiza trabajo interno de `evo-shell` que no cruza una frontera técnica externa.
+
+```text
+Use Case
+   ↓
+Agent
+   ↓
+Collaborator
+   ├─ materializa valor/vista
+   ├─ opcionalmente usa Tools
+   └─ Requester(value)
+```
+
+Ejemplo actual: About.
+
+```text
+respond_about::Respond
+        ↓
+about_responder::respond
+        ↓
+about_collaborator::collaborate
+        ↓
+shell_information::get
+        ↓
+about_requester::Request
+```
+
+Un Collaborator no llama a otro Collaborator. Si una operación requiere coordinar varios colaboradores, esa coordinación pertenece al Agent.
+
+---
+
+## 11. Resolvers
+
+Un Resolver existe únicamente cuando hay una **frontera técnica externa**.
+
+Su responsabilidad es invocar el Contract, adaptar la llamada técnica si es necesario, traducir errores técnicos a errores semánticos, transportar Requesters hacia el materializador y entregar mediante Requester el resultado semántico cuando corresponda.
+
+> Result does not imply Resolver.
+
+Los Resolvers no necesitan un Error intermedio propio cuando únicamente traducen `Contract::Error → UseCase::Error`.
+
+---
+
+## 12. Providers
+
+Un Provider posee o controla infraestructura externa concreta y expone funciones compatibles con los Contracts definidos por `evo-shell`.
+
+```text
+Contract definition
+       ▲
+       │ compatible function
+Provider implementation
+```
+
+Un Provider puede poseer estado técnico. Ese estado no debe filtrarse como dependencia conceptual hacia el Use Case.
+
+---
+
+## 13. Tools
+
+Un Tool es una operación interna reutilizable y semánticamente pequeña.
+
+Un Tool no conoce Requesters, Agents, Providers ni infraestructura externa. Puede ser usado por Collaborators cuando una operación pura o reutilizable merece una identidad separada.
+
+---
+
+## 14. Flujo de Operación Externa con Resultado Final
+
+```text
+Use Case(target, Request, Contract)
+          │
+          ▼
+        Agent
+          │
+          ▼
+       Resolver
+          │
+          ▼
+       Contract
+          │
+          ▼
+       Provider
+          │
+          ▼
+   technical Result
+          │
+          ▼
+       Resolver
+          │
+  Contract Error → Use Case Error
+          │
+          └────────────► Requester(semantic Result)
+```
+
+---
+
+## 15. Flujo de Respuesta Prestada Externa
+
+```text
+respond_scope Use Case
+        │
+        ▼
+scope_responder Agent
+        │
+        ▼
+scope_resolver
+        │
+        ▼
+provide_scope Contract
+        │
+        ▼
+Provider
+   ├─ materializa Scope<'a>
+   └─ request(scope) ─────────► consumer
+```
+
+El Provider conserva ownership de los datos de los cuales se forma la vista prestada.
+
+El pequeño `Result<(), respond_scope::Error>` representa estado de control de la operación, no transporte de la vista `Scope`.
+
+---
+
+## 16. Materialization Ownership
+
+> El componente que posee los datos materializa la vista prestada y ejecuta el Requester dentro del lifetime válido.
+
+```text
+owner/materializer
+    │
+    ├─ crea View<'a>
+    ├─ request(view)
+    └─ termina borrow
+```
+
+El Requester viaja hasta el materializador; la vista no regresa a través de las capas para buscar a su consumidor.
+
+---
+
+## 17. Respuestas Múltiples: Transfer Progress
+
+Copy y Move comparten:
+
+```rust
+pub struct TransferProgress {
+    pub total_bytes: Option<u64>,
+    pub transferred_bytes: u64,
+}
+```
+
+Y un Requester de progreso reutilizable.
+
+```text
+Copy / Move Use Case
+        │
+        ▼
+      Agent
+        │
+        ▼
+     Resolver
+        │
+        ▼
+     Contract
+        │
+        ▼
+     Provider
+       ├────► TransferProgress Requester (0..N veces)
+       │
+       └────► technical Result
+                    │
+                    ▼
+                 Resolver
+                    │
+                    └────► final Requester (1 vez)
+```
+
+Copy y Move comparten únicamente el concepto de progreso. Conservan separados Use Cases, Contracts, Errors, Agents, Resolvers y Requesters finales.
+
+---
+
+## 18. Control vs Datos
+
+```text
+CONTROL
+caller / composition
+       │ semantic args + Requesters + Contracts
+       ▼
+     Use Case
+       ▼
+      Agent
+       ▼
+Resolver / Collaborator
+```
+
+```text
+DATOS / RESPUESTA
+materializer / boundary
+       │
+       ├─ borrowed view
+       ├─ semantic Result
+       └─ progress event
+               │
+               ▼
+            Requester
+               │
+               ▼
+          final consumer
+```
+
+---
+
+## 19. Use Cases Actuales de `evo-shell`
+
+```text
+copy_to::Copy
+    → copier::copy
+    → copier::COPY
+
+create_dir::Create
+    → directory_creator::create
+    → directory_creator::CREATE
+
+create_file::CreateFile
+    → file_creator::create_file
+    → file_creator::CREATE
+
+delete::Delete
+    → deleter::delete
+    → deleter::DELETE
+
+move_to::Move
+    → mover::move_to
+    → mover::MOVE
+
+rename::Rename
+    → renamer::rename
+    → renamer::RENAME
+
+respond_about::Respond
+    → about_responder::respond
+    → about_responder::RESPOND
+
+respond_scope::Respond
+    → scope_responder::respond
+    → scope_responder::RESPOND
+
+respond_welcome::Respond
+    → welcome_responder::respond
+    → welcome_responder::RESPOND
+
+trash::Trash
+    → trasher::trash
+    → trasher::TRASH
+```
+
+About es el único flujo para `ShellInformation`.
+
+---
+
+## 20. Dependencias de Código y Crates
 
 ```text
 evo-shell-cli ─────┐
@@ -187,44 +596,107 @@ evo-runtime ─────────► evo-script
 evo-runtime ─────────► evo-shell public API
 ```
 
-> *Aclaración:* Una flecha de dependencia de crate representa una dependencia de código/compilación, **no que se envíe una petición de red o IPC en tiempo de ejecución**.
+Prohibiciones:
 
-### Prohibiciones de Dependencias de Crates:
-- `evo-runtime → frontends`: PROHIBIDO.
-- `evo-shell → evo-script`: PROHIBIDO.
-- `evo-shell → evo-runtime`: PROHIBIDO.
+- `evo-runtime → frontends`;
+- `evo-shell → evo-script`;
+- `evo-shell → evo-runtime`.
 
 ---
 
-## 9. Visión Futura: `evo-apps` (Repositorio / Launcher / Store)
+## 21. Diseño Orientado a Funciones
 
-> *Nota:* Esta sección define una visión arquitectónica futura y **no representa código ni módulos actualmente implementados**.
+La arquitectura favorece funciones, punteros `fn`, enums, structs de datos, borrowing explícito, lifetimes y composición estática.
 
-`evo-apps` conceptualiza el sistema de catálogo, launcher, instalación, actualización y descubrimiento de aplicaciones Evolution.
+No se introducen traits, `dyn`, wrappers de servicio o genéricos de comportamiento para simular interfaces cuando una firma de función expresa suficientemente el contrato arquitectónico.
+
+---
+
+## 22. Nombres y Sujeto Agente
+
+Los nombres deben expresar responsabilidad semántica.
+
+Ejemplos:
+
+- `copier` copia;
+- `mover` mueve;
+- `renamer` renombra;
+- `deleter` elimina;
+- `directory_creator` crea directorios;
+- `about_responder` responde About.
+
+Se evitan nombres genéricos como `Manager`, `Helper`, `Utils` o un objeto contenedor genérico `Capability`.
+
+---
+
+## 23. Estrategia de Testing
+
+El código de producción vive en `src/`; las pruebas viven en `tests/`.
+
+Se prueba comportamiento semántico, transporte de argumentos, traducción técnica → semántica, entrega por Requester y bindings de Agent contra Use Case.
+
+Para cambios pequeños se prefieren tests filtrados del flujo afectado, acompañados por una comprobación global de compilación del workspace.
+
+---
+
+## 24. Visión Futura: `evo-apps`
+
+`evo-apps` podrá actuar como catálogo, launcher, instalador y repositorio de aplicaciones Evolution.
 
 ```text
-evo-apps (UI / CLI) → repository / store → descarga scripts .evo → ejecución en evo-runtime
+evo-apps
+   │
+   ▼
+repository / store
+   │
+   ▼
+download .evo package
+   │
+   ▼
+evo-runtime
 ```
-
-- **Distribución liviana**: Distribuye scripts `.evo`, recursos y metadatos sin duplicar el runtime.
-- **Superficie dual UI / CLI para IA**: Posee interfaz gráfica y superficie textual equivalente (ej. `evo-apps install ...`), permitiendo que agentes de IA busquen e instalen aplicaciones Evolution de forma scriptable y determinista.
 
 ---
 
-## 10. Portabilidad y Principios Mantenedores
+## 25. Síntesis
 
-- **Portabilidad OS**: La semántica de las aplicaciones `.evo`, de `evo-script` y de `evo-shell` es idéntica entre Linux y Windows. Las diferencias específicas corresponden a los hosts y Providers concretos (`Linux Provider` / `Windows Provider`).
-- **Diseño Orientado a Funciones**: Uso de funciones puras, punteros de función (`fn`), enums y structs de datos. Se eliminan clases de servicio, administradores (*managers*), objetos stateful y despacho dinámico (`dyn`).
-- **Use Case es dueño de su resultado semántico**: Cada Use Case define su firma (`fn`) y su propio tipo `Error` cuando la acción puede fallar. No existen tipos de error globales compartidos entre Use Cases independientes.
-- **Agent = Orchestration Only**: Un Agent coordina, encadena pasos, pasa argumentos/capabilities y propaga `Result`. Un Agent **NO** valida datos, implementa reglas matemáticas/dominio, ejecuta operaciones internas ni interpreta errores técnicos.
-- **Semántica de Collaborator y Nombres de Sujeto**: Un Collaborator es un sujeto interno que colabora con un Agent. Cuando comparten el mismo sujeto (`agents/<subject>.rs` y `collaborators/<subject>.rs`), el Agent expone la función con el verbo de la acción pública y el Collaborator expone la función `collaborate()`. No se requieren traits ni despacho dinámico.
-- **Result no implica Resolver (*Result does not imply Resolver*)**: La existencia de un `Resolver` depende de la presencia de una frontera técnica externa con un `Contract`/`Provider`, **no** de la posibilidad de que una operación devuelva `Err`.
-- **Separación entre Lenguaje y Capacidades del Sistema**:
-  - `evo-script` es dueño de la sintaxis, tokenización, parsing, expresiones, operadores (`+`, `-`, `*`, `/`, `%`), tipos (`i32`, `f64`, etc.), `filter`, `select`, `new`, `to-value`, tuberías (`|>`) y semántica de iteración lazy (`iter`).
-  - `evo-shell` es dueño de las capacidades semánticas de entorno/sistema (`scope`, filesystem, terminal, `copy-to`, `move-to`, `rename`, `delete`, `trash`, procesos, red).
-  - Los operadores del lenguaje no se modelan como Use Cases de `evo-shell`.
-- **Todo Use Case tiene un Agent como Punto de Entrada**: La implementación de todo Use Case comienza obligatoriamente en un Agent. El Agent actúa como coordinador sin implementar lógica propia:
-  - **Patrón Local Puro**: `Use Case → Agent → Collaborator` (ej. `Inform` Use Case $\rightarrow$ `shell_informant` Agent $\rightarrow$ `shell_informant` Collaborator $\rightarrow$ `ShellInformation<'static>`).
-  - **Patrón Local con Múltiples Collaborators**: El Agent coordina la llamada a varios Collaborators (ej. `Welcome` Use Case $\rightarrow$ `shell_welcomer` Agent $\rightarrow$ llama `shell_informant::collaborate()` y pasa el resultado a `shell_welcomer::collaborate(shell)` $\rightarrow$ `WelcomeInformation<'static>`). Un Collaborator **NO** invoca a otro Collaborator directamente.
-  - **Patrón con Frontera Técnica de Infraestructura**: `Use Case → Agent → Resolver → Contract → Provider`.
-- **Estrategia de Testing**: Código de producción limpio en `src/` (sin `#[cfg(test)] mod tests`) y verificación externa en la suite `tests/`.
+```text
+evo-runtime
+    host / lifecycle / isolation / composition
+
+        ↓
+
+evo-script
+    language semantics
+
+        ↓
+
+evo-shell
+    semantic environment operations
+
+        ↓
+
+Providers
+    physical / technical realization
+```
+
+Dentro de `evo-shell`:
+
+```text
+Use Case
+    defines complete operation signature
+        │
+        ▼
+Agent
+    exact compile-time implementation
+        │
+        ├─────────────► Collaborator ─────► Requester
+        │
+        └─────────────► Resolver ─► Contract ─► Provider
+                                  │             │
+                                  │             └─ borrowed/progress response
+                                  │
+                                  └─ translated final result ─► Requester
+```
+
+> La firma define la operación, el Agent la coordina, el materializador conserva ownership y el Requester lleva la respuesta directamente al consumidor.
