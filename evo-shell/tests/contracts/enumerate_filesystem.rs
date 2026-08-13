@@ -2,15 +2,16 @@ use evo_shell::definitions::contracts::enumerate_filesystem;
 use evo_shell::definitions::requesters::filesystem_item_requester;
 use evo_shell::definitions::structs::borrowed::filesystem_item::FilesystemItem;
 use evo_shell::definitions::structs::filesystem_item_kind::FilesystemItemKind;
+use evo_shell::definitions::structs::flow::Flow;
 
-fn receive_item_stop(item: FilesystemItem<'_>) -> filesystem_item_requester::Flow {
+fn receive_item_stop(item: FilesystemItem<'_>) -> Flow {
     assert_eq!(item.index, 0);
     assert_eq!(item.name, "report.md");
     assert_eq!(item.path, "/documents/report.md");
     assert_eq!(item.kind, FilesystemItemKind::File);
     assert_eq!(item.size, Some(128));
 
-    filesystem_item_requester::Flow::Stop
+    Flow::Stop
 }
 
 fn fake_enumerate(
@@ -27,7 +28,7 @@ fn fake_enumerate(
         size: Some(128),
     });
 
-    assert_eq!(flow, filesystem_item_requester::Flow::Stop);
+    assert_eq!(flow, Flow::Stop);
 
     Ok(())
 }

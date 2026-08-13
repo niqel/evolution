@@ -3,6 +3,7 @@ use evo_shell::definitions::requesters::enumerate_filesystem_requester;
 use evo_shell::definitions::requesters::filesystem_item_requester;
 use evo_shell::definitions::structs::borrowed::filesystem_item::FilesystemItem;
 use evo_shell::definitions::structs::borrowed::scope::Scope;
+use evo_shell::definitions::structs::flow::Flow;
 use evo_shell::definitions::use_cases::enumerate_filesystem;
 
 fn fake_contract(
@@ -12,8 +13,8 @@ fn fake_contract(
     Ok(())
 }
 
-fn receive_item(_item: FilesystemItem<'_>) -> filesystem_item_requester::Flow {
-    filesystem_item_requester::Flow::Continue
+fn receive_item(_item: FilesystemItem<'_>) -> Flow {
+    Flow::Continue
 }
 
 fn receive_result(_result: Result<(), enumerate_filesystem::Error>) {}

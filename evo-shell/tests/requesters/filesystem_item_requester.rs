@@ -1,25 +1,26 @@
 use evo_shell::definitions::requesters::filesystem_item_requester;
 use evo_shell::definitions::structs::borrowed::filesystem_item::FilesystemItem;
 use evo_shell::definitions::structs::filesystem_item_kind::FilesystemItemKind;
+use evo_shell::definitions::structs::flow::Flow;
 
-fn continue_after_item(item: FilesystemItem<'_>) -> filesystem_item_requester::Flow {
+fn continue_after_item(item: FilesystemItem<'_>) -> Flow {
     assert_eq!(item.index, 7);
     assert_eq!(item.name, "report.md");
     assert_eq!(item.path, "/home/user/documents/report.md");
     assert_eq!(item.kind, FilesystemItemKind::File);
     assert_eq!(item.size, Some(512));
 
-    filesystem_item_requester::Flow::Continue
+    Flow::Continue
 }
 
-fn stop_after_item(item: FilesystemItem<'_>) -> filesystem_item_requester::Flow {
+fn stop_after_item(item: FilesystemItem<'_>) -> Flow {
     assert_eq!(item.index, 7);
     assert_eq!(item.name, "report.md");
     assert_eq!(item.path, "/home/user/documents/report.md");
     assert_eq!(item.kind, FilesystemItemKind::File);
     assert_eq!(item.size, Some(512));
 
-    filesystem_item_requester::Flow::Stop
+    Flow::Stop
 }
 
 #[test]
@@ -37,7 +38,7 @@ fn filesystem_item_requester_returns_flow_continue() {
         size: Some(512),
     });
 
-    assert_eq!(flow, filesystem_item_requester::Flow::Continue);
+    assert_eq!(flow, Flow::Continue);
 }
 
 #[test]
@@ -55,5 +56,5 @@ fn filesystem_item_requester_returns_flow_stop() {
         size: Some(512),
     });
 
-    assert_eq!(flow, filesystem_item_requester::Flow::Stop);
+    assert_eq!(flow, Flow::Stop);
 }
