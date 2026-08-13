@@ -12,13 +12,15 @@ fn fake_contract_success(
 ) -> Result<(), enumerate_filesystem_contract::Error> {
     assert_eq!(source, "/documents");
 
-    request(FilesystemItem {
+    let flow = request(FilesystemItem {
         index: 1,
         name: "report.md",
         path: "/documents/report.md",
         kind: FilesystemItemKind::File,
         size: Some(128),
     });
+
+    assert_eq!(flow, filesystem_item_requester::Flow::Continue);
 
     Ok(())
 }
@@ -32,12 +34,14 @@ fn fake_contract_error(
     Err(enumerate_filesystem_contract::Error::Unavailable)
 }
 
-fn receive_item(item: FilesystemItem<'_>) {
+fn receive_item(item: FilesystemItem<'_>) -> filesystem_item_requester::Flow {
     assert_eq!(item.index, 1);
     assert_eq!(item.name, "report.md");
     assert_eq!(item.path, "/documents/report.md");
     assert_eq!(item.kind, FilesystemItemKind::File);
     assert_eq!(item.size, Some(128));
+
+    filesystem_item_requester::Flow::Continue
 }
 
 fn receive_success(result: Result<(), enumerate_filesystem::Error>) {

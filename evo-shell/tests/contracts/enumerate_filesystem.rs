@@ -3,12 +3,14 @@ use evo_shell::definitions::requesters::filesystem_item_requester;
 use evo_shell::definitions::structs::borrowed::filesystem_item::FilesystemItem;
 use evo_shell::definitions::structs::filesystem_item_kind::FilesystemItemKind;
 
-fn receive_item(item: FilesystemItem<'_>) {
+fn receive_item_stop(item: FilesystemItem<'_>) -> filesystem_item_requester::Flow {
     assert_eq!(item.index, 0);
     assert_eq!(item.name, "report.md");
     assert_eq!(item.path, "/documents/report.md");
     assert_eq!(item.kind, FilesystemItemKind::File);
     assert_eq!(item.size, Some(128));
+
+    filesystem_item_requester::Flow::Stop
 }
 
 fn fake_enumerate(
@@ -17,13 +19,15 @@ fn fake_enumerate(
 ) -> Result<(), enumerate_filesystem::Error> {
     assert_eq!(source, "/documents");
 
-    request(FilesystemItem {
+    let flow = request(FilesystemItem {
         index: 0,
         name: "report.md",
         path: "/documents/report.md",
         kind: FilesystemItemKind::File,
         size: Some(128),
     });
+
+    assert_eq!(flow, filesystem_item_requester::Flow::Stop);
 
     Ok(())
 }
@@ -38,14 +42,14 @@ fn unavailable_enumerate(
 #[test]
 fn enumerate_filesystem_contract_signature_and_success() {
     let enumerate: enumerate_filesystem::Enumerate = fake_enumerate;
-    assert_eq!(enumerate("/documents", receive_item), Ok(()));
+    assert_eq!(enumerate("/documents", receive_item_stop), Ok(()));
 }
 
 #[test]
 fn enumerate_filesystem_contract_error() {
     let enumerate: enumerate_filesystem::Enumerate = unavailable_enumerate;
     assert_eq!(
-        enumerate("/documents", receive_item),
+        enumerate("/documents", receive_item_stop),
         Err(enumerate_filesystem::Error::Unavailable)
     );
 }

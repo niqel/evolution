@@ -6,12 +6,14 @@ use evo_shell::definitions::structs::filesystem_item_kind::FilesystemItemKind;
 use evo_shell::definitions::use_cases::enumerate_filesystem;
 use evo_shell::resolvers::enumerate_filesystem_resolver;
 
-fn receive_item(item: FilesystemItem<'_>) {
+fn receive_item(item: FilesystemItem<'_>) -> filesystem_item_requester::Flow {
     assert_eq!(item.index, 3);
     assert_eq!(item.name, "report.md");
     assert_eq!(item.path, "/documents/report.md");
     assert_eq!(item.kind, FilesystemItemKind::File);
     assert_eq!(item.size, Some(256));
+
+    filesystem_item_requester::Flow::Continue
 }
 
 fn fake_enumerate_success(
@@ -20,13 +22,15 @@ fn fake_enumerate_success(
 ) -> Result<(), enumerate_filesystem_contract::Error> {
     assert_eq!(source, "/documents");
 
-    request(FilesystemItem {
+    let flow = request(FilesystemItem {
         index: 3,
         name: "report.md",
         path: "/documents/report.md",
         kind: FilesystemItemKind::File,
         size: Some(256),
     });
+
+    assert_eq!(flow, filesystem_item_requester::Flow::Continue);
 
     Ok(())
 }

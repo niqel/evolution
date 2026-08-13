@@ -12,7 +12,9 @@ fn fake_contract(
     Ok(())
 }
 
-fn receive_item(_item: FilesystemItem<'_>) {}
+fn receive_item(_item: FilesystemItem<'_>) -> filesystem_item_requester::Flow {
+    filesystem_item_requester::Flow::Continue
+}
 
 fn receive_result(_result: Result<(), enumerate_filesystem::Error>) {}
 
