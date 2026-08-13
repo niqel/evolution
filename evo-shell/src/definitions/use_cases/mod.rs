@@ -4,8 +4,6 @@ pub mod create_file;
 pub mod delete;
 pub mod inform_shell;
 pub mod move_to;
-pub mod present_full_scope;
-pub mod present_scope;
 pub mod rename;
 pub mod respond_scope;
 pub mod trash;
