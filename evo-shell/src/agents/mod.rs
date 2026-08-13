@@ -6,6 +6,7 @@ pub mod full_scope_presenter;
 pub mod mover;
 pub mod renamer;
 pub mod scope_presenter;
+pub mod scope_responder;
 pub mod shell_informant;
 pub mod shell_welcomer;
 pub mod trasher;
