@@ -7,5 +7,6 @@ pub mod move_to;
 pub mod present_full_scope;
 pub mod present_scope;
 pub mod rename;
+pub mod respond_scope;
 pub mod trash;
 pub mod welcome;
