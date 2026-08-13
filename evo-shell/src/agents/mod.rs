@@ -7,5 +7,5 @@ pub mod mover;
 pub mod renamer;
 pub mod scope_responder;
 pub mod shell_informant;
-pub mod shell_welcomer;
 pub mod trasher;
+pub mod welcome_responder;

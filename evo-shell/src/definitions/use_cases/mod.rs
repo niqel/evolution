@@ -7,5 +7,5 @@ pub mod move_to;
 pub mod rename;
 pub mod respond_about;
 pub mod respond_scope;
+pub mod respond_welcome;
 pub mod trash;
-pub mod welcome;
