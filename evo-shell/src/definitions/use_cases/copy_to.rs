@@ -1,6 +1,6 @@
 use crate::definitions::contracts::copy;
-use crate::definitions::requesters::copy_progress_requester;
 use crate::definitions::requesters::copy_requester;
+use crate::definitions::requesters::transfer_progress_requester;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
@@ -10,7 +10,7 @@ pub enum Error {
 pub type Copy = for<'origin, 'destination> fn(
     &'origin str,
     &'destination str,
-    copy_progress_requester::Request,
+    transfer_progress_requester::Request,
     copy_requester::Request,
     copy::Copy,
 );

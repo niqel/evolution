@@ -1,2 +1,2 @@
 pub mod borrowed;
-pub mod copy_progress;
+pub mod transfer_progress;

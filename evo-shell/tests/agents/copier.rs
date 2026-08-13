@@ -1,12 +1,12 @@
 use evo_shell::agents::copier;
 use evo_shell::definitions::contracts::copy;
-use evo_shell::definitions::requesters::copy_progress_requester;
-use evo_shell::definitions::structs::copy_progress::CopyProgress;
+use evo_shell::definitions::requesters::transfer_progress_requester;
+use evo_shell::definitions::structs::transfer_progress::TransferProgress;
 use evo_shell::definitions::use_cases::copy_to;
 use std::sync::Mutex;
 
 fn mock_copy_success(
-    _progress: copy_progress_requester::Request,
+    _progress: transfer_progress_requester::Request,
     _origin: &str,
     _destination: &str,
 ) -> Result<(), copy::Error> {
@@ -14,7 +14,7 @@ fn mock_copy_success(
 }
 
 fn mock_copy_unavailable(
-    _progress: copy_progress_requester::Request,
+    _progress: transfer_progress_requester::Request,
     _origin: &str,
     _destination: &str,
 ) -> Result<(), copy::Error> {
@@ -24,7 +24,7 @@ fn mock_copy_unavailable(
 static CAPTURED_ARGS: Mutex<Option<(String, String)>> = Mutex::new(None);
 
 fn mock_copy_capture_args(
-    _progress: copy_progress_requester::Request,
+    _progress: transfer_progress_requester::Request,
     origin: &str,
     destination: &str,
 ) -> Result<(), copy::Error> {
@@ -33,27 +33,27 @@ fn mock_copy_capture_args(
     Ok(())
 }
 
-static CAPTURED_PROGRESS: Mutex<Vec<CopyProgress>> = Mutex::new(Vec::new());
+static CAPTURED_PROGRESS: Mutex<Vec<TransferProgress>> = Mutex::new(Vec::new());
 
-fn mock_progress_requester(progress: CopyProgress) {
+fn mock_progress_requester(progress: TransferProgress) {
     let mut guard = CAPTURED_PROGRESS.lock().unwrap_or_else(|e| e.into_inner());
     guard.push(progress);
 }
 
 fn mock_copy_with_progress_events(
-    progress: copy_progress_requester::Request,
+    progress: transfer_progress_requester::Request,
     _origin: &str,
     _destination: &str,
 ) -> Result<(), copy::Error> {
-    progress(CopyProgress {
+    progress(TransferProgress {
         total_bytes: Some(1000),
         copied_bytes: 0,
     });
-    progress(CopyProgress {
+    progress(TransferProgress {
         total_bytes: Some(1000),
         copied_bytes: 500,
     });
-    progress(CopyProgress {
+    progress(TransferProgress {
         total_bytes: Some(1000),
         copied_bytes: 1000,
     });
@@ -198,15 +198,15 @@ fn copier_delivers_progress_events() {
     assert_eq!(
         *guard_prog,
         vec![
-            CopyProgress {
+            TransferProgress {
                 total_bytes: Some(1000),
                 copied_bytes: 0,
             },
-            CopyProgress {
+            TransferProgress {
                 total_bytes: Some(1000),
                 copied_bytes: 500,
             },
-            CopyProgress {
+            TransferProgress {
                 total_bytes: Some(1000),
                 copied_bytes: 1000,
             },

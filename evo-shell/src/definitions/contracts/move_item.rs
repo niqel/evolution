@@ -1,4 +1,4 @@
-use crate::definitions::requesters::copy_progress_requester;
+use crate::definitions::requesters::transfer_progress_requester;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
@@ -6,7 +6,7 @@ pub enum Error {
 }
 
 pub type Move = for<'origin, 'destination> fn(
-    report_progress: copy_progress_requester::Request,
+    transfer_progress_requester::Request,
     &'origin str,
     &'destination str,
 ) -> Result<(), Error>;

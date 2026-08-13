@@ -1,12 +1,12 @@
 use evo_shell::agents::mover;
 use evo_shell::definitions::contracts::move_item;
-use evo_shell::definitions::requesters::copy_progress_requester;
-use evo_shell::definitions::structs::copy_progress::CopyProgress;
+use evo_shell::definitions::requesters::transfer_progress_requester;
+use evo_shell::definitions::structs::transfer_progress::TransferProgress;
 use evo_shell::definitions::use_cases::move_to;
 use std::sync::Mutex;
 
 fn mock_move_success(
-    _report: copy_progress_requester::Request,
+    _progress: transfer_progress_requester::Request,
     _origin: &str,
     _destination: &str,
 ) -> Result<(), move_item::Error> {
@@ -14,7 +14,7 @@ fn mock_move_success(
 }
 
 fn mock_move_unavailable(
-    _report: copy_progress_requester::Request,
+    _progress: transfer_progress_requester::Request,
     _origin: &str,
     _destination: &str,
 ) -> Result<(), move_item::Error> {
@@ -24,7 +24,7 @@ fn mock_move_unavailable(
 static CAPTURED_ARGS: Mutex<Option<(String, String)>> = Mutex::new(None);
 
 fn mock_move_capture_args(
-    _report: copy_progress_requester::Request,
+    _progress: transfer_progress_requester::Request,
     origin: &str,
     destination: &str,
 ) -> Result<(), move_item::Error> {
@@ -33,111 +33,180 @@ fn mock_move_capture_args(
     Ok(())
 }
 
-static CAPTURED_PROGRESS: Mutex<Vec<CopyProgress>> = Mutex::new(Vec::new());
+static CAPTURED_PROGRESS: Mutex<Vec<TransferProgress>> = Mutex::new(Vec::new());
 
-fn mock_progress_handler(progress: CopyProgress) {
+fn mock_progress_requester(progress: TransferProgress) {
     let mut guard = CAPTURED_PROGRESS.lock().unwrap_or_else(|e| e.into_inner());
     guard.push(progress);
 }
 
 fn mock_move_with_progress_events(
-    report: copy_progress_requester::Request,
+    progress: transfer_progress_requester::Request,
     _origin: &str,
     _destination: &str,
 ) -> Result<(), move_item::Error> {
-    report(CopyProgress {
+    progress(TransferProgress {
         total_bytes: Some(1000),
         copied_bytes: 0,
     });
-    report(CopyProgress {
+    progress(TransferProgress {
         total_bytes: Some(1000),
         copied_bytes: 500,
     });
-    report(CopyProgress {
+    progress(TransferProgress {
         total_bytes: Some(1000),
         copied_bytes: 1000,
     });
     Ok(())
 }
 
-fn dummy_progress_handler(_progress: CopyProgress) {}
+static CAPTURED_RESULT: Mutex<Option<Result<(), move_to::Error>>> = Mutex::new(None);
+
+fn mock_final_request(result: Result<(), move_to::Error>) {
+    let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = Some(result);
+}
 
 #[test]
-fn mover_allows_move_without_transfer_progress() {
-    assert_eq!(
-        mover::move_to(
-            mock_move_success,
-            dummy_progress_handler,
-            "origin.txt",
-            "../documents"
-        ),
-        Ok(())
+fn mover_implements_move_to() {
+    let move_operation: move_to::Move = mover::move_to;
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+    move_operation(
+        "origin.txt",
+        "../documents",
+        mock_progress_requester,
+        mock_final_request,
+        mock_move_success,
     );
+    {
+        let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard, Some(Ok(())));
+    }
+
+    let move_const: move_to::Move = mover::MOVE;
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+    move_const(
+        "origin.txt",
+        "../documents",
+        mock_progress_requester,
+        mock_final_request,
+        mock_move_success,
+    );
+    {
+        let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard, Some(Ok(())));
+    }
+}
+
+#[test]
+fn mover_success() {
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+
+    mover::move_to(
+        "origin.txt",
+        "../documents",
+        mock_progress_requester,
+        mock_final_request,
+        mock_move_success,
+    );
+
+    let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(*guard, Some(Ok(())));
 }
 
 #[test]
 fn mover_translates_move_error() {
-    assert_eq!(
-        mover::move_to(
-            mock_move_unavailable,
-            dummy_progress_handler,
-            "origin.txt",
-            "../documents"
-        ),
-        Err(move_to::Error::MoveUnavailable)
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+
+    mover::move_to(
+        "origin.txt",
+        "../documents",
+        mock_progress_requester,
+        mock_final_request,
+        mock_move_unavailable,
     );
+
+    let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(*guard, Some(Err(move_to::Error::MoveUnavailable)));
 }
 
 #[test]
 fn mover_transports_arguments() {
     {
-        let mut guard = CAPTURED_ARGS.lock().unwrap_or_else(|e| e.into_inner());
-        *guard = None;
+        let mut guard_args = CAPTURED_ARGS.lock().unwrap_or_else(|e| e.into_inner());
+        *guard_args = None;
+        let mut guard_res = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard_res = None;
     }
 
-    let result = mover::move_to(
-        mock_move_capture_args,
-        dummy_progress_handler,
+    mover::move_to(
         "origin.txt",
         "../documents",
+        mock_progress_requester,
+        mock_final_request,
+        mock_move_capture_args,
     );
-    assert_eq!(result, Ok(()));
 
-    let guard = CAPTURED_ARGS.lock().unwrap_or_else(|e| e.into_inner());
-    assert_eq!(
-        guard.as_ref(),
-        Some(&("origin.txt".to_string(), "../documents".to_string()))
-    );
+    {
+        let guard_res = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard_res, Some(Ok(())));
+    }
+    {
+        let guard_args = CAPTURED_ARGS.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(
+            guard_args.as_ref(),
+            Some(&("origin.txt".to_string(), "../documents".to_string()))
+        );
+    }
 }
 
 #[test]
 fn mover_delivers_transfer_progress() {
     {
-        let mut guard = CAPTURED_PROGRESS.lock().unwrap_or_else(|e| e.into_inner());
-        guard.clear();
+        let mut guard_prog = CAPTURED_PROGRESS.lock().unwrap_or_else(|e| e.into_inner());
+        guard_prog.clear();
+        let mut guard_res = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard_res = None;
     }
 
-    let result = mover::move_to(
-        mock_move_with_progress_events,
-        mock_progress_handler,
+    mover::move_to(
         "large_file.iso",
         "/tmp",
+        mock_progress_requester,
+        mock_final_request,
+        mock_move_with_progress_events,
     );
-    assert_eq!(result, Ok(()));
 
-    let guard = CAPTURED_PROGRESS.lock().unwrap_or_else(|e| e.into_inner());
+    {
+        let guard_res = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard_res, Some(Ok(())));
+    }
+
+    let guard_prog = CAPTURED_PROGRESS.lock().unwrap_or_else(|e| e.into_inner());
     assert_eq!(
-        *guard,
+        *guard_prog,
         vec![
-            CopyProgress {
+            TransferProgress {
                 total_bytes: Some(1000),
                 copied_bytes: 0,
             },
-            CopyProgress {
+            TransferProgress {
                 total_bytes: Some(1000),
                 copied_bytes: 500,
             },
-            CopyProgress {
+            TransferProgress {
                 total_bytes: Some(1000),
                 copied_bytes: 1000,
             },
