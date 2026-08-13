@@ -25,9 +25,18 @@ fn mock_provide_error(_request: scope_requester::Request) -> Result<(), provide_
 fn mock_request(_scope: Scope<'_>) {}
 
 #[test]
+fn scope_responder_implements_respond_scope() {
+    let respond: respond_scope::Respond = scope_responder::respond;
+    assert_eq!(respond(mock_request, mock_provide_success), Ok(()));
+
+    let respond_const: respond_scope::Respond = scope_responder::RESPOND;
+    assert_eq!(respond_const(mock_request, mock_provide_success), Ok(()));
+}
+
+#[test]
 fn scope_responder_responds_successfully() {
     assert_eq!(
-        scope_responder::respond(mock_provide_success, mock_request),
+        scope_responder::respond(mock_request, mock_provide_success),
         Ok(())
     );
 }
@@ -35,7 +44,7 @@ fn scope_responder_responds_successfully() {
 #[test]
 fn scope_responder_returns_semantic_scope_error() {
     assert_eq!(
-        scope_responder::respond(mock_provide_error, mock_request),
+        scope_responder::respond(mock_request, mock_provide_error),
         Err(respond_scope::Error::ScopeUnavailable)
     );
 }
