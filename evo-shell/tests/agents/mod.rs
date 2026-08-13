@@ -1,3 +1,4 @@
+pub mod about_responder;
 pub mod copier;
 pub mod deleter;
 pub mod directory_creator;

@@ -5,6 +5,7 @@ pub mod delete;
 pub mod inform_shell;
 pub mod move_to;
 pub mod rename;
+pub mod respond_about;
 pub mod respond_scope;
 pub mod trash;
 pub mod welcome;
