@@ -12,4 +12,7 @@ fn assert_about(about: ShellInformation<'_>) {
 fn about_responder_implements_respond_about() {
     let respond: respond_about::Respond = about_responder::respond;
     respond(assert_about);
+
+    let respond_const: respond_about::Respond = about_responder::RESPOND;
+    respond_const(assert_about);
 }

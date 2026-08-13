@@ -14,4 +14,7 @@ fn assert_welcome(welcome: WelcomeInformation<'_>) {
 fn welcome_responder_implements_respond_welcome() {
     let respond: respond_welcome::Respond = welcome_responder::respond;
     respond(assert_welcome);
+
+    let respond_const: respond_welcome::Respond = welcome_responder::RESPOND;
+    respond_const(assert_welcome);
 }

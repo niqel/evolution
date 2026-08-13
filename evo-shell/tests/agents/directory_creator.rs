@@ -26,6 +26,39 @@ fn mock_request(result: Result<(), create_dir_use_case::Error>) {
 }
 
 #[test]
+fn directory_creator_implements_create_dir() {
+    let create: create_dir_use_case::Create = directory_creator::create;
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+    create(
+        "/tmp/evolution/projects/example",
+        mock_request,
+        mock_create_dir_success,
+    );
+    {
+        let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard, Some(Ok(())));
+    }
+
+    let create_const: create_dir_use_case::Create = directory_creator::CREATE;
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+    create_const(
+        "/tmp/evolution/projects/example",
+        mock_request,
+        mock_create_dir_success,
+    );
+    {
+        let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard, Some(Ok(())));
+    }
+}
+
+#[test]
 fn directory_creator_success() {
     {
         let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
@@ -33,9 +66,9 @@ fn directory_creator_success() {
     }
 
     directory_creator::create(
-        mock_create_dir_success,
         "/tmp/evolution/projects/example",
         mock_request,
+        mock_create_dir_success,
     );
 
     let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
@@ -50,9 +83,9 @@ fn directory_creator_translates_error() {
     }
 
     directory_creator::create(
-        mock_create_dir_unavailable,
         "/tmp/evolution/projects/example",
         mock_request,
+        mock_create_dir_unavailable,
     );
 
     let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
@@ -72,9 +105,9 @@ fn directory_creator_transports_target() {
     }
 
     directory_creator::create(
-        mock_create_dir_capture_target,
         "/tmp/evolution/projects/example",
         mock_request,
+        mock_create_dir_capture_target,
     );
 
     let guard_target = CAPTURED_TARGET.lock().unwrap_or_else(|e| e.into_inner());
