@@ -6,6 +6,7 @@ pub mod delete_requester;
 pub mod enumerate_filesystem_requester;
 pub mod filesystem_item_requester;
 pub mod move_requester;
+pub mod record_requester;
 pub mod rename_requester;
 pub mod scope_requester;
 pub mod transfer_progress_requester;
