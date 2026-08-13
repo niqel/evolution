@@ -1,5 +1,5 @@
-use crate::definitions::continuations::report_copy_progress;
 use crate::definitions::contracts::move_item;
+use crate::definitions::requesters::copy_progress_requester;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
@@ -8,7 +8,7 @@ pub enum Error {
 
 pub fn resolve(
     capability: move_item::Move,
-    report_progress: report_copy_progress::Report,
+    report_progress: copy_progress_requester::Request,
     origin: &str,
     destination: &str,
 ) -> Result<(), Error> {

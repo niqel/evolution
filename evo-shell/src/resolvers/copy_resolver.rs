@@ -1,17 +1,15 @@
-use crate::definitions::continuations::report_copy_progress;
 use crate::definitions::contracts::copy;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Error {
-    Unavailable,
-}
+use crate::definitions::requesters::copy_progress_requester;
+use crate::definitions::requesters::copy_requester;
+use crate::definitions::use_cases::copy_to;
 
 pub fn resolve(
-    capability: copy::Copy,
-    report_progress: report_copy_progress::Report,
+    copy: copy::Copy,
     origin: &str,
     destination: &str,
-) -> Result<(), Error> {
-    capability(report_progress, origin, destination)
-        .map_err(|copy::Error::Unavailable| Error::Unavailable)
+    progress: copy_progress_requester::Request,
+    request: copy_requester::Request,
+) {
+    let result = copy(progress, origin, destination).map_err(|_| copy_to::Error::CopyUnavailable);
+    request(result);
 }

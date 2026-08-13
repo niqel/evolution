@@ -1,13 +1,12 @@
 use evo_shell::agents::copier;
-use evo_shell::definitions::continuations::report_copy_progress;
 use evo_shell::definitions::contracts::copy;
+use evo_shell::definitions::requesters::copy_progress_requester;
 use evo_shell::definitions::structs::copy_progress::CopyProgress;
 use evo_shell::definitions::use_cases::copy_to;
-use evo_shell::handlers::copy_progress_handler;
 use std::sync::Mutex;
 
 fn mock_copy_success(
-    _report: report_copy_progress::Report,
+    _progress: copy_progress_requester::Request,
     _origin: &str,
     _destination: &str,
 ) -> Result<(), copy::Error> {
@@ -15,7 +14,7 @@ fn mock_copy_success(
 }
 
 fn mock_copy_unavailable(
-    _report: report_copy_progress::Report,
+    _progress: copy_progress_requester::Request,
     _origin: &str,
     _destination: &str,
 ) -> Result<(), copy::Error> {
@@ -25,7 +24,7 @@ fn mock_copy_unavailable(
 static CAPTURED_ARGS: Mutex<Option<(String, String)>> = Mutex::new(None);
 
 fn mock_copy_capture_args(
-    _report: report_copy_progress::Report,
+    _progress: copy_progress_requester::Request,
     origin: &str,
     destination: &str,
 ) -> Result<(), copy::Error> {
@@ -36,97 +35,168 @@ fn mock_copy_capture_args(
 
 static CAPTURED_PROGRESS: Mutex<Vec<CopyProgress>> = Mutex::new(Vec::new());
 
-fn mock_progress_handler(progress: CopyProgress) {
+fn mock_progress_requester(progress: CopyProgress) {
     let mut guard = CAPTURED_PROGRESS.lock().unwrap_or_else(|e| e.into_inner());
     guard.push(progress);
 }
 
 fn mock_copy_with_progress_events(
-    report: report_copy_progress::Report,
+    progress: copy_progress_requester::Request,
     _origin: &str,
     _destination: &str,
 ) -> Result<(), copy::Error> {
-    report(CopyProgress {
+    progress(CopyProgress {
         total_bytes: Some(1000),
         copied_bytes: 0,
     });
-    report(CopyProgress {
+    progress(CopyProgress {
         total_bytes: Some(1000),
         copied_bytes: 500,
     });
-    report(CopyProgress {
+    progress(CopyProgress {
         total_bytes: Some(1000),
         copied_bytes: 1000,
     });
     Ok(())
 }
 
+static CAPTURED_RESULT: Mutex<Option<Result<(), copy_to::Error>>> = Mutex::new(None);
+
+fn mock_final_request(result: Result<(), copy_to::Error>) {
+    let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = Some(result);
+}
+
+#[test]
+fn copier_implements_copy_to() {
+    let copy: copy_to::Copy = copier::copy;
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+    copy(
+        "origin.txt",
+        "../documents",
+        mock_progress_requester,
+        mock_final_request,
+        mock_copy_success,
+    );
+    {
+        let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard, Some(Ok(())));
+    }
+
+    let copy_const: copy_to::Copy = copier::COPY;
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+    copy_const(
+        "origin.txt",
+        "../documents",
+        mock_progress_requester,
+        mock_final_request,
+        mock_copy_success,
+    );
+    {
+        let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard, Some(Ok(())));
+    }
+}
+
 #[test]
 fn copier_success() {
-    assert_eq!(
-        copier::copy(
-            mock_copy_success,
-            copy_progress_handler::handle,
-            "origin.txt",
-            "../documents"
-        ),
-        Ok(())
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+
+    copier::copy(
+        "origin.txt",
+        "../documents",
+        mock_progress_requester,
+        mock_final_request,
+        mock_copy_success,
     );
+
+    let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(*guard, Some(Ok(())));
 }
 
 #[test]
 fn copier_translates_copy_error() {
-    assert_eq!(
-        copier::copy(
-            mock_copy_unavailable,
-            copy_progress_handler::handle,
-            "origin.txt",
-            "../documents"
-        ),
-        Err(copy_to::Error::CopyUnavailable)
+    {
+        let mut guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = None;
+    }
+
+    copier::copy(
+        "origin.txt",
+        "../documents",
+        mock_progress_requester,
+        mock_final_request,
+        mock_copy_unavailable,
     );
+
+    let guard = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(*guard, Some(Err(copy_to::Error::CopyUnavailable)));
 }
 
 #[test]
 fn copier_argument_transport_order() {
     {
-        let mut guard = CAPTURED_ARGS.lock().unwrap_or_else(|e| e.into_inner());
-        *guard = None;
+        let mut guard_args = CAPTURED_ARGS.lock().unwrap_or_else(|e| e.into_inner());
+        *guard_args = None;
+        let mut guard_res = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard_res = None;
     }
 
-    let result = copier::copy(
-        mock_copy_capture_args,
-        copy_progress_handler::handle,
+    copier::copy(
         "origin.txt",
         "../documents",
+        mock_progress_requester,
+        mock_final_request,
+        mock_copy_capture_args,
     );
-    assert_eq!(result, Ok(()));
 
-    let guard = CAPTURED_ARGS.lock().unwrap_or_else(|e| e.into_inner());
-    assert_eq!(
-        guard.as_ref(),
-        Some(&("origin.txt".to_string(), "../documents".to_string()))
-    );
+    {
+        let guard_res = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard_res, Some(Ok(())));
+    }
+    {
+        let guard_args = CAPTURED_ARGS.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(
+            guard_args.as_ref(),
+            Some(&("origin.txt".to_string(), "../documents".to_string()))
+        );
+    }
 }
 
 #[test]
 fn copier_delivers_progress_events() {
     {
-        let mut guard = CAPTURED_PROGRESS.lock().unwrap_or_else(|e| e.into_inner());
-        guard.clear();
+        let mut guard_prog = CAPTURED_PROGRESS.lock().unwrap_or_else(|e| e.into_inner());
+        guard_prog.clear();
+        let mut guard_res = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        *guard_res = None;
     }
 
-    let result = copier::copy(
-        mock_copy_with_progress_events,
-        mock_progress_handler,
+    copier::copy(
         "large_file.iso",
         "/tmp",
+        mock_progress_requester,
+        mock_final_request,
+        mock_copy_with_progress_events,
     );
-    assert_eq!(result, Ok(()));
 
-    let guard = CAPTURED_PROGRESS.lock().unwrap_or_else(|e| e.into_inner());
+    {
+        let guard_res = CAPTURED_RESULT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(*guard_res, Some(Ok(())));
+    }
+
+    let guard_prog = CAPTURED_PROGRESS.lock().unwrap_or_else(|e| e.into_inner());
     assert_eq!(
-        *guard,
+        *guard_prog,
         vec![
             CopyProgress {
                 total_bytes: Some(1000),

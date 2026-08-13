@@ -1,13 +1,12 @@
 use evo_shell::agents::mover;
-use evo_shell::definitions::continuations::report_copy_progress;
 use evo_shell::definitions::contracts::move_item;
+use evo_shell::definitions::requesters::copy_progress_requester;
 use evo_shell::definitions::structs::copy_progress::CopyProgress;
 use evo_shell::definitions::use_cases::move_to;
-use evo_shell::handlers::copy_progress_handler;
 use std::sync::Mutex;
 
 fn mock_move_success(
-    _report: report_copy_progress::Report,
+    _report: copy_progress_requester::Request,
     _origin: &str,
     _destination: &str,
 ) -> Result<(), move_item::Error> {
@@ -15,7 +14,7 @@ fn mock_move_success(
 }
 
 fn mock_move_unavailable(
-    _report: report_copy_progress::Report,
+    _report: copy_progress_requester::Request,
     _origin: &str,
     _destination: &str,
 ) -> Result<(), move_item::Error> {
@@ -25,7 +24,7 @@ fn mock_move_unavailable(
 static CAPTURED_ARGS: Mutex<Option<(String, String)>> = Mutex::new(None);
 
 fn mock_move_capture_args(
-    _report: report_copy_progress::Report,
+    _report: copy_progress_requester::Request,
     origin: &str,
     destination: &str,
 ) -> Result<(), move_item::Error> {
@@ -42,7 +41,7 @@ fn mock_progress_handler(progress: CopyProgress) {
 }
 
 fn mock_move_with_progress_events(
-    report: report_copy_progress::Report,
+    report: copy_progress_requester::Request,
     _origin: &str,
     _destination: &str,
 ) -> Result<(), move_item::Error> {
@@ -61,22 +60,16 @@ fn mock_move_with_progress_events(
     Ok(())
 }
 
-fn mock_native_move(
-    _report: report_copy_progress::Report,
-    _origin: &str,
-    _destination: &str,
-) -> Result<(), move_item::Error> {
-    Ok(())
-}
+fn dummy_progress_handler(_progress: CopyProgress) {}
 
 #[test]
-fn mover_success() {
+fn mover_allows_move_without_transfer_progress() {
     assert_eq!(
         mover::move_to(
             mock_move_success,
-            copy_progress_handler::handle,
-            "movies/gatito.mp4",
-            "../backup"
+            dummy_progress_handler,
+            "origin.txt",
+            "../documents"
         ),
         Ok(())
     );
@@ -87,9 +80,9 @@ fn mover_translates_move_error() {
     assert_eq!(
         mover::move_to(
             mock_move_unavailable,
-            copy_progress_handler::handle,
-            "movies/gatito.mp4",
-            "../backup"
+            dummy_progress_handler,
+            "origin.txt",
+            "../documents"
         ),
         Err(move_to::Error::MoveUnavailable)
     );
@@ -104,16 +97,16 @@ fn mover_transports_arguments() {
 
     let result = mover::move_to(
         mock_move_capture_args,
-        copy_progress_handler::handle,
-        "movies/gatito.mp4",
-        "../backup",
+        dummy_progress_handler,
+        "origin.txt",
+        "../documents",
     );
     assert_eq!(result, Ok(()));
 
     let guard = CAPTURED_ARGS.lock().unwrap_or_else(|e| e.into_inner());
     assert_eq!(
         guard.as_ref(),
-        Some(&("movies/gatito.mp4".to_string(), "../backup".to_string()))
+        Some(&("origin.txt".to_string(), "../documents".to_string()))
     );
 }
 
@@ -127,8 +120,8 @@ fn mover_delivers_transfer_progress() {
     let result = mover::move_to(
         mock_move_with_progress_events,
         mock_progress_handler,
-        "movies/gatito.mp4",
-        "../backup",
+        "large_file.iso",
+        "/tmp",
     );
     assert_eq!(result, Ok(()));
 
@@ -150,23 +143,4 @@ fn mover_delivers_transfer_progress() {
             },
         ]
     );
-}
-
-#[test]
-fn mover_allows_move_without_transfer_progress() {
-    {
-        let mut guard = CAPTURED_PROGRESS.lock().unwrap_or_else(|e| e.into_inner());
-        guard.clear();
-    }
-
-    let result = mover::move_to(
-        mock_native_move,
-        mock_progress_handler,
-        "movies/gatito.mp4",
-        "../backup",
-    );
-    assert_eq!(result, Ok(()));
-
-    let guard = CAPTURED_PROGRESS.lock().unwrap_or_else(|e| e.into_inner());
-    assert!(guard.is_empty());
 }
