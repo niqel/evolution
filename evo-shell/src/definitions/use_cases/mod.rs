@@ -2,7 +2,6 @@ pub mod copy_to;
 pub mod create_dir;
 pub mod create_file;
 pub mod delete;
-pub mod inform_shell;
 pub mod move_to;
 pub mod rename;
 pub mod respond_about;

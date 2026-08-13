@@ -6,6 +6,5 @@ pub mod file_creator;
 pub mod mover;
 pub mod renamer;
 pub mod scope_responder;
-pub mod shell_informant;
 pub mod trasher;
 pub mod welcome_responder;

@@ -6,7 +6,6 @@ pub mod delete_requester;
 pub mod move_requester;
 pub mod rename_requester;
 pub mod scope_requester;
-pub mod shell_information_requester;
 pub mod transfer_progress_requester;
 pub mod trash_requester;
 pub mod welcome_requester;
