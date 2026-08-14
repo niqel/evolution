@@ -3,6 +3,7 @@ pub mod create_dir_resolver;
 pub mod create_file_resolver;
 pub mod delete_resolver;
 pub mod enumerate_filesystem_resolver;
+pub mod filesystem_scope_resolver;
 pub mod move_resolver;
 pub mod rename_resolver;
 pub mod scope_resolver;
