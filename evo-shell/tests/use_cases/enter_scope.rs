@@ -17,7 +17,7 @@ fn fake_use_case(
     target: &str,
     enter: enter_scope_contract::Enter,
 ) -> Result<(), enter_scope::Error> {
-    enter(target).map_err(|_| enter_scope::Error::EntryUnavailable)
+    enter(target).map_err(|_| enter_scope::Error::NavigationUnavailable)
 }
 
 #[test]
@@ -35,5 +35,5 @@ fn enter_scope_use_case_error() {
 
     let result = use_case("workers", fake_contract_unavailable);
 
-    assert_eq!(result, Err(enter_scope::Error::EntryUnavailable));
+    assert_eq!(result, Err(enter_scope::Error::NavigationUnavailable));
 }
