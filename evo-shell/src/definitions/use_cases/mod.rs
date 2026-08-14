@@ -3,6 +3,7 @@ pub mod copy_to;
 pub mod create_dir;
 pub mod create_file;
 pub mod delete;
+pub mod enter_scope;
 pub mod enumerate_filesystem;
 pub mod filesystem_scope;
 pub mod move_to;
