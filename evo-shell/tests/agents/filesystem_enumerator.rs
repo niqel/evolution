@@ -3,8 +3,8 @@ use evo_shell::definitions::contracts::enumerate_filesystem as enumerate_filesys
 use evo_shell::definitions::requesters::filesystem_item_requester;
 use evo_shell::definitions::structs::borrowed::filesystem_item::FilesystemItem;
 use evo_shell::definitions::structs::borrowed::scope::Scope;
-use evo_shell::definitions::structs::filesystem_item_kind::FilesystemItemKind;
-use evo_shell::definitions::structs::flow::Flow;
+use evo_shell::definitions::structs::owned::filesystem_item_kind::FilesystemItemKind;
+use evo_shell::definitions::structs::owned::flow::Flow;
 use evo_shell::definitions::use_cases::enumerate_filesystem;
 
 fn fake_contract_success(

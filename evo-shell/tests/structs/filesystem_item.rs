@@ -1,5 +1,5 @@
 use evo_shell::definitions::structs::borrowed::filesystem_item::FilesystemItem;
-use evo_shell::definitions::structs::filesystem_item_kind::FilesystemItemKind;
+use evo_shell::definitions::structs::owned::filesystem_item_kind::FilesystemItemKind;
 
 #[test]
 fn filesystem_item_creation_and_field_preservation() {

@@ -1,6 +1,6 @@
 use evo_shell::definitions::contracts::copy;
 use evo_shell::definitions::requesters::transfer_progress_requester;
-use evo_shell::definitions::structs::transfer_progress::TransferProgress;
+use evo_shell::definitions::structs::owned::transfer_progress::TransferProgress;
 use evo_shell::definitions::use_cases::copy_to;
 use evo_shell::resolvers::copy_resolver;
 use std::sync::Mutex;

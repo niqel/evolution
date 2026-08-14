@@ -2,7 +2,7 @@ use evo_shell::definitions::requesters::record_requester;
 use evo_shell::definitions::structs::borrowed::field::Field;
 use evo_shell::definitions::structs::borrowed::record::Record;
 use evo_shell::definitions::structs::borrowed::value::Value;
-use evo_shell::definitions::structs::flow::Flow;
+use evo_shell::definitions::structs::owned::flow::Flow;
 
 fn continue_after_record(record: Record<'_>) -> Flow {
     assert_eq!(record.fields.len(), 2);

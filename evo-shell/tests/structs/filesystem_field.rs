@@ -1,4 +1,6 @@
-use evo_shell::definitions::structs::filesystem_field::{FILESYSTEM_FIELDS, FilesystemField};
+use evo_shell::definitions::structs::owned::filesystem_field::{
+    FILESYSTEM_FIELDS, FilesystemField,
+};
 
 #[test]
 fn filesystem_fields_contains_exact_elements_and_order() {

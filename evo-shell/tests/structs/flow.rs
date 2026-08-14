@@ -1,4 +1,4 @@
-use evo_shell::definitions::structs::flow::Flow;
+use evo_shell::definitions::structs::owned::flow::Flow;
 
 #[test]
 fn flow_variants() {

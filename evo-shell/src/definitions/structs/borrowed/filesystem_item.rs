@@ -1,4 +1,4 @@
-use crate::definitions::structs::filesystem_item_kind::FilesystemItemKind;
+use crate::definitions::structs::owned::filesystem_item_kind::FilesystemItemKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FilesystemItem<'item> {
