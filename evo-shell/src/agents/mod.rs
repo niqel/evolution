@@ -8,6 +8,7 @@ pub mod filesystem_scope_provider;
 pub mod mover;
 pub mod renamer;
 pub mod scope_activator;
+pub mod scope_enterer;
 pub mod scope_responder;
 pub mod trasher;
 pub mod welcome_responder;
