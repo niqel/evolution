@@ -1,3 +1,4 @@
+pub mod activate_scope;
 pub mod copy;
 pub mod create_dir;
 pub mod create_file;
