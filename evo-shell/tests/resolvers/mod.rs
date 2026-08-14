@@ -1,3 +1,4 @@
+pub mod activate_scope_resolver;
 pub mod copy_resolver;
 pub mod create_dir_resolver;
 pub mod create_file_resolver;
