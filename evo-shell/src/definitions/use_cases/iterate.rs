@@ -5,6 +5,8 @@ use crate::definitions::structs::borrowed::iteration::Iteration;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
     IterationUnavailable,
+    ToValueRequiresSingleField,
+    ToValueRequiresRecord,
 }
 
 pub type Iterate = for<'iteration> fn(

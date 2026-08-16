@@ -50,6 +50,20 @@ fn unavailable_iterate(
     Err(iterate::Error::Unavailable)
 }
 
+fn to_value_requires_single_field(
+    _iteration: Iteration<'_>,
+    _request: construction_requester::Request,
+) -> Result<(), iterate::Error> {
+    Err(iterate::Error::ToValueRequiresSingleField)
+}
+
+fn to_value_requires_record(
+    _iteration: Iteration<'_>,
+    _request: construction_requester::Request,
+) -> Result<(), iterate::Error> {
+    Err(iterate::Error::ToValueRequiresRecord)
+}
+
 #[test]
 fn iterate_contract_signature_and_success() {
     let fields = ["name"];
@@ -91,5 +105,35 @@ fn iterate_contract_error() {
     assert_eq!(
         contract(iteration, receive_construction_continue),
         Err(iterate::Error::Unavailable)
+    );
+}
+
+#[test]
+fn iterate_contract_to_value_requires_single_field_error() {
+    let operations = [IterationOperation::ToValue];
+
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let contract: iterate::Iterate = to_value_requires_single_field;
+    assert_eq!(
+        contract(iteration, receive_construction_continue),
+        Err(iterate::Error::ToValueRequiresSingleField)
+    );
+}
+
+#[test]
+fn iterate_contract_to_value_requires_record_error() {
+    let operations = [IterationOperation::ToValue];
+
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let contract: iterate::Iterate = to_value_requires_record;
+    assert_eq!(
+        contract(iteration, receive_construction_continue),
+        Err(iterate::Error::ToValueRequiresRecord)
     );
 }

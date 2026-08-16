@@ -34,6 +34,20 @@ fn fake_contract_unavailable(
     Err(iterate_contract::Error::Unavailable)
 }
 
+fn fake_contract_to_value_requires_single_field(
+    _iteration: Iteration<'_>,
+    _request: construction_requester::Request,
+) -> Result<(), iterate_contract::Error> {
+    Err(iterate_contract::Error::ToValueRequiresSingleField)
+}
+
+fn fake_contract_to_value_requires_record(
+    _iteration: Iteration<'_>,
+    _request: construction_requester::Request,
+) -> Result<(), iterate_contract::Error> {
+    Err(iterate_contract::Error::ToValueRequiresRecord)
+}
+
 #[test]
 fn iterate_resolver_success() {
     let operations = [IterationOperation::Take(1), IterationOperation::Iter];
@@ -56,4 +70,33 @@ fn iterate_resolver_translates_error() {
 
     let result = iterate_resolver::resolve(fake_contract_unavailable, iteration, receive);
     assert_eq!(result, Err(iterate::Error::IterationUnavailable));
+}
+
+#[test]
+fn iterate_resolver_translates_to_value_requires_single_field() {
+    let operations = [IterationOperation::ToValue];
+
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = iterate_resolver::resolve(
+        fake_contract_to_value_requires_single_field,
+        iteration,
+        receive,
+    );
+    assert_eq!(result, Err(iterate::Error::ToValueRequiresSingleField));
+}
+
+#[test]
+fn iterate_resolver_translates_to_value_requires_record() {
+    let operations = [IterationOperation::ToValue];
+
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result =
+        iterate_resolver::resolve(fake_contract_to_value_requires_record, iteration, receive);
+    assert_eq!(result, Err(iterate::Error::ToValueRequiresRecord));
 }

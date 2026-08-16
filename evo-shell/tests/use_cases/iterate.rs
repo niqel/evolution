@@ -32,6 +32,20 @@ fn contract_unavailable(
     Err(iterate_contract::Error::Unavailable)
 }
 
+fn contract_to_value_requires_single_field(
+    _iteration: Iteration<'_>,
+    _request: construction_requester::Request,
+) -> Result<(), iterate_contract::Error> {
+    Err(iterate_contract::Error::ToValueRequiresSingleField)
+}
+
+fn contract_to_value_requires_record(
+    _iteration: Iteration<'_>,
+    _request: construction_requester::Request,
+) -> Result<(), iterate_contract::Error> {
+    Err(iterate_contract::Error::ToValueRequiresRecord)
+}
+
 fn fake_use_case(
     iteration: Iteration<'_>,
     request: construction_requester::Request,
@@ -41,6 +55,12 @@ fn fake_use_case(
         Ok(()) => Ok(()),
         Err(iterate_contract::Error::Unavailable) => {
             Err(iterate_use_case::Error::IterationUnavailable)
+        }
+        Err(iterate_contract::Error::ToValueRequiresSingleField) => {
+            Err(iterate_use_case::Error::ToValueRequiresSingleField)
+        }
+        Err(iterate_contract::Error::ToValueRequiresRecord) => {
+            Err(iterate_use_case::Error::ToValueRequiresRecord)
         }
     }
 }
@@ -74,9 +94,48 @@ fn iterate_use_case_error() {
 }
 
 #[test]
+fn iterate_use_case_to_value_requires_single_field_error() {
+    let operations = [IterationOperation::ToValue];
+
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let use_case: iterate_use_case::Iterate = fake_use_case;
+
+    let result = use_case(iteration, receive, contract_to_value_requires_single_field);
+    assert_eq!(
+        result,
+        Err(iterate_use_case::Error::ToValueRequiresSingleField)
+    );
+}
+
+#[test]
+fn iterate_use_case_to_value_requires_record_error() {
+    let operations = [IterationOperation::ToValue];
+
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let use_case: iterate_use_case::Iterate = fake_use_case;
+
+    let result = use_case(iteration, receive, contract_to_value_requires_record);
+    assert_eq!(result, Err(iterate_use_case::Error::ToValueRequiresRecord));
+}
+
+#[test]
 fn iterate_use_case_error_equality() {
     assert_eq!(
         iterate_use_case::Error::IterationUnavailable,
         iterate_use_case::Error::IterationUnavailable
+    );
+    assert_eq!(
+        iterate_use_case::Error::ToValueRequiresSingleField,
+        iterate_use_case::Error::ToValueRequiresSingleField
+    );
+    assert_eq!(
+        iterate_use_case::Error::ToValueRequiresRecord,
+        iterate_use_case::Error::ToValueRequiresRecord
     );
 }

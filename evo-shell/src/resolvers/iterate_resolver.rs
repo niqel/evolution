@@ -8,5 +8,11 @@ pub fn resolve(
     iteration: Iteration<'_>,
     request: construction_requester::Request,
 ) -> Result<(), iterate::Error> {
-    contract(iteration, request).map_err(|_| iterate::Error::IterationUnavailable)
+    contract(iteration, request).map_err(|error| match error {
+        iterate_contract::Error::Unavailable => iterate::Error::IterationUnavailable,
+        iterate_contract::Error::ToValueRequiresSingleField => {
+            iterate::Error::ToValueRequiresSingleField
+        }
+        iterate_contract::Error::ToValueRequiresRecord => iterate::Error::ToValueRequiresRecord,
+    })
 }
