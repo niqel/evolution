@@ -5,6 +5,7 @@ use evo_shell::definitions::structs::borrowed::condition_expression::ConditionEx
 use evo_shell::definitions::structs::borrowed::construction::Construction;
 use evo_shell::definitions::structs::borrowed::iteration::Iteration;
 use evo_shell::definitions::structs::borrowed::iteration_operation::IterationOperation;
+use evo_shell::definitions::structs::borrowed::selection::Selection;
 use evo_shell::definitions::structs::borrowed::value::Value;
 use evo_shell::definitions::structs::owned::condition_operator::ConditionOperator;
 use evo_shell::definitions::structs::owned::flow::Flow;
@@ -72,7 +73,10 @@ fn field_not_found<'iteration>(
     _request: construction_requester::Request,
 ) -> Result<(), iterate::Error<'iteration>> {
     match iteration.operations[0] {
-        IterationOperation::Select(fields) => Err(iterate::Error::FieldNotFound(fields[1])),
+        IterationOperation::Select(selections) => match selections[1] {
+            Selection::Field(name) => Err(iterate::Error::FieldNotFound(name)),
+            _ => panic!("expected Selection::Field"),
+        },
         _ => panic!("expected IterationOperation::Select"),
     }
 }
@@ -94,9 +98,10 @@ fn external_type_incompatible<'iteration>(
     _request: construction_requester::Request,
 ) -> Result<(), iterate::Error<'iteration>> {
     match iteration.operations[0] {
-        IterationOperation::Select(fields) => {
-            Err(iterate::Error::ExternalTypeIncompatible(fields[0]))
-        }
+        IterationOperation::Select(selections) => match selections[0] {
+            Selection::Field(name) => Err(iterate::Error::ExternalTypeIncompatible(name)),
+            _ => panic!("expected Selection::Field"),
+        },
         _ => panic!("expected IterationOperation::Select"),
     }
 }
@@ -110,9 +115,9 @@ fn provider_incompatible<'iteration>(
 
 #[test]
 fn iterate_contract_signature_and_success() {
-    let fields = ["name"];
+    let selections = [Selection::Field("name")];
     let operations = [
-        IterationOperation::Select(&fields),
+        IterationOperation::Select(&selections),
         IterationOperation::Take(1),
         IterationOperation::Iter,
     ];
@@ -184,8 +189,8 @@ fn iterate_contract_to_value_requires_record_error() {
 
 #[test]
 fn iterate_contract_field_not_found_error() {
-    let fields = ["name", "missing"];
-    let operations = [IterationOperation::Select(&fields)];
+    let selections = [Selection::Field("name"), Selection::Field("missing")];
+    let operations = [IterationOperation::Select(&selections)];
 
     let iteration = Iteration {
         operations: &operations,
@@ -222,8 +227,8 @@ fn iterate_contract_comparison_type_mismatch_error() {
 
 #[test]
 fn iterate_contract_external_type_incompatible_error() {
-    let fields = ["created"];
-    let operations = [IterationOperation::Select(&fields)];
+    let selections = [Selection::Field("created")];
+    let operations = [IterationOperation::Select(&selections)];
 
     let iteration = Iteration {
         operations: &operations,

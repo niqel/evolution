@@ -1,11 +1,12 @@
 use evo_shell::definitions::structs::borrowed::iteration::Iteration;
 use evo_shell::definitions::structs::borrowed::iteration_operation::IterationOperation;
+use evo_shell::definitions::structs::borrowed::selection::Selection;
 
 #[test]
 fn iteration_ordered_pipeline() {
-    let fields = ["name", "size"];
+    let selections = [Selection::Field("name"), Selection::Field("size")];
     let operations = [
-        IterationOperation::Select(&fields),
+        IterationOperation::Select(&selections),
         IterationOperation::Skip(20),
         IterationOperation::Take(10),
         IterationOperation::Iter,
@@ -20,8 +21,8 @@ fn iteration_ordered_pipeline() {
     match iteration.operations[0] {
         IterationOperation::Select(selected_fields) => {
             assert_eq!(selected_fields.len(), 2);
-            assert_eq!(selected_fields[0], "name");
-            assert_eq!(selected_fields[1], "size");
+            assert_eq!(selected_fields[0], Selection::Field("name"));
+            assert_eq!(selected_fields[1], Selection::Field("size"));
         }
         _ => panic!("expected IterationOperation::Select"),
     }

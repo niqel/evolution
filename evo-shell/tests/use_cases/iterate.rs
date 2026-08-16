@@ -3,6 +3,7 @@ use evo_shell::definitions::requesters::construction_requester;
 use evo_shell::definitions::structs::borrowed::construction::Construction;
 use evo_shell::definitions::structs::borrowed::iteration::Iteration;
 use evo_shell::definitions::structs::borrowed::iteration_operation::IterationOperation;
+use evo_shell::definitions::structs::borrowed::selection::Selection;
 use evo_shell::definitions::structs::borrowed::value::Value;
 use evo_shell::definitions::structs::owned::flow::Flow;
 use evo_shell::definitions::use_cases::iterate as iterate_use_case;
@@ -135,8 +136,8 @@ fn iterate_use_case_error() {
 
 #[test]
 fn iterate_use_case_field_not_found_error() {
-    let fields = ["name", "missing"];
-    let operations = [IterationOperation::Select(&fields)];
+    let selections = [Selection::Field("name"), Selection::Field("missing")];
+    let operations = [IterationOperation::Select(&selections)];
 
     let iteration = Iteration {
         operations: &operations,

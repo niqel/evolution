@@ -5,6 +5,7 @@ use evo_shell::definitions::structs::borrowed::condition_expression::ConditionEx
 use evo_shell::definitions::structs::borrowed::construction::Construction;
 use evo_shell::definitions::structs::borrowed::iteration::Iteration;
 use evo_shell::definitions::structs::borrowed::iteration_operation::IterationOperation;
+use evo_shell::definitions::structs::borrowed::selection::Selection;
 use evo_shell::definitions::structs::borrowed::value::Value;
 use evo_shell::definitions::structs::owned::condition_operator::ConditionOperator;
 use evo_shell::definitions::structs::owned::flow::Flow;
@@ -42,9 +43,10 @@ fn fake_contract_field_not_found<'iteration>(
     _request: construction_requester::Request,
 ) -> Result<(), iterate_contract::Error<'iteration>> {
     match iteration.operations[0] {
-        IterationOperation::Select(fields) => {
-            Err(iterate_contract::Error::FieldNotFound(fields[1]))
-        }
+        IterationOperation::Select(selections) => match selections[1] {
+            Selection::Field(name) => Err(iterate_contract::Error::FieldNotFound(name)),
+            _ => panic!("expected Selection::Field"),
+        },
         _ => panic!("expected IterationOperation::Select"),
     }
 }
@@ -66,9 +68,10 @@ fn fake_contract_external_type_incompatible<'iteration>(
     _request: construction_requester::Request,
 ) -> Result<(), iterate_contract::Error<'iteration>> {
     match iteration.operations[0] {
-        IterationOperation::Select(fields) => {
-            Err(iterate_contract::Error::ExternalTypeIncompatible(fields[0]))
-        }
+        IterationOperation::Select(selections) => match selections[0] {
+            Selection::Field(name) => Err(iterate_contract::Error::ExternalTypeIncompatible(name)),
+            _ => panic!("expected Selection::Field"),
+        },
         _ => panic!("expected IterationOperation::Select"),
     }
 }
@@ -120,8 +123,8 @@ fn iterate_resolver_translates_error() {
 
 #[test]
 fn iterate_resolver_translates_field_not_found() {
-    let fields = ["name", "missing"];
-    let operations = [IterationOperation::Select(&fields)];
+    let selections = [Selection::Field("name"), Selection::Field("missing")];
+    let operations = [IterationOperation::Select(&selections)];
 
     let iteration = Iteration {
         operations: &operations,
@@ -153,8 +156,8 @@ fn iterate_resolver_translates_comparison_type_mismatch() {
 
 #[test]
 fn iterate_resolver_translates_external_type_incompatible() {
-    let fields = ["created"];
-    let operations = [IterationOperation::Select(&fields)];
+    let selections = [Selection::Field("created")];
+    let operations = [IterationOperation::Select(&selections)];
 
     let iteration = Iteration {
         operations: &operations,

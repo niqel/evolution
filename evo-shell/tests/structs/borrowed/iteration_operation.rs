@@ -1,6 +1,7 @@
 use evo_shell::definitions::structs::borrowed::condition::Condition;
 use evo_shell::definitions::structs::borrowed::condition_expression::ConditionExpression;
 use evo_shell::definitions::structs::borrowed::iteration_operation::IterationOperation;
+use evo_shell::definitions::structs::borrowed::selection::Selection;
 use evo_shell::definitions::structs::borrowed::value::Value;
 use evo_shell::definitions::structs::owned::condition_operator::ConditionOperator;
 
@@ -99,14 +100,14 @@ fn iteration_operation_filter_grouped_expression() {
 
 #[test]
 fn iteration_operation_select() {
-    let fields = ["name", "size"];
-    let operation = IterationOperation::Select(&fields);
+    let selections = [Selection::Field("name"), Selection::Field("size")];
+    let operation = IterationOperation::Select(&selections);
 
     match operation {
         IterationOperation::Select(selected_fields) => {
             assert_eq!(selected_fields.len(), 2);
-            assert_eq!(selected_fields[0], "name");
-            assert_eq!(selected_fields[1], "size");
+            assert_eq!(selected_fields[0], Selection::Field("name"));
+            assert_eq!(selected_fields[1], Selection::Field("size"));
         }
         _ => panic!("expected IterationOperation::Select"),
     }
@@ -158,8 +159,8 @@ fn iteration_operation_unit_variants() {
 
 #[test]
 fn iteration_operation_copy() {
-    let fields = ["name"];
-    let original = IterationOperation::Select(&fields);
+    let selections = [Selection::Field("name")];
+    let original = IterationOperation::Select(&selections);
     let copied = original;
 
     assert_eq!(original, copied);
