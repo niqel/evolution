@@ -13,10 +13,10 @@ fn receive(construction: Construction<'_>) -> Flow {
     Flow::Continue
 }
 
-fn fake_iterate_success(
-    iteration: Iteration<'_>,
+fn fake_iterate_success<'iteration>(
+    iteration: Iteration<'iteration>,
     request: construction_requester::Request,
-) -> Result<(), iterate_contract::Error> {
+) -> Result<(), iterate_contract::Error<'iteration>> {
     assert_eq!(iteration.operations.len(), 2);
     assert_eq!(iteration.operations[0], IterationOperation::Take(1));
     assert_eq!(iteration.operations[1], IterationOperation::Iter);
@@ -27,11 +27,23 @@ fn fake_iterate_success(
     Ok(())
 }
 
-fn fake_iterate_unavailable(
-    _iteration: Iteration<'_>,
+fn fake_iterate_unavailable<'iteration>(
+    _iteration: Iteration<'iteration>,
     _request: construction_requester::Request,
-) -> Result<(), iterate_contract::Error> {
+) -> Result<(), iterate_contract::Error<'iteration>> {
     Err(iterate_contract::Error::Unavailable)
+}
+
+fn fake_iterate_field_not_found<'iteration>(
+    iteration: Iteration<'iteration>,
+    _request: construction_requester::Request,
+) -> Result<(), iterate_contract::Error<'iteration>> {
+    match iteration.operations[0] {
+        IterationOperation::Select(fields) => {
+            Err(iterate_contract::Error::FieldNotFound(fields[1]))
+        }
+        _ => panic!("expected IterationOperation::Select"),
+    }
 }
 
 #[test]
@@ -58,4 +70,21 @@ fn iteration_dispatcher_translates_error() {
     let agent: iterate_use_case::Iterate = iteration_dispatcher::ITERATE;
     let result = agent(iteration, receive, fake_iterate_unavailable);
     assert_eq!(result, Err(iterate_use_case::Error::IterationUnavailable));
+}
+
+#[test]
+fn iteration_dispatcher_translates_field_not_found() {
+    let fields = ["name", "missing"];
+    let operations = [IterationOperation::Select(&fields)];
+
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let agent: iterate_use_case::Iterate = iteration_dispatcher::ITERATE;
+    let result = agent(iteration, receive, fake_iterate_field_not_found);
+    assert_eq!(
+        result,
+        Err(iterate_use_case::Error::FieldNotFound("missing"))
+    );
 }

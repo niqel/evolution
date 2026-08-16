@@ -4,11 +4,11 @@ use crate::definitions::structs::borrowed::iteration::Iteration;
 use crate::definitions::use_cases::iterate as iterate_use_case;
 use crate::resolvers::iterate_resolver;
 
-pub fn iterate(
-    iteration: Iteration<'_>,
+pub fn iterate<'iteration>(
+    iteration: Iteration<'iteration>,
     request: construction_requester::Request,
     contract: iterate_contract::Iterate,
-) -> Result<(), iterate_use_case::Error> {
+) -> Result<(), iterate_use_case::Error<'iteration>> {
     iterate_resolver::resolve(contract, iteration, request)
 }
 
