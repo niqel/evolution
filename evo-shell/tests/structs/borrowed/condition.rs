@@ -50,7 +50,7 @@ fn condition_equality_and_inequality() {
 
     let different_operator = Condition {
         field: "active",
-        operator: ConditionOperator::NotEqual,
+        operator: ConditionOperator::GreaterThan,
         value: Value::Boolean(true),
     };
 
@@ -70,7 +70,7 @@ fn condition_equality_and_inequality() {
 fn condition_copy() {
     let original = Condition {
         field: "size",
-        operator: ConditionOperator::LessThanOrEqual,
+        operator: ConditionOperator::LessThan,
         value: Value::Unsigned(4096),
     };
 

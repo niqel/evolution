@@ -75,28 +75,29 @@ fn condition_expression_in() {
 #[test]
 fn condition_expression_not_in() {
     let values = [Value::Text(".tmp"), Value::Text(".bak")];
-    let not_in_condition = InCondition {
+    let in_expression = ConditionExpression::In(InCondition {
         field: "extension",
         values: &values,
-    };
+    });
 
-    let expression = ConditionExpression::NotIn(not_in_condition);
-
-    assert_eq!(expression, ConditionExpression::NotIn(not_in_condition));
+    let expression = ConditionExpression::Not(&in_expression);
 
     match expression {
-        ConditionExpression::NotIn(inner) => {
-            assert_eq!(inner.field, "extension");
-            assert_eq!(inner.values.len(), 2);
-            assert_eq!(inner.values[0], Value::Text(".tmp"));
-            assert_eq!(inner.values[1], Value::Text(".bak"));
-        }
-        _ => panic!("expected ConditionExpression::NotIn"),
+        ConditionExpression::Not(inner) => match *inner {
+            ConditionExpression::In(in_cond) => {
+                assert_eq!(in_cond.field, "extension");
+                assert_eq!(in_cond.values.len(), 2);
+                assert_eq!(in_cond.values[0], Value::Text(".tmp"));
+                assert_eq!(in_cond.values[1], Value::Text(".bak"));
+            }
+            _ => panic!("expected ConditionExpression::In inside Not"),
+        },
+        _ => panic!("expected ConditionExpression::Not"),
     }
 }
 
 #[test]
-fn condition_expression_in_not_in_inequality() {
+fn condition_expression_in_and_not_in_are_structurally_different() {
     let values = [Value::Text("active"), Value::Text("pending")];
     let condition = InCondition {
         field: "status",
@@ -104,9 +105,201 @@ fn condition_expression_in_not_in_inequality() {
     };
 
     let in_expression = ConditionExpression::In(condition);
-    let not_in_expression = ConditionExpression::NotIn(condition);
+    let not_in_expression = ConditionExpression::Not(&in_expression);
 
     assert_ne!(in_expression, not_in_expression);
+}
+
+#[test]
+fn condition_expression_not_equal() {
+    let equal_expression = ConditionExpression::Condition(Condition {
+        field: "status",
+        operator: ConditionOperator::Equal,
+        value: Value::Text("active"),
+    });
+
+    let expression = ConditionExpression::Not(&equal_expression);
+
+    match expression {
+        ConditionExpression::Not(inner) => {
+            assert_eq!(*inner, equal_expression);
+        }
+        _ => panic!("expected ConditionExpression::Not"),
+    }
+}
+
+#[test]
+fn condition_expression_not_greater_than() {
+    let greater_than_expression = ConditionExpression::Condition(Condition {
+        field: "size",
+        operator: ConditionOperator::GreaterThan,
+        value: Value::Unsigned(1024),
+    });
+
+    let expression = ConditionExpression::Not(&greater_than_expression);
+
+    match expression {
+        ConditionExpression::Not(inner) => {
+            assert_eq!(*inner, greater_than_expression);
+        }
+        _ => panic!("expected ConditionExpression::Not"),
+    }
+}
+
+#[test]
+fn condition_expression_not_less_than() {
+    let less_than_expression = ConditionExpression::Condition(Condition {
+        field: "size",
+        operator: ConditionOperator::LessThan,
+        value: Value::Unsigned(1024),
+    });
+
+    let expression = ConditionExpression::Not(&less_than_expression);
+
+    match expression {
+        ConditionExpression::Not(inner) => {
+            assert_eq!(*inner, less_than_expression);
+        }
+        _ => panic!("expected ConditionExpression::Not"),
+    }
+}
+
+#[test]
+fn condition_expression_not_contains() {
+    let contains_expression = ConditionExpression::Condition(Condition {
+        field: "name",
+        operator: ConditionOperator::Contains,
+        value: Value::Text("config"),
+    });
+
+    let expression = ConditionExpression::Not(&contains_expression);
+
+    match expression {
+        ConditionExpression::Not(inner) => {
+            assert_eq!(*inner, contains_expression);
+        }
+        _ => panic!("expected ConditionExpression::Not"),
+    }
+}
+
+#[test]
+fn condition_expression_not_starts_with() {
+    let starts_with_expression = ConditionExpression::Condition(Condition {
+        field: "name",
+        operator: ConditionOperator::StartsWith,
+        value: Value::Text("config"),
+    });
+
+    let expression = ConditionExpression::Not(&starts_with_expression);
+
+    match expression {
+        ConditionExpression::Not(inner) => {
+            assert_eq!(*inner, starts_with_expression);
+        }
+        _ => panic!("expected ConditionExpression::Not"),
+    }
+}
+
+#[test]
+fn condition_expression_not_ends_with() {
+    let ends_with_expression = ConditionExpression::Condition(Condition {
+        field: "name",
+        operator: ConditionOperator::EndsWith,
+        value: Value::Text(".tmp"),
+    });
+
+    let expression = ConditionExpression::Not(&ends_with_expression);
+
+    match expression {
+        ConditionExpression::Not(inner) => {
+            assert_eq!(*inner, ends_with_expression);
+        }
+        _ => panic!("expected ConditionExpression::Not"),
+    }
+}
+
+#[test]
+fn condition_expression_not_between() {
+    let between_expression = ConditionExpression::Between(BetweenCondition {
+        field: "age",
+        lower: Value::Unsigned(18),
+        upper: Value::Unsigned(65),
+    });
+
+    let expression = ConditionExpression::Not(&between_expression);
+
+    match expression {
+        ConditionExpression::Not(inner) => {
+            assert_eq!(*inner, between_expression);
+        }
+        _ => panic!("expected ConditionExpression::Not"),
+    }
+}
+
+#[test]
+fn condition_expression_not_and() {
+    let a = ConditionExpression::Condition(Condition {
+        field: "name",
+        operator: ConditionOperator::Equal,
+        value: Value::Text("config.evo"),
+    });
+
+    let b = ConditionExpression::Condition(Condition {
+        field: "size",
+        operator: ConditionOperator::GreaterThan,
+        value: Value::Unsigned(1024),
+    });
+
+    let children = [a, b];
+    let and_expression = ConditionExpression::And(&children);
+    let expression = ConditionExpression::Not(&and_expression);
+
+    match expression {
+        ConditionExpression::Not(inner) => {
+            assert_eq!(*inner, and_expression);
+        }
+        _ => panic!("expected ConditionExpression::Not"),
+    }
+}
+
+#[test]
+fn condition_expression_not_or() {
+    let a = ConditionExpression::Condition(Condition {
+        field: "name",
+        operator: ConditionOperator::Equal,
+        value: Value::Text("config.evo"),
+    });
+
+    let b = ConditionExpression::Condition(Condition {
+        field: "size",
+        operator: ConditionOperator::GreaterThan,
+        value: Value::Unsigned(1024),
+    });
+
+    let children = [a, b];
+    let or_expression = ConditionExpression::Or(&children);
+    let expression = ConditionExpression::Not(&or_expression);
+
+    match expression {
+        ConditionExpression::Not(inner) => {
+            assert_eq!(*inner, or_expression);
+        }
+        _ => panic!("expected ConditionExpression::Not"),
+    }
+}
+
+#[test]
+fn condition_expression_not_copy() {
+    let inner = ConditionExpression::Condition(Condition {
+        field: "active",
+        operator: ConditionOperator::Equal,
+        value: Value::Boolean(true),
+    });
+
+    let original = ConditionExpression::Not(&inner);
+    let copied = original;
+
+    assert_eq!(original, copied);
 }
 
 #[test]
@@ -255,10 +448,11 @@ fn condition_expression_between_or_condition() {
 #[test]
 fn condition_expression_not_in_or_between() {
     let values = [Value::Text(".tmp"), Value::Text(".bak")];
-    let not_in_expression = ConditionExpression::NotIn(InCondition {
+    let in_expression = ConditionExpression::In(InCondition {
         field: "extension",
         values: &values,
     });
+    let not_in_expression = ConditionExpression::Not(&in_expression);
 
     let between_expression = ConditionExpression::Between(BetweenCondition {
         field: "age",
@@ -380,10 +574,11 @@ fn condition_expression_membership_grouping() {
     });
 
     let values_not_in = [Value::Text(".tmp"), Value::Text(".bak")];
-    let not_in_expression = ConditionExpression::NotIn(InCondition {
+    let in_for_not = ConditionExpression::In(InCondition {
         field: "extension",
         values: &values_not_in,
     });
+    let not_in_expression = ConditionExpression::Not(&in_for_not);
 
     let and_children = [in_expression, condition];
     let and_expression = ConditionExpression::And(&and_children);
@@ -499,10 +694,11 @@ fn condition_expression_membership_grouping_inequality() {
     });
 
     let values_not_in = [Value::Text(".tmp"), Value::Text(".bak")];
-    let not_in_expression = ConditionExpression::NotIn(InCondition {
+    let in_for_not = ConditionExpression::In(InCondition {
         field: "extension",
         values: &values_not_in,
     });
+    let not_in_expression = ConditionExpression::Not(&in_for_not);
 
     let and_children = [in_expression, condition];
     let and_expression = ConditionExpression::And(&and_children);
@@ -590,7 +786,7 @@ fn condition_expression_membership_copy() {
     let copied_in = original_in;
     assert_eq!(original_in, copied_in);
 
-    let original_not_in = ConditionExpression::NotIn(in_condition);
+    let original_not_in = ConditionExpression::Not(&original_in);
     let copied_not_in = original_not_in;
     assert_eq!(original_not_in, copied_not_in);
 }

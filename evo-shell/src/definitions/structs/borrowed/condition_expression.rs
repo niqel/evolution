@@ -7,7 +7,7 @@ pub enum ConditionExpression<'condition> {
     Condition(Condition<'condition>),
     Between(BetweenCondition<'condition>),
     In(InCondition<'condition>),
-    NotIn(InCondition<'condition>),
+    Not(&'condition ConditionExpression<'condition>),
     And(&'condition [ConditionExpression<'condition>]),
     Or(&'condition [ConditionExpression<'condition>]),
 }
