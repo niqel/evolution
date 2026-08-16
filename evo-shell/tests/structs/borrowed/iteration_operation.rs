@@ -16,6 +16,13 @@ fn iteration_operation_select() {
 }
 
 #[test]
+fn iteration_operation_to_value() {
+    let operation = IterationOperation::ToValue;
+
+    assert_eq!(operation, IterationOperation::ToValue);
+}
+
+#[test]
 fn iteration_operation_take() {
     let operation = IterationOperation::Take(10);
     assert_eq!(operation, IterationOperation::Take(10));
@@ -41,11 +48,13 @@ fn iteration_operation_skip() {
 
 #[test]
 fn iteration_operation_unit_variants() {
+    assert_eq!(IterationOperation::ToValue, IterationOperation::ToValue);
     assert_eq!(IterationOperation::First, IterationOperation::First);
     assert_eq!(IterationOperation::Last, IterationOperation::Last);
     assert_eq!(IterationOperation::Count, IterationOperation::Count);
     assert_eq!(IterationOperation::Iter, IterationOperation::Iter);
 
+    assert_ne!(IterationOperation::ToValue, IterationOperation::Iter);
     assert_ne!(IterationOperation::First, IterationOperation::Last);
     assert_ne!(IterationOperation::Count, IterationOperation::Iter);
 }
@@ -57,4 +66,9 @@ fn iteration_operation_copy() {
     let copied = original;
 
     assert_eq!(original, copied);
+
+    let original_to_value = IterationOperation::ToValue;
+    let copied_to_value = original_to_value;
+
+    assert_eq!(original_to_value, copied_to_value);
 }
