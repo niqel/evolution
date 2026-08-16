@@ -1,4 +1,101 @@
+use evo_shell::definitions::structs::borrowed::condition::Condition;
+use evo_shell::definitions::structs::borrowed::condition_expression::ConditionExpression;
 use evo_shell::definitions::structs::borrowed::iteration_operation::IterationOperation;
+use evo_shell::definitions::structs::borrowed::value::Value;
+use evo_shell::definitions::structs::owned::condition_operator::ConditionOperator;
+
+#[test]
+fn iteration_operation_filter() {
+    let condition = Condition {
+        field: "name",
+        operator: ConditionOperator::Equal,
+        value: Value::Text("config.evo"),
+    };
+
+    let expression = ConditionExpression::Condition(condition);
+    let operation = IterationOperation::Filter(expression);
+
+    assert_eq!(operation, IterationOperation::Filter(expression));
+    assert_ne!(operation, IterationOperation::ToValue);
+
+    match operation {
+        IterationOperation::Filter(filter_expression) => {
+            assert_eq!(filter_expression, expression);
+        }
+        _ => panic!("expected IterationOperation::Filter"),
+    }
+}
+
+#[test]
+fn iteration_operation_filter_and_expression() {
+    let a = ConditionExpression::Condition(Condition {
+        field: "name",
+        operator: ConditionOperator::Equal,
+        value: Value::Text("config.evo"),
+    });
+
+    let b = ConditionExpression::Condition(Condition {
+        field: "size",
+        operator: ConditionOperator::GreaterThan,
+        value: Value::Unsigned(1024),
+    });
+
+    let expressions = [a, b];
+    let expression = ConditionExpression::And(&expressions);
+    let operation = IterationOperation::Filter(expression);
+
+    match operation {
+        IterationOperation::Filter(ConditionExpression::And(children)) => {
+            assert_eq!(children.len(), 2);
+            assert_eq!(children[0], a);
+            assert_eq!(children[1], b);
+        }
+        _ => panic!("expected IterationOperation::Filter with And"),
+    }
+}
+
+#[test]
+fn iteration_operation_filter_grouped_expression() {
+    let a = ConditionExpression::Condition(Condition {
+        field: "name",
+        operator: ConditionOperator::Equal,
+        value: Value::Text("config.evo"),
+    });
+
+    let b = ConditionExpression::Condition(Condition {
+        field: "size",
+        operator: ConditionOperator::GreaterThan,
+        value: Value::Unsigned(1024),
+    });
+
+    let c = ConditionExpression::Condition(Condition {
+        field: "active",
+        operator: ConditionOperator::Equal,
+        value: Value::Boolean(true),
+    });
+
+    let and_children = [a, b];
+    let and_expression = ConditionExpression::And(&and_children);
+    let or_children = [and_expression, c];
+    let expression = ConditionExpression::Or(&or_children);
+    let operation = IterationOperation::Filter(expression);
+
+    match operation {
+        IterationOperation::Filter(ConditionExpression::Or(children)) => {
+            assert_eq!(children.len(), 2);
+            match children[0] {
+                ConditionExpression::And(and_items) => {
+                    assert_eq!(and_items.len(), 2);
+                    assert_eq!(and_items[0], a);
+                    assert_eq!(and_items[1], b);
+                }
+                _ => panic!("expected And as first child"),
+            }
+            assert_eq!(children[1], c);
+        }
+        _ => panic!("expected IterationOperation::Filter with Or"),
+    }
+}
 
 #[test]
 fn iteration_operation_select() {
@@ -71,4 +168,15 @@ fn iteration_operation_copy() {
     let copied_to_value = original_to_value;
 
     assert_eq!(original_to_value, copied_to_value);
+
+    let condition = Condition {
+        field: "name",
+        operator: ConditionOperator::Equal,
+        value: Value::Text("config.evo"),
+    };
+    let expression = ConditionExpression::Condition(condition);
+    let original_filter = IterationOperation::Filter(expression);
+    let copied_filter = original_filter;
+
+    assert_eq!(original_filter, copied_filter);
 }
