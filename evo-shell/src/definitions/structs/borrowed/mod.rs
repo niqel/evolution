@@ -1,6 +1,7 @@
 pub mod construction;
 pub mod field;
 pub mod filesystem_item;
+pub mod iteration_operation;
 pub mod record;
 pub mod scope;
 pub mod shell_information;
