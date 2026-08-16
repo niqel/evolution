@@ -6,6 +6,7 @@ pub mod delete;
 pub mod enter_scope;
 pub mod enumerate_filesystem;
 pub mod filesystem_scope;
+pub mod iterate;
 pub mod move_to;
 pub mod rename;
 pub mod respond_about;
