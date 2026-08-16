@@ -1,0 +1,61 @@
+use evo_shell::agents::iteration_dispatcher;
+use evo_shell::definitions::contracts::iterate as iterate_contract;
+use evo_shell::definitions::requesters::construction_requester;
+use evo_shell::definitions::structs::borrowed::construction::Construction;
+use evo_shell::definitions::structs::borrowed::iteration::Iteration;
+use evo_shell::definitions::structs::borrowed::iteration_operation::IterationOperation;
+use evo_shell::definitions::structs::borrowed::value::Value;
+use evo_shell::definitions::structs::owned::flow::Flow;
+use evo_shell::definitions::use_cases::iterate as iterate_use_case;
+
+fn receive(construction: Construction<'_>) -> Flow {
+    assert_eq!(construction, Construction::Value(Value::Unsigned(42)));
+    Flow::Continue
+}
+
+fn fake_iterate_success(
+    iteration: Iteration<'_>,
+    request: construction_requester::Request,
+) -> Result<(), iterate_contract::Error> {
+    assert_eq!(iteration.operations.len(), 2);
+    assert_eq!(iteration.operations[0], IterationOperation::Take(1));
+    assert_eq!(iteration.operations[1], IterationOperation::Iter);
+
+    let flow = request(Construction::Value(Value::Unsigned(42)));
+    assert_eq!(flow, Flow::Continue);
+
+    Ok(())
+}
+
+fn fake_iterate_unavailable(
+    _iteration: Iteration<'_>,
+    _request: construction_requester::Request,
+) -> Result<(), iterate_contract::Error> {
+    Err(iterate_contract::Error::Unavailable)
+}
+
+#[test]
+fn iteration_dispatcher_success() {
+    let operations = [IterationOperation::Take(1), IterationOperation::Iter];
+
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let agent: iterate_use_case::Iterate = iteration_dispatcher::ITERATE;
+    let result = agent(iteration, receive, fake_iterate_success);
+    assert_eq!(result, Ok(()));
+}
+
+#[test]
+fn iteration_dispatcher_translates_error() {
+    let operations = [IterationOperation::Iter];
+
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let agent: iterate_use_case::Iterate = iteration_dispatcher::ITERATE;
+    let result = agent(iteration, receive, fake_iterate_unavailable);
+    assert_eq!(result, Err(iterate_use_case::Error::IterationUnavailable));
+}
