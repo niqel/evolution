@@ -6,4 +6,7 @@ pub enum ConditionOperator {
     GreaterThanOrEqual,
     LessThan,
     LessThanOrEqual,
+    Contains,
+    StartsWith,
+    EndsWith,
 }
