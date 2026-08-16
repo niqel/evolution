@@ -4,6 +4,7 @@ pub mod condition_expression;
 pub mod construction;
 pub mod field;
 pub mod filesystem_item;
+pub mod in_condition;
 pub mod iteration;
 pub mod iteration_operation;
 pub mod record;

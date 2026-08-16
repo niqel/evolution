@@ -1,6 +1,7 @@
 use evo_shell::definitions::structs::borrowed::between_condition::BetweenCondition;
 use evo_shell::definitions::structs::borrowed::condition::Condition;
 use evo_shell::definitions::structs::borrowed::condition_expression::ConditionExpression;
+use evo_shell::definitions::structs::borrowed::in_condition::InCondition;
 use evo_shell::definitions::structs::borrowed::value::Value;
 use evo_shell::definitions::structs::owned::condition_operator::ConditionOperator;
 
@@ -46,6 +47,66 @@ fn condition_expression_between() {
         }
         _ => panic!("expected ConditionExpression::Between"),
     }
+}
+
+#[test]
+fn condition_expression_in() {
+    let values = [Value::Text("active"), Value::Text("pending")];
+    let in_condition = InCondition {
+        field: "status",
+        values: &values,
+    };
+
+    let expression = ConditionExpression::In(in_condition);
+
+    assert_eq!(expression, ConditionExpression::In(in_condition));
+
+    match expression {
+        ConditionExpression::In(inner) => {
+            assert_eq!(inner.field, "status");
+            assert_eq!(inner.values.len(), 2);
+            assert_eq!(inner.values[0], Value::Text("active"));
+            assert_eq!(inner.values[1], Value::Text("pending"));
+        }
+        _ => panic!("expected ConditionExpression::In"),
+    }
+}
+
+#[test]
+fn condition_expression_not_in() {
+    let values = [Value::Text(".tmp"), Value::Text(".bak")];
+    let not_in_condition = InCondition {
+        field: "extension",
+        values: &values,
+    };
+
+    let expression = ConditionExpression::NotIn(not_in_condition);
+
+    assert_eq!(expression, ConditionExpression::NotIn(not_in_condition));
+
+    match expression {
+        ConditionExpression::NotIn(inner) => {
+            assert_eq!(inner.field, "extension");
+            assert_eq!(inner.values.len(), 2);
+            assert_eq!(inner.values[0], Value::Text(".tmp"));
+            assert_eq!(inner.values[1], Value::Text(".bak"));
+        }
+        _ => panic!("expected ConditionExpression::NotIn"),
+    }
+}
+
+#[test]
+fn condition_expression_in_not_in_inequality() {
+    let values = [Value::Text("active"), Value::Text("pending")];
+    let condition = InCondition {
+        field: "status",
+        values: &values,
+    };
+
+    let in_expression = ConditionExpression::In(condition);
+    let not_in_expression = ConditionExpression::NotIn(condition);
+
+    assert_ne!(in_expression, not_in_expression);
 }
 
 #[test]
@@ -107,6 +168,37 @@ fn condition_expression_between_and_condition() {
 }
 
 #[test]
+fn condition_expression_in_and_condition() {
+    let values = [Value::Text("active"), Value::Text("pending")];
+    let in_expression = ConditionExpression::In(InCondition {
+        field: "status",
+        values: &values,
+    });
+
+    let condition_expression = ConditionExpression::Condition(Condition {
+        field: "enabled",
+        operator: ConditionOperator::Equal,
+        value: Value::Boolean(true),
+    });
+
+    let children = [in_expression, condition_expression];
+    let expression = ConditionExpression::And(&children);
+
+    match expression {
+        ConditionExpression::And(items) => {
+            assert_eq!(items.len(), 2);
+            assert_eq!(items[0], in_expression);
+            assert_eq!(items[1], condition_expression);
+            match items[0] {
+                ConditionExpression::In(_) => {}
+                _ => panic!("expected ConditionExpression::In as first child"),
+            }
+        }
+        _ => panic!("expected ConditionExpression::And"),
+    }
+}
+
+#[test]
 fn condition_expression_or() {
     let a = ConditionExpression::Condition(Condition {
         field: "name",
@@ -155,6 +247,33 @@ fn condition_expression_between_or_condition() {
             assert_eq!(items.len(), 2);
             assert_eq!(items[0], between_expression);
             assert_eq!(items[1], condition_expression);
+        }
+        _ => panic!("expected ConditionExpression::Or"),
+    }
+}
+
+#[test]
+fn condition_expression_not_in_or_between() {
+    let values = [Value::Text(".tmp"), Value::Text(".bak")];
+    let not_in_expression = ConditionExpression::NotIn(InCondition {
+        field: "extension",
+        values: &values,
+    });
+
+    let between_expression = ConditionExpression::Between(BetweenCondition {
+        field: "age",
+        lower: Value::Unsigned(18),
+        upper: Value::Unsigned(65),
+    });
+
+    let children = [not_in_expression, between_expression];
+    let expression = ConditionExpression::Or(&children);
+
+    match expression {
+        ConditionExpression::Or(items) => {
+            assert_eq!(items.len(), 2);
+            assert_eq!(items[0], not_in_expression);
+            assert_eq!(items[1], between_expression);
         }
         _ => panic!("expected ConditionExpression::Or"),
     }
@@ -247,6 +366,49 @@ fn condition_expression_between_grouping() {
 }
 
 #[test]
+fn condition_expression_membership_grouping() {
+    let values_in = [Value::Text("active"), Value::Text("pending")];
+    let in_expression = ConditionExpression::In(InCondition {
+        field: "status",
+        values: &values_in,
+    });
+
+    let condition = ConditionExpression::Condition(Condition {
+        field: "enabled",
+        operator: ConditionOperator::Equal,
+        value: Value::Boolean(true),
+    });
+
+    let values_not_in = [Value::Text(".tmp"), Value::Text(".bak")];
+    let not_in_expression = ConditionExpression::NotIn(InCondition {
+        field: "extension",
+        values: &values_not_in,
+    });
+
+    let and_children = [in_expression, condition];
+    let and_expression = ConditionExpression::And(&and_children);
+
+    let or_children = [and_expression, not_in_expression];
+    let expression = ConditionExpression::Or(&or_children);
+
+    match expression {
+        ConditionExpression::Or(items) => {
+            assert_eq!(items.len(), 2);
+            match items[0] {
+                ConditionExpression::And(and_items) => {
+                    assert_eq!(and_items.len(), 2);
+                    assert_eq!(and_items[0], in_expression);
+                    assert_eq!(and_items[1], condition);
+                }
+                _ => panic!("expected ConditionExpression::And as first child"),
+            }
+            assert_eq!(items[1], not_in_expression);
+        }
+        _ => panic!("expected ConditionExpression::Or as root"),
+    }
+}
+
+#[test]
 fn condition_expression_or_and_grouping() {
     let a = ConditionExpression::Condition(Condition {
         field: "name",
@@ -323,6 +485,39 @@ fn condition_expression_between_grouping_inequality() {
 }
 
 #[test]
+fn condition_expression_membership_grouping_inequality() {
+    let values_in = [Value::Text("active"), Value::Text("pending")];
+    let in_expression = ConditionExpression::In(InCondition {
+        field: "status",
+        values: &values_in,
+    });
+
+    let condition = ConditionExpression::Condition(Condition {
+        field: "enabled",
+        operator: ConditionOperator::Equal,
+        value: Value::Boolean(true),
+    });
+
+    let values_not_in = [Value::Text(".tmp"), Value::Text(".bak")];
+    let not_in_expression = ConditionExpression::NotIn(InCondition {
+        field: "extension",
+        values: &values_not_in,
+    });
+
+    let and_children = [in_expression, condition];
+    let and_expression = ConditionExpression::And(&and_children);
+    let or_children_for_first = [and_expression, not_in_expression];
+    let expression_one = ConditionExpression::Or(&or_children_for_first);
+
+    let or_children_for_second = [condition, not_in_expression];
+    let or_expression = ConditionExpression::Or(&or_children_for_second);
+    let and_children_for_second = [in_expression, or_expression];
+    let expression_two = ConditionExpression::And(&and_children_for_second);
+
+    assert_ne!(expression_one, expression_two);
+}
+
+#[test]
 fn condition_expression_grouping_inequality() {
     let a = ConditionExpression::Condition(Condition {
         field: "name",
@@ -381,4 +576,21 @@ fn condition_expression_between_copy() {
     let copied = original;
 
     assert_eq!(original, copied);
+}
+
+#[test]
+fn condition_expression_membership_copy() {
+    let values = [Value::Text("active"), Value::Text("pending")];
+    let in_condition = InCondition {
+        field: "status",
+        values: &values,
+    };
+
+    let original_in = ConditionExpression::In(in_condition);
+    let copied_in = original_in;
+    assert_eq!(original_in, copied_in);
+
+    let original_not_in = ConditionExpression::NotIn(in_condition);
+    let copied_not_in = original_not_in;
+    assert_eq!(original_not_in, copied_not_in);
 }
