@@ -7,8 +7,11 @@ use evo_shell::definitions::structs::borrowed::construction::Construction;
 use evo_shell::definitions::structs::borrowed::in_condition::InCondition;
 use evo_shell::definitions::structs::borrowed::iteration::Iteration;
 use evo_shell::definitions::structs::borrowed::iteration_operation::IterationOperation;
+use evo_shell::definitions::structs::borrowed::len_expression::LenExpression;
 use evo_shell::definitions::structs::borrowed::new_field::NewField;
+use evo_shell::definitions::structs::borrowed::replace_expression::ReplaceExpression;
 use evo_shell::definitions::structs::borrowed::selection::Selection;
+use evo_shell::definitions::structs::borrowed::substring_expression::SubstringExpression;
 use evo_shell::definitions::structs::borrowed::value::Value;
 use evo_shell::definitions::structs::borrowed::value_expression::ValueExpression;
 use evo_shell::definitions::structs::owned::condition_operator::ConditionOperator;
@@ -2238,6 +2241,66 @@ fn iterator_new_concat_returns_provider_incompatible_before_running() {
     let new_field = NewField {
         name: "label",
         expression: ValueExpression::Concat(&expressions),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::ProviderIncompatible));
+}
+
+#[test]
+fn new_substring_expression_is_provider_incompatible() {
+    let text = ValueExpression::Literal(Value::Text("a"));
+    let start = ValueExpression::Literal(Value::Unsigned(0));
+    let length = ValueExpression::Literal(Value::Unsigned(1));
+    let substring_expr = SubstringExpression {
+        text: &text,
+        start: &start,
+        length: &length,
+    };
+    let new_field = NewField {
+        name: "label",
+        expression: ValueExpression::Substring(substring_expr),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::ProviderIncompatible));
+}
+
+#[test]
+fn new_len_expression_is_provider_incompatible() {
+    let text = ValueExpression::Literal(Value::Text("a"));
+    let len_expr = LenExpression { text: &text };
+    let new_field = NewField {
+        name: "label",
+        expression: ValueExpression::Len(len_expr),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::ProviderIncompatible));
+}
+
+#[test]
+fn new_replace_expression_is_provider_incompatible() {
+    let text = ValueExpression::Literal(Value::Text("a"));
+    let from = ValueExpression::Literal(Value::Text("a"));
+    let to = ValueExpression::Literal(Value::Text("b"));
+    let replace_expr = ReplaceExpression {
+        text: &text,
+        from: &from,
+        to: &to,
+    };
+    let new_field = NewField {
+        name: "label",
+        expression: ValueExpression::Replace(replace_expr),
     };
     let selections = [Selection::New(new_field)];
     let ops = [IterationOperation::Select(&selections)];

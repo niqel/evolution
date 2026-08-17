@@ -1,6 +1,9 @@
 use evo_shell::definitions::structs::borrowed::iteration_operation::IterationOperation;
+use evo_shell::definitions::structs::borrowed::len_expression::LenExpression;
 use evo_shell::definitions::structs::borrowed::new_field::NewField;
+use evo_shell::definitions::structs::borrowed::replace_expression::ReplaceExpression;
 use evo_shell::definitions::structs::borrowed::selection::Selection;
+use evo_shell::definitions::structs::borrowed::substring_expression::SubstringExpression;
 use evo_shell::definitions::structs::borrowed::value::Value;
 use evo_shell::definitions::structs::borrowed::value_expression::ValueExpression;
 
@@ -178,5 +181,90 @@ fn select_new_field_from_concat_expression() {
             }
         }
         _ => panic!("expected IterationOperation::Select"),
+    }
+}
+
+#[test]
+fn value_expression_substring_can_be_constructed() {
+    let text = ValueExpression::Literal(Value::Text("México"));
+    let start = ValueExpression::Literal(Value::Unsigned(1));
+    let length = ValueExpression::Literal(Value::Unsigned(3));
+    let substring_expr = SubstringExpression {
+        text: &text,
+        start: &start,
+        length: &length,
+    };
+    let expr = ValueExpression::Substring(substring_expr);
+
+    assert_eq!(expr, ValueExpression::Substring(substring_expr));
+    match expr {
+        ValueExpression::Substring(sub) => {
+            assert_eq!(*sub.text, text);
+            assert_eq!(*sub.start, start);
+            assert_eq!(*sub.length, length);
+        }
+        _ => panic!("expected ValueExpression::Substring"),
+    }
+}
+
+#[test]
+fn value_expression_len_can_be_constructed() {
+    let text = ValueExpression::Literal(Value::Text("México"));
+    let len_expr = LenExpression { text: &text };
+    let expr = ValueExpression::Len(len_expr);
+
+    assert_eq!(expr, ValueExpression::Len(len_expr));
+    match expr {
+        ValueExpression::Len(len) => {
+            assert_eq!(*len.text, text);
+        }
+        _ => panic!("expected ValueExpression::Len"),
+    }
+}
+
+#[test]
+fn value_expression_replace_can_be_constructed() {
+    let text = ValueExpression::Literal(Value::Text("one two one"));
+    let from = ValueExpression::Literal(Value::Text("one"));
+    let to = ValueExpression::Literal(Value::Text("1"));
+    let replace_expr = ReplaceExpression {
+        text: &text,
+        from: &from,
+        to: &to,
+    };
+    let expr = ValueExpression::Replace(replace_expr);
+
+    assert_eq!(expr, ValueExpression::Replace(replace_expr));
+    match expr {
+        ValueExpression::Replace(rep) => {
+            assert_eq!(*rep.text, text);
+            assert_eq!(*rep.from, from);
+            assert_eq!(*rep.to, to);
+        }
+        _ => panic!("expected ValueExpression::Replace"),
+    }
+}
+
+#[test]
+fn value_expressions_can_be_nested() {
+    let part1 = ValueExpression::Literal(Value::Text("Gustavo"));
+    let part2 = ValueExpression::Literal(Value::Text(" "));
+    let part3 = ValueExpression::Literal(Value::Text("Melendez"));
+    let parts = [part1, part2, part3];
+    let concat_expr = ValueExpression::Concat(&parts);
+    let len_expr = LenExpression { text: &concat_expr };
+    let nested = ValueExpression::Len(len_expr);
+
+    match nested {
+        ValueExpression::Len(len) => match *len.text {
+            ValueExpression::Concat(args) => {
+                assert_eq!(args.len(), 3);
+                assert_eq!(args[0], part1);
+                assert_eq!(args[1], part2);
+                assert_eq!(args[2], part3);
+            }
+            _ => panic!("expected nested Concat"),
+        },
+        _ => panic!("expected Len expression"),
     }
 }

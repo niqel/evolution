@@ -322,7 +322,10 @@ where
     match expression {
         ValueExpression::Literal(value) => Ok(*value),
         ValueExpression::Pipeline(operations) => evaluate_value_pipeline(operations, input_fields),
-        ValueExpression::Concat(_) => Err(iterate_contract::Error::ProviderIncompatible),
+        ValueExpression::Concat(_)
+        | ValueExpression::Substring(_)
+        | ValueExpression::Len(_)
+        | ValueExpression::Replace(_) => Err(iterate_contract::Error::ProviderIncompatible),
     }
 }
 
@@ -596,7 +599,10 @@ fn validate_value_expression<'iteration>(
             }
             Ok(())
         }
-        ValueExpression::Concat(_) => Err(iterate_contract::Error::ProviderIncompatible),
+        ValueExpression::Concat(_)
+        | ValueExpression::Substring(_)
+        | ValueExpression::Len(_)
+        | ValueExpression::Replace(_) => Err(iterate_contract::Error::ProviderIncompatible),
     }
 }
 
