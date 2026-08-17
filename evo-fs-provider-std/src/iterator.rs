@@ -15,6 +15,89 @@ use evo_shell::definitions::structs::borrowed::value_expression::ValueExpression
 use evo_shell::definitions::structs::owned::condition_operator::ConditionOperator;
 use evo_shell::definitions::structs::owned::flow::Flow;
 
+#[derive(Clone, Debug)]
+enum OwnedValue {
+    Text(String),
+    Unsigned(u64),
+    Signed(i64),
+    Boolean(bool),
+}
+
+impl OwnedValue {
+    fn from_borrowed(value: Value<'_>) -> Self {
+        match value {
+            Value::Text(t) => OwnedValue::Text(t.to_string()),
+            Value::Unsigned(u) => OwnedValue::Unsigned(u),
+            Value::Signed(s) => OwnedValue::Signed(s),
+            Value::Boolean(b) => OwnedValue::Boolean(b),
+        }
+    }
+
+    fn as_borrowed(&self) -> Value<'_> {
+        match self {
+            OwnedValue::Text(t) => Value::Text(t.as_str()),
+            OwnedValue::Unsigned(u) => Value::Unsigned(*u),
+            OwnedValue::Signed(s) => Value::Signed(*s),
+            OwnedValue::Boolean(b) => Value::Boolean(*b),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct OwnedField {
+    name: String,
+    value: OwnedValue,
+}
+
+impl OwnedField {
+    fn from_borrowed(field: Field<'_>) -> Self {
+        OwnedField {
+            name: field.name.to_string(),
+            value: OwnedValue::from_borrowed(field.value),
+        }
+    }
+
+    fn as_borrowed(&self) -> Field<'_> {
+        Field {
+            name: self.name.as_str(),
+            value: self.value.as_borrowed(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+enum OwnedConstruction {
+    Record(Vec<OwnedField>),
+    Value(OwnedValue),
+}
+
+impl OwnedConstruction {
+    fn from_construction(construction: Construction<'_>) -> Self {
+        match construction {
+            Construction::Record(record) => {
+                let fields = record
+                    .fields
+                    .iter()
+                    .map(|f| OwnedField::from_borrowed(*f))
+                    .collect();
+                OwnedConstruction::Record(fields)
+            }
+            Construction::Value(val) => OwnedConstruction::Value(OwnedValue::from_borrowed(val)),
+        }
+    }
+}
+
+enum StageState {
+    Filter,
+    Select,
+    ToValue,
+    Skip { count: usize },
+    Take { count: usize },
+    First { seen: bool },
+    Last { item: Option<OwnedConstruction> },
+    Count { count: u64 },
+}
+
 fn find_field<'field>(record: &Record<'field>, field_name: &str) -> Option<Field<'field>> {
     record.fields.iter().find(|f| f.name == field_name).copied()
 }
@@ -243,61 +326,44 @@ where
     }
 }
 
-fn process_pipeline<'iteration, 'item>(
+fn process_item_from<'iteration, 'item>(
+    stage_index: usize,
     operations: &'iteration [IterationOperation<'iteration>],
-    stage_counts: &mut [usize],
-    initial_fields: &'item [Field<'item>],
+    stages: &mut [StageState],
+    construction: Construction<'item>,
     request: construction_requester::Request,
 ) -> Result<Flow, iterate_contract::Error<'iteration>>
 where
     'iteration: 'item,
 {
-    let mut projected_fields: Option<Vec<Field<'item>>> = None;
-    let mut current_value: Option<Value<'item>> = None;
+    if stage_index >= operations.len() {
+        return Ok(request(construction));
+    }
 
-    for (index, operation) in operations.iter().enumerate() {
-        match operation {
-            IterationOperation::Filter(expression) => {
-                if current_value.is_some() {
-                    return Err(iterate_contract::Error::ProviderIncompatible);
-                }
-                let current_slice: &[Field<'item>] = match &projected_fields {
-                    Some(fields) => fields.as_slice(),
-                    None => initial_fields,
-                };
-                let current_record = Record {
-                    fields: current_slice,
-                };
-                if !matches_expression(expression, &current_record)? {
+    match &operations[stage_index] {
+        IterationOperation::Filter(expression) => match construction {
+            Construction::Record(record) => {
+                if !matches_expression(expression, &record)? {
                     return Ok(Flow::Continue);
                 }
+                process_item_from(
+                    stage_index + 1,
+                    operations,
+                    stages,
+                    Construction::Record(record),
+                    request,
+                )
             }
-            IterationOperation::Skip(n) => {
-                if stage_counts[index] < *n {
-                    stage_counts[index] += 1;
-                    return Ok(Flow::Continue);
-                }
-            }
-            IterationOperation::Take(n) => {
-                if stage_counts[index] < *n {
-                    stage_counts[index] += 1;
-                } else {
-                    return Ok(Flow::Continue);
-                }
-            }
-            IterationOperation::Select(selections) => {
-                if current_value.is_some() {
-                    return Err(iterate_contract::Error::ProviderIncompatible);
-                }
-                let current_slice: &[Field<'item>] = match &projected_fields {
-                    Some(fields) => fields.as_slice(),
-                    None => initial_fields,
-                };
+            Construction::Value(_) => Err(iterate_contract::Error::ProviderIncompatible),
+        },
+        IterationOperation::Select(selections) => match construction {
+            Construction::Record(record) => {
                 let mut next_fields = Vec::with_capacity(selections.len());
                 for selection in *selections {
                     match selection {
                         Selection::Field(field_name) => {
-                            let field = current_slice
+                            let field = record
+                                .fields
                                 .iter()
                                 .find(|f| f.name == *field_name)
                                 .copied()
@@ -306,7 +372,7 @@ where
                         }
                         Selection::New(new_field) => {
                             let value =
-                                evaluate_value_expression(&new_field.expression, current_slice)?;
+                                evaluate_value_expression(&new_field.expression, record.fields)?;
                             next_fields.push(Field {
                                 name: new_field.name,
                                 value,
@@ -314,39 +380,181 @@ where
                         }
                     }
                 }
-                projected_fields = Some(next_fields);
-            }
-            IterationOperation::ToValue => {
-                if current_value.is_some() {
-                    return Err(iterate_contract::Error::ToValueRequiresRecord);
-                }
-                let current_slice: &[Field<'item>] = match &projected_fields {
-                    Some(fields) => fields.as_slice(),
-                    None => initial_fields,
+                let next_record = Record {
+                    fields: &next_fields,
                 };
-                if current_slice.len() != 1 {
+                process_item_from(
+                    stage_index + 1,
+                    operations,
+                    stages,
+                    Construction::Record(next_record),
+                    request,
+                )
+            }
+            Construction::Value(_) => Err(iterate_contract::Error::ProviderIncompatible),
+        },
+        IterationOperation::ToValue => match construction {
+            Construction::Record(record) => {
+                if record.fields.len() != 1 {
                     return Err(iterate_contract::Error::ToValueRequiresSingleField);
                 }
-                current_value = Some(current_slice[0].value);
+                let value = record.fields[0].value;
+                process_item_from(
+                    stage_index + 1,
+                    operations,
+                    stages,
+                    Construction::Value(value),
+                    request,
+                )
             }
-            _ => return Err(iterate_contract::Error::ProviderIncompatible),
+            Construction::Value(_) => Err(iterate_contract::Error::ToValueRequiresRecord),
+        },
+        IterationOperation::Skip(n) => {
+            let should_skip = match &mut stages[stage_index] {
+                StageState::Skip { count } => {
+                    if *count < *n {
+                        *count += 1;
+                        true
+                    } else {
+                        false
+                    }
+                }
+                _ => unreachable!(),
+            };
+            if should_skip {
+                Ok(Flow::Continue)
+            } else {
+                process_item_from(stage_index + 1, operations, stages, construction, request)
+            }
+        }
+        IterationOperation::Take(n) => {
+            let should_take = match &mut stages[stage_index] {
+                StageState::Take { count } => {
+                    if *count < *n {
+                        *count += 1;
+                        true
+                    } else {
+                        false
+                    }
+                }
+                _ => unreachable!(),
+            };
+            if should_take {
+                process_item_from(stage_index + 1, operations, stages, construction, request)
+            } else {
+                Ok(Flow::Continue)
+            }
+        }
+        IterationOperation::First => {
+            let is_first = match &mut stages[stage_index] {
+                StageState::First { seen } => {
+                    if !*seen {
+                        *seen = true;
+                        true
+                    } else {
+                        false
+                    }
+                }
+                _ => unreachable!(),
+            };
+            if is_first {
+                process_item_from(stage_index + 1, operations, stages, construction, request)
+            } else {
+                Ok(Flow::Continue)
+            }
+        }
+        IterationOperation::Last => {
+            match &mut stages[stage_index] {
+                StageState::Last { item } => {
+                    *item = Some(OwnedConstruction::from_construction(construction));
+                }
+                _ => unreachable!(),
+            }
+            Ok(Flow::Continue)
+        }
+        IterationOperation::Count => {
+            match &mut stages[stage_index] {
+                StageState::Count { count } => {
+                    *count += 1;
+                }
+                _ => unreachable!(),
+            }
+            Ok(Flow::Continue)
         }
     }
+}
 
-    let construction = match current_value {
-        Some(value) => Construction::Value(value),
-        None => {
-            let current_slice: &[Field<'item>] = match &projected_fields {
-                Some(fields) => fields.as_slice(),
-                None => initial_fields,
+fn finalize_from<'iteration>(
+    stage_index: usize,
+    operations: &'iteration [IterationOperation<'iteration>],
+    stages: &mut [StageState],
+    request: construction_requester::Request,
+) -> Result<Flow, iterate_contract::Error<'iteration>> {
+    if stage_index >= operations.len() {
+        return Ok(Flow::Continue);
+    }
+
+    match &operations[stage_index] {
+        IterationOperation::Last => {
+            let item_opt = match &mut stages[stage_index] {
+                StageState::Last { item } => item.take(),
+                _ => unreachable!(),
             };
-            Construction::Record(Record {
-                fields: current_slice,
-            })
-        }
-    };
 
-    Ok(request(construction))
+            if let Some(owned_item) = item_opt {
+                let flow = match &owned_item {
+                    OwnedConstruction::Value(v) => process_item_from(
+                        stage_index + 1,
+                        operations,
+                        stages,
+                        Construction::Value(v.as_borrowed()),
+                        request,
+                    )?,
+                    OwnedConstruction::Record(owned_fields) => {
+                        let borrowed_fields: Vec<Field<'_>> =
+                            owned_fields.iter().map(|f| f.as_borrowed()).collect();
+                        let record = Record {
+                            fields: &borrowed_fields,
+                        };
+                        process_item_from(
+                            stage_index + 1,
+                            operations,
+                            stages,
+                            Construction::Record(record),
+                            request,
+                        )?
+                    }
+                };
+
+                if flow == Flow::Stop {
+                    return Ok(Flow::Stop);
+                }
+            }
+
+            finalize_from(stage_index + 1, operations, stages, request)
+        }
+        IterationOperation::Count => {
+            let count = match &stages[stage_index] {
+                StageState::Count { count } => *count,
+                _ => unreachable!(),
+            };
+
+            let flow = process_item_from(
+                stage_index + 1,
+                operations,
+                stages,
+                Construction::Value(Value::Unsigned(count)),
+                request,
+            )?;
+
+            if flow == Flow::Stop {
+                return Ok(Flow::Stop);
+            }
+
+            finalize_from(stage_index + 1, operations, stages, request)
+        }
+        _ => finalize_from(stage_index + 1, operations, stages, request),
+    }
 }
 
 fn validate_value_expression<'iteration>(
@@ -417,18 +625,36 @@ pub fn iterate<'iteration>(
                     }
                 }
             }
-            IterationOperation::Skip(_) | IterationOperation::Take(_) => {}
+            IterationOperation::Skip(_)
+            | IterationOperation::Take(_)
+            | IterationOperation::First
+            | IterationOperation::Last => {}
             IterationOperation::ToValue => {
                 if is_value {
                     return Err(iterate_contract::Error::ToValueRequiresRecord);
                 }
                 is_value = true;
             }
-            _ => return Err(iterate_contract::Error::ProviderIncompatible),
+            IterationOperation::Count => {
+                is_value = true;
+            }
         }
     }
 
-    let mut stage_counts = vec![0usize; iteration.operations.len()];
+    let mut stages: Vec<StageState> = iteration
+        .operations
+        .iter()
+        .map(|op| match op {
+            IterationOperation::Filter(_) => StageState::Filter,
+            IterationOperation::Select(_) => StageState::Select,
+            IterationOperation::ToValue => StageState::ToValue,
+            IterationOperation::Skip(_) => StageState::Skip { count: 0 },
+            IterationOperation::Take(_) => StageState::Take { count: 0 },
+            IterationOperation::First => StageState::First { seen: false },
+            IterationOperation::Last => StageState::Last { item: None },
+            IterationOperation::Count => StageState::Count { count: 0 },
+        })
+        .collect();
 
     let current_dir = std::env::current_dir().map_err(|_| iterate_contract::Error::Unavailable)?;
     let read_dir =
@@ -487,16 +713,32 @@ pub fn iterate<'iteration>(
                 value: Value::Unsigned(metadata.len()),
             };
             let fields = [index_field, name_field, path_field, kind_field, size_field];
-            process_pipeline(iteration.operations, &mut stage_counts, &fields, request)?
+            let record = Record { fields: &fields };
+            process_item_from(
+                0,
+                iteration.operations,
+                &mut stages,
+                Construction::Record(record),
+                request,
+            )?
         } else {
             let fields = [index_field, name_field, path_field, kind_field];
-            process_pipeline(iteration.operations, &mut stage_counts, &fields, request)?
+            let record = Record { fields: &fields };
+            process_item_from(
+                0,
+                iteration.operations,
+                &mut stages,
+                Construction::Record(record),
+                request,
+            )?
         };
 
         if flow == Flow::Stop {
             return Ok(());
         }
     }
+
+    finalize_from(0, iteration.operations, &mut stages, request)?;
 
     Ok(())
 }
