@@ -16,9 +16,8 @@ fn contract_success<'iteration>(
     iteration: Iteration<'iteration>,
     request: construction_requester::Request,
 ) -> Result<(), iterate_contract::Error<'iteration>> {
-    assert_eq!(iteration.operations.len(), 2);
+    assert_eq!(iteration.operations.len(), 1);
     assert_eq!(iteration.operations[0], IterationOperation::Take(1));
-    assert_eq!(iteration.operations[1], IterationOperation::Iter);
 
     let flow = request(Construction::Value(Value::Unsigned(42)));
     assert_eq!(flow, Flow::Continue);
@@ -108,7 +107,7 @@ fn fake_use_case<'iteration>(
 
 #[test]
 fn iterate_use_case_signature_and_success() {
-    let operations = [IterationOperation::Take(1), IterationOperation::Iter];
+    let operations = [IterationOperation::Take(1)];
 
     let iteration = Iteration {
         operations: &operations,
@@ -122,7 +121,7 @@ fn iterate_use_case_signature_and_success() {
 
 #[test]
 fn iterate_use_case_error() {
-    let operations = [IterationOperation::Iter];
+    let operations: [IterationOperation<'_>; 0] = [];
 
     let iteration = Iteration {
         operations: &operations,
@@ -154,7 +153,7 @@ fn iterate_use_case_field_not_found_error() {
 
 #[test]
 fn iterate_use_case_comparison_type_mismatch_error() {
-    let operations = [IterationOperation::Iter];
+    let operations: [IterationOperation<'_>; 0] = [];
 
     let iteration = Iteration {
         operations: &operations,
@@ -171,7 +170,7 @@ fn iterate_use_case_comparison_type_mismatch_error() {
 
 #[test]
 fn iterate_use_case_external_type_incompatible_error() {
-    let operations = [IterationOperation::Iter];
+    let operations: [IterationOperation<'_>; 0] = [];
 
     let iteration = Iteration {
         operations: &operations,
@@ -188,7 +187,7 @@ fn iterate_use_case_external_type_incompatible_error() {
 
 #[test]
 fn iterate_use_case_provider_incompatible_error() {
-    let operations = [IterationOperation::Iter];
+    let operations: [IterationOperation<'_>; 0] = [];
 
     let iteration = Iteration {
         operations: &operations,

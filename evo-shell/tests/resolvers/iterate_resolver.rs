@@ -21,9 +21,8 @@ fn fake_contract_success<'iteration>(
     iteration: Iteration<'iteration>,
     request: construction_requester::Request,
 ) -> Result<(), iterate_contract::Error<'iteration>> {
-    assert_eq!(iteration.operations.len(), 2);
+    assert_eq!(iteration.operations.len(), 1);
     assert_eq!(iteration.operations[0], IterationOperation::Take(1));
-    assert_eq!(iteration.operations[1], IterationOperation::Iter);
 
     let flow = request(Construction::Value(Value::Unsigned(42)));
     assert_eq!(flow, Flow::Continue);
@@ -99,7 +98,7 @@ fn fake_contract_to_value_requires_record<'iteration>(
 
 #[test]
 fn iterate_resolver_success() {
-    let operations = [IterationOperation::Take(1), IterationOperation::Iter];
+    let operations = [IterationOperation::Take(1)];
 
     let iteration = Iteration {
         operations: &operations,
@@ -111,7 +110,7 @@ fn iterate_resolver_success() {
 
 #[test]
 fn iterate_resolver_translates_error() {
-    let operations = [IterationOperation::Iter];
+    let operations: [IterationOperation<'_>; 0] = [];
 
     let iteration = Iteration {
         operations: &operations,
@@ -173,7 +172,7 @@ fn iterate_resolver_translates_external_type_incompatible() {
 
 #[test]
 fn iterate_resolver_translates_provider_incompatible() {
-    let operations = [IterationOperation::Iter];
+    let operations: [IterationOperation<'_>; 0] = [];
 
     let iteration = Iteration {
         operations: &operations,

@@ -174,11 +174,10 @@ fn iteration_operation_unit_variants() {
     assert_eq!(IterationOperation::First, IterationOperation::First);
     assert_eq!(IterationOperation::Last, IterationOperation::Last);
     assert_eq!(IterationOperation::Count, IterationOperation::Count);
-    assert_eq!(IterationOperation::Iter, IterationOperation::Iter);
 
-    assert_ne!(IterationOperation::ToValue, IterationOperation::Iter);
+    assert_ne!(IterationOperation::ToValue, IterationOperation::Count);
     assert_ne!(IterationOperation::First, IterationOperation::Last);
-    assert_ne!(IterationOperation::Count, IterationOperation::Iter);
+    assert_ne!(IterationOperation::Count, IterationOperation::First);
 }
 
 #[test]

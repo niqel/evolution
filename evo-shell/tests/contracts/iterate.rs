@@ -24,9 +24,8 @@ fn fake_iterate_success<'iteration>(
     iteration: Iteration<'iteration>,
     request: construction_requester::Request,
 ) -> Result<(), iterate::Error<'iteration>> {
-    assert_eq!(iteration.operations.len(), 3);
+    assert_eq!(iteration.operations.len(), 2);
     assert_eq!(iteration.operations[1], IterationOperation::Take(1));
-    assert_eq!(iteration.operations[2], IterationOperation::Iter);
 
     let flow = request(Construction::Value(Value::Unsigned(1)));
     assert_eq!(flow, Flow::Continue);
@@ -39,12 +38,50 @@ fn fake_iterate_handles_stop<'iteration>(
     request: construction_requester::Request,
 ) -> Result<(), iterate::Error<'iteration>> {
     assert_eq!(iteration.operations.len(), 1);
-    assert_eq!(iteration.operations[0], IterationOperation::Iter);
+    assert_eq!(iteration.operations[0], IterationOperation::Take(1));
 
     let flow = request(Construction::Value(Value::Unsigned(1)));
     assert_eq!(flow, Flow::Stop);
 
     Ok(())
+}
+
+fn fake_iterate_zero_results<'iteration>(
+    _iteration: Iteration<'iteration>,
+    _request: construction_requester::Request,
+) -> Result<(), iterate::Error<'iteration>> {
+    Ok(())
+}
+
+fn fake_iterate_multiple_results<'iteration>(
+    _iteration: Iteration<'iteration>,
+    request: construction_requester::Request,
+) -> Result<(), iterate::Error<'iteration>> {
+    let flow_1 = request(Construction::Value(Value::Unsigned(1)));
+    if flow_1 == Flow::Stop {
+        return Ok(());
+    }
+    let flow_2 = request(Construction::Value(Value::Unsigned(2)));
+    if flow_2 == Flow::Stop {
+        return Ok(());
+    }
+    let _flow_3 = request(Construction::Value(Value::Unsigned(3)));
+    Ok(())
+}
+
+fn fake_iterate_stop_prevents_subsequent_results<'iteration>(
+    _iteration: Iteration<'iteration>,
+    request: construction_requester::Request,
+) -> Result<(), iterate::Error<'iteration>> {
+    let flow_1 = request(Construction::Value(Value::Unsigned(1)));
+    if flow_1 == Flow::Stop {
+        return Ok(());
+    }
+    let flow_2 = request(Construction::Value(Value::Unsigned(2)));
+    if flow_2 == Flow::Stop {
+        return Ok(());
+    }
+    panic!("third result should not be requested after Flow::Stop");
 }
 
 fn unavailable_iterate<'iteration>(
@@ -119,7 +156,6 @@ fn iterate_contract_signature_and_success() {
     let operations = [
         IterationOperation::Select(&selections),
         IterationOperation::Take(1),
-        IterationOperation::Iter,
     ];
 
     let iteration = Iteration {
@@ -132,7 +168,7 @@ fn iterate_contract_signature_and_success() {
 
 #[test]
 fn iterate_contract_handles_flow_stop() {
-    let operations = [IterationOperation::Iter];
+    let operations = [IterationOperation::Take(1)];
 
     let iteration = Iteration {
         operations: &operations,
@@ -143,8 +179,55 @@ fn iterate_contract_handles_flow_stop() {
 }
 
 #[test]
+fn iterate_contract_zero_results() {
+    let operations: [IterationOperation<'_>; 0] = [];
+
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let contract: iterate::Iterate = fake_iterate_zero_results;
+    assert_eq!(
+        contract(iteration, |_| panic!(
+            "requester should not be called for zero results"
+        )),
+        Ok(())
+    );
+}
+
+#[test]
+fn iterate_contract_multiple_results_continue() {
+    let operations = [IterationOperation::Take(3)];
+
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let contract: iterate::Iterate = fake_iterate_multiple_results;
+    assert_eq!(contract(iteration, |_| Flow::Continue), Ok(()));
+}
+
+#[test]
+fn iterate_contract_stop_prevents_next_result() {
+    let operations = [IterationOperation::Take(3)];
+
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let contract: iterate::Iterate = fake_iterate_stop_prevents_subsequent_results;
+    let result = contract(iteration, |construction| match construction {
+        Construction::Value(Value::Unsigned(1)) => Flow::Continue,
+        Construction::Value(Value::Unsigned(2)) => Flow::Stop,
+        _ => panic!("unexpected construction"),
+    });
+
+    assert_eq!(result, Ok(()));
+}
+
+#[test]
 fn iterate_contract_error() {
-    let operations = [IterationOperation::Iter];
+    let operations: [IterationOperation<'_>; 0] = [];
 
     let iteration = Iteration {
         operations: &operations,
@@ -243,7 +326,7 @@ fn iterate_contract_external_type_incompatible_error() {
 
 #[test]
 fn iterate_contract_provider_incompatible_error() {
-    let operations = [IterationOperation::Iter];
+    let operations: [IterationOperation<'_>; 0] = [];
 
     let iteration = Iteration {
         operations: &operations,

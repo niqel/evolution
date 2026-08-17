@@ -18,9 +18,8 @@ fn fake_iterate_success<'iteration>(
     iteration: Iteration<'iteration>,
     request: construction_requester::Request,
 ) -> Result<(), iterate_contract::Error<'iteration>> {
-    assert_eq!(iteration.operations.len(), 2);
+    assert_eq!(iteration.operations.len(), 1);
     assert_eq!(iteration.operations[0], IterationOperation::Take(1));
-    assert_eq!(iteration.operations[1], IterationOperation::Iter);
 
     let flow = request(Construction::Value(Value::Unsigned(42)));
     assert_eq!(flow, Flow::Continue);
@@ -50,7 +49,7 @@ fn fake_iterate_field_not_found<'iteration>(
 
 #[test]
 fn iteration_dispatcher_success() {
-    let operations = [IterationOperation::Take(1), IterationOperation::Iter];
+    let operations = [IterationOperation::Take(1)];
 
     let iteration = Iteration {
         operations: &operations,
@@ -63,7 +62,7 @@ fn iteration_dispatcher_success() {
 
 #[test]
 fn iteration_dispatcher_translates_error() {
-    let operations = [IterationOperation::Iter];
+    let operations: [IterationOperation<'_>; 0] = [];
 
     let iteration = Iteration {
         operations: &operations,

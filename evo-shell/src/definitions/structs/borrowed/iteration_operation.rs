@@ -11,5 +11,4 @@ pub enum IterationOperation<'operation> {
     First,
     Last,
     Count,
-    Iter,
 }

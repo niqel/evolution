@@ -13,14 +13,13 @@ fn iteration_ordered_pipeline() {
         IterationOperation::Select(&selections),
         IterationOperation::Skip(20),
         IterationOperation::Take(10),
-        IterationOperation::Iter,
     ];
 
     let iteration = Iteration {
         operations: &operations,
     };
 
-    assert_eq!(iteration.operations.len(), 4);
+    assert_eq!(iteration.operations.len(), 3);
 
     match iteration.operations[0] {
         IterationOperation::Select(selected_fields) => {
@@ -33,7 +32,6 @@ fn iteration_ordered_pipeline() {
 
     assert_eq!(iteration.operations[1], IterationOperation::Skip(20));
     assert_eq!(iteration.operations[2], IterationOperation::Take(10));
-    assert_eq!(iteration.operations[3], IterationOperation::Iter);
 }
 
 #[test]
@@ -115,7 +113,7 @@ fn iteration_single_operation() {
 
 #[test]
 fn iteration_copy() {
-    let operations = [IterationOperation::Take(5), IterationOperation::Iter];
+    let operations = [IterationOperation::Take(5), IterationOperation::Count];
 
     let original = Iteration {
         operations: &operations,
