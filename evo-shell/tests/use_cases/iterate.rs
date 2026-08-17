@@ -102,6 +102,16 @@ fn fake_use_case<'iteration>(
         Err(iterate_contract::Error::ToValueRequiresRecord) => {
             Err(iterate_use_case::Error::ToValueRequiresRecord)
         }
+        Err(iterate_contract::Error::TextExpected) => Err(iterate_use_case::Error::TextExpected),
+        Err(iterate_contract::Error::UnsignedExpected) => {
+            Err(iterate_use_case::Error::UnsignedExpected)
+        }
+        Err(iterate_contract::Error::SubstringOutOfBounds) => {
+            Err(iterate_use_case::Error::SubstringOutOfBounds)
+        }
+        Err(iterate_contract::Error::ReplaceEmptyPattern) => {
+            Err(iterate_use_case::Error::ReplaceEmptyPattern)
+        }
     }
 }
 

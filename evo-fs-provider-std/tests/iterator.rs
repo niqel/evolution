@@ -36,12 +36,15 @@ static RECEIVED_UNSIGNED_VALUES: Mutex<Vec<u64>> = Mutex::new(Vec::new());
 static RECEIVED_SIGNED_VALUES: Mutex<Vec<i64>> = Mutex::new(Vec::new());
 static RECEIVED_BOOLEAN_VALUES: Mutex<Vec<bool>> = Mutex::new(Vec::new());
 
+static UNIQUE_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
 struct CurrentDirGuard {
     temp_dir: PathBuf,
+    _lock: Option<std::sync::MutexGuard<'static, ()>>,
 }
 
 impl CurrentDirGuard {
-    fn new(test_name: &str) -> (Self, std::sync::MutexGuard<'static, ()>) {
+    fn new(test_name: &str) -> (Self, ()) {
         let lock = DIR_MUTEX
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -68,11 +71,20 @@ impl CurrentDirGuard {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let temp_dir =
-            std::env::temp_dir().join(format!("evo_fs_test_{}_{}", test_name, unique_id));
+        let counter = UNIQUE_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let temp_dir = std::env::temp_dir().join(format!(
+            "evo_fs_test_{}_{}_{}",
+            test_name, unique_id, counter
+        ));
         std::fs::create_dir_all(&temp_dir).expect("failed to create temp dir");
         std::env::set_current_dir(&temp_dir).expect("failed to set current dir");
-        (Self { temp_dir }, lock)
+        (
+            Self {
+                temp_dir,
+                _lock: Some(lock),
+            },
+            (),
+        )
     }
 }
 
@@ -82,6 +94,7 @@ impl Drop for CurrentDirGuard {
             let _ = std::env::set_current_dir(base_dir);
         }
         let _ = std::fs::remove_dir_all(&self.temp_dir);
+        drop(self._lock.take());
     }
 }
 
@@ -165,7 +178,10 @@ fn collect_names_and_continue(construction: Construction<'_>) -> Flow {
         RECORD_COUNT.fetch_add(1, Ordering::SeqCst);
         if let Some(name_field) = record.fields.iter().find(|f| f.name == "name") {
             if let Value::Text(name) = name_field.value {
-                RECEIVED_NAMES.lock().unwrap().push(name.to_string());
+                RECEIVED_NAMES
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .push(name.to_string());
             }
         }
     }
@@ -177,12 +193,18 @@ fn collect_names_and_indices_and_continue(construction: Construction<'_>) -> Flo
         RECORD_COUNT.fetch_add(1, Ordering::SeqCst);
         if let Some(name_field) = record.fields.iter().find(|f| f.name == "name") {
             if let Value::Text(name) = name_field.value {
-                RECEIVED_NAMES.lock().unwrap().push(name.to_string());
+                RECEIVED_NAMES
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .push(name.to_string());
             }
         }
         if let Some(index_field) = record.fields.iter().find(|f| f.name == "index") {
             if let Value::Unsigned(idx) = index_field.value {
-                RECEIVED_INDICES.lock().unwrap().push(idx);
+                RECEIVED_INDICES
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .push(idx);
             }
         }
     }
@@ -193,7 +215,10 @@ fn collect_field_names_and_continue(construction: Construction<'_>) -> Flow {
     if let Construction::Record(record) = construction {
         RECORD_COUNT.fetch_add(1, Ordering::SeqCst);
         let names: Vec<String> = record.fields.iter().map(|f| f.name.to_string()).collect();
-        RECEIVED_FIELD_NAMES.lock().unwrap().push(names);
+        RECEIVED_FIELD_NAMES
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .push(names);
     }
     Flow::Continue
 }
@@ -202,7 +227,10 @@ fn collect_text_values_and_continue(construction: Construction<'_>) -> Flow {
     match construction {
         Construction::Value(Value::Text(text)) => {
             RECORD_COUNT.fetch_add(1, Ordering::SeqCst);
-            RECEIVED_TEXT_VALUES.lock().unwrap().push(text.to_string());
+            RECEIVED_TEXT_VALUES
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .push(text.to_string());
         }
         _ => panic!("expected text value construction"),
     }
@@ -213,7 +241,10 @@ fn collect_unsigned_values_and_continue(construction: Construction<'_>) -> Flow 
     match construction {
         Construction::Value(Value::Unsigned(val)) => {
             RECORD_COUNT.fetch_add(1, Ordering::SeqCst);
-            RECEIVED_UNSIGNED_VALUES.lock().unwrap().push(val);
+            RECEIVED_UNSIGNED_VALUES
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .push(val);
         }
         _ => panic!("expected unsigned value construction"),
     }
@@ -224,7 +255,10 @@ fn collect_signed_values_and_continue(construction: Construction<'_>) -> Flow {
     match construction {
         Construction::Value(Value::Signed(val)) => {
             RECORD_COUNT.fetch_add(1, Ordering::SeqCst);
-            RECEIVED_SIGNED_VALUES.lock().unwrap().push(val);
+            RECEIVED_SIGNED_VALUES
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .push(val);
         }
         _ => panic!("expected signed value construction"),
     }
@@ -235,7 +269,10 @@ fn collect_boolean_values_and_continue(construction: Construction<'_>) -> Flow {
     match construction {
         Construction::Value(Value::Boolean(val)) => {
             RECORD_COUNT.fetch_add(1, Ordering::SeqCst);
-            RECEIVED_BOOLEAN_VALUES.lock().unwrap().push(val);
+            RECEIVED_BOOLEAN_VALUES
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .push(val);
         }
         _ => panic!("expected boolean value construction"),
     }
@@ -264,10 +301,6 @@ fn count_and_stop(_construction: Construction<'_>) -> Flow {
 
 fn panic_on_call(_construction: Construction<'_>) -> Flow {
     panic!("requester should not be called");
-}
-
-fn ignore_and_continue(_construction: Construction<'_>) -> Flow {
-    Flow::Continue
 }
 
 #[test]
@@ -2236,48 +2269,312 @@ fn iterator_new_pipeline_select_new_returns_provider_incompatible_before_running
 }
 
 #[test]
-fn iterator_new_concat_returns_provider_incompatible_before_running() {
-    let expressions = [ValueExpression::Literal(Value::Text("a"))];
+fn new_concat_expression() {
+    let (_guard, _lock) = CurrentDirGuard::new("new_concat_expression");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let args = [
+        ValueExpression::Literal(Value::Text("hello")),
+        ValueExpression::Literal(Value::Text(" world")),
+    ];
     let new_field = NewField {
-        name: "label",
-        expression: ValueExpression::Concat(&expressions),
+        name: "c",
+        expression: ValueExpression::Concat(&args),
     };
     let selections = [Selection::New(new_field)];
-    let ops = [IterationOperation::Select(&selections)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
     let iteration = Iteration { operations: &ops };
 
-    let result = ITERATE(iteration, panic_on_call);
-    assert_eq!(result, Err(iterate_contract::Error::ProviderIncompatible));
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["hello world"]);
 }
 
 #[test]
-fn new_substring_expression_is_provider_incompatible() {
-    let text = ValueExpression::Literal(Value::Text("a"));
-    let start = ValueExpression::Literal(Value::Unsigned(0));
-    let length = ValueExpression::Literal(Value::Unsigned(1));
-    let substring_expr = SubstringExpression {
+fn concat_empty() {
+    let (_guard, _lock) = CurrentDirGuard::new("concat_empty");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let args: [ValueExpression<'_>; 0] = [];
+    let new_field = NewField {
+        name: "c",
+        expression: ValueExpression::Concat(&args),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec![""]);
+}
+
+#[test]
+fn concat_multiple_literals() {
+    let (_guard, _lock) = CurrentDirGuard::new("concat_multiple_literals");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let args = [
+        ValueExpression::Literal(Value::Text("a")),
+        ValueExpression::Literal(Value::Text("b")),
+        ValueExpression::Literal(Value::Text("c")),
+    ];
+    let new_field = NewField {
+        name: "c",
+        expression: ValueExpression::Concat(&args),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["abc"]);
+}
+
+#[test]
+fn concat_pipeline_field_and_literal() {
+    let (_guard, _lock) = CurrentDirGuard::new("concat_pipeline_field_and_literal");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let name_selections = [Selection::Field("name")];
+    let name_pipeline = [
+        IterationOperation::Select(&name_selections),
+        IterationOperation::ToValue,
+    ];
+
+    let args = [
+        ValueExpression::Pipeline(&name_pipeline),
+        ValueExpression::Literal(Value::Text(".bak")),
+    ];
+    let new_field = NewField {
+        name: "c",
+        expression: ValueExpression::Concat(&args),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["file.txt.bak"]);
+}
+
+#[test]
+fn concat_unicode() {
+    let (_guard, _lock) = CurrentDirGuard::new("concat_unicode");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let args = [
+        ValueExpression::Literal(Value::Text("¡Hola, ")),
+        ValueExpression::Literal(Value::Text("Mundo! 🌍")),
+    ];
+    let new_field = NewField {
+        name: "c",
+        expression: ValueExpression::Concat(&args),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        *RECEIVED_TEXT_VALUES.lock().unwrap(),
+        vec!["¡Hola, Mundo! 🌍"]
+    );
+}
+
+#[test]
+fn concat_nested_substring() {
+    let (_guard, _lock) = CurrentDirGuard::new("concat_nested_substring");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let text = ValueExpression::Literal(Value::Text("México"));
+    let start = ValueExpression::Literal(Value::Unsigned(1));
+    let length = ValueExpression::Literal(Value::Unsigned(3));
+    let sub = SubstringExpression {
         text: &text,
         start: &start,
         length: &length,
     };
+
+    let args = [
+        ValueExpression::Literal(Value::Text("prefix_")),
+        ValueExpression::Substring(sub),
+    ];
     let new_field = NewField {
-        name: "label",
-        expression: ValueExpression::Substring(substring_expr),
+        name: "c",
+        expression: ValueExpression::Concat(&args),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["prefix_éxi"]);
+}
+
+#[test]
+fn concat_type_mismatch() {
+    let (_guard, _lock) = CurrentDirGuard::new("concat_type_mismatch");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let args = [
+        ValueExpression::Literal(Value::Text("a")),
+        ValueExpression::Literal(Value::Unsigned(1)),
+    ];
+    let new_field = NewField {
+        name: "c",
+        expression: ValueExpression::Concat(&args),
     };
     let selections = [Selection::New(new_field)];
     let ops = [IterationOperation::Select(&selections)];
     let iteration = Iteration { operations: &ops };
 
     let result = ITERATE(iteration, panic_on_call);
-    assert_eq!(result, Err(iterate_contract::Error::ProviderIncompatible));
+    assert_eq!(result, Err(iterate_contract::Error::TextExpected));
 }
 
 #[test]
-fn new_len_expression_is_provider_incompatible() {
-    let text = ValueExpression::Literal(Value::Text("a"));
+fn new_len_expression() {
+    let (_guard, _lock) = CurrentDirGuard::new("new_len_expression");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let text = ValueExpression::Literal(Value::Text("hello"));
     let len_expr = LenExpression { text: &text };
     let new_field = NewField {
-        name: "label",
+        name: "l",
+        expression: ValueExpression::Len(len_expr),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_unsigned_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_UNSIGNED_VALUES.lock().unwrap(), vec![5]);
+}
+
+#[test]
+fn len_unicode() {
+    let (_guard, _lock) = CurrentDirGuard::new("len_unicode");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let text = ValueExpression::Literal(Value::Text("México"));
+    let len_expr = LenExpression { text: &text };
+    let new_field = NewField {
+        name: "l",
+        expression: ValueExpression::Len(len_expr),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_unsigned_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_UNSIGNED_VALUES.lock().unwrap(), vec![6]);
+}
+
+#[test]
+fn len_pipeline_field() {
+    let (_guard, _lock) = CurrentDirGuard::new("len_pipeline_field");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let name_selections = [Selection::Field("name")];
+    let name_pipeline = [
+        IterationOperation::Select(&name_selections),
+        IterationOperation::ToValue,
+    ];
+    let text = ValueExpression::Pipeline(&name_pipeline);
+    let len_expr = LenExpression { text: &text };
+    let new_field = NewField {
+        name: "l",
+        expression: ValueExpression::Len(len_expr),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_unsigned_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_UNSIGNED_VALUES.lock().unwrap(), vec![8]);
+}
+
+#[test]
+fn len_of_concat() {
+    let (_guard, _lock) = CurrentDirGuard::new("len_of_concat");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let concat_args = [
+        ValueExpression::Literal(Value::Text("abc")),
+        ValueExpression::Literal(Value::Text("def")),
+    ];
+    let text = ValueExpression::Concat(&concat_args);
+    let len_expr = LenExpression { text: &text };
+    let new_field = NewField {
+        name: "l",
+        expression: ValueExpression::Len(len_expr),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_unsigned_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_UNSIGNED_VALUES.lock().unwrap(), vec![6]);
+}
+
+#[test]
+fn len_type_mismatch() {
+    let (_guard, _lock) = CurrentDirGuard::new("len_type_mismatch");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let text = ValueExpression::Literal(Value::Unsigned(123));
+    let len_expr = LenExpression { text: &text };
+    let new_field = NewField {
+        name: "l",
         expression: ValueExpression::Len(len_expr),
     };
     let selections = [Selection::New(new_field)];
@@ -2285,29 +2582,799 @@ fn new_len_expression_is_provider_incompatible() {
     let iteration = Iteration { operations: &ops };
 
     let result = ITERATE(iteration, panic_on_call);
-    assert_eq!(result, Err(iterate_contract::Error::ProviderIncompatible));
+    assert_eq!(result, Err(iterate_contract::Error::TextExpected));
 }
 
 #[test]
-fn new_replace_expression_is_provider_incompatible() {
-    let text = ValueExpression::Literal(Value::Text("a"));
-    let from = ValueExpression::Literal(Value::Text("a"));
-    let to = ValueExpression::Literal(Value::Text("b"));
-    let replace_expr = ReplaceExpression {
+fn new_substring_expression() {
+    let (_guard, _lock) = CurrentDirGuard::new("new_substring_expression");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let text = ValueExpression::Literal(Value::Text("hello"));
+    let start = ValueExpression::Literal(Value::Unsigned(1));
+    let length = ValueExpression::Literal(Value::Unsigned(3));
+    let sub = SubstringExpression {
         text: &text,
-        from: &from,
-        to: &to,
+        start: &start,
+        length: &length,
     };
     let new_field = NewField {
-        name: "label",
-        expression: ValueExpression::Replace(replace_expr),
+        name: "s",
+        expression: ValueExpression::Substring(sub),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["ell"]);
+}
+
+#[test]
+fn substring_unicode() {
+    let (_guard, _lock) = CurrentDirGuard::new("substring_unicode");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let text = ValueExpression::Literal(Value::Text("México"));
+    let start = ValueExpression::Literal(Value::Unsigned(1));
+    let length = ValueExpression::Literal(Value::Unsigned(3));
+    let sub = SubstringExpression {
+        text: &text,
+        start: &start,
+        length: &length,
+    };
+    let new_field = NewField {
+        name: "s",
+        expression: ValueExpression::Substring(sub),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["éxi"]);
+}
+
+#[test]
+fn substring_pipeline_field() {
+    let (_guard, _lock) = CurrentDirGuard::new("substring_pipeline_field");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let name_selections = [Selection::Field("name")];
+    let name_pipeline = [
+        IterationOperation::Select(&name_selections),
+        IterationOperation::ToValue,
+    ];
+    let text = ValueExpression::Pipeline(&name_pipeline);
+    let start = ValueExpression::Literal(Value::Unsigned(0));
+    let length = ValueExpression::Literal(Value::Unsigned(4));
+    let sub = SubstringExpression {
+        text: &text,
+        start: &start,
+        length: &length,
+    };
+    let new_field = NewField {
+        name: "s",
+        expression: ValueExpression::Substring(sub),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["file"]);
+}
+
+#[test]
+fn substring_zero_length() {
+    let (_guard, _lock) = CurrentDirGuard::new("substring_zero_length");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let text = ValueExpression::Literal(Value::Text("hello"));
+    let start = ValueExpression::Literal(Value::Unsigned(1));
+    let length = ValueExpression::Literal(Value::Unsigned(0));
+    let sub = SubstringExpression {
+        text: &text,
+        start: &start,
+        length: &length,
+    };
+    let new_field = NewField {
+        name: "s",
+        expression: ValueExpression::Substring(sub),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec![""]);
+}
+
+#[test]
+fn substring_out_of_bounds() {
+    let (_guard, _lock) = CurrentDirGuard::new("substring_out_of_bounds");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let text = ValueExpression::Literal(Value::Text("hello"));
+    let start = ValueExpression::Literal(Value::Unsigned(10));
+    let length = ValueExpression::Literal(Value::Unsigned(1));
+    let sub = SubstringExpression {
+        text: &text,
+        start: &start,
+        length: &length,
+    };
+    let new_field = NewField {
+        name: "s",
+        expression: ValueExpression::Substring(sub),
     };
     let selections = [Selection::New(new_field)];
     let ops = [IterationOperation::Select(&selections)];
     let iteration = Iteration { operations: &ops };
 
     let result = ITERATE(iteration, panic_on_call);
-    assert_eq!(result, Err(iterate_contract::Error::ProviderIncompatible));
+    assert_eq!(result, Err(iterate_contract::Error::SubstringOutOfBounds));
+}
+
+#[test]
+fn substring_start_type_mismatch() {
+    let (_guard, _lock) = CurrentDirGuard::new("substring_start_type_mismatch");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let text = ValueExpression::Literal(Value::Text("hello"));
+    let start = ValueExpression::Literal(Value::Text("0"));
+    let length = ValueExpression::Literal(Value::Unsigned(1));
+    let sub = SubstringExpression {
+        text: &text,
+        start: &start,
+        length: &length,
+    };
+    let new_field = NewField {
+        name: "s",
+        expression: ValueExpression::Substring(sub),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::UnsignedExpected));
+}
+
+#[test]
+fn substring_length_type_mismatch() {
+    let (_guard, _lock) = CurrentDirGuard::new("substring_length_type_mismatch");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let text = ValueExpression::Literal(Value::Text("hello"));
+    let start = ValueExpression::Literal(Value::Unsigned(0));
+    let length = ValueExpression::Literal(Value::Text("1"));
+    let sub = SubstringExpression {
+        text: &text,
+        start: &start,
+        length: &length,
+    };
+    let new_field = NewField {
+        name: "s",
+        expression: ValueExpression::Substring(sub),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::UnsignedExpected));
+}
+
+#[test]
+fn substring_text_type_mismatch() {
+    let (_guard, _lock) = CurrentDirGuard::new("substring_text_type_mismatch");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let text = ValueExpression::Literal(Value::Unsigned(123));
+    let start = ValueExpression::Literal(Value::Unsigned(0));
+    let length = ValueExpression::Literal(Value::Unsigned(1));
+    let sub = SubstringExpression {
+        text: &text,
+        start: &start,
+        length: &length,
+    };
+    let new_field = NewField {
+        name: "s",
+        expression: ValueExpression::Substring(sub),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::TextExpected));
+}
+
+#[test]
+fn substring_of_concat() {
+    let (_guard, _lock) = CurrentDirGuard::new("substring_of_concat");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let concat_args = [
+        ValueExpression::Literal(Value::Text("abc")),
+        ValueExpression::Literal(Value::Text("def")),
+    ];
+    let text = ValueExpression::Concat(&concat_args);
+    let start = ValueExpression::Literal(Value::Unsigned(2));
+    let length = ValueExpression::Literal(Value::Unsigned(3));
+    let sub = SubstringExpression {
+        text: &text,
+        start: &start,
+        length: &length,
+    };
+    let new_field = NewField {
+        name: "s",
+        expression: ValueExpression::Substring(sub),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["cde"]);
+}
+
+#[test]
+fn new_replace_expression() {
+    let (_guard, _lock) = CurrentDirGuard::new("new_replace_expression");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let text = ValueExpression::Literal(Value::Text("hello world"));
+    let from = ValueExpression::Literal(Value::Text("world"));
+    let to = ValueExpression::Literal(Value::Text("there"));
+    let rep = ReplaceExpression {
+        text: &text,
+        from: &from,
+        to: &to,
+    };
+    let new_field = NewField {
+        name: "r",
+        expression: ValueExpression::Replace(rep),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["hello there"]);
+}
+
+#[test]
+fn replace_multiple() {
+    let (_guard, _lock) = CurrentDirGuard::new("replace_multiple");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let text = ValueExpression::Literal(Value::Text("banana"));
+    let from = ValueExpression::Literal(Value::Text("a"));
+    let to = ValueExpression::Literal(Value::Text("o"));
+    let rep = ReplaceExpression {
+        text: &text,
+        from: &from,
+        to: &to,
+    };
+    let new_field = NewField {
+        name: "r",
+        expression: ValueExpression::Replace(rep),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["bonono"]);
+}
+
+#[test]
+fn replace_unicode() {
+    let (_guard, _lock) = CurrentDirGuard::new("replace_unicode");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let text = ValueExpression::Literal(Value::Text("árbol verde"));
+    let from = ValueExpression::Literal(Value::Text("árbol"));
+    let to = ValueExpression::Literal(Value::Text("bosque"));
+    let rep = ReplaceExpression {
+        text: &text,
+        from: &from,
+        to: &to,
+    };
+    let new_field = NewField {
+        name: "r",
+        expression: ValueExpression::Replace(rep),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["bosque verde"]);
+}
+
+#[test]
+fn replace_to_empty() {
+    let (_guard, _lock) = CurrentDirGuard::new("replace_to_empty");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let text = ValueExpression::Literal(Value::Text("hello world"));
+    let from = ValueExpression::Literal(Value::Text(" world"));
+    let to = ValueExpression::Literal(Value::Text(""));
+    let rep = ReplaceExpression {
+        text: &text,
+        from: &from,
+        to: &to,
+    };
+    let new_field = NewField {
+        name: "r",
+        expression: ValueExpression::Replace(rep),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["hello"]);
+}
+
+#[test]
+fn replace_empty_pattern() {
+    let (_guard, _lock) = CurrentDirGuard::new("replace_empty_pattern");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let text = ValueExpression::Literal(Value::Text("hello"));
+    let from = ValueExpression::Literal(Value::Text(""));
+    let to = ValueExpression::Literal(Value::Text("x"));
+    let rep = ReplaceExpression {
+        text: &text,
+        from: &from,
+        to: &to,
+    };
+    let new_field = NewField {
+        name: "r",
+        expression: ValueExpression::Replace(rep),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::ReplaceEmptyPattern));
+}
+
+#[test]
+fn replace_text_type_mismatch() {
+    let (_guard, _lock) = CurrentDirGuard::new("replace_text_type_mismatch");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let text = ValueExpression::Literal(Value::Unsigned(1));
+    let from = ValueExpression::Literal(Value::Text("a"));
+    let to = ValueExpression::Literal(Value::Text("b"));
+    let rep = ReplaceExpression {
+        text: &text,
+        from: &from,
+        to: &to,
+    };
+    let new_field = NewField {
+        name: "r",
+        expression: ValueExpression::Replace(rep),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::TextExpected));
+}
+
+#[test]
+fn replace_from_type_mismatch() {
+    let (_guard, _lock) = CurrentDirGuard::new("replace_from_type_mismatch");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let text = ValueExpression::Literal(Value::Text("hello"));
+    let from = ValueExpression::Literal(Value::Unsigned(1));
+    let to = ValueExpression::Literal(Value::Text("b"));
+    let rep = ReplaceExpression {
+        text: &text,
+        from: &from,
+        to: &to,
+    };
+    let new_field = NewField {
+        name: "r",
+        expression: ValueExpression::Replace(rep),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::TextExpected));
+}
+
+#[test]
+fn replace_to_type_mismatch() {
+    let (_guard, _lock) = CurrentDirGuard::new("replace_to_type_mismatch");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let text = ValueExpression::Literal(Value::Text("hello"));
+    let from = ValueExpression::Literal(Value::Text("h"));
+    let to = ValueExpression::Literal(Value::Unsigned(1));
+    let rep = ReplaceExpression {
+        text: &text,
+        from: &from,
+        to: &to,
+    };
+    let new_field = NewField {
+        name: "r",
+        expression: ValueExpression::Replace(rep),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::TextExpected));
+}
+
+#[test]
+fn replace_of_concat() {
+    let (_guard, _lock) = CurrentDirGuard::new("replace_of_concat");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let concat_args = [
+        ValueExpression::Literal(Value::Text("hello")),
+        ValueExpression::Literal(Value::Text(" world")),
+    ];
+    let text = ValueExpression::Concat(&concat_args);
+    let from = ValueExpression::Literal(Value::Text("world"));
+    let to = ValueExpression::Literal(Value::Text("earth"));
+    let rep = ReplaceExpression {
+        text: &text,
+        from: &from,
+        to: &to,
+    };
+    let new_field = NewField {
+        name: "r",
+        expression: ValueExpression::Replace(rep),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["hello earth"]);
+}
+
+#[test]
+fn nesting_len_of_concat() {
+    let (_guard, _lock) = CurrentDirGuard::new("nesting_len_of_concat");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let concat_args = [
+        ValueExpression::Literal(Value::Text("a")),
+        ValueExpression::Literal(Value::Text("b")),
+        ValueExpression::Literal(Value::Text("c")),
+    ];
+    let text = ValueExpression::Concat(&concat_args);
+    let len_expr = LenExpression { text: &text };
+    let new_field = NewField {
+        name: "l",
+        expression: ValueExpression::Len(len_expr),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_unsigned_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_UNSIGNED_VALUES.lock().unwrap(), vec![3]);
+}
+
+#[test]
+fn nesting_concat_of_substring_and_replace() {
+    let (_guard, _lock) = CurrentDirGuard::new("nesting_concat_of_substring_and_replace");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let sub_text = ValueExpression::Literal(Value::Text("abc"));
+    let sub_start = ValueExpression::Literal(Value::Unsigned(0));
+    let sub_length = ValueExpression::Literal(Value::Unsigned(2));
+    let sub = SubstringExpression {
+        text: &sub_text,
+        start: &sub_start,
+        length: &sub_length,
+    };
+
+    let rep_text = ValueExpression::Literal(Value::Text("xyz"));
+    let rep_from = ValueExpression::Literal(Value::Text("x"));
+    let rep_to = ValueExpression::Literal(Value::Text("w"));
+    let rep = ReplaceExpression {
+        text: &rep_text,
+        from: &rep_from,
+        to: &rep_to,
+    };
+
+    let concat_args = [
+        ValueExpression::Substring(sub),
+        ValueExpression::Replace(rep),
+    ];
+    let new_field = NewField {
+        name: "c",
+        expression: ValueExpression::Concat(&concat_args),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["abwyz"]);
+}
+
+#[test]
+fn nesting_substring_of_concat() {
+    let (_guard, _lock) = CurrentDirGuard::new("nesting_substring_of_concat");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let concat_args = [
+        ValueExpression::Literal(Value::Text("foo")),
+        ValueExpression::Literal(Value::Text("bar")),
+    ];
+    let text = ValueExpression::Concat(&concat_args);
+    let start = ValueExpression::Literal(Value::Unsigned(1));
+    let length = ValueExpression::Literal(Value::Unsigned(4));
+    let sub = SubstringExpression {
+        text: &text,
+        start: &start,
+        length: &length,
+    };
+    let new_field = NewField {
+        name: "s",
+        expression: ValueExpression::Substring(sub),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["ooba"]);
+}
+
+#[test]
+fn nesting_replace_of_concat() {
+    let (_guard, _lock) = CurrentDirGuard::new("nesting_replace_of_concat");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let concat_args = [
+        ValueExpression::Literal(Value::Text("hello")),
+        ValueExpression::Literal(Value::Text(" friend")),
+    ];
+    let text = ValueExpression::Concat(&concat_args);
+    let from = ValueExpression::Literal(Value::Text("friend"));
+    let to = ValueExpression::Literal(Value::Text("world"));
+    let rep = ReplaceExpression {
+        text: &text,
+        from: &from,
+        to: &to,
+    };
+    let new_field = NewField {
+        name: "r",
+        expression: ValueExpression::Replace(rep),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["hello world"]);
+}
+
+#[test]
+fn multiple_new_fields_in_same_select_coexist() {
+    let (_guard, _lock) = CurrentDirGuard::new("multiple_new_fields_coexist");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let concat_args = [
+        ValueExpression::Literal(Value::Text("hello")),
+        ValueExpression::Literal(Value::Text(" ")),
+        ValueExpression::Literal(Value::Text("world")),
+    ];
+    let field_a = NewField {
+        name: "a",
+        expression: ValueExpression::Concat(&concat_args),
+    };
+
+    let rep = ReplaceExpression {
+        text: &ValueExpression::Literal(Value::Text("banana")),
+        from: &ValueExpression::Literal(Value::Text("a")),
+        to: &ValueExpression::Literal(Value::Text("o")),
+    };
+    let field_b = NewField {
+        name: "b",
+        expression: ValueExpression::Replace(rep),
+    };
+
+    let selections = [Selection::New(field_a), Selection::New(field_b)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, |construction| {
+        match construction {
+            Construction::Record(record) => {
+                RECORD_COUNT.fetch_add(1, Ordering::SeqCst);
+                assert_eq!(record.fields.len(), 2);
+                assert_eq!(record.fields[0].name, "a");
+                assert_eq!(record.fields[0].value, Value::Text("hello world"));
+                assert_eq!(record.fields[1].name, "b");
+                assert_eq!(record.fields[1].value, Value::Text("bonono"));
+            }
+            _ => panic!("expected record construction"),
+        }
+        Flow::Continue
+    });
+
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn select_posterior_reads_field_from_previous_select() {
+    let (_guard, _lock) = CurrentDirGuard::new("select_posterior_reads_previous");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let concat_args = [
+        ValueExpression::Literal(Value::Text("file")),
+        ValueExpression::Literal(Value::Text(".txt")),
+    ];
+    let select1_fields = [Selection::New(NewField {
+        name: "full",
+        expression: ValueExpression::Concat(&concat_args),
+    })];
+
+    let pipeline_ops = [
+        IterationOperation::Select(&[Selection::Field("full")]),
+        IterationOperation::ToValue,
+    ];
+    let len_expr = LenExpression {
+        text: &ValueExpression::Pipeline(&pipeline_ops),
+    };
+    let select2_fields = [Selection::New(NewField {
+        name: "length",
+        expression: ValueExpression::Len(len_expr),
+    })];
+
+    let ops = [
+        IterationOperation::Select(&select1_fields),
+        IterationOperation::Select(&select2_fields),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_unsigned_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_UNSIGNED_VALUES.lock().unwrap(), vec![8]);
+}
+
+#[test]
+fn select_new_concat_then_to_value() {
+    let (_guard, _lock) = CurrentDirGuard::new("select_new_concat_to_value");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let concat_args = [
+        ValueExpression::Literal(Value::Text("pre_")),
+        ValueExpression::Literal(Value::Text("fix")),
+    ];
+    let selections = [Selection::New(NewField {
+        name: "label",
+        expression: ValueExpression::Concat(&concat_args),
+    })];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["pre_fix"]);
+}
+
+#[test]
+fn select_new_concat_then_last() {
+    let (_guard, _lock) = CurrentDirGuard::new("select_new_concat_then_last");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let concat_args = [
+        ValueExpression::Literal(Value::Text("item_")),
+        ValueExpression::Literal(Value::Text("val")),
+    ];
+    let selections = [Selection::New(NewField {
+        name: "label",
+        expression: ValueExpression::Concat(&concat_args),
+    })];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::Last,
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["item_val"]);
 }
 
 #[test]

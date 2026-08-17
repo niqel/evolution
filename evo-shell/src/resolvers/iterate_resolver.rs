@@ -22,5 +22,9 @@ pub fn resolve<'iteration>(
             iterate::Error::ToValueRequiresSingleField
         }
         iterate_contract::Error::ToValueRequiresRecord => iterate::Error::ToValueRequiresRecord,
+        iterate_contract::Error::TextExpected => iterate::Error::TextExpected,
+        iterate_contract::Error::UnsignedExpected => iterate::Error::UnsignedExpected,
+        iterate_contract::Error::SubstringOutOfBounds => iterate::Error::SubstringOutOfBounds,
+        iterate_contract::Error::ReplaceEmptyPattern => iterate::Error::ReplaceEmptyPattern,
     })
 }

@@ -8,3 +8,4 @@ path = "src/lib.rs"
 
 [dependencies]
 evo-shell = { path = "../evo-shell" }
+evo-values = { path = "../evo-values" }

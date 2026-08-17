@@ -96,6 +96,34 @@ fn fake_contract_to_value_requires_record<'iteration>(
     Err(iterate_contract::Error::ToValueRequiresRecord)
 }
 
+fn fake_contract_text_expected<'iteration>(
+    _iteration: Iteration<'iteration>,
+    _request: construction_requester::Request,
+) -> Result<(), iterate_contract::Error<'iteration>> {
+    Err(iterate_contract::Error::TextExpected)
+}
+
+fn fake_contract_unsigned_expected<'iteration>(
+    _iteration: Iteration<'iteration>,
+    _request: construction_requester::Request,
+) -> Result<(), iterate_contract::Error<'iteration>> {
+    Err(iterate_contract::Error::UnsignedExpected)
+}
+
+fn fake_contract_substring_out_of_bounds<'iteration>(
+    _iteration: Iteration<'iteration>,
+    _request: construction_requester::Request,
+) -> Result<(), iterate_contract::Error<'iteration>> {
+    Err(iterate_contract::Error::SubstringOutOfBounds)
+}
+
+fn fake_contract_replace_empty_pattern<'iteration>(
+    _iteration: Iteration<'iteration>,
+    _request: construction_requester::Request,
+) -> Result<(), iterate_contract::Error<'iteration>> {
+    Err(iterate_contract::Error::ReplaceEmptyPattern)
+}
+
 #[test]
 fn iterate_resolver_success() {
     let operations = [IterationOperation::Take(1)];
@@ -209,4 +237,45 @@ fn iterate_resolver_translates_to_value_requires_record() {
     let result =
         iterate_resolver::resolve(fake_contract_to_value_requires_record, iteration, receive);
     assert_eq!(result, Err(iterate::Error::ToValueRequiresRecord));
+}
+
+#[test]
+fn iterate_resolver_translates_text_expected() {
+    let operations: [IterationOperation<'_>; 0] = [];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+    let result = iterate_resolver::resolve(fake_contract_text_expected, iteration, receive);
+    assert_eq!(result, Err(iterate::Error::TextExpected));
+}
+
+#[test]
+fn iterate_resolver_translates_unsigned_expected() {
+    let operations: [IterationOperation<'_>; 0] = [];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+    let result = iterate_resolver::resolve(fake_contract_unsigned_expected, iteration, receive);
+    assert_eq!(result, Err(iterate::Error::UnsignedExpected));
+}
+
+#[test]
+fn iterate_resolver_translates_substring_out_of_bounds() {
+    let operations: [IterationOperation<'_>; 0] = [];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+    let result =
+        iterate_resolver::resolve(fake_contract_substring_out_of_bounds, iteration, receive);
+    assert_eq!(result, Err(iterate::Error::SubstringOutOfBounds));
+}
+
+#[test]
+fn iterate_resolver_translates_replace_empty_pattern() {
+    let operations: [IterationOperation<'_>; 0] = [];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+    let result = iterate_resolver::resolve(fake_contract_replace_empty_pattern, iteration, receive);
+    assert_eq!(result, Err(iterate::Error::ReplaceEmptyPattern));
 }

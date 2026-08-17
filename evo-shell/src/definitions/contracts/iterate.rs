@@ -10,6 +10,10 @@ pub enum Error<'error> {
     ProviderIncompatible,
     ToValueRequiresSingleField,
     ToValueRequiresRecord,
+    TextExpected,
+    UnsignedExpected,
+    SubstringOutOfBounds,
+    ReplaceEmptyPattern,
 }
 
 pub type Iterate = for<'iteration> fn(

@@ -14,6 +14,10 @@ use evo_shell::definitions::structs::borrowed::value::Value;
 use evo_shell::definitions::structs::borrowed::value_expression::ValueExpression;
 use evo_shell::definitions::structs::owned::condition_operator::ConditionOperator;
 use evo_shell::definitions::structs::owned::flow::Flow;
+use evo_values::text::concat::CONCAT;
+use evo_values::text::len::LEN;
+use evo_values::text::replace::REPLACE;
+use evo_values::text::substring::SUBSTRING;
 
 #[derive(Clone, Debug)]
 enum OwnedValue {
@@ -85,6 +89,26 @@ impl OwnedConstruction {
             Construction::Value(val) => OwnedConstruction::Value(OwnedValue::from_borrowed(val)),
         }
     }
+}
+
+#[derive(Clone, Debug)]
+enum EvaluatedValue<'item> {
+    Borrowed(Value<'item>),
+    Owned(OwnedValue),
+}
+
+impl<'item> EvaluatedValue<'item> {
+    fn as_borrowed(&self) -> Value<'_> {
+        match self {
+            EvaluatedValue::Borrowed(v) => *v,
+            EvaluatedValue::Owned(owned) => owned.as_borrowed(),
+        }
+    }
+}
+
+struct EvaluatedField<'item> {
+    name: &'item str,
+    value: EvaluatedValue<'item>,
 }
 
 enum StageState {
@@ -315,17 +339,102 @@ where
 fn evaluate_value_expression<'iteration, 'item>(
     expression: &'iteration ValueExpression<'iteration>,
     input_fields: &[Field<'item>],
-) -> Result<Value<'item>, iterate_contract::Error<'iteration>>
+) -> Result<EvaluatedValue<'item>, iterate_contract::Error<'iteration>>
 where
     'iteration: 'item,
 {
     match expression {
-        ValueExpression::Literal(value) => Ok(*value),
-        ValueExpression::Pipeline(operations) => evaluate_value_pipeline(operations, input_fields),
-        ValueExpression::Concat(_)
-        | ValueExpression::Substring(_)
-        | ValueExpression::Len(_)
-        | ValueExpression::Replace(_) => Err(iterate_contract::Error::ProviderIncompatible),
+        ValueExpression::Literal(value) => Ok(EvaluatedValue::Borrowed(*value)),
+        ValueExpression::Pipeline(operations) => {
+            let val = evaluate_value_pipeline(operations, input_fields)?;
+            Ok(EvaluatedValue::Borrowed(val))
+        }
+        ValueExpression::Concat(expressions) => {
+            let mut temp_evaluated: Vec<EvaluatedValue<'item>> =
+                Vec::with_capacity(expressions.len());
+            for expr in *expressions {
+                let eval = evaluate_value_expression(expr, input_fields)?;
+                temp_evaluated.push(eval);
+            }
+            let mut parts: Vec<&str> = Vec::with_capacity(temp_evaluated.len());
+            for eval in &temp_evaluated {
+                match eval.as_borrowed() {
+                    Value::Text(t) => parts.push(t),
+                    _ => return Err(iterate_contract::Error::TextExpected),
+                }
+            }
+            let result = CONCAT(&parts);
+            Ok(EvaluatedValue::Owned(OwnedValue::Text(result)))
+        }
+        ValueExpression::Len(len_expr) => {
+            let eval = evaluate_value_expression(len_expr.text, input_fields)?;
+            match eval.as_borrowed() {
+                Value::Text(t) => {
+                    let count = LEN(t);
+                    Ok(EvaluatedValue::Borrowed(Value::Unsigned(count as u64)))
+                }
+                _ => Err(iterate_contract::Error::TextExpected),
+            }
+        }
+        ValueExpression::Substring(substring_expr) => {
+            let text_eval = evaluate_value_expression(substring_expr.text, input_fields)?;
+            let start_eval = evaluate_value_expression(substring_expr.start, input_fields)?;
+            let length_eval = evaluate_value_expression(substring_expr.length, input_fields)?;
+
+            let start_u64 = match start_eval.as_borrowed() {
+                Value::Unsigned(u) => u,
+                _ => return Err(iterate_contract::Error::UnsignedExpected),
+            };
+            let length_u64 = match length_eval.as_borrowed() {
+                Value::Unsigned(u) => u,
+                _ => return Err(iterate_contract::Error::UnsignedExpected),
+            };
+
+            let start_usize = usize::try_from(start_u64)
+                .map_err(|_| iterate_contract::Error::SubstringOutOfBounds)?;
+            let length_usize = usize::try_from(length_u64)
+                .map_err(|_| iterate_contract::Error::SubstringOutOfBounds)?;
+
+            match text_eval {
+                EvaluatedValue::Borrowed(Value::Text(s)) => {
+                    let slice = SUBSTRING(s, start_usize, length_usize)
+                        .map_err(|_| iterate_contract::Error::SubstringOutOfBounds)?;
+                    Ok(EvaluatedValue::Borrowed(Value::Text(slice)))
+                }
+                EvaluatedValue::Owned(OwnedValue::Text(ref s)) => {
+                    let slice = SUBSTRING(s.as_str(), start_usize, length_usize)
+                        .map_err(|_| iterate_contract::Error::SubstringOutOfBounds)?;
+                    Ok(EvaluatedValue::Owned(OwnedValue::Text(slice.to_string())))
+                }
+                _ => Err(iterate_contract::Error::TextExpected),
+            }
+        }
+        ValueExpression::Replace(replace_expr) => {
+            let text_eval = evaluate_value_expression(replace_expr.text, input_fields)?;
+            let from_eval = evaluate_value_expression(replace_expr.from, input_fields)?;
+            let to_eval = evaluate_value_expression(replace_expr.to, input_fields)?;
+
+            let text_str = match text_eval.as_borrowed() {
+                Value::Text(s) => s,
+                _ => return Err(iterate_contract::Error::TextExpected),
+            };
+            let from_str = match from_eval.as_borrowed() {
+                Value::Text(s) => s,
+                _ => return Err(iterate_contract::Error::TextExpected),
+            };
+            let to_str = match to_eval.as_borrowed() {
+                Value::Text(s) => s,
+                _ => return Err(iterate_contract::Error::TextExpected),
+            };
+
+            let replaced = REPLACE(text_str, from_str, to_str).map_err(|e| match e {
+                evo_values::definitions::text::replace::Error::EmptyPattern => {
+                    iterate_contract::Error::ReplaceEmptyPattern
+                }
+            })?;
+
+            Ok(EvaluatedValue::Owned(OwnedValue::Text(replaced)))
+        }
     }
 }
 
@@ -361,7 +470,7 @@ where
         },
         IterationOperation::Select(selections) => match construction {
             Construction::Record(record) => {
-                let mut next_fields = Vec::with_capacity(selections.len());
+                let mut evaluated_fields = Vec::with_capacity(selections.len());
                 for selection in *selections {
                     match selection {
                         Selection::Field(field_name) => {
@@ -371,20 +480,30 @@ where
                                 .find(|f| f.name == *field_name)
                                 .copied()
                                 .ok_or(iterate_contract::Error::FieldNotFound(field_name))?;
-                            next_fields.push(field);
+                            evaluated_fields.push(EvaluatedField {
+                                name: field.name,
+                                value: EvaluatedValue::Borrowed(field.value),
+                            });
                         }
                         Selection::New(new_field) => {
-                            let value =
+                            let evaluated_val =
                                 evaluate_value_expression(&new_field.expression, record.fields)?;
-                            next_fields.push(Field {
+                            evaluated_fields.push(EvaluatedField {
                                 name: new_field.name,
-                                value,
+                                value: evaluated_val,
                             });
                         }
                     }
                 }
+                let borrowed_fields: Vec<Field<'_>> = evaluated_fields
+                    .iter()
+                    .map(|ef| Field {
+                        name: ef.name,
+                        value: ef.value.as_borrowed(),
+                    })
+                    .collect();
                 let next_record = Record {
-                    fields: &next_fields,
+                    fields: &borrowed_fields,
                 };
                 process_item_from(
                     stage_index + 1,
@@ -599,10 +718,28 @@ fn validate_value_expression<'iteration>(
             }
             Ok(())
         }
-        ValueExpression::Concat(_)
-        | ValueExpression::Substring(_)
-        | ValueExpression::Len(_)
-        | ValueExpression::Replace(_) => Err(iterate_contract::Error::ProviderIncompatible),
+        ValueExpression::Concat(expressions) => {
+            for expr in *expressions {
+                validate_value_expression(expr)?;
+            }
+            Ok(())
+        }
+        ValueExpression::Substring(sub) => {
+            validate_value_expression(sub.text)?;
+            validate_value_expression(sub.start)?;
+            validate_value_expression(sub.length)?;
+            Ok(())
+        }
+        ValueExpression::Len(len) => {
+            validate_value_expression(len.text)?;
+            Ok(())
+        }
+        ValueExpression::Replace(rep) => {
+            validate_value_expression(rep.text)?;
+            validate_value_expression(rep.from)?;
+            validate_value_expression(rep.to)?;
+            Ok(())
+        }
     }
 }
 
