@@ -165,15 +165,32 @@ fn matches_expression<'iteration>(
     }
 }
 
-fn matches_filters<'iteration>(
+fn passes_operations<'iteration>(
     operations: &'iteration [IterationOperation<'iteration>],
+    stage_counts: &mut [usize],
     record: &Record<'_>,
 ) -> Result<bool, iterate_contract::Error<'iteration>> {
-    for operation in operations {
-        if let IterationOperation::Filter(expression) = operation {
-            if !matches_expression(expression, record)? {
-                return Ok(false);
+    for (index, operation) in operations.iter().enumerate() {
+        match operation {
+            IterationOperation::Filter(expression) => {
+                if !matches_expression(expression, record)? {
+                    return Ok(false);
+                }
             }
+            IterationOperation::Skip(n) => {
+                if stage_counts[index] < *n {
+                    stage_counts[index] += 1;
+                    return Ok(false);
+                }
+            }
+            IterationOperation::Take(n) => {
+                if stage_counts[index] < *n {
+                    stage_counts[index] += 1;
+                } else {
+                    return Ok(false);
+                }
+            }
+            _ => return Err(iterate_contract::Error::ProviderIncompatible),
         }
     }
     Ok(true)
@@ -185,10 +202,14 @@ pub fn iterate<'iteration>(
 ) -> Result<(), iterate_contract::Error<'iteration>> {
     for operation in iteration.operations {
         match operation {
-            IterationOperation::Filter(_) => {}
+            IterationOperation::Filter(_)
+            | IterationOperation::Skip(_)
+            | IterationOperation::Take(_) => {}
             _ => return Err(iterate_contract::Error::ProviderIncompatible),
         }
     }
+
+    let mut stage_counts = vec![0usize; iteration.operations.len()];
 
     let current_dir = std::env::current_dir().map_err(|_| iterate_contract::Error::Unavailable)?;
     let read_dir =
@@ -248,7 +269,7 @@ pub fn iterate<'iteration>(
             };
             let fields = [index_field, name_field, path_field, kind_field, size_field];
             let record = Record { fields: &fields };
-            if matches_filters(iteration.operations, &record)? {
+            if passes_operations(iteration.operations, &mut stage_counts, &record)? {
                 request(Construction::Record(record))
             } else {
                 Flow::Continue
@@ -256,7 +277,7 @@ pub fn iterate<'iteration>(
         } else {
             let fields = [index_field, name_field, path_field, kind_field];
             let record = Record { fields: &fields };
-            if matches_filters(iteration.operations, &record)? {
+            if passes_operations(iteration.operations, &mut stage_counts, &record)? {
                 request(Construction::Record(record))
             } else {
                 Flow::Continue
