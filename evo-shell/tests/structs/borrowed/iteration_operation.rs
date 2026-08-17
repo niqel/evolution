@@ -133,6 +133,18 @@ fn iteration_operation_take() {
 }
 
 #[test]
+fn iteration_operation_take_zero() {
+    let operation = IterationOperation::Take(0);
+    assert_eq!(operation, IterationOperation::Take(0));
+    assert_ne!(operation, IterationOperation::Take(1));
+
+    match operation {
+        IterationOperation::Take(count) => assert_eq!(count, 0),
+        _ => panic!("expected IterationOperation::Take"),
+    }
+}
+
+#[test]
 fn iteration_operation_skip() {
     let operation = IterationOperation::Skip(20);
     assert_eq!(operation, IterationOperation::Skip(20));
@@ -140,6 +152,18 @@ fn iteration_operation_skip() {
 
     match operation {
         IterationOperation::Skip(count) => assert_eq!(count, 20),
+        _ => panic!("expected IterationOperation::Skip"),
+    }
+}
+
+#[test]
+fn iteration_operation_skip_zero() {
+    let operation = IterationOperation::Skip(0);
+    assert_eq!(operation, IterationOperation::Skip(0));
+    assert_ne!(operation, IterationOperation::Skip(1));
+
+    match operation {
+        IterationOperation::Skip(count) => assert_eq!(count, 0),
         _ => panic!("expected IterationOperation::Skip"),
     }
 }
@@ -180,4 +204,14 @@ fn iteration_operation_copy() {
     let copied_filter = original_filter;
 
     assert_eq!(original_filter, copied_filter);
+
+    let original_take = IterationOperation::Take(15);
+    let copied_take = original_take;
+
+    assert_eq!(original_take, copied_take);
+
+    let original_skip = IterationOperation::Skip(25);
+    let copied_skip = original_skip;
+
+    assert_eq!(original_skip, copied_skip);
 }

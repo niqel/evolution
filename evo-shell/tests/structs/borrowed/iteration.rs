@@ -1,6 +1,10 @@
+use evo_shell::definitions::structs::borrowed::condition::Condition;
+use evo_shell::definitions::structs::borrowed::condition_expression::ConditionExpression;
 use evo_shell::definitions::structs::borrowed::iteration::Iteration;
 use evo_shell::definitions::structs::borrowed::iteration_operation::IterationOperation;
 use evo_shell::definitions::structs::borrowed::selection::Selection;
+use evo_shell::definitions::structs::borrowed::value::Value;
+use evo_shell::definitions::structs::owned::condition_operator::ConditionOperator;
 
 #[test]
 fn iteration_ordered_pipeline() {
@@ -30,6 +34,60 @@ fn iteration_ordered_pipeline() {
     assert_eq!(iteration.operations[1], IterationOperation::Skip(20));
     assert_eq!(iteration.operations[2], IterationOperation::Take(10));
     assert_eq!(iteration.operations[3], IterationOperation::Iter);
+}
+
+#[test]
+fn iteration_skip_then_take_order() {
+    let operations = [IterationOperation::Skip(5), IterationOperation::Take(10)];
+
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    assert_eq!(iteration.operations.len(), 2);
+    assert_eq!(iteration.operations[0], IterationOperation::Skip(5));
+    assert_eq!(iteration.operations[1], IterationOperation::Take(10));
+}
+
+#[test]
+fn iteration_take_then_skip_order() {
+    let operations = [IterationOperation::Take(10), IterationOperation::Skip(5)];
+
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    assert_eq!(iteration.operations.len(), 2);
+    assert_eq!(iteration.operations[0], IterationOperation::Take(10));
+    assert_eq!(iteration.operations[1], IterationOperation::Skip(5));
+}
+
+#[test]
+fn iteration_filter_skip_take_order() {
+    let condition = Condition {
+        field: "active",
+        operator: ConditionOperator::Equal,
+        value: Value::Boolean(true),
+    };
+    let filter_expr = ConditionExpression::Condition(condition);
+
+    let operations = [
+        IterationOperation::Filter(filter_expr),
+        IterationOperation::Skip(10),
+        IterationOperation::Take(5),
+    ];
+
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    assert_eq!(iteration.operations.len(), 3);
+    assert_eq!(
+        iteration.operations[0],
+        IterationOperation::Filter(filter_expr)
+    );
+    assert_eq!(iteration.operations[1], IterationOperation::Skip(10));
+    assert_eq!(iteration.operations[2], IterationOperation::Take(5));
 }
 
 #[test]
