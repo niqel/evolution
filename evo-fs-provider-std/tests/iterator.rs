@@ -1,23 +1,31 @@
 use evo_fs_provider_std::iterator::ITERATE;
 use evo_shell::definitions::contracts::iterate as iterate_contract;
+use evo_shell::definitions::structs::borrowed::between_condition::BetweenCondition;
+use evo_shell::definitions::structs::borrowed::condition::Condition;
+use evo_shell::definitions::structs::borrowed::condition_expression::ConditionExpression;
 use evo_shell::definitions::structs::borrowed::construction::Construction;
+use evo_shell::definitions::structs::borrowed::in_condition::InCondition;
 use evo_shell::definitions::structs::borrowed::iteration::Iteration;
 use evo_shell::definitions::structs::borrowed::iteration_operation::IterationOperation;
 use evo_shell::definitions::structs::borrowed::value::Value;
+use evo_shell::definitions::structs::owned::condition_operator::ConditionOperator;
 use evo_shell::definitions::structs::owned::flow::Flow;
-use std::sync::Mutex;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 static DIR_MUTEX: Mutex<()> = Mutex::new(());
+static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
+
 static RECORD_COUNT: AtomicUsize = AtomicUsize::new(0);
 static SEEN_FILE: AtomicBool = AtomicBool::new(false);
 static SEEN_DIR: AtomicBool = AtomicBool::new(false);
 static FOUND_SIZE: AtomicUsize = AtomicUsize::new(0);
 static FOUND_DIR_NO_SIZE: AtomicBool = AtomicBool::new(false);
+static RECEIVED_NAMES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 struct CurrentDirGuard {
-    original_dir: std::path::PathBuf,
-    temp_dir: std::path::PathBuf,
+    temp_dir: PathBuf,
 }
 
 impl CurrentDirGuard {
@@ -26,13 +34,18 @@ impl CurrentDirGuard {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
+        let base_dir = BASE_DIR
+            .get_or_init(|| std::env::current_dir().expect("failed to get initial working dir"));
+
+        std::env::set_current_dir(base_dir).expect("failed to restore base dir");
+
         RECORD_COUNT.store(0, Ordering::SeqCst);
         SEEN_FILE.store(false, Ordering::SeqCst);
         SEEN_DIR.store(false, Ordering::SeqCst);
         FOUND_SIZE.store(0, Ordering::SeqCst);
         FOUND_DIR_NO_SIZE.store(false, Ordering::SeqCst);
+        RECEIVED_NAMES.lock().unwrap().clear();
 
-        let original_dir = std::env::current_dir().expect("failed to get current dir");
         let unique_id = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -41,19 +54,15 @@ impl CurrentDirGuard {
             std::env::temp_dir().join(format!("evo_fs_test_{}_{}", test_name, unique_id));
         std::fs::create_dir_all(&temp_dir).expect("failed to create temp dir");
         std::env::set_current_dir(&temp_dir).expect("failed to set current dir");
-        (
-            Self {
-                original_dir,
-                temp_dir,
-            },
-            lock,
-        )
+        (Self { temp_dir }, lock)
     }
 }
 
 impl Drop for CurrentDirGuard {
     fn drop(&mut self) {
-        let _ = std::env::set_current_dir(&self.original_dir);
+        if let Some(base_dir) = BASE_DIR.get() {
+            let _ = std::env::set_current_dir(base_dir);
+        }
         let _ = std::fs::remove_dir_all(&self.temp_dir);
     }
 }
@@ -129,6 +138,18 @@ fn check_dir_no_size_and_continue(construction: Construction<'_>) -> Flow {
             }
         }
         Construction::Value(_) => panic!("expected record construction"),
+    }
+    Flow::Continue
+}
+
+fn collect_names_and_continue(construction: Construction<'_>) -> Flow {
+    if let Construction::Record(record) = construction {
+        RECORD_COUNT.fetch_add(1, Ordering::SeqCst);
+        if let Some(name_field) = record.fields.iter().find(|f| f.name == "name") {
+            if let Value::Text(name) = name_field.value {
+                RECEIVED_NAMES.lock().unwrap().push(name.to_string());
+            }
+        }
     }
     Flow::Continue
 }
@@ -277,4 +298,502 @@ fn iterator_zero_results_empty_directory() {
 
     let result = ITERATE(iteration, panic_on_call);
     assert_eq!(result, Ok(()));
+}
+
+#[test]
+fn iterator_filter_simple_equal_text() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_equal_text");
+    std::fs::write("one.txt", b"1").unwrap();
+    std::fs::write("two.txt", b"2").unwrap();
+    std::fs::write("three.txt", b"3").unwrap();
+
+    let condition = Condition {
+        field: "name",
+        operator: ConditionOperator::Equal,
+        value: Value::Text("one.txt"),
+    };
+    let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
+    let operations = [filter];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, collect_names_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_NAMES.lock().unwrap(), vec!["one.txt"]);
+}
+
+#[test]
+fn iterator_filter_kind() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_kind");
+    std::fs::write("file.txt", b"file").unwrap();
+    std::fs::create_dir("folder").unwrap();
+
+    let condition = Condition {
+        field: "kind",
+        operator: ConditionOperator::Equal,
+        value: Value::Text("file"),
+    };
+    let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
+    let operations = [filter];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, collect_names_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_NAMES.lock().unwrap(), vec!["file.txt"]);
+}
+
+#[test]
+fn iterator_filter_contains() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_contains");
+    std::fs::write("alpha.txt", b"a").unwrap();
+    std::fs::write("beta.log", b"b").unwrap();
+    std::fs::write("gamma.txt", b"c").unwrap();
+
+    let condition = Condition {
+        field: "name",
+        operator: ConditionOperator::Contains,
+        value: Value::Text(".txt"),
+    };
+    let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
+    let operations = [filter];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, collect_names_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 2);
+    let mut names = RECEIVED_NAMES.lock().unwrap().clone();
+    names.sort();
+    assert_eq!(names, vec!["alpha.txt", "gamma.txt"]);
+}
+
+#[test]
+fn iterator_filter_starts_with() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_starts_with");
+    std::fs::write("pre_one.txt", b"1").unwrap();
+    std::fs::write("pre_two.txt", b"2").unwrap();
+    std::fs::write("other.txt", b"3").unwrap();
+
+    let condition = Condition {
+        field: "name",
+        operator: ConditionOperator::StartsWith,
+        value: Value::Text("pre_"),
+    };
+    let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
+    let operations = [filter];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, collect_names_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 2);
+    let mut names = RECEIVED_NAMES.lock().unwrap().clone();
+    names.sort();
+    assert_eq!(names, vec!["pre_one.txt", "pre_two.txt"]);
+}
+
+#[test]
+fn iterator_filter_ends_with() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_ends_with");
+    std::fs::write("data.log", b"1").unwrap();
+    std::fs::write("info.log", b"2").unwrap();
+    std::fs::write("app.txt", b"3").unwrap();
+
+    let condition = Condition {
+        field: "name",
+        operator: ConditionOperator::EndsWith,
+        value: Value::Text(".log"),
+    };
+    let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
+    let operations = [filter];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, collect_names_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 2);
+    let mut names = RECEIVED_NAMES.lock().unwrap().clone();
+    names.sort();
+    assert_eq!(names, vec!["data.log", "info.log"]);
+}
+
+#[test]
+fn iterator_filter_size_greater_than() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_size_gt");
+    std::fs::write("small.bin", b"12345").unwrap();
+    std::fs::write("large.bin", b"12345678901234567890").unwrap();
+
+    let condition = Condition {
+        field: "size",
+        operator: ConditionOperator::GreaterThan,
+        value: Value::Unsigned(10),
+    };
+    let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
+    let operations = [filter];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, collect_names_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_NAMES.lock().unwrap(), vec!["large.bin"]);
+}
+
+#[test]
+fn iterator_filter_index_less_than() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_index_lt");
+    std::fs::write("a.txt", b"a").unwrap();
+    std::fs::write("b.txt", b"b").unwrap();
+    std::fs::write("c.txt", b"c").unwrap();
+
+    let condition = Condition {
+        field: "index",
+        operator: ConditionOperator::LessThan,
+        value: Value::Unsigned(1),
+    };
+    let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
+    let operations = [filter];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, count_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn iterator_filter_between_inclusive() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_between");
+    std::fs::write("a.bin", b"1234567890").unwrap();
+    std::fs::write("b.bin", b"123456789012345").unwrap();
+    std::fs::write("c.bin", b"12345678901234567890").unwrap();
+    std::fs::write("d.bin", b"1234567890123456789012345").unwrap();
+
+    let between = BetweenCondition {
+        field: "size",
+        lower: Value::Unsigned(10),
+        upper: Value::Unsigned(20),
+    };
+    let filter = IterationOperation::Filter(ConditionExpression::Between(between));
+    let operations = [filter];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, count_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 3);
+}
+
+#[test]
+fn iterator_filter_in() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_in");
+    std::fs::write("one.txt", b"1").unwrap();
+    std::fs::write("two.txt", b"2").unwrap();
+    std::fs::write("three.txt", b"3").unwrap();
+    std::fs::write("four.txt", b"4").unwrap();
+
+    let candidates = [Value::Text("one.txt"), Value::Text("three.txt")];
+    let in_condition = InCondition {
+        field: "name",
+        values: &candidates,
+    };
+    let filter = IterationOperation::Filter(ConditionExpression::In(in_condition));
+    let operations = [filter];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, collect_names_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 2);
+    let mut names = RECEIVED_NAMES.lock().unwrap().clone();
+    names.sort();
+    assert_eq!(names, vec!["one.txt", "three.txt"]);
+}
+
+#[test]
+fn iterator_filter_not() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_not");
+    std::fs::write("one.txt", b"1").unwrap();
+    std::fs::write("two.txt", b"2").unwrap();
+
+    let inner = ConditionExpression::Condition(Condition {
+        field: "name",
+        operator: ConditionOperator::Equal,
+        value: Value::Text("one.txt"),
+    });
+    let filter = IterationOperation::Filter(ConditionExpression::Not(&inner));
+    let operations = [filter];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, collect_names_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_NAMES.lock().unwrap(), vec!["two.txt"]);
+}
+
+#[test]
+fn iterator_filter_and() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_and");
+    std::fs::write("one.txt", b"1234567890").unwrap();
+    std::fs::write("two.txt", b"12").unwrap();
+    std::fs::write("three.log", b"1234567890").unwrap();
+
+    let a = ConditionExpression::Condition(Condition {
+        field: "name",
+        operator: ConditionOperator::EndsWith,
+        value: Value::Text(".txt"),
+    });
+    let b = ConditionExpression::Condition(Condition {
+        field: "size",
+        operator: ConditionOperator::GreaterThan,
+        value: Value::Unsigned(5),
+    });
+    let children = [a, b];
+    let filter = IterationOperation::Filter(ConditionExpression::And(&children));
+    let operations = [filter];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, collect_names_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_NAMES.lock().unwrap(), vec!["one.txt"]);
+}
+
+#[test]
+fn iterator_filter_or() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_or");
+    std::fs::write("one.txt", b"1").unwrap();
+    std::fs::write("two.txt", b"2").unwrap();
+    std::fs::write("three.txt", b"3").unwrap();
+
+    let a = ConditionExpression::Condition(Condition {
+        field: "name",
+        operator: ConditionOperator::Equal,
+        value: Value::Text("one.txt"),
+    });
+    let b = ConditionExpression::Condition(Condition {
+        field: "name",
+        operator: ConditionOperator::Equal,
+        value: Value::Text("two.txt"),
+    });
+    let children = [a, b];
+    let filter = IterationOperation::Filter(ConditionExpression::Or(&children));
+    let operations = [filter];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, collect_names_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 2);
+    let mut names = RECEIVED_NAMES.lock().unwrap().clone();
+    names.sort();
+    assert_eq!(names, vec!["one.txt", "two.txt"]);
+}
+
+#[test]
+fn iterator_filter_and_empty_is_true() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_and_empty");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let children: [ConditionExpression<'_>; 0] = [];
+    let filter = IterationOperation::Filter(ConditionExpression::And(&children));
+    let operations = [filter];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, count_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn iterator_filter_or_empty_is_false() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_or_empty");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let children: [ConditionExpression<'_>; 0] = [];
+    let filter = IterationOperation::Filter(ConditionExpression::Or(&children));
+    let operations = [filter];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, count_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn iterator_multiple_filters() {
+    let (_guard, _lock) = CurrentDirGuard::new("multiple_filters");
+    std::fs::write("one.txt", b"1234567890").unwrap();
+    std::fs::write("two.txt", b"12").unwrap();
+    std::fs::write("three.log", b"1234567890").unwrap();
+
+    let filter_1 = IterationOperation::Filter(ConditionExpression::Condition(Condition {
+        field: "name",
+        operator: ConditionOperator::EndsWith,
+        value: Value::Text(".txt"),
+    }));
+    let filter_2 = IterationOperation::Filter(ConditionExpression::Condition(Condition {
+        field: "size",
+        operator: ConditionOperator::GreaterThan,
+        value: Value::Unsigned(5),
+    }));
+    let operations = [filter_1, filter_2];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, collect_names_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_NAMES.lock().unwrap(), vec!["one.txt"]);
+}
+
+#[test]
+fn iterator_filter_field_not_found() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_field_not_found");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let condition = Condition {
+        field: "unknown",
+        operator: ConditionOperator::Equal,
+        value: Value::Text("x"),
+    };
+    let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
+    let operations = [filter];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, count_and_continue);
+    assert_eq!(
+        result,
+        Err(iterate_contract::Error::FieldNotFound("unknown"))
+    );
+}
+
+#[test]
+fn iterator_filter_size_absent_on_directory_returns_field_not_found() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_size_absent_dir");
+    std::fs::create_dir("subdir").unwrap();
+
+    let condition = Condition {
+        field: "size",
+        operator: ConditionOperator::GreaterThan,
+        value: Value::Unsigned(0),
+    };
+    let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
+    let operations = [filter];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, count_and_continue);
+    assert_eq!(result, Err(iterate_contract::Error::FieldNotFound("size")));
+}
+
+#[test]
+fn iterator_filter_type_mismatch() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_type_mismatch");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let condition = Condition {
+        field: "name",
+        operator: ConditionOperator::GreaterThan,
+        value: Value::Unsigned(1),
+    };
+    let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
+    let operations = [filter];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, count_and_continue);
+    assert_eq!(
+        result,
+        Err(iterate_contract::Error::ComparisonTypeMismatch("name"))
+    );
+}
+
+#[test]
+fn iterator_filter_signed_unsigned_no_coercion() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_signed_unsigned_mismatch");
+    std::fs::write("file.txt", b"1234567890").unwrap();
+
+    let condition = Condition {
+        field: "size",
+        operator: ConditionOperator::Equal,
+        value: Value::Signed(10),
+    };
+    let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
+    let operations = [filter];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, count_and_continue);
+    assert_eq!(
+        result,
+        Err(iterate_contract::Error::ComparisonTypeMismatch("size"))
+    );
+}
+
+#[test]
+fn iterator_filter_and_non_filter_returns_provider_incompatible_before_running() {
+    let condition = Condition {
+        field: "name",
+        operator: ConditionOperator::Equal,
+        value: Value::Text("file.txt"),
+    };
+    let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
+    let operations = [filter, IterationOperation::Count];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::ProviderIncompatible));
+}
+
+#[test]
+fn iterator_filter_flow_stop_after_filter() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_flow_stop");
+    std::fs::write("a.txt", b"a").unwrap();
+    std::fs::write("b.txt", b"b").unwrap();
+    std::fs::write("c.txt", b"c").unwrap();
+
+    let condition = Condition {
+        field: "name",
+        operator: ConditionOperator::EndsWith,
+        value: Value::Text(".txt"),
+    };
+    let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
+    let operations = [filter];
+    let iteration = Iteration {
+        operations: &operations,
+    };
+
+    let result = ITERATE(iteration, count_and_stop);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
 }
