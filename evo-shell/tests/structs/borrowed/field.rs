@@ -1,5 +1,5 @@
 use evo_shell::definitions::structs::borrowed::field::Field;
-use evo_shell::definitions::structs::borrowed::value::Value;
+use evo_values::definitions::value::Value;
 
 #[test]
 fn field_native_and_projected_creation() {

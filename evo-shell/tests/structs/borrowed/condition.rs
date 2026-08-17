@@ -1,6 +1,6 @@
 use evo_shell::definitions::structs::borrowed::condition::Condition;
-use evo_shell::definitions::structs::borrowed::value::Value;
 use evo_shell::definitions::structs::owned::condition_operator::ConditionOperator;
+use evo_values::definitions::value::Value;
 
 #[test]
 fn condition_text_equality() {

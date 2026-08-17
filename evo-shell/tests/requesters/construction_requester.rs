@@ -2,8 +2,8 @@ use evo_shell::definitions::requesters::construction_requester;
 use evo_shell::definitions::structs::borrowed::construction::Construction;
 use evo_shell::definitions::structs::borrowed::field::Field;
 use evo_shell::definitions::structs::borrowed::record::Record;
-use evo_shell::definitions::structs::borrowed::value::Value;
 use evo_shell::definitions::structs::owned::flow::Flow;
+use evo_values::definitions::value::Value;
 
 fn continue_after_value(construction: Construction<'_>) -> Flow {
     match construction {

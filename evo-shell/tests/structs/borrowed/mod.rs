@@ -9,5 +9,4 @@ pub mod iteration_operation;
 pub mod new_field;
 pub mod record;
 pub mod selection;
-pub mod value;
 pub mod value_expression;

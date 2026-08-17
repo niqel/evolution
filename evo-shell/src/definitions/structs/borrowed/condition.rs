@@ -1,5 +1,5 @@
-use super::value::Value;
 use crate::definitions::structs::owned::condition_operator::ConditionOperator;
+use evo_values::definitions::value::Value;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Condition<'condition> {

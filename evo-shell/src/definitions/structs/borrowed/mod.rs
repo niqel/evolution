@@ -15,6 +15,5 @@ pub mod scope;
 pub mod selection;
 pub mod shell_information;
 pub mod substring_expression;
-pub mod value;
 pub mod value_expression;
 pub mod welcome_information;

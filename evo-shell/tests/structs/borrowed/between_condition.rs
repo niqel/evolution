@@ -1,5 +1,5 @@
 use evo_shell::definitions::structs::borrowed::between_condition::BetweenCondition;
-use evo_shell::definitions::structs::borrowed::value::Value;
+use evo_values::definitions::value::Value;
 
 #[test]
 fn between_condition_unsigned() {

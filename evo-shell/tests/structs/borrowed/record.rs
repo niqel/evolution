@@ -1,6 +1,6 @@
 use evo_shell::definitions::structs::borrowed::field::Field;
 use evo_shell::definitions::structs::borrowed::record::Record;
-use evo_shell::definitions::structs::borrowed::value::Value;
+use evo_values::definitions::value::Value;
 
 #[test]
 fn record_borrowed_fields() {

@@ -1,5 +1,5 @@
 use evo_shell::definitions::structs::borrowed::in_condition::InCondition;
-use evo_shell::definitions::structs::borrowed::value::Value;
+use evo_values::definitions::value::Value;
 
 #[test]
 fn in_condition_text_values() {

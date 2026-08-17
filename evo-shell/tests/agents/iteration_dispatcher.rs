@@ -5,9 +5,9 @@ use evo_shell::definitions::structs::borrowed::construction::Construction;
 use evo_shell::definitions::structs::borrowed::iteration::Iteration;
 use evo_shell::definitions::structs::borrowed::iteration_operation::IterationOperation;
 use evo_shell::definitions::structs::borrowed::selection::Selection;
-use evo_shell::definitions::structs::borrowed::value::Value;
 use evo_shell::definitions::structs::owned::flow::Flow;
 use evo_shell::definitions::use_cases::iterate as iterate_use_case;
+use evo_values::definitions::value::Value;
 
 fn receive(construction: Construction<'_>) -> Flow {
     assert_eq!(construction, Construction::Value(Value::Unsigned(42)));

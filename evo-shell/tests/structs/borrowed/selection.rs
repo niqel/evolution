@@ -1,7 +1,7 @@
 use evo_shell::definitions::structs::borrowed::new_field::NewField;
 use evo_shell::definitions::structs::borrowed::selection::Selection;
-use evo_shell::definitions::structs::borrowed::value::Value;
 use evo_shell::definitions::structs::borrowed::value_expression::ValueExpression;
+use evo_values::definitions::value::Value;
 
 #[test]
 fn selection_field() {

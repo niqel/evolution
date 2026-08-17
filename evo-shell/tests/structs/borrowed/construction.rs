@@ -1,7 +1,7 @@
 use evo_shell::definitions::structs::borrowed::construction::Construction;
 use evo_shell::definitions::structs::borrowed::field::Field;
 use evo_shell::definitions::structs::borrowed::record::Record;
-use evo_shell::definitions::structs::borrowed::value::Value;
+use evo_values::definitions::value::Value;
 
 #[test]
 fn construction_record_wrapping_and_field_preservation() {
