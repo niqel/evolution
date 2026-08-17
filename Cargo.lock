@@ -12,3 +12,7 @@ dependencies = [
 [[package]]
 name = "evo-shell"
 version = "0.1.0"
+
+[[package]]
+name = "evo-values"
+version = "0.1.0"
