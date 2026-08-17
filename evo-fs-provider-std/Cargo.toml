@@ -7,5 +7,5 @@ edition = "2024"
 path = "src/lib.rs"
 
 [dependencies]
-evo-shell = { path = "../evo-shell" }
+evo-query = { path = "../evo-query" }
 evo-values = { path = "../evo-values" }

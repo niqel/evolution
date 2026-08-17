@@ -6,16 +6,20 @@ version = 4
 name = "evo-fs-provider-std"
 version = "0.1.0"
 dependencies = [
- "evo-shell",
+ "evo-query",
+ "evo-values",
+]
+
+[[package]]
+name = "evo-query"
+version = "0.1.0"
+dependencies = [
  "evo-values",
 ]
 
 [[package]]
 name = "evo-shell"
 version = "0.1.0"
-dependencies = [
- "evo-values",
-]
 
 [[package]]
 name = "evo-values"

@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "evo-shell",
+    "evo-query",
     "evo-fs-provider-std",
     "evo-values",
 ]

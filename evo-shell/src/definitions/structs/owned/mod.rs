@@ -1,4 +1,3 @@
-pub mod condition_operator;
 pub mod filesystem_field;
 pub mod filesystem_item_kind;
 pub mod flow;

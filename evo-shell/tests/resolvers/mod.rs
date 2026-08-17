@@ -6,7 +6,6 @@ pub mod delete_resolver;
 pub mod enter_scope_resolver;
 pub mod enumerate_filesystem_resolver;
 pub mod filesystem_scope_resolver;
-pub mod iterate_resolver;
 pub mod move_resolver;
 pub mod rename_resolver;
 pub mod scope_resolver;
