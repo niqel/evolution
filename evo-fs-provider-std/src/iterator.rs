@@ -9,12 +9,13 @@ use evo_shell::definitions::structs::borrowed::in_condition::InCondition;
 use evo_shell::definitions::structs::borrowed::iteration::Iteration;
 use evo_shell::definitions::structs::borrowed::iteration_operation::IterationOperation;
 use evo_shell::definitions::structs::borrowed::record::Record;
+use evo_shell::definitions::structs::borrowed::selection::Selection;
 use evo_shell::definitions::structs::borrowed::value::Value;
 use evo_shell::definitions::structs::owned::condition_operator::ConditionOperator;
 use evo_shell::definitions::structs::owned::flow::Flow;
 
-fn find_field<'a>(record: &'a Record<'_>, field_name: &str) -> Option<&'a Field<'a>> {
-    record.fields.iter().find(|f| f.name == field_name)
+fn find_field<'field>(record: &Record<'field>, field_name: &str) -> Option<Field<'field>> {
+    record.fields.iter().find(|f| f.name == field_name).copied()
 }
 
 fn matches_condition<'iteration>(
@@ -165,35 +166,75 @@ fn matches_expression<'iteration>(
     }
 }
 
-fn passes_operations<'iteration>(
+fn process_pipeline<'iteration, 'item>(
     operations: &'iteration [IterationOperation<'iteration>],
     stage_counts: &mut [usize],
-    record: &Record<'_>,
-) -> Result<bool, iterate_contract::Error<'iteration>> {
+    initial_fields: &'item [Field<'item>],
+    request: construction_requester::Request,
+) -> Result<Flow, iterate_contract::Error<'iteration>> {
+    let mut projected_fields: Option<Vec<Field<'item>>> = None;
+
     for (index, operation) in operations.iter().enumerate() {
+        let current_slice: &[Field<'item>] = match &projected_fields {
+            Some(fields) => fields.as_slice(),
+            None => initial_fields,
+        };
+
         match operation {
             IterationOperation::Filter(expression) => {
-                if !matches_expression(expression, record)? {
-                    return Ok(false);
+                let current_record = Record {
+                    fields: current_slice,
+                };
+                if !matches_expression(expression, &current_record)? {
+                    return Ok(Flow::Continue);
                 }
             }
             IterationOperation::Skip(n) => {
                 if stage_counts[index] < *n {
                     stage_counts[index] += 1;
-                    return Ok(false);
+                    return Ok(Flow::Continue);
                 }
             }
             IterationOperation::Take(n) => {
                 if stage_counts[index] < *n {
                     stage_counts[index] += 1;
                 } else {
-                    return Ok(false);
+                    return Ok(Flow::Continue);
                 }
+            }
+            IterationOperation::Select(selections) => {
+                let mut next_fields = Vec::with_capacity(selections.len());
+                for selection in *selections {
+                    match selection {
+                        Selection::Field(field_name) => {
+                            let field = current_slice
+                                .iter()
+                                .find(|f| f.name == *field_name)
+                                .copied()
+                                .ok_or(iterate_contract::Error::FieldNotFound(field_name))?;
+                            next_fields.push(field);
+                        }
+                        Selection::New(_) => {
+                            return Err(iterate_contract::Error::ProviderIncompatible);
+                        }
+                    }
+                }
+                projected_fields = Some(next_fields);
             }
             _ => return Err(iterate_contract::Error::ProviderIncompatible),
         }
     }
-    Ok(true)
+
+    let final_record = match &projected_fields {
+        Some(fields) => Record {
+            fields: fields.as_slice(),
+        },
+        None => Record {
+            fields: initial_fields,
+        },
+    };
+
+    Ok(request(Construction::Record(final_record)))
 }
 
 pub fn iterate<'iteration>(
@@ -205,6 +246,19 @@ pub fn iterate<'iteration>(
             IterationOperation::Filter(_)
             | IterationOperation::Skip(_)
             | IterationOperation::Take(_) => {}
+            IterationOperation::Select(selections) => {
+                if selections.is_empty() {
+                    return Err(iterate_contract::Error::ProviderIncompatible);
+                }
+                for selection in *selections {
+                    match selection {
+                        Selection::Field(_) => {}
+                        Selection::New(_) => {
+                            return Err(iterate_contract::Error::ProviderIncompatible);
+                        }
+                    }
+                }
+            }
             _ => return Err(iterate_contract::Error::ProviderIncompatible),
         }
     }
@@ -268,20 +322,10 @@ pub fn iterate<'iteration>(
                 value: Value::Unsigned(metadata.len()),
             };
             let fields = [index_field, name_field, path_field, kind_field, size_field];
-            let record = Record { fields: &fields };
-            if passes_operations(iteration.operations, &mut stage_counts, &record)? {
-                request(Construction::Record(record))
-            } else {
-                Flow::Continue
-            }
+            process_pipeline(iteration.operations, &mut stage_counts, &fields, request)?
         } else {
             let fields = [index_field, name_field, path_field, kind_field];
-            let record = Record { fields: &fields };
-            if passes_operations(iteration.operations, &mut stage_counts, &record)? {
-                request(Construction::Record(record))
-            } else {
-                Flow::Continue
-            }
+            process_pipeline(iteration.operations, &mut stage_counts, &fields, request)?
         };
 
         if flow == Flow::Stop {
