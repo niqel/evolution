@@ -11,6 +11,7 @@ use evo_shell::definitions::structs::borrowed::iteration_operation::IterationOpe
 use evo_shell::definitions::structs::borrowed::record::Record;
 use evo_shell::definitions::structs::borrowed::selection::Selection;
 use evo_shell::definitions::structs::borrowed::value::Value;
+use evo_shell::definitions::structs::borrowed::value_expression::ValueExpression;
 use evo_shell::definitions::structs::owned::condition_operator::ConditionOperator;
 use evo_shell::definitions::structs::owned::flow::Flow;
 
@@ -166,12 +167,91 @@ fn matches_expression<'iteration>(
     }
 }
 
+fn evaluate_value_pipeline<'iteration, 'item>(
+    operations: &'iteration [IterationOperation<'iteration>],
+    input_fields: &[Field<'item>],
+) -> Result<Value<'item>, iterate_contract::Error<'iteration>>
+where
+    'iteration: 'item,
+{
+    if operations.is_empty() {
+        return Err(iterate_contract::Error::ProviderIncompatible);
+    }
+
+    let mut projected_fields: Option<Vec<Field<'item>>> = None;
+    let mut current_value: Option<Value<'item>> = None;
+
+    for operation in operations {
+        match operation {
+            IterationOperation::Select(selections) => {
+                if current_value.is_some() || selections.is_empty() {
+                    return Err(iterate_contract::Error::ProviderIncompatible);
+                }
+                let current_slice: &[Field<'item>] = match &projected_fields {
+                    Some(fields) => fields.as_slice(),
+                    None => input_fields,
+                };
+                let mut next_fields = Vec::with_capacity(selections.len());
+                for selection in *selections {
+                    match selection {
+                        Selection::Field(field_name) => {
+                            let field = current_slice
+                                .iter()
+                                .find(|f| f.name == *field_name)
+                                .copied()
+                                .ok_or(iterate_contract::Error::FieldNotFound(field_name))?;
+                            next_fields.push(field);
+                        }
+                        Selection::New(_) => {
+                            return Err(iterate_contract::Error::ProviderIncompatible);
+                        }
+                    }
+                }
+                projected_fields = Some(next_fields);
+            }
+            IterationOperation::ToValue => {
+                if current_value.is_some() {
+                    return Err(iterate_contract::Error::ToValueRequiresRecord);
+                }
+                let current_slice: &[Field<'item>] = match &projected_fields {
+                    Some(fields) => fields.as_slice(),
+                    None => input_fields,
+                };
+                if current_slice.len() != 1 {
+                    return Err(iterate_contract::Error::ToValueRequiresSingleField);
+                }
+                current_value = Some(current_slice[0].value);
+            }
+            _ => return Err(iterate_contract::Error::ProviderIncompatible),
+        }
+    }
+
+    current_value.ok_or(iterate_contract::Error::ProviderIncompatible)
+}
+
+fn evaluate_value_expression<'iteration, 'item>(
+    expression: &'iteration ValueExpression<'iteration>,
+    input_fields: &[Field<'item>],
+) -> Result<Value<'item>, iterate_contract::Error<'iteration>>
+where
+    'iteration: 'item,
+{
+    match expression {
+        ValueExpression::Literal(value) => Ok(*value),
+        ValueExpression::Pipeline(operations) => evaluate_value_pipeline(operations, input_fields),
+        ValueExpression::Concat(_) => Err(iterate_contract::Error::ProviderIncompatible),
+    }
+}
+
 fn process_pipeline<'iteration, 'item>(
     operations: &'iteration [IterationOperation<'iteration>],
     stage_counts: &mut [usize],
     initial_fields: &'item [Field<'item>],
     request: construction_requester::Request,
-) -> Result<Flow, iterate_contract::Error<'iteration>> {
+) -> Result<Flow, iterate_contract::Error<'iteration>>
+where
+    'iteration: 'item,
+{
     let mut projected_fields: Option<Vec<Field<'item>>> = None;
     let mut current_value: Option<Value<'item>> = None;
 
@@ -224,8 +304,13 @@ fn process_pipeline<'iteration, 'item>(
                                 .ok_or(iterate_contract::Error::FieldNotFound(field_name))?;
                             next_fields.push(field);
                         }
-                        Selection::New(_) => {
-                            return Err(iterate_contract::Error::ProviderIncompatible);
+                        Selection::New(new_field) => {
+                            let value =
+                                evaluate_value_expression(&new_field.expression, current_slice)?;
+                            next_fields.push(Field {
+                                name: new_field.name,
+                                value,
+                            });
                         }
                     }
                 }
@@ -264,6 +349,49 @@ fn process_pipeline<'iteration, 'item>(
     Ok(request(construction))
 }
 
+fn validate_value_expression<'iteration>(
+    expression: &'iteration ValueExpression<'iteration>,
+) -> Result<(), iterate_contract::Error<'iteration>> {
+    match expression {
+        ValueExpression::Literal(_) => Ok(()),
+        ValueExpression::Pipeline(operations) => {
+            if operations.is_empty() {
+                return Err(iterate_contract::Error::ProviderIncompatible);
+            }
+            let mut inner_is_value = false;
+            for operation in *operations {
+                match operation {
+                    IterationOperation::Select(selections) => {
+                        if inner_is_value || selections.is_empty() {
+                            return Err(iterate_contract::Error::ProviderIncompatible);
+                        }
+                        for selection in *selections {
+                            match selection {
+                                Selection::Field(_) => {}
+                                Selection::New(_) => {
+                                    return Err(iterate_contract::Error::ProviderIncompatible);
+                                }
+                            }
+                        }
+                    }
+                    IterationOperation::ToValue => {
+                        if inner_is_value {
+                            return Err(iterate_contract::Error::ToValueRequiresRecord);
+                        }
+                        inner_is_value = true;
+                    }
+                    _ => return Err(iterate_contract::Error::ProviderIncompatible),
+                }
+            }
+            if !inner_is_value {
+                return Err(iterate_contract::Error::ProviderIncompatible);
+            }
+            Ok(())
+        }
+        ValueExpression::Concat(_) => Err(iterate_contract::Error::ProviderIncompatible),
+    }
+}
+
 pub fn iterate<'iteration>(
     iteration: Iteration<'iteration>,
     request: construction_requester::Request,
@@ -283,8 +411,8 @@ pub fn iterate<'iteration>(
                 for selection in *selections {
                     match selection {
                         Selection::Field(_) => {}
-                        Selection::New(_) => {
-                            return Err(iterate_contract::Error::ProviderIncompatible);
+                        Selection::New(new_field) => {
+                            validate_value_expression(&new_field.expression)?;
                         }
                     }
                 }

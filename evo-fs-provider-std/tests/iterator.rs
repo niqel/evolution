@@ -30,6 +30,8 @@ static RECEIVED_INDICES: Mutex<Vec<u64>> = Mutex::new(Vec::new());
 static RECEIVED_FIELD_NAMES: Mutex<Vec<Vec<String>>> = Mutex::new(Vec::new());
 static RECEIVED_TEXT_VALUES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 static RECEIVED_UNSIGNED_VALUES: Mutex<Vec<u64>> = Mutex::new(Vec::new());
+static RECEIVED_SIGNED_VALUES: Mutex<Vec<i64>> = Mutex::new(Vec::new());
+static RECEIVED_BOOLEAN_VALUES: Mutex<Vec<bool>> = Mutex::new(Vec::new());
 
 struct CurrentDirGuard {
     temp_dir: PathBuf,
@@ -56,6 +58,8 @@ impl CurrentDirGuard {
         RECEIVED_FIELD_NAMES.lock().unwrap().clear();
         RECEIVED_TEXT_VALUES.lock().unwrap().clear();
         RECEIVED_UNSIGNED_VALUES.lock().unwrap().clear();
+        RECEIVED_SIGNED_VALUES.lock().unwrap().clear();
+        RECEIVED_BOOLEAN_VALUES.lock().unwrap().clear();
 
         let unique_id = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -209,6 +213,28 @@ fn collect_unsigned_values_and_continue(construction: Construction<'_>) -> Flow 
             RECEIVED_UNSIGNED_VALUES.lock().unwrap().push(val);
         }
         _ => panic!("expected unsigned value construction"),
+    }
+    Flow::Continue
+}
+
+fn collect_signed_values_and_continue(construction: Construction<'_>) -> Flow {
+    match construction {
+        Construction::Value(Value::Signed(val)) => {
+            RECORD_COUNT.fetch_add(1, Ordering::SeqCst);
+            RECEIVED_SIGNED_VALUES.lock().unwrap().push(val);
+        }
+        _ => panic!("expected signed value construction"),
+    }
+    Flow::Continue
+}
+
+fn collect_boolean_values_and_continue(construction: Construction<'_>) -> Flow {
+    match construction {
+        Construction::Value(Value::Boolean(val)) => {
+            RECORD_COUNT.fetch_add(1, Ordering::SeqCst);
+            RECEIVED_BOOLEAN_VALUES.lock().unwrap().push(val);
+        }
+        _ => panic!("expected boolean value construction"),
     }
     Flow::Continue
 }
@@ -1888,20 +1914,6 @@ fn iterator_count_returns_provider_incompatible() {
 }
 
 #[test]
-fn iterator_select_with_new_field_returns_provider_incompatible_before_running() {
-    let new_field = NewField {
-        name: "custom",
-        expression: ValueExpression::Literal(Value::Text("hello")),
-    };
-    let selections = [Selection::New(new_field)];
-    let ops = [IterationOperation::Select(&selections)];
-    let iteration = Iteration { operations: &ops };
-
-    let result = ITERATE(iteration, panic_on_call);
-    assert_eq!(result, Err(iterate_contract::Error::ProviderIncompatible));
-}
-
-#[test]
 fn iterator_select_empty_returns_provider_incompatible() {
     let selections: [Selection<'_>; 0] = [];
     let ops = [IterationOperation::Select(&selections)];
@@ -1922,4 +1934,628 @@ fn iterator_select_plus_count_returns_provider_incompatible() {
 
     let result = ITERATE(iteration, panic_on_call);
     assert_eq!(result, Err(iterate_contract::Error::ProviderIncompatible));
+}
+
+#[test]
+fn iterator_new_literal_text() {
+    let (_guard, _lock) = CurrentDirGuard::new("new_literal_text");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let new_field = NewField {
+        name: "label",
+        expression: ValueExpression::Literal(Value::Text("hello")),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["hello"]);
+}
+
+#[test]
+fn iterator_new_literal_unsigned() {
+    let (_guard, _lock) = CurrentDirGuard::new("new_literal_unsigned");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let new_field = NewField {
+        name: "count",
+        expression: ValueExpression::Literal(Value::Unsigned(42)),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_unsigned_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_UNSIGNED_VALUES.lock().unwrap(), vec![42]);
+}
+
+#[test]
+fn iterator_new_literal_signed() {
+    let (_guard, _lock) = CurrentDirGuard::new("new_literal_signed");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let new_field = NewField {
+        name: "delta",
+        expression: ValueExpression::Literal(Value::Signed(-5)),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_signed_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_SIGNED_VALUES.lock().unwrap(), vec![-5]);
+}
+
+#[test]
+fn iterator_new_literal_boolean() {
+    let (_guard, _lock) = CurrentDirGuard::new("new_literal_boolean");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let new_field = NewField {
+        name: "flag",
+        expression: ValueExpression::Literal(Value::Boolean(true)),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_boolean_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_BOOLEAN_VALUES.lock().unwrap(), vec![true]);
+}
+
+#[test]
+fn iterator_field_plus_new() {
+    let (_guard, _lock) = CurrentDirGuard::new("field_plus_new");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let new_field = NewField {
+        name: "enabled",
+        expression: ValueExpression::Literal(Value::Boolean(true)),
+    };
+    let selections = [Selection::Field("name"), Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_field_names_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    let field_names = RECEIVED_FIELD_NAMES.lock().unwrap().clone();
+    assert_eq!(
+        field_names,
+        vec![vec!["name".to_string(), "enabled".to_string()]]
+    );
+}
+
+#[test]
+fn iterator_new_pipeline_name() {
+    let (_guard, _lock) = CurrentDirGuard::new("new_pipeline_name");
+    std::fs::write("sample.txt", b"1").unwrap();
+
+    let inner_sels = [Selection::Field("name")];
+    let inner_ops = [
+        IterationOperation::Select(&inner_sels),
+        IterationOperation::ToValue,
+    ];
+    let new_field = NewField {
+        name: "copy_name",
+        expression: ValueExpression::Pipeline(&inner_ops),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_text_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_TEXT_VALUES.lock().unwrap(), vec!["sample.txt"]);
+}
+
+#[test]
+fn iterator_new_pipeline_index() {
+    let (_guard, _lock) = CurrentDirGuard::new("new_pipeline_index");
+    std::fs::write("sample.txt", b"1").unwrap();
+
+    let inner_sels = [Selection::Field("index")];
+    let inner_ops = [
+        IterationOperation::Select(&inner_sels),
+        IterationOperation::ToValue,
+    ];
+    let new_field = NewField {
+        name: "copy_index",
+        expression: ValueExpression::Pipeline(&inner_ops),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_unsigned_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_UNSIGNED_VALUES.lock().unwrap(), vec![0]);
+}
+
+#[test]
+fn iterator_new_pipeline_size() {
+    let (_guard, _lock) = CurrentDirGuard::new("new_pipeline_size");
+    let content = b"123456789";
+    std::fs::write("sample.bin", content).unwrap();
+
+    let inner_sels = [Selection::Field("size")];
+    let inner_ops = [
+        IterationOperation::Select(&inner_sels),
+        IterationOperation::ToValue,
+    ];
+    let new_field = NewField {
+        name: "copy_size",
+        expression: ValueExpression::Pipeline(&inner_ops),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_unsigned_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        *RECEIVED_UNSIGNED_VALUES.lock().unwrap(),
+        vec![content.len() as u64]
+    );
+}
+
+#[test]
+fn iterator_new_pipeline_field_not_found() {
+    let (_guard, _lock) = CurrentDirGuard::new("new_pipeline_not_found");
+    std::fs::write("sample.txt", b"1").unwrap();
+
+    let inner_sels = [Selection::Field("missing")];
+    let inner_ops = [
+        IterationOperation::Select(&inner_sels),
+        IterationOperation::ToValue,
+    ];
+    let new_field = NewField {
+        name: "copy",
+        expression: ValueExpression::Pipeline(&inner_ops),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(
+        result,
+        Err(iterate_contract::Error::FieldNotFound("missing"))
+    );
+}
+
+#[test]
+fn iterator_new_pipeline_multi_field_to_value() {
+    let (_guard, _lock) = CurrentDirGuard::new("new_pipeline_multi_field");
+    std::fs::write("sample.txt", b"1").unwrap();
+
+    let inner_sels = [Selection::Field("name"), Selection::Field("kind")];
+    let inner_ops = [
+        IterationOperation::Select(&inner_sels),
+        IterationOperation::ToValue,
+    ];
+    let new_field = NewField {
+        name: "copy",
+        expression: ValueExpression::Pipeline(&inner_ops),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(
+        result,
+        Err(iterate_contract::Error::ToValueRequiresSingleField)
+    );
+}
+
+#[test]
+fn iterator_new_pipeline_empty_returns_provider_incompatible_before_running() {
+    let inner_ops: [IterationOperation<'_>; 0] = [];
+    let new_field = NewField {
+        name: "copy",
+        expression: ValueExpression::Pipeline(&inner_ops),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::ProviderIncompatible));
+}
+
+#[test]
+fn iterator_new_pipeline_filter_returns_provider_incompatible_before_running() {
+    let condition = Condition {
+        field: "name",
+        operator: ConditionOperator::Equal,
+        value: Value::Text("x"),
+    };
+    let inner_ops = [
+        IterationOperation::Filter(ConditionExpression::Condition(condition)),
+        IterationOperation::ToValue,
+    ];
+    let new_field = NewField {
+        name: "copy",
+        expression: ValueExpression::Pipeline(&inner_ops),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::ProviderIncompatible));
+}
+
+#[test]
+fn iterator_new_pipeline_skip_returns_provider_incompatible_before_running() {
+    let inner_ops = [IterationOperation::Skip(1), IterationOperation::ToValue];
+    let new_field = NewField {
+        name: "copy",
+        expression: ValueExpression::Pipeline(&inner_ops),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::ProviderIncompatible));
+}
+
+#[test]
+fn iterator_new_pipeline_take_returns_provider_incompatible_before_running() {
+    let inner_ops = [IterationOperation::Take(1), IterationOperation::ToValue];
+    let new_field = NewField {
+        name: "copy",
+        expression: ValueExpression::Pipeline(&inner_ops),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::ProviderIncompatible));
+}
+
+#[test]
+fn iterator_new_pipeline_first_returns_provider_incompatible_before_running() {
+    let inner_ops = [IterationOperation::First];
+    let new_field = NewField {
+        name: "copy",
+        expression: ValueExpression::Pipeline(&inner_ops),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::ProviderIncompatible));
+}
+
+#[test]
+fn iterator_new_pipeline_last_returns_provider_incompatible_before_running() {
+    let inner_ops = [IterationOperation::Last];
+    let new_field = NewField {
+        name: "copy",
+        expression: ValueExpression::Pipeline(&inner_ops),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::ProviderIncompatible));
+}
+
+#[test]
+fn iterator_new_pipeline_count_returns_provider_incompatible_before_running() {
+    let inner_ops = [IterationOperation::Count];
+    let new_field = NewField {
+        name: "copy",
+        expression: ValueExpression::Pipeline(&inner_ops),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::ProviderIncompatible));
+}
+
+#[test]
+fn iterator_new_pipeline_select_new_returns_provider_incompatible_before_running() {
+    let deep_new = NewField {
+        name: "deep",
+        expression: ValueExpression::Literal(Value::Unsigned(1)),
+    };
+    let inner_sels = [Selection::New(deep_new)];
+    let inner_ops = [
+        IterationOperation::Select(&inner_sels),
+        IterationOperation::ToValue,
+    ];
+    let new_field = NewField {
+        name: "copy",
+        expression: ValueExpression::Pipeline(&inner_ops),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::ProviderIncompatible));
+}
+
+#[test]
+fn iterator_new_concat_returns_provider_incompatible_before_running() {
+    let expressions = [ValueExpression::Literal(Value::Text("a"))];
+    let new_field = NewField {
+        name: "label",
+        expression: ValueExpression::Concat(&expressions),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::ProviderIncompatible));
+}
+
+#[test]
+fn iterator_select_solo_new() {
+    let (_guard, _lock) = CurrentDirGuard::new("select_solo_new");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let new_field = NewField {
+        name: "a",
+        expression: ValueExpression::Literal(Value::Unsigned(1)),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_field_names_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    let field_names = RECEIVED_FIELD_NAMES.lock().unwrap().clone();
+    assert_eq!(field_names, vec![vec!["a".to_string()]]);
+}
+
+#[test]
+fn iterator_select_new_then_to_value() {
+    let (_guard, _lock) = CurrentDirGuard::new("select_new_to_value");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let new_field = NewField {
+        name: "a",
+        expression: ValueExpression::Literal(Value::Unsigned(1)),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Select(&selections),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_unsigned_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_UNSIGNED_VALUES.lock().unwrap(), vec![1]);
+}
+
+#[test]
+fn iterator_filter_then_select_new() {
+    let (_guard, _lock) = CurrentDirGuard::new("filter_then_select_new");
+    std::fs::write("file.txt", b"1").unwrap();
+    std::fs::create_dir("folder").unwrap();
+
+    let filter = IterationOperation::Filter(ConditionExpression::Condition(Condition {
+        field: "kind",
+        operator: ConditionOperator::Equal,
+        value: Value::Text("file"),
+    }));
+    let new_field = NewField {
+        name: "a",
+        expression: ValueExpression::Literal(Value::Unsigned(1)),
+    };
+    let selections = [Selection::New(new_field)];
+    let select = IterationOperation::Select(&selections);
+    let ops = [filter, select];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_field_names_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    let field_names = RECEIVED_FIELD_NAMES.lock().unwrap().clone();
+    assert_eq!(field_names, vec![vec!["a".to_string()]]);
+}
+
+#[test]
+fn iterator_select_new_then_filter_new_field() {
+    let (_guard, _lock) = CurrentDirGuard::new("select_new_filter_new_field");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let new_field = NewField {
+        name: "flag",
+        expression: ValueExpression::Literal(Value::Boolean(true)),
+    };
+    let selections = [Selection::Field("name"), Selection::New(new_field)];
+    let select = IterationOperation::Select(&selections);
+    let filter = IterationOperation::Filter(ConditionExpression::Condition(Condition {
+        field: "flag",
+        operator: ConditionOperator::Equal,
+        value: Value::Boolean(true),
+    }));
+    let ops = [select, filter];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, count_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn iterator_same_select_new_cannot_see_previous_new() {
+    let (_guard, _lock) = CurrentDirGuard::new("same_select_new_no_cross_ref");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let new_a = NewField {
+        name: "a",
+        expression: ValueExpression::Literal(Value::Unsigned(1)),
+    };
+    let inner_sels = [Selection::Field("a")];
+    let inner_ops = [
+        IterationOperation::Select(&inner_sels),
+        IterationOperation::ToValue,
+    ];
+    let new_b = NewField {
+        name: "b",
+        expression: ValueExpression::Pipeline(&inner_ops),
+    };
+    let selections = [Selection::New(new_a), Selection::New(new_b)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, panic_on_call);
+    assert_eq!(result, Err(iterate_contract::Error::FieldNotFound("a")));
+}
+
+#[test]
+fn iterator_second_select_can_see_new_from_first_select() {
+    let (_guard, _lock) = CurrentDirGuard::new("second_select_sees_previous_new");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let new_a = NewField {
+        name: "a",
+        expression: ValueExpression::Literal(Value::Unsigned(1)),
+    };
+    let sel_a = [Selection::New(new_a)];
+
+    let inner_sels = [Selection::Field("a")];
+    let inner_ops = [
+        IterationOperation::Select(&inner_sels),
+        IterationOperation::ToValue,
+    ];
+    let new_b = NewField {
+        name: "b",
+        expression: ValueExpression::Pipeline(&inner_ops),
+    };
+    let sel_b = [Selection::New(new_b)];
+
+    let ops = [
+        IterationOperation::Select(&sel_a),
+        IterationOperation::Select(&sel_b),
+        IterationOperation::ToValue,
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_unsigned_values_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(*RECEIVED_UNSIGNED_VALUES.lock().unwrap(), vec![1]);
+}
+
+#[test]
+fn iterator_multiple_new_preserve_selection_order() {
+    let (_guard, _lock) = CurrentDirGuard::new("multiple_new_preserve_order");
+    std::fs::write("file.txt", b"1").unwrap();
+
+    let new_a = NewField {
+        name: "a",
+        expression: ValueExpression::Literal(Value::Unsigned(1)),
+    };
+    let new_b = NewField {
+        name: "b",
+        expression: ValueExpression::Literal(Value::Unsigned(2)),
+    };
+    let selections = [
+        Selection::New(new_a),
+        Selection::Field("name"),
+        Selection::New(new_b),
+    ];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, collect_field_names_and_continue);
+    assert_eq!(result, Ok(()));
+    let field_names = RECEIVED_FIELD_NAMES.lock().unwrap().clone();
+    assert_eq!(
+        field_names,
+        vec![vec!["a".to_string(), "name".to_string(), "b".to_string()]]
+    );
+}
+
+#[test]
+fn iterator_flow_stop_after_select_new() {
+    let (_guard, _lock) = CurrentDirGuard::new("flow_stop_select_new");
+    std::fs::write("1.txt", b"1").unwrap();
+    std::fs::write("2.txt", b"2").unwrap();
+
+    let new_field = NewField {
+        name: "custom",
+        expression: ValueExpression::Literal(Value::Text("test")),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [IterationOperation::Select(&selections)];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, count_and_stop);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn iterator_skip_take_with_select_new() {
+    let (_guard, _lock) = CurrentDirGuard::new("skip_take_select_new");
+    std::fs::write("1.txt", b"1").unwrap();
+    std::fs::write("2.txt", b"2").unwrap();
+    std::fs::write("3.txt", b"3").unwrap();
+
+    let new_field = NewField {
+        name: "custom",
+        expression: ValueExpression::Literal(Value::Unsigned(100)),
+    };
+    let selections = [Selection::New(new_field)];
+    let ops = [
+        IterationOperation::Skip(1),
+        IterationOperation::Select(&selections),
+        IterationOperation::Take(1),
+    ];
+    let iteration = Iteration { operations: &ops };
+
+    let result = ITERATE(iteration, count_and_continue);
+    assert_eq!(result, Ok(()));
+    assert_eq!(RECORD_COUNT.load(Ordering::SeqCst), 1);
 }
