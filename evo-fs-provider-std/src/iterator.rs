@@ -173,15 +173,18 @@ fn process_pipeline<'iteration, 'item>(
     request: construction_requester::Request,
 ) -> Result<Flow, iterate_contract::Error<'iteration>> {
     let mut projected_fields: Option<Vec<Field<'item>>> = None;
+    let mut current_value: Option<Value<'item>> = None;
 
     for (index, operation) in operations.iter().enumerate() {
-        let current_slice: &[Field<'item>] = match &projected_fields {
-            Some(fields) => fields.as_slice(),
-            None => initial_fields,
-        };
-
         match operation {
             IterationOperation::Filter(expression) => {
+                if current_value.is_some() {
+                    return Err(iterate_contract::Error::ProviderIncompatible);
+                }
+                let current_slice: &[Field<'item>] = match &projected_fields {
+                    Some(fields) => fields.as_slice(),
+                    None => initial_fields,
+                };
                 let current_record = Record {
                     fields: current_slice,
                 };
@@ -203,6 +206,13 @@ fn process_pipeline<'iteration, 'item>(
                 }
             }
             IterationOperation::Select(selections) => {
+                if current_value.is_some() {
+                    return Err(iterate_contract::Error::ProviderIncompatible);
+                }
+                let current_slice: &[Field<'item>] = match &projected_fields {
+                    Some(fields) => fields.as_slice(),
+                    None => initial_fields,
+                };
                 let mut next_fields = Vec::with_capacity(selections.len());
                 for selection in *selections {
                     match selection {
@@ -221,33 +231,53 @@ fn process_pipeline<'iteration, 'item>(
                 }
                 projected_fields = Some(next_fields);
             }
+            IterationOperation::ToValue => {
+                if current_value.is_some() {
+                    return Err(iterate_contract::Error::ToValueRequiresRecord);
+                }
+                let current_slice: &[Field<'item>] = match &projected_fields {
+                    Some(fields) => fields.as_slice(),
+                    None => initial_fields,
+                };
+                if current_slice.len() != 1 {
+                    return Err(iterate_contract::Error::ToValueRequiresSingleField);
+                }
+                current_value = Some(current_slice[0].value);
+            }
             _ => return Err(iterate_contract::Error::ProviderIncompatible),
         }
     }
 
-    let final_record = match &projected_fields {
-        Some(fields) => Record {
-            fields: fields.as_slice(),
-        },
-        None => Record {
-            fields: initial_fields,
-        },
+    let construction = match current_value {
+        Some(value) => Construction::Value(value),
+        None => {
+            let current_slice: &[Field<'item>] = match &projected_fields {
+                Some(fields) => fields.as_slice(),
+                None => initial_fields,
+            };
+            Construction::Record(Record {
+                fields: current_slice,
+            })
+        }
     };
 
-    Ok(request(Construction::Record(final_record)))
+    Ok(request(construction))
 }
 
 pub fn iterate<'iteration>(
     iteration: Iteration<'iteration>,
     request: construction_requester::Request,
 ) -> Result<(), iterate_contract::Error<'iteration>> {
+    let mut is_value = false;
     for operation in iteration.operations {
         match operation {
-            IterationOperation::Filter(_)
-            | IterationOperation::Skip(_)
-            | IterationOperation::Take(_) => {}
+            IterationOperation::Filter(_) => {
+                if is_value {
+                    return Err(iterate_contract::Error::ProviderIncompatible);
+                }
+            }
             IterationOperation::Select(selections) => {
-                if selections.is_empty() {
+                if is_value || selections.is_empty() {
                     return Err(iterate_contract::Error::ProviderIncompatible);
                 }
                 for selection in *selections {
@@ -258,6 +288,13 @@ pub fn iterate<'iteration>(
                         }
                     }
                 }
+            }
+            IterationOperation::Skip(_) | IterationOperation::Take(_) => {}
+            IterationOperation::ToValue => {
+                if is_value {
+                    return Err(iterate_contract::Error::ToValueRequiresRecord);
+                }
+                is_value = true;
             }
             _ => return Err(iterate_contract::Error::ProviderIncompatible),
         }
