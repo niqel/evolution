@@ -2,4 +2,5 @@
 resolver = "3"
 members = [
     "evo-shell",
+    "evo-fs-provider-std",
 ]
