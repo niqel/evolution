@@ -12,3 +12,5 @@ pub fn iterate<'iteration>(
 
     Ok(())
 }
+
+pub const ITERATE: iterate_contract::Iterate = iterate;
