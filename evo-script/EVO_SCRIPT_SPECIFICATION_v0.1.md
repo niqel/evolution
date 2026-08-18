@@ -962,7 +962,7 @@ Evo-Script v0.1 delimita formalmente el alcance de `enum`:
 3. **Pattern matching general**: La inspección de variantes se realiza exclusivamente mediante la expresión exhaustiva `when` (Sección 10.13). Mecanismos de pattern matching general (`match`, wildcards `_`, guards, patrones anidados o rangos) no forman parte de v0.1.
 4. **Discriminantes explícitos**: No se permite asignar valores numéricos explícitos a variantes (`Activo = 1`).
 5. **Generic enums**: Los enums genéricos (`enum Tipo<T>`) no forman parte de v0.1.
-6. **Conceptos ajenos**: No se introducen métodos, `impl`, `self`, `this`, `new`, `Option`, traits, `dyn`, punteros ni sintaxis de ownership/borrowing.
+6. **Conceptos ajenos**: No se introducen métodos, `impl`, `self`, `this` orientado a objetos, `new`, `Option`, traits, `dyn`, punteros ni sintaxis de ownership/borrowing.
 
 
 ### 7.5 Ausencia de tipos genéricos
@@ -1653,29 +1653,186 @@ Los paréntesis `( )` permiten agrupar expresiones para controlar explícitament
 
 El uso de paréntesis tiene como único propósito la agrupación sintáctica; no define tuplas ni tipos compuestos.
 
-Para los operadores compartidos con Rust, Evo-Script adopta la precedencia y asociatividad convencional de Rust:
+Evo-Script v0.1 define la jerarquía completa de precedencia y asociatividad de operadores de la siguiente manera (de mayor a menor precedencia):
 
-1. Operadores unarios (`!`, `-`)
-2. Multiplicativos (`*`, `/`, `%`)
-3. Aditivos (`+`, `-`)
-4. Comparaciones (`<`, `<=`, `>`, `>=`, `==`, `!=`)
-5. Conjunción lógica (`&&`)
-6. Disyunción lógica (`||`)
+1. **Operadores unarios prefijos** (`!`, `-`) — asociatividad por la derecha.
+2. **Multiplicativos** (`*`, `/`, `%`) — asociatividad por la izquierda.
+3. **Aditivos** (`+`, `-`) — asociatividad por la izquierda.
+4. **Comparaciones** (`<`, `<=`, `>`, `>=`, `==`, `!=`) — no encadenables.
+5. **Conjunción lógica** (`&&`) — asociatividad por la izquierda.
+6. **Disyunción lógica** (`||`) — asociatividad por la izquierda.
+7. **Pipeline** (`|>`) — asociatividad por la izquierda (menor precedencia de todos los operadores).
 
 Ejemplos:
 
 - `a + b * c` equivale semánticamente a `a + (b * c)`.
 - `a > 10 && b < 20` equivale semánticamente a `(a > 10) && (b < 20)`.
+- `a + b |> to_string` equivale semánticamente a `(a + b) |> to_string`.
+- `a > b |> to_string` equivale semánticamente a `(a > b) |> to_string`.
 
 
-### 10.11 Pipeline (`|>`)
+### 10.11 Pipeline (`|>`) y placeholder contextual `this`
 
-Evo-Script preserva su operador nativo de pipeline `|>` para la composición secuencial de datos y operaciones:
+Evo-Script define la sintaxis y la semántica universal del operador de composición secuencial de pipelines:
 
-    source
-    |> to_int64
+    |>
 
-`|>` no es un operador bitwise ni debe confundirse con la disyunción lógica `||`.
+y del placeholder contextual:
+
+    this
+
+El pipeline en Evo-Script es estrictamente **monovalor** y opera mediante composición secuencial de izquierda a derecha.
+
+
+#### 10.11.1 Principio de pipeline monovalor
+
+1. **Un solo valor transportado**: Un pipeline transporta exactamente un valor en cada etapa. Cada stage consume exactamente un valor proveniente de la izquierda del pipe y produce exactamente un valor que se convierte en la entrada del siguiente stage.
+2. **Valores estructurados**: El principio monovalor aplica a todo tipo de valor semántico en Evo-Script (tipos nativos, `struct`, `enum`, `dynamic`). Un `struct Trabajador` o un `enum BuscarTrabajadorResultado` transportado por un pipeline cuenta como exactamente un valor.
+3. **Ausencia de pipes multivalor**: El pipeline no transporta múltiples parámetros, tuplas implícitas, listas de argumentos ni valores múltiples (`(a, b) |> funcion` no existe como mecanismo de paso múltiple).
+
+
+#### 10.11.2 Stage de un solo argumento (Aridad 1)
+
+Para operaciones cuya firma requiere exactamente un argumento:
+
+    fn to_string(int value) -> string
+
+la forma canónica y obligatoria en el pipeline es:
+
+    valor |> operacion
+
+Ejemplo:
+
+    100 |> to_string
+
+Reglas:
+- No se permite `valor |> operacion(this)` ni `valor |> operacion()`. Evo-Script define una única forma canónica para operaciones de aridad 1.
+- Semánticamente, el stage recibe el valor transportado y lo aplica como único argumento de la operación.
+
+
+#### 10.11.3 Stage de dos o más argumentos (Aridad >= 2) y placeholder `this`
+
+Para operaciones cuya firma requiere dos o más argumentos, el valor transportado por el pipeline debe declararse explícitamente mediante el placeholder contextual `this`:
+
+    valor |> operacion(this, argumento2, ..., argumentoN)
+
+Ejemplo:
+
+    fn sumar(int a, int b) -> int {
+        return a + b;
+    }
+
+    let int resultado = 10 |> sumar(this, 20);
+
+Reglas normativas de `this`:
+
+1. **Obligatoriedad en aridad >= 2**: Para operaciones de dos o más argumentos, el uso de `this` es obligatorio. La forma implícita `10 |> sumar(20)` es inválida.
+2. **Exclusivamente en el primer argumento**: `this` solo puede ocupar la primera posición de la lista de argumentos del stage. Las formas `sumar(20, this)` o `concat(a, this, b)` son inválidas.
+3. **Exactamente una aparición**: `this` debe aparecer exactamente una vez en el stage. Las formas `sumar(this, this)` o `concat(this, " ", this)` son inválidas.
+4. **Primer argumento completo**: `this` debe ser directamente el primer argumento completo del stage. No se permiten subexpresiones que contengan `this` (como `sumar(this + 1, 20)` o `funcion(to_string(this), 20)`). Para transformar previamente el valor transportado, debe utilizarse un stage previo en el pipeline.
+5. **Naturaleza de placeholder contextual**: `this` no es una variable, no es un binding, no es un parámetro, no es un campo y no representa un objeto actual ni referencia `self`/`this` de programación orientada a objetos. Su significado existe exclusivamente dentro de `operacion(this, ...)` como placeholder del valor transportado por el pipeline inmediato. Fuera de este contexto (`let int x = this;`, `return this;`), `this` es inválido.
+6. **Argumentos adicionales**: Los argumentos posteriores a `this` (`argumento2`, `argumento3`, etc.) son expresiones normales del lenguaje evaluadas en su propio contexto.
+
+
+#### 10.11.4 Pipelines anidados y scopes de `this`
+
+Un argumento adicional en un stage de pipeline puede ser a su vez una expresión pipeline:
+
+```text
+nombre
+|> concat(
+    this,
+    " ",
+    apellido |> limpiar
+)
+```
+
+O agrupado explícitamente con paréntesis:
+
+```text
+nombre
+|> concat(
+    this,
+    " ",
+    (apellido |> limpiar)
+)
+```
+
+Reglas:
+- Cada pipeline posee su propio contexto de valor transportado.
+- En pipelines anidados, cada aparición de `this` se resuelve estrictamente contra el pipeline inmediato al que pertenece. No existe captura de `this` entre pipelines externos e internos.
+
+
+#### 10.11.5 Asociatividad y composición secuencial
+
+1. **Asociatividad por la izquierda**: El operador `|>` es asociativo de izquierda a derecha. Una cadena como:
+   ```text
+   valor
+   |> operacion_a
+   |> operacion_b
+   |> operacion_c
+   ```
+   se evalúa secuencialmente alimentando la salida de `operacion_a` hacia `operacion_b`, y la salida de esta hacia `operacion_c`.
+2. **Equivalencia semántica**: Para funciones ordinarias de un argumento, `a |> f |> g` equivale conceptualmente a `g(f(a))`.
+
+
+#### 10.11.6 Compatibilidad de tipos en stages
+
+1. **Validación estricta de tipos**: El tipo del valor producido por la parte izquierda de `|>` debe ser exactamente compatible con el tipo esperado por el primer parámetro del stage derecho.
+2. **Ausencia de conversiones implícitas**: El pipeline no efectúa coerciones ni conversiones automáticas entre stages. Si se requiere transformar el tipo, debe intercalarse un stage explícito de la familia `to_tipo`.
+3. **Stage de cero argumentos inválido**: Una operación que no recibe argumentos no puede participar como stage de pipeline, ya que no posee un parámetro para consumir el valor transportado.
+
+
+#### 10.11.7 Composición con let, return y when
+
+1. **Con `let`**: Un pipeline puede inicializar un binding inmutable:
+   ```text
+   let string texto = 100 |> to_int64 |> to_string;
+   ```
+2. **Con `return`**: Una función puede declarar una expresión pipeline como su resultado:
+   ```text
+   fn calcular_texto(int a, int b) -> string {
+       return a + b
+           |> to_string;
+   }
+   ```
+   Debido a la menor precedencia de `|>`, `return a + b |> to_string;` evalúa `(a + b) |> to_string` antes de entregarlo a `return`.
+3. **Con `when`**: Las ramas de una correspondencia `when` pueden producir expresiones pipeline:
+   ```text
+   return when resultado {
+       Resultado::Numero(int value) => value |> to_string
+       Resultado::Texto(string value) => value
+   };
+   ```
+
+
+#### 10.11.8 Relación arquitectónica con EvoQ
+
+1. **Independencia semántica**: Evo-Script define la semántica universal y el mecanismo de composición de `|>`, `this` y pipelines. EvoQ define operaciones semánticas de consulta que pueden participar en pipelines, pero no redefine el operador ni el lenguaje.
+2. **Operaciones conceptuales**: Nombres como `filter`, `select`, `take`, `skip`, `first`, `last`, `count` o `concat` no constituyen palabras clave reservadas de Evo-Script en v0.1; pertenecen a sus respectivos sistemas semánticos o funciones del programa.
+
+
+#### 10.11.9 Ejemplo canónico completo
+
+```text
+fn sumar(int value, int amount) -> int {
+    return value + amount;
+}
+
+fn multiplicar(int value, int factor) -> int {
+    return value * factor;
+}
+
+fn calcular(int value) -> string {
+    return value
+        |> sumar(this, 20)
+        |> multiplicar(this, 2)
+        |> to_string;
+}
+```
+
+Flujo conceptual para `calcular(10)`:
+$$\text{10} \xrightarrow{\text{sumar(10, 20)}} \text{30} \xrightarrow{\text{multiplicar(30, 2)}} \text{60} \xrightarrow{\text{to\_string(60)}} \text{"60"}$$
 
 
 ### 10.12 Ausencia de operadores de asignación y mutación
@@ -1822,6 +1979,8 @@ Quedan formalmente fuera de Evo-Script v0.1:
 5. **Tipos no numéricos en dynamic**: `dynamic` no soporta structs, enums ni dispatch polimórfico dinámico.
 6. **Tipos enteros artificiales visibles**: No existen `bigint`, `int256` ni `int512`.
 7. **Control condicional imperativo y pattern matching general**: No existen `if`, `else`, `switch`, `case`, `for`, `while`, `loop`, `match`, guards, wildcards `_`, rangos ni destructuring anidado.
+8. **Conceptos orientados a objetos y tuplas**: No existen clases, métodos, constructores, interfaces, herencia, `self`, `this` orientado a objetos, tuplas ni pipes multivalor.
+9. **Funciones como valores y closures**: No existen lambdas, funciones anónimas, clausuras ni tipos función como valores de primer orden.
 
 
 ### 10.15 Semántica pendiente
@@ -1830,7 +1989,6 @@ Permanecen explícitamente pendientes para su definición en especificaciones po
 
 1. **Mecanismos generales de captura de errores de evaluación**: No se introducen construcciones de manejo de excepciones o captura de errores de evaluación (`try`/`catch`).
 2. **Detalles avanzados de parsing en flotantes**: Algoritmos de parsing textual detallado y soporte de notación científica avanzada en literales float.
-3. **Precedencia específica de pipeline**: La posición exacta del operador `|>` en la jerarquía completa de precedencia frente a todos los operadores.
 
 
 ## 11. Funciones
@@ -2026,7 +2184,9 @@ Existe una separación estricta entre la representación textual y la semántica
 | `!a` | `Logical NOT` |
 | `-a` | `Numeric negation` |
 | `(expresión)` | `Grouped expression` |
-| `valor \|> operación` | `Pipeline composition` |
+| `valor \|> operacion` | `Single-input pipeline stage` |
+| `valor \|> operacion(this, arg)` | `Explicit pipeline input with additional arguments` |
+| `this` | `Contextual pipeline input placeholder` |
 | `when valor { ... }` | `Exhaustive enum correspondence expression` |
 | `Tipo::Variante => expresion` | `Variant-to-value correspondence` |
 | `Tipo::Variante(Tipo binding)` | `Associated enum value extraction` |
