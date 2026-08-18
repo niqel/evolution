@@ -489,6 +489,7 @@ Evo-Script v0.1 define exactamente la siguiente tabla de tipos nativos:
 | `int` | `i32` |
 | `float` | `f64` |
 | `bool` | `bool` |
+| `string` | `str` / `String` según requerimiento técnico de ownership |
 | `int8` | `i8` |
 | `int16` | `i16` |
 | `int32` | `i32` |
@@ -508,7 +509,15 @@ de referencia en Rust es `i32`.
 El tipo `float` es un tipo nativo de Evo-Script cuya representación técnica
 de referencia en Rust es `f64`.
 
-No se definen como macros textuales ni reemplazos del parser.
+El tipo `string` es un tipo semántico nativo único de Evo-Script. Su representación
+técnica de referencia en Rust puede ser prestada (`&str`) o propietaria (`String`)
+según las necesidades técnicas de la implementación y de su runtime. La distinción
+entre referencias prestadas y memoria propietaria no forma parte de la semántica
+visible del lenguaje: el programador de Evo-Script utiliza exclusivamente `string`.
+Aspectos como ownership, borrowing y lifetimes del texto son detalles internos de
+implementación.
+
+Estos tipos nativos no se definen como macros textuales ni reemplazos del parser.
 
 
 ### 7.2 Tipos definidos
@@ -520,31 +529,182 @@ En Evo-Script v0.1 existen conceptualmente dos mecanismos para definir tipos:
 - `struct`
 - `enum`
 
-Ejemplos conceptuales:
+Una función o estructura que hace referencia a un tipo definido no necesita
+conocer internamente si el identificador corresponde a un `struct` o a un `enum`.
+La definición correspondiente determina su naturaleza.
+
+
+### 7.3 Struct
+
+`struct` define exclusivamente una estructura de datos.
+
+Un `struct` no posee funciones, métodos, constructores, herencia, interfaces,
+comportamiento ni lógica asociada. No describe clases, objetos ni entidades
+orientadas a objetos.
+
+
+#### 7.3.1 Forma general y declaración de campos
+
+La forma textual general para definir un `struct` es:
+
+    struct NombreTipo {
+        tipo campo;
+        tipo campo;
+    }
+
+Ejemplo canónico:
 
     struct Trabajador {
-        ...
+        int edad;
+        string name;
+        string last_name;
     }
 
-    enum Estado {
-        ...
-    }
+Cada campo se declara siguiendo la regla oficial: `tipo nombre;` y termina con
+punto y coma (`;`).
 
-Estos ejemplos establecen que `Trabajador` y `Estado` se convierten en
-nombres de tipo válidos dentro del programa.
 
-Una función que hace referencia a un tipo definido no necesita conocer
-internamente si el identificador corresponde a un `struct` o a un `enum`.
+#### 7.3.2 Convenciones de nombres
+
+Evo-Script establece normativamente las siguientes convenciones:
+
+- **Tipos definidos**: se nombran en `PascalCase`.
+  Ejemplos: `Trabajador`, `Pais`, `Colonia`, `DireccionFiscal`, `GuardarError`.
+- **Campos**: se nombran en `snake_case`.
+  Ejemplos: `edad`, `name`, `last_name`, `id_colonia`, `direccion_fiscal`.
+
+
+#### 7.3.3 Composición de structs
+
+Un campo dentro de un `struct` puede utilizar cualquier tipo válido de Evo-Script,
+incluyendo otro tipo definido mediante `struct`.
 
 Ejemplo:
 
-    fn guardar(Trabajador trabajador) ...
+    struct Pais {
+        int id;
+        string name;
+    }
 
-La firma referencia el tipo `Trabajador`. La definición correspondiente de
-`Trabajador` determina si se trata de un `struct`, un `enum` u otra categoría.
+    struct Colonia {
+        int id_colonia;
+        string name;
+        Pais pais;
+    }
+
+Esta relación representa exclusivamente una **composición de datos**: `Colonia`
+simplemente contiene un campo de tipo `Pais`. No constituye herencia, relación
+orientada a objetos ni clase contenida.
 
 
-### 7.3 Result
+#### 7.3.4 Construcción de valores struct
+
+Evo-Script no utiliza la palabra clave `new` ni constructores asociados para
+instanciar un `struct`.
+
+La construcción de un valor se realiza directamente mediante el nombre del tipo:
+
+    Trabajador {
+        edad: 43
+        name: "Gustavo"
+        last_name: "Melendez"
+    }
+
+La construcción `NombreTipo { ... }` produce directamente un valor del tipo
+`NombreTipo`.
+
+
+#### 7.3.5 Diferencia entre definición y construcción
+
+Existe una distinción sintáctica y semántica fundamental:
+
+- **Definición**: declara la estructura mediante `tipo nombre;`.
+  ```text
+  struct Trabajador {
+      int edad;
+      string name;
+  }
+  ```
+- **Construcción**: inicializa los datos mediante `nombre: valor`.
+  ```text
+  Trabajador {
+      edad: 43
+      name: "Gustavo"
+  }
+  ```
+
+El carácter dos puntos (`:`) pertenece exclusivamente a la asignación de valor a
+un campo durante la construcción; no se utiliza para declarar campos en la definición.
+
+
+#### 7.3.6 Reglas de construcción
+
+Durante la construcción de un `struct` en Evo-Script v0.1 aplican las siguientes
+reglas:
+
+1. **Campos obligatorios**: Todos los campos definidos en el `struct` son
+   obligatorios. No existen valores por defecto implícitos (no se asume `0`,
+   `""` ni `false`) ni existe `null` como mecanismo para omitir campos.
+2. **Campos desconocidos o duplicados**: No pueden proporcionarse campos no
+   declarados en la definición del `struct`, ni puede repetirse un mismo campo.
+3. **Orden de campos**: El orden en que se asignan los campos durante la
+   construcción no altera la identidad semántica del valor. Los campos se
+   identifican exclusivamente por su nombre:
+
+       Trabajador {
+           edad: 43
+           name: "Gustavo"
+       }
+
+   y:
+
+       Trabajador {
+           name: "Gustavo"
+           edad: 43
+       }
+
+   producen valores equivalentes.
+
+
+#### 7.3.7 Structs recursivos
+
+Los structs recursivos directos (como `struct Nodo { Nodo siguiente; }`) quedan
+explícitamente fuera de la especificación de Evo-Script v0.1. El lenguaje no ha
+incorporado aún mecanismos de direccionamiento, `Option`, referencias ni
+representación formal de ausencia.
+
+
+#### 7.3.8 Separación entre datos y comportamiento
+
+Evo-Script mantiene una separación total entre la estructura de datos y las
+operaciones que actúan sobre ella:
+
+- `struct`: define datos.
+- `NombreTipo { ... }`: construye un valor de datos.
+- `fn`: define comportamiento y funciones de transformación.
+
+Ejemplo conceptual:
+
+    struct Pais {
+        int id;
+        string name;
+    }
+
+    struct Colonia {
+        int id_colonia;
+        string name;
+        Pais pais;
+    }
+
+    fn guardar(Colonia colonia) -> result<Colonia, GuardarError> {
+        ...
+    }
+
+`Colonia` no contiene ni conoce la función `guardar`. Las funciones operan sobre
+valores de datos; los structs no poseen lógica ni métodos asociados.
+
+
+### 7.4 Result
 
 Evo-Script incluye el tipo incorporado especial:
 
@@ -676,6 +836,10 @@ semántica del lenguaje:
 | `-> tipo` | `Result type declaration` |
 | `result<T, E>` | `Result type` |
 | `{ ... }` | `Correspondence` |
+| `struct Nombre { ... }` | `Struct definition` |
+| `tipo nombre;` | `Field` |
+| `Nombre { ... }` | `Struct construction` |
+| `nombre: valor` | `Field initialization` |
 
 El parser futuro reconocerá la representación textual y generará la estructura
 correspondiente; Evo-Script define el significado y las reglas semánticas
