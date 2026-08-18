@@ -959,7 +959,7 @@ Evo-Script v0.1 delimita formalmente el alcance de `enum`:
 
 1. **Mutabilidad**: Evo-Script v0.1 no define `var`, `mut` ni variables reasignables. Los valores con nombre se representan mediante bindings inmutables declarados con `let`.
 2. **Funciones como valores**: Variantes que transporten tipos función o clausuras quedan pendientes.
-3. **Pattern matching general**: La inspección de variantes se realiza exclusivamente mediante la expresión exhaustiva `when` (Sección 10.13). Mecanismos de pattern matching general (`match`, wildcards `_`, guards, patrones anidados o rangos) no forman parte de v0.1.
+3. **Pattern matching general**: La inspección de variantes se realiza exclusivamente mediante la expresión exhaustiva `when` (Sección 10.14). Mecanismos de pattern matching general (`match`, wildcards `_`, guards, patrones anidados o rangos) no forman parte de v0.1.
 4. **Discriminantes explícitos**: No se permite asignar valores numéricos explícitos a variantes (`Activo = 1`).
 5. **Generic enums**: Los enums genéricos (`enum Tipo<T>`) no forman parte de v0.1.
 6. **Conceptos ajenos**: No se introducen métodos, `impl`, `self`, `this` orientado a objetos, `new`, `Option`, traits, `dyn`, punteros ni sintaxis de ownership/borrowing.
@@ -1281,18 +1281,15 @@ Aun siendo una conversión garantizada, la operación **sigue siendo estrictamen
 
 ### 9.4 Conversiones potencialmente fallables y ConversionError
 
-Cuando una conversión puede implicar pérdida de rango numérico, imposibilidad de
-representación exacta o pérdida de precisión, la operación no altera ni distorsiona
-silenciosamente el valor. El tipo semántico normal de la expresión es el tipo destino
-(`T`). Si la conversión puede realizarse con exactitud, la evaluación produce el valor
-en el tipo destino; si el valor de origen no puede representarse exactamente en el
-destino, la evaluación falla con:
+Cuando una conversión puede implicar pérdida de rango numérico, imposibilidad de representación exacta o pérdida de precisión, la operación no altera ni distorsiona silenciosamente el valor.
 
-    ConversionError
-
-`ConversionError` se define conceptualmente como un error de evaluación del lenguaje
-que representa el fracaso de una conversión de tipo. No constituye un valor envuelto en
-un tipo genérico `Result` ni altera el tipo normal de la conversión.
+1. **Tipo semántico normal**: El tipo normal de una conversión explícita es estrictamente el tipo destino declarado (`T`).
+2. **Evaluación válida**: Si el valor concreto de origen puede representarse de forma exacta y completa en el tipo destino, la evaluación produce directamente el valor en el tipo destino.
+3. **Fallo de evaluación**: Si el valor de origen no puede representarse exactamente en el destino, la evaluación falla con:
+   ```text
+   ConversionError
+   ```
+4. **Naturaleza de ConversionError**: `ConversionError` es un error de evaluación del lenguaje que representa el fracaso de una conversión de tipo. No constituye un valor, no forma parte del tipo normal (`T | ConversionError` no existe), no se envuelve en un tipo genérico `Result`, no puede asociarse a un binding ni capturarse desde dentro de Evo-Script v0.1.
 
 
 ### 9.5 Conversiones entre enteros
@@ -1420,13 +1417,11 @@ Quedan formalmente fuera de la especificación de conversiones de Evo-Script v0.
 7. **Genéricos y desempaquetado de Result**: Result no existe como tipo del lenguaje; no existen genéricos, `?`, `unwrap`, `expect` ni tipos unión (`T | E`).
 
 
-
 ## 10. Expresiones y operadores
 
 ### 10.1 Expresiones
 
-Una **expresión** (`Expression`) es una construcción sintáctica y semántica que se
-evalúa para producir un valor.
+Una **expresión** (`Expression`) es una construcción sintáctica y semántica que posee un tipo semántico normal y, al evaluarse correctamente, produce exactamente un valor de dicho tipo.
 
 Ejemplos:
 
@@ -1436,6 +1431,12 @@ Ejemplos:
 - Unarias: `-temperature`, `!ready`
 - Conversiones: `to_int64(value)`
 
+Reglas fundamentales de evaluación:
+
+1. **Producción de valor normal**: Una evaluación válida produce exactamente un valor coincidente con el tipo semántico de la expresión.
+2. **Fallo de evaluación**: Una expresión puede fallar durante su evaluación según las reglas normativas del lenguaje (por ejemplo, `ConversionError`, `OverflowError`, `DivisionByZeroError`).
+3. **Ausencia de tipos unión o Result**: Un posible fallo de evaluación no altera el tipo normal de la expresión, no produce un segundo valor, no genera tipos unión (`T | Error`) ni envuelve el resultado en `Result<T, E>`.
+
 Una expresión puede utilizarse directamente como el valor en una declaración `let`:
 
     let int total = price + tax;
@@ -1444,16 +1445,13 @@ Una expresión puede utilizarse directamente como el valor en una declaración `
 
 ### 10.2 Tipado contextual de literales numéricos
 
-Los literales numéricos en Evo-Script no se definen como valores previamente tipados
-que posteriormente deban convertirse. Un literal numérico adquiere su tipo a partir
-del contexto numérico explícitamente requerido.
+Los literales numéricos en Evo-Script no se definen como valores previamente tipados que posteriormente deban convertirse. Un literal numérico adquiere su tipo a partir del contexto numérico explícitamente requerido.
 
 Ejemplo:
 
     let int64 value = 100;
 
-En este caso, el literal `100` nace semánticamente como `int64`. No ocurre una
-conversión implícita `int -> int64` ni una promoción de tipos.
+En este caso, el literal `100` nace semánticamente como `int64`. No ocurre una conversión implícita `int -> int64` ni una promoción de tipos.
 
 Ejemplos canónicos de tipado contextual:
 
@@ -1509,36 +1507,32 @@ Ejemplo:
 
 Reglas de overflow:
 
-1. **Sin promoción automática**: El lenguaje nunca cambia silenciosamente el tipo para evitar un error (`int8 + int8` no se transforma en `int16`).
-2. **Fallo con OverflowError**: Cuando una operación bajo un tipo fijo produce un valor fuera del rango representable, la evaluación falla con `OverflowError`.
-3. **Sin wrapping modular**: Evo-Script no realiza wrapping silencioso (`127 + 1` en `int8` no produce `-128`).
-4. **Sin saturación**: No se realiza saturación automática (`127 + 1` en `int8` no produce `127`).
-5. **Negación unaria y rango**: La negación numérica `-value` sobre tipos fijos también produce `OverflowError` si el valor resultante no cabe en el tipo (por ejemplo, negar el valor mínimo representable en un entero con signo).
-6. **Separación semántica de errores**:
-   - `OverflowError`: ocurre durante la evaluación de una operación numérica bajo un tipo fijo cuando el resultado no cabe en dicho tipo.
-   - `DivisionByZeroError`: ocurre cuando `/` o `%` reciben un divisor numéricamente igual a cero.
-   - `ConversionError`: ocurre cuando se solicita una conversión explícita `to_tipo` y el valor de origen no puede representarse en el destino.
-7. **No altera tipos normales**: `OverflowError` es un error de evaluación aritmética; no altera el tipo normal de la expresión ni la envuelve en tipos contenedores de error.
+1. **Conservación de tipo normal**: La operación conserva como tipo normal el tipo de tamaño fijo declarado en sus operandos.
+2. **Sin promoción automática**: El lenguaje nunca cambia silenciosamente el tipo para evitar un error (`int8 + int8` no se transforma en `int16`).
+3. **Fallo con OverflowError**: Cuando una operación bajo un tipo fijo produce un valor fuera del rango representable, la evaluación falla con `OverflowError`.
+4. **Sin wrapping modular**: Evo-Script no realiza wrapping silencioso (`127 + 1` en `int8` no produce `-128`).
+5. **Sin saturación**: No se realiza saturación automática (`127 + 1` en `int8` no produce `127`).
+6. **Negación unaria y rango**: La negación numérica `-value` sobre tipos fijos también produce `OverflowError` si el valor resultante no cabe en el tipo (por ejemplo, negar el valor mínimo representable en un entero con signo).
+7. **Naturaleza de OverflowError**: `OverflowError` es un fallo de evaluación aritmética; no es un valor normal, no forma parte del tipo normal de la expresión (`int8 | OverflowError` no existe), no se envuelve en `Result` y no es capturable desde dentro de Evo-Script v0.1.
 
 
 ### 10.5 División y residuo entre cero (DivisionByZeroError)
 
-Dividir entre cero o calcular el residuo con un divisor igual a cero no constituye
-una operación válida en Evo-Script. Cuando el segundo operando de una operación `/`
-o `%` es numéricamente igual a cero, la evaluación aritmética falla con:
+Dividir entre cero o calcular el residuo con un divisor igual a cero no constituye una operación válida en Evo-Script. Cuando el segundo operando de una operación `/` o `%` es numéricamente igual a cero, la evaluación aritmética falla con:
 
     DivisionByZeroError
 
 Reglas:
 
-1. **Operaciones cubiertas**: Aplica de manera uniforme tanto a la división (`a / b`) como al residuo (`a % b`). No existen errores separados como `RemainderByZeroError` ni `ModuloByZeroError`.
-2. **Tipos enteros**: Aplica a todos los tipos enteros (`int`, `int8`..`int128`, `uint8`..`uint128`).
+1. **Conservación de tipo normal**: Las operaciones `/` y `%` conservan su tipo semántico normal (`int`, `float64`, etc.). `DivisionByZeroError` no forma parte del tipo normal de retorno.
+2. **Operaciones cubiertas**: Aplica de manera uniforme tanto a la división (`a / b`) como al residuo (`a % b`). No existen errores separados como `RemainderByZeroError` ni `ModuloByZeroError`.
+3. **Tipos enteros**: Aplica a todos los tipos enteros (`int`, `int8`..`int128`, `uint8`..`uint128`).
    ```text
    let int64 value = 100;
    let int64 divisor = 0;
-   let int64 result = value / divisor; // Falla con DivisionByZeroError
+   let int64 result = value / divisor; // Falla la evaluación con DivisionByZeroError
    ```
-3. **Punto flotante**: Aplica a todos los tipos flotantes (`float`, `float32`, `float64`). Evo-Script no produce silenciosamente `Infinity`, `+Infinity`, `-Infinity` ni `NaN` como resultado normal de una división entre cero.
+4. **Punto flotante**: Aplica a todos los tipos flotantes (`float`, `float32`, `float64`). Evo-Script no produce silenciosamente `Infinity`, `+Infinity`, `-Infinity` ni `NaN` como resultado normal de una división entre cero.
    - Divisores `0.0` y `-0.0` se consideran numéricamente cero:
      ```text
      10.0 / 0.0  // Produce DivisionByZeroError
@@ -1546,12 +1540,11 @@ Reglas:
      0.0 / 0.0   // Produce DivisionByZeroError
      0 / 0       // Produce DivisionByZeroError
      ```
-4. **Tipo dynamic**: La evaluación bajo contexto `dynamic` no valida la división entre cero; la evaluación termina con `DivisionByZeroError` antes de producir un valor dynamic:
+5. **Tipo dynamic**: La evaluación bajo contexto `dynamic` no valida la división entre cero; la evaluación termina con `DivisionByZeroError` antes de producir un valor dynamic:
    ```text
-   let dynamic result = 100 / 0; // Falla con DivisionByZeroError
+   let dynamic result = 100 / 0; // Falla la evaluación con DivisionByZeroError
    ```
-5. **No altera tipos normales**: `DivisionByZeroError` es un error de evaluación aritmética en tiempo de ejecución. No altera la signatura conceptual de las operaciones válidas (`int / int -> int`, `float64 / float64 -> float64`).
-6. **Diagnóstico**: Permite diagnosticar claramente que ocurrió una operación de división o residuo con divisor cero. El texto exacto del mensaje no forma parte del contrato del lenguaje.
+6. **Naturaleza de DivisionByZeroError**: Es un fallo de evaluación aritmética en tiempo de ejecución. No es un valor, no pasa por `return`, no genera tipos unión y no es capturable desde dentro de Evo-Script v0.1.
 
 
 ### 10.6 Evaluación numérica dinámica con dynamic
@@ -1582,9 +1575,104 @@ Reglas de evaluación bajo contexto `dynamic`:
    ```text
    let dynamic result = to_int64(a) + b;
    ```
+7. **Errores de evaluación en dynamic**: Si una operación dentro de una expresión `dynamic` resulta matemáticamente inválida (como división entre cero), la evaluación falla con el error correspondiente (`DivisionByZeroError`) antes de producir un valor `dynamic`.
 
 
-### 10.7 Operadores de comparación
+### 10.7 Errores de evaluación y ausencia de captura
+
+Evo-Script v0.1 establece una distinción conceptual estricta entre **alternativas de dominio** y **errores de evaluación del lenguaje**.
+
+```
+Categorías de Resultado
+├── Alternativas de dominio (Domain Alternatives)
+│   ├── Modeladas explícitamente mediante enum
+│   ├── Constituyen valores normales (Values)
+│   ├── Retornables con return e inspeccionables con when
+│   └── Ejemplo: BuscarTrabajadorResultado::Error(string)
+│
+└── Errores de evaluación (Evaluation Errors)
+    ├── Fallos de evaluación del lenguaje
+    ├── No son valores normales ni tipos de datos
+    ├── Detienen la evaluación y se propagan al host exterior
+    └── Ejemplos: ConversionError, OverflowError, DivisionByZeroError
+```
+
+
+#### 10.7.1 Alternativas de dominio vs errores de evaluación
+
+1. **Alternativas de dominio como valores**: Toda situación esperada y manejable por la lógica del programa debe modelarse como parte del contrato de tipos del dominio mediante un `enum` definido explícitamente:
+   ```text
+   enum BuscarTrabajadorResultado {
+       Encontrado(Trabajador)
+       NoEncontrado
+       Error(string)
+   }
+   ```
+   En este caso, la variante `Error(string)` es un **valor normal** del enum. El nombre `Error` no posee magia ni captura fallos del lenguaje; es simplemente una variante de datos que puede almacenarse en bindings, retornarse mediante `return` e inspeccionarse exhaustivamente mediante `when`.
+2. **Errores de evaluación como fallos**: Los errores definidos por el lenguaje (`ConversionError`, `OverflowError`, `DivisionByZeroError`) representan **fallos de evaluación** causados por operaciones inválidas. No son valores, no son tipos de datos declarables y no forman parte del tipo normal de las expresiones.
+
+
+#### 10.7.2 Naturaleza no tipable de los errores de evaluación
+
+1. **Sin tipos visibles**: No existen tipos de datos como `EvaluationError`, `ArithmeticError`, `ConversionError` ni jerarquías de errores en el sistema de tipos de Evo-Script.
+2. **Prohibición en declaraciones**:
+   - No es válido declarar bindings de error: `let DivisionByZeroError err = ...;` (inválido).
+   - No es válido recibir errores como argumentos: `fn manejar(DivisionByZeroError err) -> ...` (inválido).
+   - No es válido declarar retornos de error: `fn test() -> DivisionByZeroError` o `return DivisionByZeroError;` (inválido).
+3. **Sin tipos unión ni Result**: Una expresión como `a / b` posee como tipo semántico normal únicamente `int`. No posee tipo `int | DivisionByZeroError` ni `Result<int, DivisionByZeroError>`.
+
+
+#### 10.7.3 Propagación del fallo en expresiones, bindings y funciones
+
+Como Evo-Script v0.1 no define mecanismos de captura de errores de evaluación, un fallo ocurrido durante la evaluación detiene la producción de valores normales y se propaga hacia el exterior:
+
+1. **Expresiones compuestas**: Si una subexpresión falla, la expresión completa que depende de ella no produce su valor normal. En `(a / b) + 10`, si `b == 0`, `a / b` falla con `DivisionByZeroError` y la suma exterior no se evalúa ni produce `int`.
+2. **Declaraciones let**: En `let int value = a / b;`, si `a / b` falla con `DivisionByZeroError`, el binding `value` no llega a crearse con valores parciales, nulos o por defecto. La inicialización completa del binding falla.
+3. **Declaraciones return**: `return expresion;` solo declara como resultado el valor producido exitosamente por `expresion`. Si la evaluación de `expresion` falla, el fallo ocurre **antes** de que `return` pueda completarse; la función no retorna un valor y el fallo se propaga al contexto que invocó la función.
+4. **Llamadas entre funciones**: Si una función invocada falla durante su evaluación, la función llamadora tampoco produce su valor normal:
+   ```text
+   fn dividir(int a, int b) -> int {
+       return a / b;
+   }
+
+   fn calcular(int a, int b) -> int {
+       return dividir(a, b) + 10;
+   }
+   ```
+   Si `b == 0`, `dividir(a, 0)` falla con `DivisionByZeroError` y `calcular(a, 0)` no produce un `int`.
+
+
+#### 10.7.4 Propagación en pipelines y when
+
+1. **Pipelines**: En una cadena monovalor `valor |> operacion_a |> operacion_b`, si `operacion_a` falla con un error de evaluación (por ejemplo `ConversionError`), ese stage no produce un valor, `operacion_b` no recibe entrada y el pipeline completo no produce un resultado normal. El placeholder contextual `this` no intercepta ni transforma errores.
+2. **Expresiones when**: `when` inspecciona exclusivamente valores de tipo `enum`. Si la expresión asociada a la variante activa falla durante su evaluación (por ejemplo `Resultado::Numero(0) => 100 / value`), la expresión `when` completa falla con `DivisionByZeroError`. `when` no busca otras variantes como respaldo ni captura errores del lenguaje.
+3. **Ausencia de enum de captura automática**: Definir un enum como:
+   ```text
+   enum DivisionResultado {
+       Correcto(int)
+       DivisorInvalido
+   }
+   ```
+   no captura automáticamente un `DivisionByZeroError` producido por `/`. El lenguaje no transforma fallos de evaluación en variantes de enum a posteriori.
+
+
+#### 10.7.5 Ausencia de mecanismos de captura y control de excepciones
+
+Evo-Script v0.1 **no define mecanismos de captura ni manejo de excepciones**:
+
+1. **Sin try / catch / throw**: No existen palabras clave `try`, `catch`, `throw`, `finally` ni sintaxis de lanzamiento/captura manual.
+2. **Sin recuperación ni fallback**: No existen operadores ni funciones como `recover`, `rescue`, `fallback`, `or_else`, `on_error` o `otherwise_error` para errores de evaluación.
+3. **Sin inspección booleana**: Los errores de evaluación no pueden convertirse a `bool` ni inspeccionarse mediante APIs como `has_error` o `is_error`.
+4. **Modelado en el origen**: Si una operación requiere que un resultado no exitoso sea manejable por el programa, dicha operación debe diseñar su contrato semántico desde el origen mediante un tipo `enum` de dominio, en lugar de intentar capturar un fallo del lenguaje a posteriori.
+
+
+#### 10.7.6 Límite exterior de evaluación e independencia de implementación
+
+1. **Límite exterior**: Al no existir captura interna en el lenguaje, todo error de evaluación se propaga hasta el límite exterior del entorno que inició la ejecución de Evo-Script (el host o runtime), el cual es responsable de registrar o reportar el diagnóstico correspondiente.
+2. **Independencia de implementación Rust**: La ausencia de tipos `Result` y excepciones en la semántica visible de Evo-Script no prohíbe que la implementación interna del compilador, parser, runtime o crates Rust (`evo-values`, `evo-query`, `evo-shell`, providers) utilice `Result<T, E>` u otros patrones técnicos de Rust para implementar el comportamiento del lenguaje.
+
+
+### 10.8 Operadores de comparación
 
 Evo-Script v0.1 define seis operadores de comparación:
 
@@ -1608,7 +1696,7 @@ Ejemplos:
     let bool same = first == second;
 
 
-### 10.8 Operadores lógicos
+### 10.9 Operadores lógicos
 
 Evo-Script v0.1 define tres operadores lógicos:
 
@@ -1629,7 +1717,7 @@ Ejemplo:
     let bool allowed = active && age >= 18;
 
 
-### 10.9 Operadores unarios
+### 10.10 Operadores unarios
 
 Evo-Script v0.1 define dos operadores unarios prefijos:
 
@@ -1645,7 +1733,7 @@ Ejemplo:
 No se incluyen operadores unarios de incremento (`++`), decremento (`--`), complemento bit a bit (`~`), referencias (`&`) ni desreferencia (`*`).
 
 
-### 10.10 Agrupación y precedencia
+### 10.11 Agrupación y precedencia
 
 Los paréntesis `( )` permiten agrupar expresiones para controlar explícitamente el orden de evaluación:
 
@@ -1671,7 +1759,7 @@ Ejemplos:
 - `a > b |> to_string` equivale semánticamente a `(a > b) |> to_string`.
 
 
-### 10.11 Pipeline (`|>`) y placeholder contextual `this`
+### 10.12 Pipeline (`|>`) y placeholder contextual `this`
 
 Evo-Script define la sintaxis y la semántica universal del operador de composición secuencial de pipelines:
 
@@ -1684,14 +1772,14 @@ y del placeholder contextual:
 El pipeline en Evo-Script es estrictamente **monovalor** y opera mediante composición secuencial de izquierda a derecha.
 
 
-#### 10.11.1 Principio de pipeline monovalor
+#### 10.12.1 Principio de pipeline monovalor
 
 1. **Un solo valor transportado**: Un pipeline transporta exactamente un valor en cada etapa. Cada stage consume exactamente un valor proveniente de la izquierda del pipe y produce exactamente un valor que se convierte en la entrada del siguiente stage.
 2. **Valores estructurados**: El principio monovalor aplica a todo tipo de valor semántico en Evo-Script (tipos nativos, `struct`, `enum`, `dynamic`). Un `struct Trabajador` o un `enum BuscarTrabajadorResultado` transportado por un pipeline cuenta como exactamente un valor.
 3. **Ausencia de pipes multivalor**: El pipeline no transporta múltiples parámetros, tuplas implícitas, listas de argumentos ni valores múltiples (`(a, b) |> funcion` no existe como mecanismo de paso múltiple).
 
 
-#### 10.11.2 Stage de un solo argumento (Aridad 1)
+#### 10.12.2 Stage de un solo argumento (Aridad 1)
 
 Para operaciones cuya firma requiere exactamente un argumento:
 
@@ -1710,7 +1798,7 @@ Reglas:
 - Semánticamente, el stage recibe el valor transportado y lo aplica como único argumento de la operación.
 
 
-#### 10.11.3 Stage de dos o más argumentos (Aridad >= 2) y placeholder `this`
+#### 10.12.3 Stage de dos o más argumentos (Aridad >= 2) y placeholder `this`
 
 Para operaciones cuya firma requiere dos o más argumentos, el valor transportado por el pipeline debe declararse explícitamente mediante el placeholder contextual `this`:
 
@@ -1734,7 +1822,7 @@ Reglas normativas de `this`:
 6. **Argumentos adicionales**: Los argumentos posteriores a `this` (`argumento2`, `argumento3`, etc.) son expresiones normales del lenguaje evaluadas en su propio contexto.
 
 
-#### 10.11.4 Pipelines anidados y scopes de `this`
+#### 10.12.4 Pipelines anidados y scopes de `this`
 
 Un argumento adicional en un stage de pipeline puede ser a su vez una expresión pipeline:
 
@@ -1763,7 +1851,7 @@ Reglas:
 - En pipelines anidados, cada aparición de `this` se resuelve estrictamente contra el pipeline inmediato al que pertenece. No existe captura de `this` entre pipelines externos e internos.
 
 
-#### 10.11.5 Asociatividad y composición secuencial
+#### 10.12.5 Asociatividad y composición secuencial
 
 1. **Asociatividad por la izquierda**: El operador `|>` es asociativo de izquierda a derecha. Una cadena como:
    ```text
@@ -1776,14 +1864,14 @@ Reglas:
 2. **Equivalencia semántica**: Para funciones ordinarias de un argumento, `a |> f |> g` equivale conceptualmente a `g(f(a))`.
 
 
-#### 10.11.6 Compatibilidad de tipos en stages
+#### 10.12.6 Compatibilidad de tipos en stages
 
 1. **Validación estricta de tipos**: El tipo del valor producido por la parte izquierda de `|>` debe ser exactamente compatible con el tipo esperado por el primer parámetro del stage derecho.
 2. **Ausencia de conversiones implícitas**: El pipeline no efectúa coerciones ni conversiones automáticas entre stages. Si se requiere transformar el tipo, debe intercalarse un stage explícito de la familia `to_tipo`.
 3. **Stage de cero argumentos inválido**: Una operación que no recibe argumentos no puede participar como stage de pipeline, ya que no posee un parámetro para consumir el valor transportado.
 
 
-#### 10.11.7 Composición con let, return y when
+#### 10.12.7 Composición con let, return y when
 
 1. **Con `let`**: Un pipeline puede inicializar un binding inmutable:
    ```text
@@ -1806,13 +1894,13 @@ Reglas:
    ```
 
 
-#### 10.11.8 Relación arquitectónica con EvoQ
+#### 10.12.8 Relación arquitectónica con EvoQ
 
 1. **Independencia semántica**: Evo-Script define la semántica universal y el mecanismo de composición de `|>`, `this` y pipelines. EvoQ define operaciones semánticas de consulta que pueden participar en pipelines, pero no redefine el operador ni el lenguaje.
 2. **Operaciones conceptuales**: Nombres como `filter`, `select`, `take`, `skip`, `first`, `last`, `count` o `concat` no constituyen palabras clave reservadas de Evo-Script en v0.1; pertenecen a sus respectivos sistemas semánticos o funciones del programa.
 
 
-#### 10.11.9 Ejemplo canónico completo
+#### 10.12.9 Ejemplo canónico completo
 
 ```text
 fn sumar(int value, int amount) -> int {
@@ -1835,7 +1923,7 @@ Flujo conceptual para `calcular(10)`:
 $$\text{10} \xrightarrow{\text{sumar(10, 20)}} \text{30} \xrightarrow{\text{multiplicar(30, 2)}} \text{60} \xrightarrow{\text{to\_string(60)}} \text{"60"}$$
 
 
-### 10.12 Ausencia de operadores de asignación y mutación
+### 10.13 Ausencia de operadores de asignación y mutación
 
 Debido a la inmutabilidad intrínseca de los bindings, Evo-Script no posee operadores generales de asignación ni mutación:
 
@@ -1851,7 +1939,7 @@ Ejemplos inválidos:
     ++age;        // Inválido
 
 
-### 10.13 Correspondencia exhaustiva de enums con when
+### 10.14 Correspondencia exhaustiva de enums con when
 
 Evo-Script no utiliza estructuras imperativas de control de flujo (`if`, `else`, `switch`, `case`, `for`, `while`, `loop`). La inspección y el consumo de valores de un tipo `enum` se modelan como una correspondencia declarativa y exhaustiva entre el conjunto cerrado de alternativas del enum y expresiones que producen un valor, mediante la palabra clave:
 
@@ -1872,7 +1960,7 @@ Forma general:
 El símbolo `=>` actúa exclusivamente como **marcador de correspondencia** dentro de `when`. No constituye un operador aritmético, lógico, de comparación, de asignación ni de pipeline, y no forma parte de la jerarquía de precedencia de operadores. Fuera de `when`, el símbolo `=>` no posee significado en Evo-Script v0.1.
 
 
-#### 10.13.1 Reglas de exhaustividad y correspondencia
+#### 10.14.1 Reglas de exhaustividad y correspondencia
 
 1. **Exhaustividad obligatoria**: Una expresión `when` debe cubrir todas las variantes declaradas en el tipo enum inspeccionado. Si falta alguna variante, el programa es semánticamente inválido.
 2. **Sin duplicados**: Cada variante del enum debe aparecer exactamente una vez. No pueden repetirse correspondencias para una misma variante.
@@ -1883,7 +1971,7 @@ El símbolo `=>` actúa exclusivamente como **marcador de correspondencia** dent
 7. **Tipado contextual de literales**: Si el resultado de `when` se asigna a un binding explícito (`let int64 value = when ...`), los literales numéricos en las expresiones de correspondencia adquieren dicho tipo contextual.
 
 
-#### 10.13.2 Inspección y extracción según tipo de variante
+#### 10.14.2 Inspección y extracción según tipo de variante
 
 1. **Variantes simples**: Se corresponden directamente sin paréntesis ni parámetros:
    ```text
@@ -1911,21 +1999,21 @@ El símbolo `=>` actúa exclusivamente como **marcador de correspondencia** dent
    En Evo-Script v0.1, una correspondencia sobre una variante estructurada debe extraer todos sus campos declarados. No se permite extracción parcial ni patrones de resto (`..`, `_`).
 
 
-#### 10.13.3 Ausencia de control condicional y guards
+#### 10.14.3 Ausencia de control condicional y guards
 
 1. **Solo tipos enum**: `when` solo acepta expresiones cuyo tipo sea un `enum` definido. No acepta valores booleanos (`when active { ... }`), numéricos ni cadenas.
 2. **Sin guards condicionales**: No se permite sintaxis de guards (`Variante if condicion => ...` ni `Variante when condicion => ...`). La selección se realiza exclusivamente por la variante activa del enum.
 3. **No sustituye a comparaciones booleanas**: La inspección semántica del enum se realiza mediante `when`, no mediante comparaciones de igualdad (`resultado == Tipo::Variante`).
 
 
-#### 10.13.4 Expresión when y resultado de función
+#### 10.14.4 Expresión when y resultado de función
 
 1. **Expresión when en return**: `when` es una `Expression` y no retorna implícitamente de una función. Para constituir el resultado de una función, debe declararse explícitamente mediante `return when ...;`.
 2. **Ausencia de return en ramas**: No se permite utilizar `return` dentro de las ramas individuales de `when` (`Variante => return valor;` es inválido). `when` produce el valor y `return` declara que ese valor es el resultado de la función.
 3. **Terminación con punto y coma**: Cuando `when` forma parte de una declaración `let` o de una sentencia `return`, la declaración completa termina con `;` (`let string mensaje = when ... ;` o `return when ... ;`). No se coloca `;` al final de cada correspondencia individual `Variante => expresion`.
 
 
-#### 10.13.5 Ejemplo completo canónico
+#### 10.14.5 Ejemplo completo canónico
 
 ```text
 struct Trabajador {
@@ -1968,7 +2056,7 @@ let string mensaje =
 ```
 
 
-### 10.14 Operadores y conceptos excluidos de v0.1
+### 10.15 Operadores y conceptos excluidos de v0.1
 
 Quedan formalmente fuera de Evo-Script v0.1:
 
@@ -1981,14 +2069,14 @@ Quedan formalmente fuera de Evo-Script v0.1:
 7. **Control condicional imperativo y pattern matching general**: No existen `if`, `else`, `switch`, `case`, `for`, `while`, `loop`, `match`, guards, wildcards `_`, rangos ni destructuring anidado.
 8. **Conceptos orientados a objetos y tuplas**: No existen clases, métodos, constructores, interfaces, herencia, `self`, `this` orientado a objetos, tuplas ni pipes multivalor.
 9. **Funciones como valores y closures**: No existen lambdas, funciones anónimas, clausuras ni tipos función como valores de primer orden.
+10. **Manejo de excepciones y captura de errores**: No existen `try`, `catch`, `throw`, `finally`, `recover`, tipos de excepción ni captura de errores de evaluación dentro del lenguaje.
 
 
-### 10.15 Semántica pendiente
+### 10.16 Semántica pendiente
 
-Permanecen explícitamente pendientes para su definición en especificaciones posteriores:
+Permanece explícitamente pendiente para su definición en especificaciones posteriores:
 
-1. **Mecanismos generales de captura de errores de evaluación**: No se introducen construcciones de manejo de excepciones o captura de errores de evaluación (`try`/`catch`).
-2. **Detalles avanzados de parsing en flotantes**: Algoritmos de parsing textual detallado y soporte de notación científica avanzada en literales float.
+1. **Detalles avanzados de parsing en flotantes**: Algoritmos de parsing textual detallado y soporte de notación científica avanzada en literales float.
 
 
 ## 11. Funciones
@@ -2160,6 +2248,7 @@ Existe una separación estricta entre la representación textual y la semántica
 | `=` | `Value association in let` |
 | `;` | `End of declaration/operation` |
 | `to_tipo(valor)` | `Explicit type conversion` |
+| `ConversionError` | `Explicit type conversion evaluation error` |
 | `valor \|> to_tipo` | `Composed explicit conversion` |
 | `literal numérico` | `Contextual numeric literal` |
 | `let int64 x = 100;` | `Literal typed as int64 by context` |
