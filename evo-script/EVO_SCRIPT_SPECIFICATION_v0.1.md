@@ -1443,9 +1443,9 @@ Una expresión puede utilizarse directamente como el valor en una declaración `
     let bool allowed = active && age >= 18;
 
 
-### 10.2 Tipado contextual de literales numéricos
+### 10.2 Tipado contextual y sintaxis de literales numéricos
 
-Los literales numéricos en Evo-Script no se definen como valores previamente tipados que posteriormente deban convertirse. Un literal numérico adquiere su tipo a partir del contexto numérico explícitamente requerido.
+Los literales numéricos en Evo-Script no se definen como valores previamente tipados que posteriormente deban convertirse. Un literal numérico expresa un valor textual en el código fuente y adquiere su tipo semántico directamente a partir del contexto numérico explícitamente requerido.
 
 Ejemplo:
 
@@ -1453,27 +1453,110 @@ Ejemplo:
 
 En este caso, el literal `100` nace semánticamente como `int64`. No ocurre una conversión implícita `int -> int64` ni una promoción de tipos.
 
-Ejemplos canónicos de tipado contextual:
+
+#### 10.2.1 Gramática conceptual de literales numéricos
+
+Evo-Script v0.1 clasifica los literales numéricos en tres formas textuales:
+
+```text
+digit
+    := "0".."9"
+
+digits
+    := digit+
+
+integer_literal
+    := digits
+
+decimal_literal
+    := digits "." digits
+
+scientific_literal
+    := (digits | decimal_literal) ("e" | "E") ("+" | "-")? digits
+```
+
+Reglas lexicales:
+1. **Separador decimal**: El separador decimal es exclusivamente el punto (`.`). No se admite la coma (`,`) ni separadores dependientes del locale o configuración regional del entorno.
+2. **Ausencia de separadores de dígitos**: No se admite el carácter guión bajo (`_`) dentro de literales numéricos (`1_000`, `1_000.25` o `1e1_000` son inválidos).
+3. **Signo negativo y unario**: El signo negativo situado antes de un número (`-10.5` o `-1.5e10`) no forma parte de la gramática lexical del literal; constituye la aplicación del operador unario `-` sobre el literal (`-(10.5)`, `-(1.5e10)`).
+4. **Ausencia de operador unario `+`**: El lenguaje no define un operador unario `+` (`+10.5` es inválido). El signo `+` solo es válido como marcador opcional dentro del exponente de un literal científico (`1e+10`).
+
+
+#### 10.2.2 Literales enteros
+
+Un literal entero está compuesto por una o más cifras decimales (`digits`):
 
     let int8 level = 5;
     let int64 population = 100;
     let int128 total = 500;
     let uint8 percentage = 100;
     let uint64 identifier = 1000;
-    let float32 price = 10.5;
-    let float64 amount = 10.5;
-    let dynamic count = 100;
 
-Reglas de tipado contextual:
+Reglas:
+1. **Representabilidad obligatoria**: El valor entero debe ser exactamente representable por el tipo requerido (por ejemplo, `let uint8 x = 100;` es válido; `let uint8 x = 300;` es inválido por exceder el rango de `uint8`).
+2. **Sin contexto**: Un literal entero sin contexto de tipo explícito produce `int` (`i32`).
 
-1. **Representabilidad obligatoria**: El literal debe ser exactamente representable por el tipo requerido.
-   - `let uint8 value = 100;` es válido porque `100` cabe en `uint8`.
-   - `let uint8 value = 300;` es inválido porque `300` excede el rango de `uint8`. No se realiza wrapping, truncamiento ni saturación silenciosa.
-2. **Literales sin contexto**: Cuando un literal numérico no posee un contexto de tipo que determine una representación específica, adopta los tipos por defecto del lenguaje:
-   - Literal entero sin contexto: produce `int` (`i32`).
-   - Literal decimal sin contexto: produce `float` (`f64`).
-3. **Propagación del contexto en expresiones `let`**: En una declaración como `let int64 total = value + 1;`, si la expresión opera en el contexto de `int64`, el literal `1` nace directamente como `int64`. Esto no constituye inferencia general de tipos ni relaja la prohibición de conversiones implícitas entre bindings existentes.
-4. **Literales de punto flotante**: El contexto asigna el tipo `float32` o `float64`. En Evo-Script v0.1 no se extienden reglas sobre algoritmos de parsing decimal/binario o notación científica avanzada.
+
+#### 10.2.3 Literales decimales de punto flotante
+
+La forma decimal canónica de un literal de punto flotante requiere dígitos obligatorios tanto antes como después del punto decimal (`digits "." digits`):
+
+    0.0
+    0.5
+    1.0
+    10.5
+    123.456
+    1000.25
+
+Reglas normativas:
+1. **Dígito inicial obligatorio**: Formas decimales sin dígito entero previo al punto (como `.5`) son sintácticamente inválidas en Evo-Script v0.1; la forma canónica es `0.5`.
+2. **Dígito posterior obligatorio**: Formas decimales sin dígitos tras el punto (como `5.`) son sintácticamente inválidas en Evo-Script v0.1; la forma canónica es `5.0`.
+3. **Tipado contextual de punto flotante**: El literal decimal nace directamente con el tipo del contexto requerido:
+   - `let float a = 10.5;` $\rightarrow$ nace directamente como `float` (`f64`).
+   - `let float32 b = 10.5;` $\rightarrow$ nace directamente como `float32` (`f32`).
+   - `let float64 c = 10.5;` $\rightarrow$ nace directamente como `float64` (`f64`).
+   No existe una representación decimal intermedia ni conversión implícita posterior.
+4. **Sin contexto**: Un literal decimal sin contexto explícito adopta el tipo por defecto `float` (`f64`).
+
+
+#### 10.2.4 Literales de notación científica
+
+Evo-Script v0.1 admite notación científica para literales de punto flotante mediante la sintaxis:
+
+    mantissa ("e" | "E") ["+" | "-"] digits
+
+donde la mantisa puede ser una secuencia entera de dígitos (`digits`) o un literal decimal canónico (`digits "." digits`).
+
+Ejemplos válidos:
+
+    1e10
+    1E10
+    1e+10
+    1e-10
+
+    1.5e10
+    1.5E10
+    1.5e+10
+    1.5e-10
+
+Reglas normativas:
+1. **Naturaleza de punto flotante**: Todo literal en notación científica constituye semánticamente un literal de punto flotante, incluso cuando su mantisa no incluya punto decimal (por ejemplo, `1e10` es un literal de punto flotante, no un entero).
+2. **Tipado contextual científico**: El literal científico adopta directamente el tipo requerido por el contexto:
+   - `let float a = 1.5e10;` $\rightarrow$ nace directamente como `float` (`f64`).
+   - `let float32 b = 1.5e-3;` $\rightarrow$ nace directamente como `float32` (`f32`).
+   - `let float64 c = 1.5e10;` $\rightarrow$ nace directamente como `float64` (`f64`).
+3. **Sin contexto**: Un literal en notación científica sin contexto explícito produce `float` (`f64`).
+4. **Incompatibilidad con contexto entero**: Un literal científico no se asocia directamente a tipos enteros (`let int64 x = 1e10;` es inválido). Si se requiere convertir un valor flotante a entero, debe utilizarse una conversión explícita `to_tipo`.
+5. **Exponentes completos obligatorios**: El exponente debe contener al menos un dígito posterior a `e`, `E` o al signo opcional (formas como `1e`, `1E`, `1e+`, `1e-`, `1.5e`, `1.5e+`, `1.5e-` son sintácticamente inválidas).
+6. **Mantisas decimales canónicas**: Formas con mantisa incompleta como `.5e10` o `5.e10` son sintácticamente inválidas (las formas válidas son `0.5e10` y `5.0e10`).
+
+
+#### 10.2.5 Formas y conceptos excluidos en literales
+
+1. **Ausencia de sufijos de tipo**: Evo-Script v0.1 no admite sufijos en literales (`10.5f`, `10.5d`, `10.5f32`, `10.5f64`, `1e10f` son inválidos).
+2. **Ausencia de literales especiales NaN e Infinity**: No existen identificadores o literales especiales como `NaN`, `nan`, `Infinity`, `infinity`, `inf` ni `-inf`.
+3. **Ausencia de bases no decimales en flotantes**: No existen literales de punto flotante hexadecimales (`0x1.2p3`), binarios ni octales.
+4. **Independencia de algoritmos internos de parsing**: La especificación define la sintaxis textual aceptada y la semántica de tipado, pero no exige un algoritmo interno particular de parsing binario ni se acopla a librerías específicas.
 
 
 ### 10.3 Operadores aritméticos
@@ -2070,13 +2153,12 @@ Quedan formalmente fuera de Evo-Script v0.1:
 8. **Conceptos orientados a objetos y tuplas**: No existen clases, métodos, constructores, interfaces, herencia, `self`, `this` orientado a objetos, tuplas ni pipes multivalor.
 9. **Funciones como valores y closures**: No existen lambdas, funciones anónimas, clausuras ni tipos función como valores de primer orden.
 10. **Manejo de excepciones y captura de errores**: No existen `try`, `catch`, `throw`, `finally`, `recover`, tipos de excepción ni captura de errores de evaluación dentro del lenguaje.
+11. **Sintaxis no canónica en literales numéricos**: No existen sufijos de tipo (`10.5f`, `10.5f32`), separadores `_` en números (`1_000`), decimales incompletos (`.5`, `5.`), mantisas científicas incompletas (`.5e10`, `5.e10`), exponentes incompletos (`1e`), flotantes hexadecimales (`0x1.2p3`) ni literales especiales `NaN` o `Infinity`.
 
 
 ### 10.16 Semántica pendiente
 
-Permanece explícitamente pendiente para su definición en especificaciones posteriores:
-
-1. **Detalles avanzados de parsing en flotantes**: Algoritmos de parsing textual detallado y soporte de notación científica avanzada en literales float.
+Dentro del alcance delimitado para Evo-Script v0.1, no existen temas semánticos pendientes en el subsistema de expresiones y operadores.
 
 
 ## 11. Funciones
@@ -2251,6 +2333,8 @@ Existe una separación estricta entre la representación textual y la semántica
 | `ConversionError` | `Explicit type conversion evaluation error` |
 | `valor \|> to_tipo` | `Composed explicit conversion` |
 | `literal numérico` | `Contextual numeric literal` |
+| `10.5` | `Decimal floating-point literal` |
+| `1.5e10` | `Scientific floating-point literal` |
 | `let int64 x = 100;` | `Literal typed as int64 by context` |
 | `let dynamic x = expresión;` | `Dynamic numeric binding` |
 | `OverflowError` | `Fixed-width arithmetic overflow` |
