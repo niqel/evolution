@@ -1510,11 +1510,45 @@ Reglas de overflow:
 5. **Negación unaria y rango**: La negación numérica `-value` sobre tipos fijos también produce `OverflowError` si el valor resultante no cabe en el tipo (por ejemplo, negar el valor mínimo representable en un entero con signo).
 6. **Separación semántica de errores**:
    - `OverflowError`: ocurre durante la evaluación de una operación numérica bajo un tipo fijo cuando el resultado no cabe en dicho tipo.
+   - `DivisionByZeroError`: ocurre cuando `/` o `%` reciben un divisor numéricamente igual a cero.
    - `ConversionError`: ocurre cuando se solicita una conversión explícita `to_tipo` y el valor de origen no puede representarse en el destino.
 7. **No afecta firmas con Result**: `OverflowError` es un error de evaluación aritmética; no altera la firma conceptual de los operadores para envolverlos en `result<T, E>`.
 
 
-### 10.5 Evaluación numérica dinámica con dynamic
+### 10.5 División y residuo entre cero (DivisionByZeroError)
+
+Dividir entre cero o calcular el residuo con un divisor igual a cero no constituye
+una operación válida en Evo-Script. Cuando el segundo operando de una operación `/`
+o `%` es numéricamente igual a cero, la evaluación aritmética falla con:
+
+    DivisionByZeroError
+
+Reglas:
+
+1. **Operaciones cubiertas**: Aplica de manera uniforme tanto a la división (`a / b`) como al residuo (`a % b`). No existen errores separados como `RemainderByZeroError` ni `ModuloByZeroError`.
+2. **Tipos enteros**: Aplica a todos los tipos enteros (`int`, `int8`..`int128`, `uint8`..`uint128`).
+   ```text
+   let int64 value = 100;
+   let int64 divisor = 0;
+   let int64 result = value / divisor; // Falla con DivisionByZeroError
+   ```
+3. **Punto flotante**: Aplica a todos los tipos flotantes (`float`, `float32`, `float64`). Evo-Script no produce silenciosamente `Infinity`, `+Infinity`, `-Infinity` ni `NaN` como resultado normal de una división entre cero.
+   - Divisores `0.0` y `-0.0` se consideran numéricamente cero:
+     ```text
+     10.0 / 0.0  // Produce DivisionByZeroError
+     10.0 / -0.0 // Produce DivisionByZeroError
+     0.0 / 0.0   // Produce DivisionByZeroError
+     0 / 0       // Produce DivisionByZeroError
+     ```
+4. **Tipo dynamic**: La evaluación bajo contexto `dynamic` no valida la división entre cero; la evaluación termina con `DivisionByZeroError` antes de producir un valor dynamic:
+   ```text
+   let dynamic result = 100 / 0; // Falla con DivisionByZeroError
+   ```
+5. **No altera firmas normales con Result**: `DivisionByZeroError` es un error de evaluación aritmética en tiempo de ejecución. No altera la signatura conceptual de las operaciones válidas (`int / int -> int`, `float64 / float64 -> float64`) para envolverlas en `Result`.
+6. **Diagnóstico**: Permite diagnosticar claramente que ocurrió una operación de división o residuo con divisor cero. El texto exacto del mensaje no forma parte del contrato del lenguaje.
+
+
+### 10.6 Evaluación numérica dinámica con dynamic
 
 Evo-Script proporciona el tipo especial `dynamic` como alternativa explícita para evaluaciones numéricas donde el programador no desea restringir de antemano el tamaño de representación del resultado.
 
@@ -1544,7 +1578,7 @@ Reglas de evaluación bajo contexto `dynamic`:
    ```
 
 
-### 10.6 Operadores de comparación
+### 10.7 Operadores de comparación
 
 Evo-Script v0.1 define seis operadores de comparación:
 
@@ -1568,7 +1602,7 @@ Ejemplos:
     let bool same = first == second;
 
 
-### 10.7 Operadores lógicos
+### 10.8 Operadores lógicos
 
 Evo-Script v0.1 define tres operadores lógicos:
 
@@ -1589,7 +1623,7 @@ Ejemplo:
     let bool allowed = active && age >= 18;
 
 
-### 10.8 Operadores unarios
+### 10.9 Operadores unarios
 
 Evo-Script v0.1 define dos operadores unarios prefijos:
 
@@ -1605,7 +1639,7 @@ Ejemplo:
 No se incluyen operadores unarios de incremento (`++`), decremento (`--`), complemento bit a bit (`~`), referencias (`&`) ni desreferencia (`*`).
 
 
-### 10.9 Agrupación y precedencia
+### 10.10 Agrupación y precedencia
 
 Los paréntesis `( )` permiten agrupar expresiones para controlar explícitamente el orden de evaluación:
 
@@ -1628,7 +1662,7 @@ Ejemplos:
 - `a > 10 && b < 20` equivale semánticamente a `(a > 10) && (b < 20)`.
 
 
-### 10.10 Pipeline (`|>`)
+### 10.11 Pipeline (`|>`)
 
 Evo-Script preserva su operador nativo de pipeline `|>` para la composición secuencial de datos y operaciones:
 
@@ -1638,7 +1672,7 @@ Evo-Script preserva su operador nativo de pipeline `|>` para la composición sec
 `|>` no es un operador bitwise ni debe confundirse con la disyunción lógica `||`.
 
 
-### 10.11 Ausencia de operadores de asignación y mutación
+### 10.12 Ausencia de operadores de asignación y mutación
 
 Debido a la inmutabilidad intrínseca de los bindings, Evo-Script no posee operadores generales de asignación ni mutación:
 
@@ -1654,7 +1688,7 @@ Ejemplos inválidos:
     ++age;        // Inválido
 
 
-### 10.12 Operadores y conceptos excluidos de v0.1
+### 10.13 Operadores y conceptos excluidos de v0.1
 
 Quedan formalmente fuera de Evo-Script v0.1:
 
@@ -1666,13 +1700,14 @@ Quedan formalmente fuera de Evo-Script v0.1:
 6. **Tipos enteros artificiales visibles**: No existen `bigint`, `int256` ni `int512`.
 
 
-### 10.13 Semántica pendiente
+### 10.14 Semántica pendiente
 
 Permanecen explícitamente pendientes para su definición en especificaciones posteriores:
 
-1. **División por cero**: La semántica exacta y diagnóstico ante la división entre cero permanece abierta (no se introduce `DivisionByZeroError` en v0.1).
-2. **Detalles avanzados de parsing en flotantes**: Algoritmos de parsing textual detallado y soporte de notación científica avanzada en literales float.
-3. **Mecanismos generales de captura de errores**: No se introducen construcciones de manejo de excepciones o captura de errores de evaluación (`try`/`catch`).
+1. **Detalles avanzados de parsing en flotantes**: Algoritmos de parsing textual detallado y soporte de notación científica avanzada en literales float.
+2. **Mecanismos generales de captura de errores**: No se introducen construcciones de manejo de excepciones o captura de errores de evaluación (`try`/`catch`).
+3. **Consumo y propagación de Result**: No se definen operadores ni sintaxis de extracción de `result<T, E>` (`?`, `unwrap`, `match`).
+4. **Precedencia específica de pipeline**: La posición exacta del operador `|>` en la jerarquía completa de precedencia frente a todos los operadores.
 
 
 ## 11. Funciones
@@ -1806,11 +1841,14 @@ semántica del lenguaje:
 | `let int64 x = 100;` | `Literal typed as int64 by context` |
 | `let dynamic x = expresión;` | `Dynamic numeric binding` |
 | `OverflowError` | `Fixed-width arithmetic overflow` |
+| `DivisionByZeroError` | `Zero-divisor arithmetic evaluation error` |
 | `a + b` | `Addition expression` |
 | `a - b` | `Subtraction expression` |
 | `a * b` | `Multiplication expression` |
 | `a / b` | `Division expression` |
 | `a % b` | `Remainder expression` |
+| `a / 0` | `Division by zero evaluation error` |
+| `a % 0` | `Division/remainder by zero evaluation error` |
 | `a == b` | `Equality comparison` |
 | `a != b` | `Inequality comparison` |
 | `a < b` | `Less-than comparison` |
