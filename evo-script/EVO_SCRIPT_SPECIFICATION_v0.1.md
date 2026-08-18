@@ -9,17 +9,23 @@ La especificación describe qué representa una construcción del lenguaje
 y cómo debe comportarse, independientemente de la implementación concreta
 del parser, intérprete o runtime.
 
-Evo-Script se diseña en conjunto con Evo-Shell, pero ambos componentes
-mantienen responsabilidades distintas:
+Evo-Script convive dentro de un ecosistema de dominios independientes
+con responsabilidades claramente delimitadas:
 
-- Evo-Script define el lenguaje, la composición y el procesamiento de datos.
-- Evo-Shell define capacidades semánticas para interactuar con el entorno.
-- Los Providers implementan las capacidades técnicas requeridas por Evo-Shell.
+- **Evo-Script** (`evo-script`): define el lenguaje general, la estructura
+  de programas y la composición funcional.
+- **EvoQ** (`evo-query`): define la semántica formal de consultas, operaciones
+  de iteración, proyecciones, condiciones y expresiones sobre datos.
+- **Evo-Shell** (`evo-shell`): define capacidades semánticas para interactuar
+  con el entorno y el sistema (gestión de scopes, operaciones de sistema).
+- **Evo-Values** (`evo-values`): define valores puros y operaciones universales
+  independientes de tecnología.
+- **Providers**: implementan contratos técnicos concretos para respaldar
+  las capacidades semánticas de EvoQ, Evo-Shell u otros dominios.
 
-Esta especificación debe guiar posteriormente la implementación del lenguaje.
-
-La implementación no debe definir retrospectivamente la semántica del lenguaje;
-la semántica definida aquí debe guiar la implementación.
+Esta especificación guía la implementación del lenguaje. La implementación
+no define retrospectivamente la semántica; la semántica definida aquí
+rige la implementación.
 
 
 ## 2. Descripción general
@@ -76,12 +82,14 @@ Evo-Script busca:
 - evitar materializaciones innecesarias de colecciones completas
 - evitar null como mecanismo de ausencia o error
 - separar el lenguaje de las tecnologías y recursos externos
-- permitir que nuevas capacidades sean proporcionadas por Evo-Shell y Providers
+- permitir que nuevas capacidades sean proporcionadas mediante contratos
+  por EvoQ, Evo-Shell y Providers
 - evitar abstracciones orientadas a objetos
 - evitar estructuras imperativas tradicionales cuando exista una
   representación funcional equivalente
 - permitir composición entre distintas fuentes de datos y capacidades
-- mantener separada la semántica del lenguaje de su implementación técnica
+- mantener separada la semántica del lenguaje de su representación textual
+  e implementación técnica
 
 
 ## 4. Paradigma
@@ -98,7 +106,7 @@ tradicionales como:
     while
 
 La transformación de colecciones o flujos se expresa mediante operaciones
-funcionales.
+funcionales y declarativas.
 
 Por ejemplo, en lugar de recorrer manualmente una colección,
 se expresa una transformación:
@@ -107,6 +115,10 @@ se expresa una transformación:
     |> select ...
     |> take(...)
     |> iter
+
+La sintaxis del pipeline forma parte del programa en Evo-Script, mientras
+que las operaciones de consulta (`Filter`, `Select`, `Take`, `Iteration`, etc.)
+se representan semánticamente mediante **EvoQ** (`evo-query`).
 
 Los datos son el elemento que fluye entre las operaciones.
 
@@ -126,9 +138,10 @@ Evo-Script no implementa directamente acceso a:
 - processes
 - operating system resources
 
-Estas capacidades pertenecen a Evo-Shell.
+Estas capacidades pertenecen a dominios independientes como Evo-Shell
+o proveedores especializados de EvoQ.
 
-Evo-Script expresa intención semántica.
+Evo-Script expresa intención semántica y coordina flujos.
 
 Por ejemplo:
 
@@ -136,25 +149,46 @@ Por ejemplo:
     |> enter("documents")
     |> ...
 
-Evo-Shell proporciona las capacidades semánticas necesarias para realizar
-esas operaciones.
+Evo-Shell proporciona las capacidades semánticas necesarias para interactuar
+con el entorno (como scopes). EvoQ proporciona la semántica para consultar
+e iterar datos.
 
-Los Providers realizan la interacción técnica con la tecnología concreta.
+Los Providers implementan los contratos técnicos correspondientes
+para comunicarse con la tecnología concreta.
 
 Conceptualmente:
 
-    Evo-Script
-        ↓
-    Evo-Shell
-        ↓
-    Contract
-        ↓
-    Provider
-        ↓
-    External Technology
+                     Evo-Script
+                    /          \
+                   ▼            ▼
+                EvoQ         Evo-Shell
+              evo-query      evo-shell
+                   │             │
+                   ▼             ▼
+               Contracts     Contracts
+                   \             /
+                    ▼           ▼
+                      Providers
+                          │
+                          ▼
+                 External Technology
 
-Evo-Script no debe necesitar conocer si una capacidad está implementada
-mediante:
+                  Evo Values (evo-values)
+
+Un Provider implementa contratos de la capacidad semántica correspondiente.
+Por ejemplo:
+
+    EvoQ Contract
+        ↓
+    Filesystem Provider
+
+o:
+
+    Evo-Shell Contract
+        ↓
+    Filesystem Provider
+
+Evo-Script no necesita conocer si una capacidad está implementada mediante:
 
 - Linux
 - Windows
@@ -164,17 +198,24 @@ mediante:
 - almacenamiento remoto
 - cualquier otra tecnología
 
-La tecnología concreta pertenece al Provider.
-
-Esto permite que nuevas tecnologías puedan incorporarse sin introducir
+La tecnología concreta pertenece al Provider. Esto permite que nuevas
+tecnologías puedan incorporarse mediante contratos sin introducir
 su semántica dentro del lenguaje.
+
+Asimismo, existe una estricta separación entre el lenguaje y el parser:
+
+- `evo-script` define el lenguaje, los tipos y el modelo semántico.
+- `evo-script-parser` es responsable únicamente de reconocer e interpretar
+  la representación textual (tokens, delimitadores, identificadores),
+  sin definir el significado semántico de las construcciones.
 
 
 ## 6. Scopes y contexto de ejecución
 
 ### 6.1 Definición de Scope
 
-El Scope es una pieza fundamental de Evo-Script.
+El Scope es una pieza fundamental de Evo-Script para la interacción
+con el entorno, provista semánticamente por Evo-Shell.
 
 Un Scope es un contexto semántico de ejecución que identifica un entorno
 de operación, mantiene una ubicación cuando el contexto la requiere
@@ -191,8 +232,8 @@ Un Scope no es:
 - una tecnología concreta
 
 El Scope proporciona una frontera semántica entre el lenguaje y las
-capacidades externas. Permite a Evo-Script operar dentro de un entorno
-sin necesidad de conocer la tecnología concreta que lo implementa.
+capacidades externas de sistema. Permite a Evo-Script operar dentro de un
+entorno sin necesidad de conocer la tecnología concreta que lo implementa.
 
 
 ### 6.2 Contexto
@@ -269,7 +310,7 @@ basadas en nombres de tecnologías concretas.
 ### 6.5 Obtención de Scopes
 
 Un Scope puede obtenerse mediante operaciones de creación o materialización
-de contexto.
+de contexto provistas por Evo-Shell.
 
 Ejemplos conceptuales:
 
@@ -345,18 +386,19 @@ Evo-Script no conoce las tecnologías concretas que implementan los Scopes.
 - Un Scope de terminal no impone conocimiento de stdout, secuencias ANSI,
   Windows Console, Wayland o X11.
 
-La relación arquitectónica conceptual se define en capas:
+La relación arquitectónica conceptual se define mediante contratos:
 
     Provider
         ↓
-    Evo-Shell
+    Contrato semántico (Evo-Shell / EvoQ)
         ↓
     Scope / capacidades
         ↓
     Evo-Script
 
-Evo-Shell expone las capacidades semánticas y los Providers realizan la
-interacción técnica concreta con el entorno externo.
+Evo-Shell expone las capacidades de entorno, EvoQ expone las capacidades
+de consulta, y los Providers realizan la interacción técnica concreta
+con el entorno externo.
 
 
 ### 6.10 Scope y flujo de datos
@@ -418,8 +460,9 @@ Ejemplo conceptual (Filesystem hacia Database):
 En estos flujos:
 
 1. El Scope inicial (`files`) actúa como fuente y produce datos.
-2. Las operaciones funcionales intermedias (`filter`, `select`) transforman
-   los datos en tránsito.
+2. Las operaciones intermedias de consulta (`filter`, `select`) son expresadas
+   en la sintaxis de Evo-Script pero representadas y ejecutadas según la semántica
+   de **EvoQ** sobre el Provider correspondiente.
 3. La activación de un segundo Scope (`use terminal` o `use database`)
    establece un nuevo contexto activo sin interrumpir el flujo de datos.
 4. Las capacidades del nuevo Scope (`print` o `enter` / `insert`) consumen
@@ -427,3 +470,213 @@ En estos flujos:
 
 Scope permite así que Evo-Script componga operaciones sobre distintas fuentes,
 destinos y entornos sin incorporar dichas tecnologías directamente al lenguaje.
+
+
+## 7. Sistema de tipos
+
+Evo-Script posee su propio sistema de tipos formal.
+
+Los nombres de tipos del lenguaje no son meros aliases textuales ni sustituciones
+realizadas por el parser; representan tipos semánticos propios de Evo-Script.
+
+
+### 7.1 Tipos nativos
+
+Evo-Script v0.1 define exactamente la siguiente tabla de tipos nativos:
+
+| Evo Script | Representación Rust |
+| :--- | :--- |
+| `int` | `i32` |
+| `float` | `f64` |
+| `bool` | `bool` |
+| `int8` | `i8` |
+| `int16` | `i16` |
+| `int32` | `i32` |
+| `int64` | `i64` |
+| `int128` | `i128` |
+| `uint8` | `u8` |
+| `uint16` | `u16` |
+| `uint32` | `u32` |
+| `uint64` | `u64` |
+| `uint128` | `u128` |
+| `float32` | `f32` |
+| `float64` | `f64` |
+
+El tipo `int` es un tipo nativo de Evo-Script cuya representación técnica
+de referencia en Rust es `i32`.
+
+El tipo `float` es un tipo nativo de Evo-Script cuya representación técnica
+de referencia en Rust es `f64`.
+
+No se definen como macros textuales ni reemplazos del parser.
+
+
+### 7.2 Tipos definidos
+
+Un tipo también puede ser un tipo definido por el programa.
+
+En Evo-Script v0.1 existen conceptualmente dos mecanismos para definir tipos:
+
+- `struct`
+- `enum`
+
+Ejemplos conceptuales:
+
+    struct Trabajador {
+        ...
+    }
+
+    enum Estado {
+        ...
+    }
+
+Estos ejemplos establecen que `Trabajador` y `Estado` se convierten en
+nombres de tipo válidos dentro del programa.
+
+Una función que hace referencia a un tipo definido no necesita conocer
+internamente si el identificador corresponde a un `struct` o a un `enum`.
+
+Ejemplo:
+
+    fn guardar(Trabajador trabajador) ...
+
+La firma referencia el tipo `Trabajador`. La definición correspondiente de
+`Trabajador` determina si se trata de un `struct`, un `enum` u otra categoría.
+
+
+### 7.3 Result
+
+Evo-Script incluye el tipo incorporado especial:
+
+    result<T, E>
+
+Ejemplos:
+
+    result<int, Error>
+    result<Trabajador, GuardarError>
+    result<bool, Error>
+
+Reglas:
+
+- `T` representa el tipo producido en caso de éxito.
+- `E` representa el tipo de error.
+- `T` y `E` deben ser tipos válidos de Evo-Script.
+- `result<T, E>` es un tipo especial incorporado y no implica soporte
+  para genéricos generales.
+- Los genéricos generales no forman parte de Evo-Script v0.1.
+
+
+## 8. Funciones
+
+La unidad semántica fundamental de ejecución y cómputo se denomina `Function`.
+
+La forma textual general definida en Evo-Script v0.1 es:
+
+    fn nombre(tipo argumento, tipo argumento) -> tipo {
+        correspondencia
+    }
+
+Ejemplo:
+
+    fn guardar(Trabajador trabajador) -> result<Trabajador, GuardarError> {
+        ...
+    }
+
+
+### 8.1 Declaración
+
+La palabra clave `fn` inicia textualmente la declaración de una función.
+
+Semánticamente representa una `Function`. El parser reconoce el token `fn`,
+pero el significado y modelo semántico de `Function` pertenece a Evo-Script.
+
+
+### 8.2 Nombre
+
+En la declaración:
+
+    fn guardar(...)
+
+el identificador `guardar` define el nombre de la función dentro del programa.
+
+
+### 8.3 Argumentos
+
+La regla oficial para la declaración de argumentos en Evo-Script es:
+
+    tipo primero, nombre después
+
+Ejemplo:
+
+    Trabajador trabajador
+
+No se utiliza la sintaxis invertida con dos puntos (`trabajador: Trabajador`).
+
+Ejemplos válidos conceptuales:
+
+    int count
+    float value
+    Trabajador trabajador
+
+Una función puede declarar múltiples argumentos separados por comas:
+
+    fn ejemplo(int id, float amount, Trabajador trabajador) -> ...
+
+
+### 8.4 Tipo de resultado
+
+La cláusula:
+
+    -> tipo
+
+declara explícitamente el tipo producido por la función.
+
+Ejemplos:
+
+    fn calcular(int value) -> int {
+        ...
+    }
+
+    fn guardar(Trabajador trabajador) -> result<Trabajador, GuardarError> {
+        ...
+    }
+
+En Evo-Script v0.1 toda función declara su tipo de resultado de forma explícita.
+
+
+### 8.5 Correspondencia
+
+Las llaves delimitadoras:
+
+    {
+        ...
+    }
+
+representan textualmente el inicio y fin de la correspondencia asociada
+a la función.
+
+Semánticamente, una `Function` posee una correspondencia asociada:
+
+    Function
+    ├── name
+    ├── arguments
+    ├── result type
+    └── correspondence
+
+
+### 8.6 Sintaxis y semántica
+
+Existe una separación estricta entre la representación textual y la
+semántica del lenguaje:
+
+| Sintaxis | Semántica |
+| :--- | :--- |
+| `fn` | `Function` |
+| `tipo nombre` | `Argument` |
+| `-> tipo` | `Result type declaration` |
+| `result<T, E>` | `Result type` |
+| `{ ... }` | `Correspondence` |
+
+El parser futuro reconocerá la representación textual y generará la estructura
+correspondiente; Evo-Script define el significado y las reglas semánticas
+de cada elemento.
