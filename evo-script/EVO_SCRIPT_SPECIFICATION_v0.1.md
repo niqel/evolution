@@ -1351,7 +1351,176 @@ Quedan formalmente fuera de la especificación de conversiones de Evo-Script v0.
 7. **Desempaquetado de Result**: No se introducen `?`, `unwrap`, `expect` ni `match`.
 
 
-## 10. Funciones
+## 10. Expresiones y operadores
+
+### 10.1 Expresiones
+
+Una **expresión** (`Expression`) es una construcción sintáctica y semántica que se
+evalúa para producir un valor.
+
+Ejemplos:
+
+- Aritméticas: `price + tax`, `count * 2`
+- Comparaciones: `age >= 18`, `first == second`
+- Lógicas: `active && authorized`, `!disabled`
+- Unarias: `-temperature`, `!ready`
+- Conversiones: `to_int64(value)`
+
+Una expresión puede utilizarse directamente como el valor en una declaración `let`:
+
+    let int total = price + tax;
+    let bool allowed = active && age >= 18;
+
+
+### 10.2 Operadores aritméticos
+
+Evo-Script v0.1 define exactamente cinco operadores aritméticos binarios:
+
+| Operador | Operación | Ejemplo |
+| :--- | :--- | :--- |
+| `+` | Suma | `a + b` |
+| `-` | Resta | `a - b` |
+| `*` | Multiplicación | `a * b` |
+| `/` | División | `a / b` |
+| `%` | Residuo | `a % b` |
+
+Reglas:
+
+1. **Conservación de tipo**: Una operación entre operandos del mismo tipo numérico produce como resultado ese mismo tipo semántico (por ejemplo, `int32 + int32` produce `int32`).
+2. **Ausencia de promoción automática**: Las operaciones aritméticas no promocionan silenciosamente sus tipos (por ejemplo, `int32 + int32` no se convierte automáticamente en `int64` para prevenir desbordamientos).
+3. **Compatibilidad estricta**: Operaciones entre tipos distintos (como `int32 + int64` o `int + float`) no realizan conversiones implícitas; requieren conversiones explícitas mediante `to_tipo`.
+
+
+### 10.3 Operadores de comparación
+
+Evo-Script v0.1 define seis operadores de comparación:
+
+| Operador | Significado | Ejemplo |
+| :--- | :--- | :--- |
+| `==` | Igual a | `a == b` |
+| `!=` | Diferente de | `a != b` |
+| `<` | Menor que | `a < b` |
+| `<=` | Menor o igual que | `a <= b` |
+| `>` | Mayor que | `a > b` |
+| `>=` | Mayor o igual que | `a >= b` |
+
+Reglas:
+
+- El resultado semántico de toda comparación es un valor de tipo `bool`.
+- No se introducen identificadores textuales como `equals`, `greater_than` o `less_than` para las expresiones generales del lenguaje (las construcciones semánticas de consulta de EvoQ son independientes).
+
+Ejemplos:
+
+    let bool adult = age >= 18;
+    let bool same = first == second;
+
+
+### 10.4 Operadores lógicos
+
+Evo-Script v0.1 define tres operadores lógicos:
+
+| Operador | Significado | Ejemplo |
+| :--- | :--- | :--- |
+| `&&` | AND lógico | `active && authorized` |
+| `\|\|` | OR lógico | `active \|\| administrator` |
+| `!` | Negación lógica (NOT) | `!disabled` |
+
+Reglas:
+
+- Operan exclusivamente sobre valores de tipo `bool` y producen un resultado `bool`.
+- No se introducen palabras clave alternativas como `and`, `or` o `not`.
+- El operador `!` actúa exclusivamente como negación booleana; no cumple funciones de unwrapping, aserción ni propagación de errores.
+
+Ejemplo:
+
+    let bool allowed = active && age >= 18;
+
+
+### 10.5 Operadores unarios
+
+Evo-Script v0.1 define dos operadores unarios prefijos:
+
+| Operador | Significado | Tipo aplicable | Ejemplo |
+| :--- | :--- | :--- | :--- |
+| `!` | Negación lógica | `bool` | `!valid` |
+| `-` | Negación numérica | Numéricos con signo | `-10`, `-delta` |
+
+Ejemplo:
+
+    let int temperature = -10;
+
+No se incluyen operadores unarios de incremento (`++`), decremento (`--`), complemento bit a bit (`~`), referencias (`&`) ni desreferencia (`*`).
+
+
+### 10.6 Agrupación y precedencia
+
+Los paréntesis `( )` permiten agrupar expresiones para controlar explícitamente el orden de evaluación:
+
+    (a + b) * c
+
+El uso de paréntesis tiene como único propósito la agrupación sintáctica; no define tuplas ni tipos compuestos.
+
+Para los operadores compartidos con Rust, Evo-Script adopta la precedencia y asociatividad convencional de Rust:
+
+1. Operadores unarios (`!`, `-`)
+2. Multiplicativos (`*`, `/`, `%`)
+3. Aditivos (`+`, `-`)
+4. Comparaciones (`<`, `<=`, `>`, `>=`, `==`, `!=`)
+5. Conjunción lógica (`&&`)
+6. Disyunción lógica (`||`)
+
+Ejemplos:
+
+- `a + b * c` equivale semánticamente a `a + (b * c)`.
+- `a > 10 && b < 20` equivale semánticamente a `(a > 10) && (b < 20)`.
+
+
+### 10.7 Pipeline (`|>`)
+
+Evo-Script preserva su operador nativo de pipeline `|>` para la composición secuencial de datos y operaciones:
+
+    source
+    |> to_int64
+
+`|>` no es un operador bitwise ni debe confundirse con la disyunción lógica `||`.
+
+
+### 10.8 Ausencia de operadores de asignación y mutación
+
+Debido a la inmutabilidad intrínseca de los bindings, Evo-Script no posee operadores generales de asignación ni mutación:
+
+- No existen operadores de asignación ni asignación compuesta (`=`, `+=`, `-=`, `*=`, `/=`, `%=`).
+- El símbolo `=` aparece exclusivamente dentro de la sentencia `let tipo nombre = valor;` como ligadura inicial; no constituye una sentencia de asignación.
+- No existen operadores de incremento ni decremento (`++`, `--`).
+
+Ejemplos inválidos:
+
+    age = 44;     // Inválido
+    age += 1;     // Inválido
+    age++;        // Inválido
+    ++age;        // Inválido
+
+
+### 10.9 Operadores y conceptos excluidos de v0.1
+
+Quedan formalmente fuera de Evo-Script v0.1:
+
+1. **Operaciones Bitwise**: No existen `&`, `|`, `^`, `<<`, `>>` ni funciones como `bit_and`, `bit_or`, `shift_left`.
+2. **Mutación y asignación**: No existen `=`, `+=`, `++`, `--`.
+3. **Casteo**: No existen `as` ni `cast` (se utiliza exclusivamente la familia `to_tipo`).
+4. **Punteros y referencias**: No existen operadores `&` ni `*`.
+
+
+### 10.10 Semántica pendiente
+
+Permanecen explícitamente pendientes para su definición en especificaciones posteriores:
+
+1. **Comportamiento exacto de overflow aritmético**: No se define aún si el desbordamiento numérico produce un error de ejecución, un `ArithmeticError`, un `Result` u otra representación. Se establece únicamente que no se resuelve mediante promociones implícitas de tipo.
+2. **Tipado contextual de literales numéricos**: La forma exacta en que literales como `100` adquieren su tipo específico dentro de una declaración permanece abierta.
+3. **Literales cerrados**: Los literales booleanos `true` y `false` corresponden a `bool`; los literales delimitados por comillas `"..."` corresponden a `string`.
+
+
+## 11. Funciones
 
 La unidad semántica fundamental de ejecución y cómputo se denomina `Function`.
 
@@ -1368,7 +1537,7 @@ Ejemplo:
     }
 
 
-### 10.1 Declaración
+### 11.1 Declaración
 
 La palabra clave `fn` inicia textualmente la declaración de una función.
 
@@ -1376,7 +1545,7 @@ Semánticamente representa una `Function`. El parser reconoce el token `fn`,
 pero el significado y modelo semántico de `Function` pertenece a Evo-Script.
 
 
-### 10.2 Nombre
+### 11.2 Nombre
 
 En la declaración:
 
@@ -1385,7 +1554,7 @@ En la declaración:
 el identificador `guardar` define el nombre de la función dentro del programa.
 
 
-### 10.3 Argumentos
+### 11.3 Argumentos
 
 La regla oficial para la declaración de argumentos en Evo-Script es:
 
@@ -1408,7 +1577,7 @@ Una función puede declarar múltiples argumentos separados por comas:
     fn ejemplo(int id, float amount, Trabajador trabajador) -> ...
 
 
-### 10.4 Tipo de resultado
+### 11.4 Tipo de resultado
 
 La cláusula:
 
@@ -1429,7 +1598,7 @@ Ejemplos:
 En Evo-Script v0.1 toda función declara su tipo de resultado de forma explícita.
 
 
-### 10.5 Correspondencia
+### 11.5 Correspondencia
 
 Las llaves delimitadoras:
 
@@ -1449,7 +1618,7 @@ Semánticamente, una `Function` posee una correspondencia asociada:
     └── correspondence
 
 
-### 10.6 Sintaxis y semántica
+### 11.6 Sintaxis y semántica
 
 Existe una separación estricta entre la representación textual y la
 semántica del lenguaje:
@@ -1478,6 +1647,23 @@ semántica del lenguaje:
 | `;` | `End of declaration/operation` |
 | `to_tipo(valor)` | `Explicit type conversion` |
 | `valor \|> to_tipo` | `Composed explicit conversion` |
+| `a + b` | `Addition expression` |
+| `a - b` | `Subtraction expression` |
+| `a * b` | `Multiplication expression` |
+| `a / b` | `Division expression` |
+| `a % b` | `Remainder expression` |
+| `a == b` | `Equality comparison` |
+| `a != b` | `Inequality comparison` |
+| `a < b` | `Less-than comparison` |
+| `a <= b` | `Less-or-equal comparison` |
+| `a > b` | `Greater-than comparison` |
+| `a >= b` | `Greater-or-equal comparison` |
+| `a && b` | `Logical AND` |
+| `a \|\| b` | `Logical OR` |
+| `!a` | `Logical NOT` |
+| `-a` | `Numeric negation` |
+| `(expresión)` | `Grouped expression` |
+| `valor \|> operación` | `Pipeline composition` |
 
 El parser futuro reconocerá la representación textual y generará la estructura
 correspondiente; Evo-Script define el significado y las reglas semánticas
