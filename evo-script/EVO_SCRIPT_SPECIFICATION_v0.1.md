@@ -709,7 +709,12 @@ Ejemplo conceptual:
         Pais pais;
     }
 
-    fn guardar(Colonia colonia) -> result<Colonia, GuardarError> {
+    enum GuardarColoniaResult {
+        Guardado(Colonia)
+        Error(GuardarError)
+    }
+
+    fn guardar(Colonia colonia) -> GuardarColoniaResult {
         ...
     }
 
@@ -960,26 +965,35 @@ Evo-Script v0.1 delimita formalmente el alcance de `enum`:
 6. **Conceptos ajenos**: No se introducen métodos, `impl`, `self`, `this`, `new`, `Option`, traits, `dyn`, punteros ni sintaxis de ownership/borrowing.
 
 
-### 7.5 Result
+### 7.5 Ausencia de tipos genéricos
 
-Evo-Script incluye el tipo incorporado especial:
+Evo-Script v0.1 **no posee tipos genéricos**. No existe parametrización de tipos ni
+sintaxis general como `Tipo<T>` o `Tipo<T, E>`.
 
-    result<T, E>
+Reglas normativas:
 
-Ejemplos:
+1. **Sin tipos genéricos generales**: No se introducen type parameters, constraints, cláusulas `where`, traits, `dyn` ni colecciones genéricas integradas (`Option<T>`, `Either<T, E>`, `Outcome<T, E>`, `List<T>`, `Vec<T>`, `Map<K, V>`).
+2. **Eliminación de result<T, E>**: `result<T, E>` no existe como tipo especial ni como abstracción genérica del lenguaje. No existen tipos unión como `T | E`.
+3. **Alternativas del dominio mediante enum**: Cuando una función requiere retornar una de varias alternativas semánticas de su dominio, se define explícitamente un tipo `enum`:
+   ```text
+   struct Trabajador {
+       int id;
+       string name;
+   }
 
-    result<int, Error>
-    result<Trabajador, GuardarError>
-    result<bool, Error>
+   enum BuscarTrabajadorResult {
+       Encontrado(Trabajador)
+       NoEncontrado
+       Error(BuscarError)
+   }
 
-Reglas:
+   fn buscar(int id) -> BuscarTrabajadorResult {
+       ...
+   }
+   ```
+4. **Variantes sin semántica mágica**: La variante `Error` dentro de un enum de dominio es una variante normal definida por el usuario; el lenguaje no le asigna ningún comportamiento intrínseco especial. Los enums de dominio pueden modelar tantas alternativas como el caso requiera (por ejemplo, `Encontrado(Trabajador)`, `NoEncontrado`, `ServicioNoDisponible`).
+5. **Separación entre dominio y evaluación**: Las alternativas del dominio son valores normales producidos por el programa (`enum`); los errores de evaluación del lenguaje (`ConversionError`, `OverflowError`, `DivisionByZeroError`) representan fallos durante la evaluación y no forman parte del tipo normal retornado por una expresión o función.
 
-- `T` representa el tipo producido en caso de éxito.
-- `E` representa el tipo de error.
-- `T` y `E` deben ser tipos válidos de Evo-Script.
-- `result<T, E>` es un tipo especial incorporado y no implica soporte
-  para genéricos generales.
-- Los genéricos generales no forman parte de Evo-Script v0.1.
 
 
 ## 8. Valores y bindings
@@ -1268,15 +1282,17 @@ Aun siendo una conversión garantizada, la operación **sigue siendo estrictamen
 ### 9.4 Conversiones potencialmente fallables y ConversionError
 
 Cuando una conversión puede implicar pérdida de rango numérico, imposibilidad de
-representación exacta o pérdida de precisión, la operación **no altera ni trunca silenciosamente
-el valor**. En su lugar, expresa la posibilidad de fallo produciendo:
+representación exacta o pérdida de precisión, la operación no altera ni distorsiona
+silenciosamente el valor. El tipo semántico normal de la expresión es el tipo destino
+(`T`). Si la conversión puede realizarse con exactitud, la evaluación produce el valor
+en el tipo destino; si el valor de origen no puede representarse exactamente en el
+destino, la evaluación falla con:
 
-    result<T, ConversionError>
+    ConversionError
 
-`ConversionError` se introduce conceptualmente como el tipo semántico de error que
-representa el fracaso de una conversión de tipo. En Evo-Script v0.1 no se definen
-variantes internas cerradas de `ConversionError` ni mecanismos finales de captura/propagación
-de Result (`?`, `unwrap`, `match`).
+`ConversionError` se define conceptualmente como un error de evaluación del lenguaje
+que representa el fracaso de una conversión de tipo. No constituye un valor envuelto en
+un tipo genérico `Result` ni altera el tipo normal de la conversión.
 
 
 ### 9.5 Conversiones entre enteros
@@ -1287,9 +1303,9 @@ de Result (`?`, `unwrap`, `match`).
   ```
 - **Reducción potencialmente fallable**:
   ```text
-  to_int64(int128_value) -> result<int64, ConversionError>
+  to_int64(int128_value) -> int64
   ```
-  La conversión valida en tiempo de ejecución si el valor concreto cabe dentro del rango del tipo destino.
+  La conversión valida en tiempo de ejecución si el valor concreto cabe dentro del rango del tipo destino. Si cabe, produce `int64`; si no cabe, la evaluación falla con `ConversionError`.
 
 
 ### 9.6 Conversiones entre signed y unsigned
@@ -1317,10 +1333,10 @@ de signo, sino de la relación de rangos entre ambos tipos:
 
 - **Conversiones signed/unsigned potencialmente fallables**:
   Cuando existe al menos un valor válido del tipo origen que no cabe en el tipo destino:
-  - `int32` $\rightarrow$ `uint32`: los valores negativos de `int32` no pueden representarse en `uint32`. Requiere `to_uint32(value)` y produce `result<uint32, ConversionError>`.
-  - `uint32` $\rightarrow$ `int32`: los valores de `uint32` mayores a $2^{31}-1$ no caben en `int32`. Requiere `to_int32(value)` y produce `result<int32, ConversionError>`.
-  - `int8` $\rightarrow$ `uint8`: los valores negativos no pueden representarse en `uint8`. Requiere `to_uint8(value)` y produce `result<uint8, ConversionError>`.
-  - `uint128` $\rightarrow$ `int128`: los valores de `uint128` mayores a $2^{127}-1$ no caben en `int128`. Requiere `to_int128(value)` y produce `result<int128, ConversionError>`.
+  - `int32` $\rightarrow$ `uint32`: los valores negativos de `int32` no pueden representarse en `uint32`. `to_uint32(value)` produce `uint32` si el valor es positivo o cero; si es negativo, la evaluación falla con `ConversionError`.
+  - `uint32` $\rightarrow$ `int32`: los valores de `uint32` mayores a $2^{31}-1$ no caben en `int32`. `to_int32(value)` produce `int32` si cabe; si no cabe, la evaluación falla con `ConversionError`.
+  - `int8` $\rightarrow$ `uint8`: los valores negativos no pueden representarse en `uint8`. `to_uint8(value)` produce `uint8` si no es negativo; si es negativo, la evaluación falla con `ConversionError`.
+  - `uint128` $\rightarrow$ `int128`: los valores de `uint128` mayores a $2^{127}-1$ no caben en `int128`. `to_int128(value)` produce `int128` si cabe; si no cabe, la evaluación falla con `ConversionError`.
 
 Evo-Script no realiza reinterpretación de bits ni comportamiento de wrapping silencioso.
 
@@ -1330,9 +1346,9 @@ Evo-Script no realiza reinterpretación de bits ni comportamiento de wrapping si
 Las conversiones que involucran números de punto flotante consideran tanto el rango
 como la precisión y la exactitud de la representación:
 
-- **Entero a Float**: `to_float64(int64_value)` produce `result<float64, ConversionError>` cuando el valor entero no pueda representarse con exactitud en el formato flotante sin pérdida de información. No se realiza redondeo silencioso.
-- **Float a Entero**: `to_int64(float_value)` produce `result<int64, ConversionError>`. No se realiza truncamiento ni redondeo silencioso.
-- **Float a Float**: `to_float32(float64_value)` produce `result<float32, ConversionError>` si existe pérdida de precisión.
+- **Entero a Float**: `to_float64(int64_value)` produce `float64` cuando el valor entero es exactamente representable en formato flotante. Si existe pérdida de información, la evaluación falla con `ConversionError`. No se realiza redondeo silencioso.
+- **Float a Entero**: `to_int64(float_value)` produce `int64` cuando el valor cabe exactamente en el entero. Si no cabe o no es entero exacto, la evaluación falla con `ConversionError`. No se realiza truncamiento ni redondeo silencioso.
+- **Float a Float**: `to_float32(float64_value)` produce `float32` si no existe pérdida de precisión; si existe pérdida, la evaluación falla con `ConversionError`.
 
 
 ### 9.8 Conversión a string (`to_string`)
@@ -1347,46 +1363,35 @@ Ningún valor se convierte automáticamente a texto. En Evo-Script v0.1 no se de
 ### 9.9 Conversiones desde dynamic
 
 Toda conversión explícita desde `dynamic` hacia cualquier tipo numérico de tamaño fijo
-es **semánticamente potencialmente fallable** y posee una firma de retorno estable:
+es **semánticamente potencialmente fallable**. Su tipo semántico normal es el tipo destino:
 
-    result<T, ConversionError>
+    to_int(dynamic_value)    -> int
+    to_int8(dynamic_value)   -> int8
+    to_int16(dynamic_value)  -> int16
+    to_int32(dynamic_value)  -> int32
+    to_int64(dynamic_value)  -> int64
+    to_int128(dynamic_value) -> int128
 
-Dado que el dominio representable por `dynamic` no está acotado por los límites
-de ningún tipo numérico fijo particular, la operación no puede garantizar estáticamente
-que el valor concreto quepa en el tipo destino. Por tanto, su firma no varía según
-el valor en tiempo de ejecución:
+    to_uint8(dynamic_value)   -> uint8
+    to_uint16(dynamic_value)  -> uint16
+    to_uint32(dynamic_value)  -> uint32
+    to_uint64(dynamic_value)  -> uint64
+    to_uint128(dynamic_value) -> uint128
 
-    to_int(dynamic_value)    -> result<int, ConversionError>
-    to_int8(dynamic_value)   -> result<int8, ConversionError>
-    to_int16(dynamic_value)  -> result<int16, ConversionError>
-    to_int32(dynamic_value)  -> result<int32, ConversionError>
-    to_int64(dynamic_value)  -> result<int64, ConversionError>
-    to_int128(dynamic_value) -> result<int128, ConversionError>
+    to_float(dynamic_value)   -> float
+    to_float32(dynamic_value) -> float32
+    to_float64(dynamic_value) -> float64
 
-    to_uint8(dynamic_value)   -> result<uint8, ConversionError>
-    to_uint16(dynamic_value)  -> result<uint16, ConversionError>
-    to_uint32(dynamic_value)  -> result<uint32, ConversionError>
-    to_uint64(dynamic_value)  -> result<uint64, ConversionError>
-    to_uint128(dynamic_value) -> result<uint128, ConversionError>
+Reglas:
 
-    to_float(dynamic_value)   -> result<float, ConversionError>
-    to_float32(dynamic_value) -> result<float32, ConversionError>
-    to_float64(dynamic_value) -> result<float64, ConversionError>
-
-Incluso cuando un binding `dynamic` contenga un valor pequeño que cabe en el tipo destino:
-
-    let dynamic value = 10;
-    to_int64(value) // Produce result<int64, ConversionError> (con éxito en esa ejecución)
-
-La operación produce una variante de éxito que contiene el valor `int64`, pero el tipo
-estático de la expresión continúa siendo `result<int64, ConversionError>`. Si el valor
-no puede representarse exactamente en el destino por rango o precisión, produce una
-variante de error con `ConversionError`.
-
-Asimismo, `to_string(dynamic_value)` produce directamente `string` como representación
-textual explícita del valor dinámico. No se introducen métodos como `dynamic.as_int64`
-ni operadores de casteo (`as`, `cast`).
-
+1. **Evaluación exitosa**: Si el valor concreto almacenado en `dynamic` puede representarse exactamente en el tipo destino según las reglas de rango y precisión, la evaluación produce directamente el valor en dicho tipo:
+   ```text
+   let dynamic value = 10;
+   let int64 fixed_value = to_int64(value); // Produce int64 normalmente
+   ```
+   No existe ningún contenedor `Result` que deba ser desempaquetado.
+2. **Evaluación fallida**: Si el valor concreto no puede representarse con exactitud en el tipo destino, la evaluación falla con `ConversionError`.
+3. **Conversión a string**: `to_string(dynamic_value)` produce directamente `string` como representación textual explícita del valor dinámico. No se introducen métodos como `dynamic.as_int64` ni operadores de casteo (`as`, `cast`).
 
 
 ### 9.10 Composición en pipelines
@@ -1408,11 +1413,12 @@ Quedan formalmente fuera de la especificación de conversiones de Evo-Script v0.
 
 1. **Casts implícitos o estilo C / Rust**: No existen `as`, `cast`, `transmute` ni reinterpretación de memoria.
 2. **Promociones automáticas**: No existen widening implícito ni conversiones silenciosas.
-3. **Redondeo o truncamiento automático**: Las conversiones fallan explícitamente en lugar de distorsionar datos.
+3. **Redondeo o truncamiento automático**: Las conversiones fallan explícitamente con `ConversionError` en lugar de distorsionar datos.
 4. **Parsing inverso**: No se definen `parse_int` ni `parse_float`.
 5. **Tipos no existentes**: No existe `float128` ni `to_float128`.
 6. **Mecanismos alternativos**: No existen `convert_to_*` ni generic conversion functions.
-7. **Desempaquetado de Result**: No se introducen `?`, `unwrap`, `expect` ni `match`.
+7. **Genéricos y desempaquetado de Result**: Result no existe como tipo del lenguaje; no existen genéricos, `?`, `unwrap`, `expect` ni tipos unión (`T | E`).
+
 
 
 ## 10. Expresiones y operadores
@@ -1512,7 +1518,7 @@ Reglas de overflow:
    - `OverflowError`: ocurre durante la evaluación de una operación numérica bajo un tipo fijo cuando el resultado no cabe en dicho tipo.
    - `DivisionByZeroError`: ocurre cuando `/` o `%` reciben un divisor numéricamente igual a cero.
    - `ConversionError`: ocurre cuando se solicita una conversión explícita `to_tipo` y el valor de origen no puede representarse en el destino.
-7. **No afecta firmas con Result**: `OverflowError` es un error de evaluación aritmética; no altera la firma conceptual de los operadores para envolverlos en `result<T, E>`.
+7. **No altera tipos normales**: `OverflowError` es un error de evaluación aritmética; no altera el tipo normal de la expresión ni la envuelve en tipos contenedores de error.
 
 
 ### 10.5 División y residuo entre cero (DivisionByZeroError)
@@ -1544,7 +1550,7 @@ Reglas:
    ```text
    let dynamic result = 100 / 0; // Falla con DivisionByZeroError
    ```
-5. **No altera firmas normales con Result**: `DivisionByZeroError` es un error de evaluación aritmética en tiempo de ejecución. No altera la signatura conceptual de las operaciones válidas (`int / int -> int`, `float64 / float64 -> float64`) para envolverlas en `Result`.
+5. **No altera tipos normales**: `DivisionByZeroError` es un error de evaluación aritmética en tiempo de ejecución. No altera la signatura conceptual de las operaciones válidas (`int / int -> int`, `float64 / float64 -> float64`).
 6. **Diagnóstico**: Permite diagnosticar claramente que ocurrió una operación de división o residuo con divisor cero. El texto exacto del mensaje no forma parte del contrato del lenguaje.
 
 
@@ -1704,9 +1710,9 @@ Quedan formalmente fuera de Evo-Script v0.1:
 
 Permanecen explícitamente pendientes para su definición en especificaciones posteriores:
 
-1. **Detalles avanzados de parsing en flotantes**: Algoritmos de parsing textual detallado y soporte de notación científica avanzada en literales float.
-2. **Mecanismos generales de captura de errores**: No se introducen construcciones de manejo de excepciones o captura de errores de evaluación (`try`/`catch`).
-3. **Consumo y propagación de Result**: No se definen operadores ni sintaxis de extracción de `result<T, E>` (`?`, `unwrap`, `match`).
+1. **Inspección y pattern matching en enums**: Mecanismos para observar y seleccionar variantes de enums definidos (`match`, desestructuración, guards).
+2. **Mecanismos generales de captura de errores de evaluación**: No se introducen construcciones de manejo de excepciones o captura de errores de evaluación (`try`/`catch`).
+3. **Detalles avanzados de parsing en flotantes**: Algoritmos de parsing textual detallado y soporte de notación científica avanzada en literales float.
 4. **Precedencia específica de pipeline**: La posición exacta del operador `|>` en la jerarquía completa de precedencia frente a todos los operadores.
 
 
@@ -1722,7 +1728,12 @@ La forma textual general definida en Evo-Script v0.1 es:
 
 Ejemplo:
 
-    fn guardar(Trabajador trabajador) -> result<Trabajador, GuardarError> {
+    enum GuardarTrabajadorResult {
+        Guardado(Trabajador)
+        Error(GuardarError)
+    }
+
+    fn guardar(Trabajador trabajador) -> GuardarTrabajadorResult {
         ...
     }
 
@@ -1781,7 +1792,7 @@ Ejemplos:
         ...
     }
 
-    fn guardar(Trabajador trabajador) -> result<Trabajador, GuardarError> {
+    fn guardar(Trabajador trabajador) -> GuardarTrabajadorResult {
         ...
     }
 
@@ -1818,7 +1829,6 @@ semántica del lenguaje:
 | `fn` | `Function` |
 | `tipo nombre` | `Argument` |
 | `-> tipo` | `Result type declaration` |
-| `result<T, E>` | `Result type` |
 | `{ ... }` | `Correspondence` |
 | `struct Nombre { ... }` | `Struct definition` |
 | `tipo nombre;` | `Field` |
