@@ -969,7 +969,223 @@ Reglas:
 - Los genéricos generales no forman parte de Evo-Script v0.1.
 
 
-## 8. Funciones
+## 8. Valores y bindings
+
+Evo-Script v0.1 no posee variables mutables.
+
+El lenguaje utiliza la palabra clave `let` para asociar un nombre a un valor.
+Semánticamente, `let` crea un **binding inmutable**:
+
+    nombre -> valor
+
+Una vez establecido el binding, el identificador representa ese mismo valor
+durante todo su ciclo de vida dentro del ámbito correspondiente. `let` no es
+un mecanismo de mutabilidad ni define variables reasignables.
+
+
+### 8.1 Declaración oficial con `let`
+
+La sintaxis oficial y canónica para crear un binding inmutable es:
+
+    let tipo nombre = valor;
+
+Ejemplos:
+
+    let int edad = 43;
+    let string name = "Gustavo";
+    let Dias dia = Dias::Lunes;
+
+Esta forma mantiene la regla uniforme de Evo-Script: **tipo primero, nombre después**.
+No se utiliza la sintaxis invertida con dos puntos (`let edad: int = 43;`).
+
+
+### 8.2 Tipo explícito obligatorio
+
+En Evo-Script v0.1 todo binding creado mediante `let` debe declarar su tipo
+de forma explícita.
+
+Válido:
+
+    let int edad = 43;
+
+La inferencia de tipos no forma parte de Evo-Script v0.1. Por tanto, formas sin
+tipo explícito quedan fuera del lenguaje:
+
+    let edad = 43;
+
+No se introducen palabras clave como `auto`, `var`, `infer` ni operadores como `:=`.
+
+
+### 8.3 Inicialización obligatoria y compatibilidad de tipos
+
+Todo binding debe inicializarse obligatoriamente en la misma sentencia en que se declara.
+
+Válido:
+
+    let int edad = 43;
+
+Inválido:
+
+    let int edad;
+
+No existen bindings sin valor inicial ni valores por defecto implícitos.
+
+Asimismo, el valor asignado debe ser compatible con el tipo declarado:
+
+    let int edad = 43;     // Válido
+
+    let int edad = "43";   // Inválido: incompatibilidad de tipos
+
+Evo-Script no realiza coerciones implícitas ni conversiones automáticas de tipos
+en esta etapa.
+
+
+### 8.4 Inmutabilidad absoluta y ausencia de reasignación
+
+Un binding creado mediante `let` no puede ser reasignado bajo ninguna circunstancia.
+
+Ejemplo:
+
+    let int edad = 43;
+
+Tras esta declaración, cualquier intento de reasignación es inválido:
+
+    edad = 44; // Inválido
+
+La inmutabilidad es una propiedad intrínseca y estructural de Evo-Script. No existen
+modificadores ni sintaxis para declarar bindings mutables (`mut`, `mutable`, `var`,
+`ref mut`, `set`, etc.).
+
+
+### 8.5 Ausencia de shadowing y ámbito de visibilidad
+
+Evo-Script no permite shadowing (ocultamiento de nombres en un mismo ámbito de visibilidad).
+
+Ejemplo inválido:
+
+    let int edad = 43;
+    let int edad = 44; // Inválido: el identificador 'edad' ya se encuentra visible
+
+Mientras un binding continúe visible, su identificador no puede ser reutilizado
+por otra declaración `let`. Debe emplearse un identificador distinto:
+
+    let int edad = 43;
+    let int nueva_edad = 44; // Válido
+
+El shadowing no se admite como alternativa para simular mutabilidad ni como excepción.
+Un binding posee una región delimitada de visibilidad, y al salir de dicho ámbito
+finaliza su ciclo de vida.
+
+
+### 8.6 Convenciones de nombres
+
+Los nombres de los bindings creados mediante `let` siguen la convención oficial:
+
+- **Bindings**: se nombran en `snake_case` (`edad`, `first_name`, `last_name`, `id_colonia`, `current_user`). No se utiliza `camelCase`.
+- **Tipos**: se nombran en `PascalCase` (`int`, `string`, `Trabajador`, `Dias`).
+
+
+### 8.7 `let` con distintos tipos de valores
+
+`let` opera de manera uniforme sobre todos los tipos de datos de Evo-Script:
+
+#### 8.7.1 Tipos nativos
+
+    let int edad = 43;
+    let float precio = 10.5;
+    let bool activo = true;
+    let string name = "Gustavo";
+
+#### 8.7.2 Structs
+
+El valor asignado puede ser la construcción directa de un `struct`:
+
+    let Trabajador trabajador = Trabajador {
+        edad: 43
+        name: "Gustavo"
+        last_name: "Melendez"
+    };
+
+La expresión `Trabajador { ... }` produce el valor del struct y `let` asocia el nombre
+`trabajador` a dicho valor. No existe `new` ni instanciación orientada a objetos.
+
+#### 8.7.3 Enums
+
+El valor asignado puede ser cualquier variante válida de un `enum`:
+
+- Variante simple:
+  ```text
+  let Dias dia = Dias::Lunes;
+  ```
+- Variante con valor asociado:
+  ```text
+  let Resultado resultado = Resultado::Correcto("Guardado");
+  ```
+- Variante estructurada:
+  ```text
+  let Evento evento = Evento::Movimiento {
+      x: 10
+      y: 20
+  };
+  ```
+
+
+### 8.8 Regla de terminación con punto y coma (`;`)
+
+En Evo-Script v0.1 aplica la siguiente regla sintáctica general:
+
+    Toda declaración u operación completa termina con punto y coma (`;`).
+
+Ejemplos:
+
+    let int edad = 43;
+    guardar(trabajador);
+    print(name);
+
+Esta regla no aplica a las definiciones estructurales delimitadas por bloques:
+
+- Las definiciones de `struct`, `enum` y `fn` concluyen con su llave de cierre `}` sin requerir un punto y coma posterior (no se escribe `};`).
+- Los campos internos de un `struct` o de una variante estructurada concluyen con punto y coma (`tipo nombre;`).
+- Las declaraciones `let` y las operaciones concluyen con punto y coma (`;`).
+
+
+### 8.9 Separación entre Tipo, Valor y Binding
+
+Evo-Script distingue tres conceptos fundamentales:
+
+1. **Tipo**: define la clase y el contrato de los datos válidos (`int`, `string`, `Trabajador`, `Dias`).
+2. **Valor**: representa la instancia concreta de datos (`43`, `"Gustavo"`, `Trabajador { ... }`, `Dias::Lunes`).
+3. **Binding**: asocia de forma inmutable un nombre a un valor específico mediante `let`.
+
+Ejemplo:
+
+| Concepto | Ejemplo | Significado |
+| :--- | :--- | :--- |
+| **Tipo** | `int` | Define el dominio de enteros de 32 bits. |
+| **Valor** | `43` | Instancia concreta de dato numérico. |
+| **Binding** | `let int edad = 43;` | Asociación inmutable del nombre `edad` al valor `43`. |
+
+Asimismo, se mantiene una clara distinción entre construcciones del lenguaje:
+
+- **Argumento de función**: `int edad` (sin `let`, sin punto y coma).
+- **Campo de struct**: `int edad;` (sin `let`, con punto y coma).
+- **Binding**: `let int edad = 43;` (con `let`, con inicialización y punto y coma).
+
+
+### 8.10 Conceptos no incluidos en v0.1
+
+Evo-Script v0.1 delimita estrictamente la semántica de valores y bindings:
+
+1. **Variables mutables**: No existen `mut`, `var`, `mutable` ni reasignaciones (`edad = 44`).
+2. **Asignación independiente**: El operador `=` solo forma parte de la sintaxis de `let`, no constituye una sentencia de asignación separada.
+3. **Constantes globales**: No se introducen `const` ni `static`.
+4. **Desestructuración**: No se admite pattern binding ni desestructuración en `let` (`let (a, b) = ...`).
+5. **Inferencia de tipos**: No se admite omisión de tipo ni palabras clave de inferencia (`auto`).
+6. **Funciones como valores**: No se definen bindings a funciones (`let funcion = guardar;`).
+7. **Referencias y punteros**: No se introducen punteros, referencias, `&mut`, `Box`, `Rc`, `Arc` ni mutabilidad interior (`Cell`, `RefCell`).
+
+
+## 9. Funciones
 
 La unidad semántica fundamental de ejecución y cómputo se denomina `Function`.
 
@@ -986,7 +1202,7 @@ Ejemplo:
     }
 
 
-### 8.1 Declaración
+### 9.1 Declaración
 
 La palabra clave `fn` inicia textualmente la declaración de una función.
 
@@ -994,7 +1210,7 @@ Semánticamente representa una `Function`. El parser reconoce el token `fn`,
 pero el significado y modelo semántico de `Function` pertenece a Evo-Script.
 
 
-### 8.2 Nombre
+### 9.2 Nombre
 
 En la declaración:
 
@@ -1003,7 +1219,7 @@ En la declaración:
 el identificador `guardar` define el nombre de la función dentro del programa.
 
 
-### 8.3 Argumentos
+### 9.3 Argumentos
 
 La regla oficial para la declaración de argumentos en Evo-Script es:
 
@@ -1026,7 +1242,7 @@ Una función puede declarar múltiples argumentos separados por comas:
     fn ejemplo(int id, float amount, Trabajador trabajador) -> ...
 
 
-### 8.4 Tipo de resultado
+### 9.4 Tipo de resultado
 
 La cláusula:
 
@@ -1047,7 +1263,7 @@ Ejemplos:
 En Evo-Script v0.1 toda función declara su tipo de resultado de forma explícita.
 
 
-### 8.5 Correspondencia
+### 9.5 Correspondencia
 
 Las llaves delimitadoras:
 
@@ -1067,7 +1283,7 @@ Semánticamente, una `Function` posee una correspondencia asociada:
     └── correspondence
 
 
-### 8.6 Sintaxis y semántica
+### 9.6 Sintaxis y semántica
 
 Existe una separación estricta entre la representación textual y la
 semántica del lenguaje:
@@ -1090,6 +1306,10 @@ semántica del lenguaje:
 | `Tipo::Variante(valor)` | `Construction of associated-value variant` |
 | `Variante { ... }` | `Structured variant` |
 | `Tipo::Variante { ... }` | `Structured variant construction` |
+| `let` | `Binding declaration` |
+| `let tipo nombre = valor;` | `Immutable binding` |
+| `=` | `Value association in let` |
+| `;` | `End of declaration/operation` |
 
 El parser futuro reconocerá la representación textual y generará la estructura
 correspondiente; Evo-Script define el significado y las reglas semánticas
