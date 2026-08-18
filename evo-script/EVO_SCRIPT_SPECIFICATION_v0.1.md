@@ -704,7 +704,250 @@ Ejemplo conceptual:
 valores de datos; los structs no poseen lógica ni métodos asociados.
 
 
-### 7.4 Result
+### 7.4 Enum
+
+`enum` define un tipo suma en Evo-Script.
+
+Un valor de un tipo `enum` representa exactamente una de las variantes declaradas
+en ese enum.
+
+Conceptualmente:
+
+- `struct`: representa un **AND** de datos (composición de campos).
+- `enum`: representa un **OR** de variantes (alternativas de datos).
+- `fn`: representa **comportamiento** (funciones que operan sobre datos).
+
+Ejemplo:
+
+    enum Estado {
+        Activo
+        Inactivo
+        Suspendido
+    }
+
+Un valor de `Estado` puede ser:
+
+    Estado::Activo
+
+o:
+
+    Estado::Inactivo
+
+o:
+
+    Estado::Suspendido
+
+pero exclusivamente una variante a la vez.
+
+Las variantes de un enum **no representan números enteros** dentro de la semántica
+visible del lenguaje (no existe `Activo = 0`, `Inactivo = 1`, etc.). La implementación
+técnica interna puede emplear discriminantes en bajo nivel, pero éstos no forman
+parte del significado del lenguaje: `Estado::Activo` es una variante formal del tipo
+`Estado`, no un número entero.
+
+
+#### 7.4.1 Forma general y declaración de variantes
+
+La forma textual general para definir un `enum` es:
+
+    enum NombreTipo {
+        Variante
+        Variante
+        Variante
+    }
+
+Ejemplo canónico:
+
+    enum Dias {
+        Lunes
+        Martes
+        Miercoles
+        Jueves
+        Viernes
+        Sabado
+        Domingo
+    }
+
+
+#### 7.4.2 Convenciones de nombres
+
+Evo-Script establece las siguientes convenciones para `enum`:
+
+- **Tipos definidos**: se nombran en `PascalCase` (`Dias`, `Estado`, `Resultado`, `Evento`, `EstadoUsuario`).
+- **Variantes**: se nombran en `PascalCase` (`Lunes`, `Activo`, `Correcto`, `NoEncontrado`, `Movimiento`).
+- **Campos en variantes estructuradas**: se nombran en `snake_case` (`error_message`, `user_id`, `last_name`, `x`, `y`, `text`).
+
+
+#### 7.4.3 Referencia y construcción: Tipo::Variante
+
+La forma canónica oficial para referenciar y construir una variante es:
+
+    Tipo::Variante
+
+Ejemplos:
+
+    Dias::Lunes
+    Estado::Activo
+    Estado::Suspendido
+
+La variante siempre se referencia mediante el nombre calificado de su tipo (`NombreEnum::NombreVariante`).
+No se permite el uso de la variante aislada (`Lunes`, `Activo`) como forma canónica,
+evitando cualquier ambigüedad entre enums distintos que compartan nombres de variantes:
+
+    enum EstadoUsuario {
+        Activo
+    }
+
+    enum EstadoServicio {
+        Activo
+    }
+
+Los valores `EstadoUsuario::Activo` y `EstadoServicio::Activo` son formalmente
+distintos y no ambiguos.
+
+No existe la palabra clave `new` para instanciar enums.
+
+
+#### 7.4.4 Variantes simples
+
+Una variante simple no transporta datos asociados:
+
+    enum Estado {
+        Activo
+        Inactivo
+        Suspendido
+    }
+
+Construcción:
+
+    Estado::Activo
+
+No requiere paréntesis `()`, llaves `{}` ni palabras clave adicionales.
+
+
+#### 7.4.5 Variantes con un valor asociado
+
+Una variante puede transportar un dato asociado cuyo tipo sea cualquier tipo válido
+de Evo-Script:
+
+    enum Resultado {
+        Correcto(string)
+        Error(string)
+    }
+
+Construcción:
+
+    Resultado::Correcto("Guardado")
+    Resultado::Error("No se pudo guardar")
+
+Conceptualmente:
+
+    Resultado
+    ├── Correcto(string)
+    └── Error(string)
+
+La variante identifica la alternativa y transporta el valor correspondiente.
+
+
+#### 7.4.6 Variantes con tipos definidos
+
+Una variante puede transportar un tipo definido previamente en el programa (como un `struct`):
+
+    struct Trabajador {
+        int id;
+        string name;
+    }
+
+    enum Busqueda {
+        Encontrado(Trabajador)
+        NoEncontrado
+    }
+
+Construcción:
+
+    Busqueda::Encontrado(
+        Trabajador {
+            id: 10
+            name: "Juan"
+        }
+    )
+
+o:
+
+    Busqueda::NoEncontrado
+
+Una variante puede transportar cualquier tipo válido de Evo-Script sin requerir
+reglas especiales para structs.
+
+
+#### 7.4.7 Variantes estructuradas
+
+Una variante puede declarar una estructura propia de campos con nombre:
+
+    enum Evento {
+        Inicio
+
+        Movimiento {
+            int x;
+            int y;
+        }
+
+        Mensaje {
+            string text;
+        }
+    }
+
+Construcción:
+
+    Evento::Inicio
+
+    Evento::Movimiento {
+        x: 10
+        y: 20
+    }
+
+    Evento::Mensaje {
+        text: "Hola"
+    }
+
+
+#### 7.4.8 Reglas de campos en variantes estructuradas
+
+Las variantes estructuradas reutilizan exactamente las mismas reglas definidas
+para los campos de `struct`:
+
+- **En definición**: se declara `tipo nombre;` (con punto y coma).
+- **En construcción**: se inicializa `nombre: valor` (con dos puntos).
+- Todos los campos declarados son obligatorios durante la construcción.
+- No existen valores por defecto implícitos ni existe `null`.
+- No pueden proporcionarse campos duplicados ni inexistentes.
+- El orden de inicialización no altera la identidad semántica del valor; los campos
+  se identifican por nombre.
+
+
+#### 7.4.9 Separación entre datos y comportamiento
+
+Un `enum` solo define alternativas de datos. No contiene funciones, métodos,
+constructores, herencia, interfaces ni lógica asociada.
+
+- `struct`: define una composición de datos.
+- `enum`: define alternativas de datos.
+- `fn`: define comportamiento.
+
+
+#### 7.4.10 Conceptos no incluidos en v0.1
+
+Evo-Script v0.1 delimita formalmente el alcance de `enum`:
+
+1. **Variables**: No se define aún sintaxis de declaración de variables (`let`, `var`, `mut`).
+2. **Funciones como valores**: Variantes que transporten tipos función o clausuras quedan pendientes.
+3. **Inspección de variantes**: Mecanismos como `match`, pattern matching, desestructuración o guards pertenecen a especificaciones posteriores y no forman parte de esta sección.
+4. **Discriminantes explícitos**: No se permite asignar valores numéricos explícitos a variantes (`Activo = 1`).
+5. **Generic enums**: Los enums genéricos (`enum Tipo<T>`) no forman parte de v0.1.
+6. **Conceptos ajenos**: No se introducen métodos, `impl`, `self`, `this`, `new`, `Option`, traits, `dyn`, punteros ni sintaxis de ownership/borrowing.
+
+
+### 7.5 Result
 
 Evo-Script incluye el tipo incorporado especial:
 
@@ -840,6 +1083,13 @@ semántica del lenguaje:
 | `tipo nombre;` | `Field` |
 | `Nombre { ... }` | `Struct construction` |
 | `nombre: valor` | `Field initialization` |
+| `enum Nombre { ... }` | `Enum definition` |
+| `Variante` | `Enum variant` |
+| `Tipo::Variante` | `Enum variant value` |
+| `Variante(tipo)` | `Variant with associated value` |
+| `Tipo::Variante(valor)` | `Construction of associated-value variant` |
+| `Variante { ... }` | `Structured variant` |
+| `Tipo::Variante { ... }` | `Structured variant construction` |
 
 El parser futuro reconocerá la representación textual y generará la estructura
 correspondiente; Evo-Script define el significado y las reglas semánticas
