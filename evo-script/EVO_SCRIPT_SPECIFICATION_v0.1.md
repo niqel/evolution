@@ -489,7 +489,7 @@ Evo-Script v0.1 define exactamente la siguiente tabla de tipos nativos:
 | `int` | `i32` |
 | `float` | `f64` |
 | `bool` | `bool` |
-| `string` | `str` / `String` según requerimiento técnico de ownership |
+| `string` | `&str` / `String` según requerimiento técnico de ownership |
 | `int8` | `i8` |
 | `int16` | `i16` |
 | `int32` | `i32` |
