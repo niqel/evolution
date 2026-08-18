@@ -1761,10 +1761,11 @@ El símbolo `=>` actúa exclusivamente como **marcador de correspondencia** dent
 3. **No sustituye a comparaciones booleanas**: La inspección semántica del enum se realiza mediante `when`, no mediante comparaciones de igualdad (`resultado == Tipo::Variante`).
 
 
-#### 10.13.4 Correspondencia como cuerpo de función y terminación
+#### 10.13.4 Expresión when y resultado de función
 
-1. **Cuerpo de función**: Una expresión `when` puede constituir directamente la correspondencia asociada a una `Function` sin requerir palabras clave como `return`.
-2. **Terminación con punto y coma**: Cuando un `when` forma parte de una declaración `let`, el punto y coma `;` cierra la declaración completa (`let string mensaje = when ... ;`). No se coloca `;` al final de cada rama `Variante => expresion`.
+1. **Expresión when en return**: `when` es una `Expression` y no retorna implícitamente de una función. Para constituir el resultado de una función, debe declararse explícitamente mediante `return when ...;`.
+2. **Ausencia de return en ramas**: No se permite utilizar `return` dentro de las ramas individuales de `when` (`Variante => return valor;` es inválido). `when` produce el valor y `return` declara que ese valor es el resultado de la función.
+3. **Terminación con punto y coma**: Cuando `when` forma parte de una declaración `let` o de una sentencia `return`, la declaración completa termina con `;` (`let string mensaje = when ... ;` o `return when ... ;`). No se coloca `;` al final de cada correspondencia individual `Variante => expresion`.
 
 
 #### 10.13.5 Ejemplo completo canónico
@@ -1790,7 +1791,7 @@ fn describir_trabajador(Trabajador trabajador) -> string {
 }
 
 fn obtener_mensaje(BuscarTrabajadorResultado resultado) -> string {
-    when resultado {
+    return when resultado {
         BuscarTrabajadorResultado::Encontrado(Trabajador trabajador)
             => describir_trabajador(trabajador)
 
@@ -1799,7 +1800,7 @@ fn obtener_mensaje(BuscarTrabajadorResultado resultado) -> string {
 
         BuscarTrabajadorResultado::Error(string message)
             => message
-    }
+    };
 }
 
 let BuscarTrabajadorResultado resultado =
@@ -1820,7 +1821,7 @@ Quedan formalmente fuera de Evo-Script v0.1:
 4. **Punteros y referencias**: No existen operadores `&` ni `*`.
 5. **Tipos no numéricos en dynamic**: `dynamic` no soporta structs, enums ni dispatch polimórfico dinámico.
 6. **Tipos enteros artificiales visibles**: No existen `bigint`, `int256` ni `int512`.
-7. **Control condicional imperativo y pattern matching general**: No existen `if`, `else`, `switch`, `case`, `for`, `while`, `loop`, `return`, `match`, guards, wildcards `_`, rangos ni destructuring anidado.
+7. **Control condicional imperativo y pattern matching general**: No existen `if`, `else`, `switch`, `case`, `for`, `while`, `loop`, `match`, guards, wildcards `_`, rangos ni destructuring anidado.
 
 
 ### 10.15 Semántica pendiente
@@ -1839,18 +1840,14 @@ La unidad semántica fundamental de ejecución y cómputo se denomina `Function`
 La forma textual general definida en Evo-Script v0.1 es:
 
     fn nombre(tipo argumento, tipo argumento) -> tipo {
-        correspondencia
+        cero_o_mas_bindings_let
+        return expresion;
     }
 
-Ejemplo:
+Ejemplo canónico:
 
-    enum GuardarTrabajadorResult {
-        Guardado(Trabajador)
-        Error(GuardarError)
-    }
-
-    fn guardar(Trabajador trabajador) -> GuardarTrabajadorResult {
-        ...
+    fn sumar(int numero, int numero2) -> int {
+        return numero + numero2;
     }
 
 
@@ -1900,51 +1897,94 @@ La cláusula:
 
     -> tipo
 
-declara explícitamente el tipo producido por la función.
-
-Ejemplos:
-
-    fn calcular(int value) -> int {
-        ...
-    }
-
-    fn guardar(Trabajador trabajador) -> GuardarTrabajadorResult {
-        ...
-    }
-
-En Evo-Script v0.1 toda función declara su tipo de resultado de forma explícita.
+declara explícitamente el contrato de tipo producido por la función. Toda función en Evo-Script v0.1 declara su tipo de resultado de forma explícita. No existe inferencia del tipo de resultado de una función.
 
 
-### 11.5 Correspondencia
+### 11.5 Declaración explícita de resultado con return
 
-Las llaves delimitadoras:
+Evo-Script v0.1 exige que toda función declare explícitamente cuál es la expresión que produce su resultado mediante la palabra clave:
 
-    {
-        ...
-    }
+    return
 
-representan textualmente el inicio y fin de la correspondencia asociada
-a la función.
+Sintaxis oficial:
 
-Semánticamente, una `Function` posee una correspondencia asociada:
+    return expresion;
+
+Reglas normativas:
+
+1. **Declaración explícita de resultado**: `return expresion;` declara formalmente que `expresion` constituye el valor producido por la función.
+2. **Ausencia de retorno implícito**: Evo-Script no infiere el resultado a partir de la última expresión del cuerpo. Una función sin `return` (por ejemplo, `{ a + b }`) es semánticamente inválida.
+3. **Exactamente un return por función**: Toda función debe contener exactamente un `return`. No se permiten cero ni múltiples sentencias `return`.
+4. **Último elemento de la correspondencia**: `return expresion;` debe ser estrictamente el último elemento dentro del cuerpo de la función. No se admiten declaraciones, bindings ni expresiones posteriores al `return`.
+5. **Ausencia de early return y control imperativo**: `return` no constituye una sentencia de bifurcación, salto o interrupción temprana (`early exit`/`jump`). No existen múltiples puntos de retorno ni sentencias de control condicional (`if`, `else`, `switch`).
+6. **Compatibilidad estricta de tipos**: El tipo producido por la expresión en `return expresion;` debe coincidir exactamente con el tipo declarado en `-> tipo`. Si los tipos no coinciden (por ejemplo, `return a + b;` con `-> string`), el programa es inválido. Si se requiere convertir el tipo, debe utilizarse explícitamente `to_tipo`.
+7. **Terminación obligatoria con punto y coma**: La sentencia `return` debe terminar obligatoriamente con punto y coma (`;`).
+8. **Ámbito de return**: `return` solo tiene significado dentro de la correspondencia de una `Function`. No es un operador ni puede utilizarse a nivel global.
+
+
+### 11.6 Estructura de la correspondencia (Correspondence)
+
+La correspondencia de una función está delimitada por llaves `{ ... }` y posee la siguiente estructura:
 
     Function
     ├── name
     ├── arguments
-    ├── result type
+    ├── result type (-> Tipo)
     └── correspondence
+        ├── cero o más let bindings inmutables
+        └── exactamente un return expresion;
+
+Ejemplos válidos:
+
+- **Función directa**:
+  ```text
+  fn multiplicar(int a, int b) -> int {
+      return a * b;
+  }
+  ```
+- **Función con bindings intermedios**:
+  ```text
+  fn calcular_total(int precio, int impuesto) -> int {
+      let int subtotal = precio + impuesto;
+      let int resultado = subtotal * 2;
+
+      return resultado;
+  }
+  ```
+- **Función con pipeline**:
+  ```text
+  fn sumar_texto(int a, int b) -> string {
+      return a + b
+          |> to_string;
+  }
+  ```
+- **Función con when**:
+  ```text
+  fn obtener_mensaje(BuscarTrabajadorResultado resultado) -> string {
+      return when resultado {
+          BuscarTrabajadorResultado::Encontrado(Trabajador trabajador)
+              => trabajador.name
+
+          BuscarTrabajadorResultado::NoEncontrado
+              => "Trabajador no encontrado"
+
+          BuscarTrabajadorResultado::Error(string message)
+              => message
+      };
+  }
+  ```
 
 
-### 11.6 Sintaxis y semántica
+### 11.7 Sintaxis y semántica
 
-Existe una separación estricta entre la representación textual y la
-semántica del lenguaje:
+Existe una separación estricta entre la representación textual y la semántica del lenguaje:
 
 | Sintaxis | Semántica |
 | :--- | :--- |
 | `fn` | `Function` |
 | `tipo nombre` | `Argument` |
 | `-> tipo` | `Result type declaration` |
+| `return expresion;` | `Explicit function result declaration` |
 | `{ ... }` | `Correspondence` |
 | `struct Nombre { ... }` | `Struct definition` |
 | `tipo nombre;` | `Field` |
