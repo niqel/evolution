@@ -959,7 +959,7 @@ Evo-Script v0.1 delimita formalmente el alcance de `enum`:
 
 1. **Mutabilidad**: Evo-Script v0.1 no define `var`, `mut` ni variables reasignables. Los valores con nombre se representan mediante bindings inmutables declarados con `let`.
 2. **Funciones como valores**: Variantes que transporten tipos función o clausuras quedan pendientes.
-3. **Inspección de variantes**: Mecanismos como `match`, pattern matching, desestructuración o guards pertenecen a especificaciones posteriores y no forman parte de esta sección.
+3. **Pattern matching general**: La inspección de variantes se realiza exclusivamente mediante la expresión exhaustiva `when` (Sección 10.13). Mecanismos de pattern matching general (`match`, wildcards `_`, guards, patrones anidados o rangos) no forman parte de v0.1.
 4. **Discriminantes explícitos**: No se permite asignar valores numéricos explícitos a variantes (`Activo = 1`).
 5. **Generic enums**: Los enums genéricos (`enum Tipo<T>`) no forman parte de v0.1.
 6. **Conceptos ajenos**: No se introducen métodos, `impl`, `self`, `this`, `new`, `Option`, traits, `dyn`, punteros ni sintaxis de ownership/borrowing.
@@ -1694,7 +1694,123 @@ Ejemplos inválidos:
     ++age;        // Inválido
 
 
-### 10.13 Operadores y conceptos excluidos de v0.1
+### 10.13 Correspondencia exhaustiva de enums con when
+
+Evo-Script no utiliza estructuras imperativas de control de flujo (`if`, `else`, `switch`, `case`, `for`, `while`, `loop`). La inspección y el consumo de valores de un tipo `enum` se modelan como una correspondencia declarativa y exhaustiva entre el conjunto cerrado de alternativas del enum y expresiones que producen un valor, mediante la palabra clave:
+
+    when
+
+`when` es una **expresión** (`Expression`) que evalúa exactamente un valor de tipo `enum` definido por el programa y produce exactamente un valor.
+
+Forma general:
+
+    when valor_enum {
+        TipoEnum::VarianteA
+            => expresion_a
+
+        TipoEnum::VarianteB(Tipo valor)
+            => expresion_b
+    }
+
+El símbolo `=>` actúa exclusivamente como **marcador de correspondencia** dentro de `when`. No constituye un operador aritmético, lógico, de comparación, de asignación ni de pipeline, y no forma parte de la jerarquía de precedencia de operadores. Fuera de `when`, el símbolo `=>` no posee significado en Evo-Script v0.1.
+
+
+#### 10.13.1 Reglas de exhaustividad y correspondencia
+
+1. **Exhaustividad obligatoria**: Una expresión `when` debe cubrir todas las variantes declaradas en el tipo enum inspeccionado. Si falta alguna variante, el programa es semánticamente inválido.
+2. **Sin duplicados**: Cada variante del enum debe aparecer exactamente una vez. No pueden repetirse correspondencias para una misma variante.
+3. **Ausencia de default y comodines**: No existen palabras clave `default`, `otherwise`, `else` ni comodines de captura general `_`. Todas las correspondencias deben declarar explícitamente la variante que atienden.
+4. **Referencia canónica obligatoria**: Cada correspondencia debe utilizar el calificador completo `TipoEnum::Variante`. No se admiten nombres de variantes no calificados dentro de `when`.
+5. **Valor producido y consistencia de tipos**: `when` produce exactamente un valor. Todas las expresiones asociadas mediante `=>` deben producir el mismo tipo semántico. Si una rama produce `string` y otra `int`, la expresión es inválida. No existen tipos unión (`T | E`) ni promociones automáticas para ocultar incompatibilidades.
+6. **Conversiones explícitas**: Si las correspondencias necesitan producir un tipo común a partir de tipos distintos, deben utilizar explícitamente la familia `to_tipo`.
+7. **Tipado contextual de literales**: Si el resultado de `when` se asigna a un binding explícito (`let int64 value = when ...`), los literales numéricos en las expresiones de correspondencia adquieren dicho tipo contextual.
+
+
+#### 10.13.2 Inspección y extracción según tipo de variante
+
+1. **Variantes simples**: Se corresponden directamente sin paréntesis ni parámetros:
+   ```text
+   Estado::Activo => "activo"
+   ```
+2. **Variantes con valor asociado**: Extraen el valor asociado mediante la sintaxis oficial `tipo primero, nombre después`:
+   ```text
+   BuscarTrabajadorResultado::Encontrado(Trabajador trabajador)
+       => describir_trabajador(trabajador)
+
+   BuscarTrabajadorResultado::Error(string message)
+       => message
+   ```
+   El identificador (`trabajador`, `message`) crea un binding inmutable estrictamente local a la expresión correspondiente a esa variante. Fuera de esa correspondencia, el binding no está visible.
+3. **Inmutabilidad y prohibición de shadowing en extracciones**: Los bindings extraídos por `when` son inmutables y no pueden reasignarse ni sombrear nombres ya visibles en el ámbito exterior.
+4. **Ausencia de patrones anidados o alias**: No se admite desestructuración anidada (como `Encontrado(Trabajador { ... })`) ni sintaxis de captura adicional (`as`, `@`, `bind`).
+5. **Variantes estructuradas**: Extraen explícitamente todos sus campos mediante la sintaxis de campos con bindings tipados:
+   ```text
+   OperacionResultado::Error {
+       message: string error_message;
+       code: int error_code;
+   }
+       => error_message
+   ```
+   En Evo-Script v0.1, una correspondencia sobre una variante estructurada debe extraer todos sus campos declarados. No se permite extracción parcial ni patrones de resto (`..`, `_`).
+
+
+#### 10.13.3 Ausencia de control condicional y guards
+
+1. **Solo tipos enum**: `when` solo acepta expresiones cuyo tipo sea un `enum` definido. No acepta valores booleanos (`when active { ... }`), numéricos ni cadenas.
+2. **Sin guards condicionales**: No se permite sintaxis de guards (`Variante if condicion => ...` ni `Variante when condicion => ...`). La selección se realiza exclusivamente por la variante activa del enum.
+3. **No sustituye a comparaciones booleanas**: La inspección semántica del enum se realiza mediante `when`, no mediante comparaciones de igualdad (`resultado == Tipo::Variante`).
+
+
+#### 10.13.4 Correspondencia como cuerpo de función y terminación
+
+1. **Cuerpo de función**: Una expresión `when` puede constituir directamente la correspondencia asociada a una `Function` sin requerir palabras clave como `return`.
+2. **Terminación con punto y coma**: Cuando un `when` forma parte de una declaración `let`, el punto y coma `;` cierra la declaración completa (`let string mensaje = when ... ;`). No se coloca `;` al final de cada rama `Variante => expresion`.
+
+
+#### 10.13.5 Ejemplo completo canónico
+
+```text
+struct Trabajador {
+    int id;
+    string name;
+}
+
+enum BuscarTrabajadorResultado {
+    Encontrado(Trabajador)
+    NoEncontrado
+    Error(string)
+}
+
+fn buscar_trabajador(int id) -> BuscarTrabajadorResultado {
+    correspondencia
+}
+
+fn describir_trabajador(Trabajador trabajador) -> string {
+    correspondencia
+}
+
+fn obtener_mensaje(BuscarTrabajadorResultado resultado) -> string {
+    when resultado {
+        BuscarTrabajadorResultado::Encontrado(Trabajador trabajador)
+            => describir_trabajador(trabajador)
+
+        BuscarTrabajadorResultado::NoEncontrado
+            => "Trabajador no encontrado"
+
+        BuscarTrabajadorResultado::Error(string message)
+            => message
+    }
+}
+
+let BuscarTrabajadorResultado resultado =
+    buscar_trabajador(10);
+
+let string mensaje =
+    obtener_mensaje(resultado);
+```
+
+
+### 10.14 Operadores y conceptos excluidos de v0.1
 
 Quedan formalmente fuera de Evo-Script v0.1:
 
@@ -1704,16 +1820,16 @@ Quedan formalmente fuera de Evo-Script v0.1:
 4. **Punteros y referencias**: No existen operadores `&` ni `*`.
 5. **Tipos no numéricos en dynamic**: `dynamic` no soporta structs, enums ni dispatch polimórfico dinámico.
 6. **Tipos enteros artificiales visibles**: No existen `bigint`, `int256` ni `int512`.
+7. **Control condicional imperativo y pattern matching general**: No existen `if`, `else`, `switch`, `case`, `for`, `while`, `loop`, `return`, `match`, guards, wildcards `_`, rangos ni destructuring anidado.
 
 
-### 10.14 Semántica pendiente
+### 10.15 Semántica pendiente
 
 Permanecen explícitamente pendientes para su definición en especificaciones posteriores:
 
-1. **Inspección y pattern matching en enums**: Mecanismos para observar y seleccionar variantes de enums definidos (`match`, desestructuración, guards).
-2. **Mecanismos generales de captura de errores de evaluación**: No se introducen construcciones de manejo de excepciones o captura de errores de evaluación (`try`/`catch`).
-3. **Detalles avanzados de parsing en flotantes**: Algoritmos de parsing textual detallado y soporte de notación científica avanzada en literales float.
-4. **Precedencia específica de pipeline**: La posición exacta del operador `|>` en la jerarquía completa de precedencia frente a todos los operadores.
+1. **Mecanismos generales de captura de errores de evaluación**: No se introducen construcciones de manejo de excepciones o captura de errores de evaluación (`try`/`catch`).
+2. **Detalles avanzados de parsing en flotantes**: Algoritmos de parsing textual detallado y soporte de notación científica avanzada en literales float.
+3. **Precedencia específica de pipeline**: La posición exacta del operador `|>` en la jerarquía completa de precedencia frente a todos los operadores.
 
 
 ## 11. Funciones
@@ -1871,6 +1987,11 @@ semántica del lenguaje:
 | `-a` | `Numeric negation` |
 | `(expresión)` | `Grouped expression` |
 | `valor \|> operación` | `Pipeline composition` |
+| `when valor { ... }` | `Exhaustive enum correspondence expression` |
+| `Tipo::Variante => expresion` | `Variant-to-value correspondence` |
+| `Tipo::Variante(Tipo binding)` | `Associated enum value extraction` |
+| `Tipo::Variante { campo: Tipo binding; }` | `Structured variant field extraction` |
+| `=>` | `Correspondence marker inside when` |
 
 El parser futuro reconocerá la representación textual y generará la estructura
 correspondiente; Evo-Script define el significado y las reglas semánticas
