@@ -957,7 +957,7 @@ constructores, herencia, interfaces ni lógica asociada.
 
 Evo-Script v0.1 delimita formalmente el alcance de `enum`:
 
-1. **Variables**: No se define aún sintaxis de declaración de variables (`let`, `var`, `mut`).
+1. **Mutabilidad**: Evo-Script v0.1 no define `var`, `mut` ni variables reasignables. Los valores con nombre se representan mediante bindings inmutables declarados con `let`.
 2. **Funciones como valores**: Variantes que transporten tipos función o clausuras quedan pendientes.
 3. **Inspección de variantes**: Mecanismos como `match`, pattern matching, desestructuración o guards pertenecen a especificaciones posteriores y no forman parte de esta sección.
 4. **Discriminantes explícitos**: No se permite asignar valores numéricos explícitos a variantes (`Activo = 1`).
