@@ -1030,14 +1030,15 @@ Inválido:
 
 No existen bindings sin valor inicial ni valores por defecto implícitos.
 
-Asimismo, el valor asignado debe ser compatible con el tipo declarado:
+Asimismo, el valor asignado debe ser directamente compatible con el tipo declarado:
 
     let int edad = 43;     // Válido
 
     let int edad = "43";   // Inválido: incompatibilidad de tipos
 
-Evo-Script no realiza coerciones implícitas ni conversiones automáticas de tipos
-en esta etapa.
+Evo-Script no realiza coerciones ni conversiones implícitas de tipos. Si se requiere
+adaptar un valor a otro tipo, debe utilizarse una conversión explícita mediante la
+familia `to_tipo`.
 
 
 ### 8.4 Inmutabilidad absoluta y ausencia de reasignación
@@ -1079,10 +1080,11 @@ finaliza su ciclo de vida.
 
 ### 8.6 Convenciones de nombres
 
-Los nombres de los bindings creados mediante `let` siguen la convención oficial:
+Evo-Script distingue formalmente las siguientes convenciones de nombres:
 
+- **Tipos nativos**: conservan exactamente los nombres definidos por Evo-Script (`int`, `float`, `bool`, `string`, `int8`, `int16`, `int32`, `int64`, `int128`, `uint8`, `uint16`, `uint32`, `uint64`, `uint128`, `float32`, `float64`).
+- **Tipos definidos por el programa**: se nombran en `PascalCase` (`Trabajador`, `Dias`, `Resultado`, `Evento`).
 - **Bindings**: se nombran en `snake_case` (`edad`, `first_name`, `last_name`, `id_colonia`, `current_user`). No se utiliza `camelCase`.
-- **Tipos**: se nombran en `PascalCase` (`int`, `string`, `Trabajador`, `Dias`).
 
 
 ### 8.7 `let` con distintos tipos de valores
@@ -1185,7 +1187,148 @@ Evo-Script v0.1 delimita estrictamente la semántica de valores y bindings:
 7. **Referencias y punteros**: No se introducen punteros, referencias, `&mut`, `Box`, `Rc`, `Arc` ni mutabilidad interior (`Cell`, `RefCell`).
 
 
-## 9. Funciones
+## 9. Conversiones de tipos
+
+### 9.1 Principio fundamental: ausencia de conversiones implícitas
+
+Evo-Script **no realiza conversiones implícitas de tipos**. Un valor nunca cambia
+silenciosamente de tipo en ninguna circunstancia.
+
+Esto aplica incluso cuando técnicamente el tipo destino pueda albergar sin pérdida
+todos los valores del tipo origen. No existen promociones numéricas automáticas como:
+
+- `int8` $\rightarrow$ `int16` $\rightarrow$ `int32` $\rightarrow$ `int64` $\rightarrow$ `int128`
+- `uint8` $\rightarrow$ `uint16` $\rightarrow$ `uint32` $\rightarrow$ `uint64` $\rightarrow$ `uint128`
+- `int` $\rightarrow$ `float`
+- `float32` $\rightarrow$ `float64`
+
+Cualquier cambio de tipo debe ser explícito y visible en el código del programa.
+
+
+### 9.2 Familia oficial de conversión: `to_tipo`
+
+Evo-Script define una única familia oficial y normativa de operaciones de conversión:
+
+    to_tipo
+
+La lista completa de operaciones de conversión en Evo-Script v0.1 es:
+
+- **Enteros con signo**: `to_int` (convierte a `int` / `i32`), `to_int8`, `to_int16`, `to_int32`, `to_int64`, `to_int128`.
+- **Enteros sin signo**: `to_uint8`, `to_uint16`, `to_uint32`, `to_uint64`, `to_uint128`.
+- **Punto flotante**: `to_float` (convierte a `float` / `f64`), `to_float32`, `to_float64`.
+- **Texto**: `to_string`.
+
+No existe una familia alternativa como `convert_to_tipo`, ni palabras clave de casteo como `cast` o `as`. No existe el tipo `float128` ni la operación `to_float128`.
+
+
+### 9.3 Conversiones garantizadas
+
+Una conversión se considera **garantizada** cuando todos los valores posibles del
+tipo origen tienen representación exacta dentro del tipo destino sin riesgo de
+pérdida de rango ni precisión (por ejemplo, ampliaciones entre enteros del mismo signo:
+`int8` $\rightarrow$ `int16`, `int64` $\rightarrow$ `int128`, `uint8` $\rightarrow$ `uint16`).
+
+En estos casos, la operación produce directamente el tipo destino:
+
+    let int64 source = 100;
+    let int128 target = to_int128(source); // Produce int128 directamente
+
+Aun siendo una conversión garantizada, la operación **sigue siendo estrictamente explícita**:
+
+    let int128 target = source; // Inválido: no hay conversión automática
+
+
+### 9.4 Conversiones potencialmente fallables y ConversionError
+
+Cuando una conversión puede implicar pérdida de rango numérico, imposibilidad de
+representación exacta o pérdida de precisión, la operación **no altera ni trunca silenciosamente
+el valor**. En su lugar, expresa la posibilidad de fallo produciendo:
+
+    result<T, ConversionError>
+
+`ConversionError` se introduce conceptualmente como el tipo semántico de error que
+representa el fracaso de una conversión de tipo. En Evo-Script v0.1 no se definen
+variantes internas cerradas de `ConversionError` ni mecanismos finales de captura/propagación
+de Result (`?`, `unwrap`, `match`).
+
+
+### 9.5 Conversiones entre enteros
+
+- **Ampliación garantizada**:
+  ```text
+  to_int128(int64_value) -> int128
+  ```
+- **Reducción potencialmente fallable**:
+  ```text
+  to_int64(int128_value) -> result<int64, ConversionError>
+  ```
+  La conversión valida en tiempo de ejecución si el valor concreto cabe dentro del rango del tipo destino.
+
+
+### 9.6 Conversiones entre signed y unsigned
+
+Las conversiones entre enteros con signo y sin signo nunca se presumen seguras:
+
+- `int32` $\rightarrow$ `uint32`: requiere `to_uint32(value)` y produce `result<uint32, ConversionError>`.
+- `uint32` $\rightarrow$ `int32`: requiere `to_int32(value)` y produce `result<int32, ConversionError>`.
+
+Evo-Script no realiza reinterpretación de bits ni comportamiento de wrapping silencioso.
+
+
+### 9.7 Conversiones de punto flotante
+
+Las conversiones que involucran números de punto flotante consideran tanto el rango
+como la precisión y la exactitud de la representación:
+
+- **Entero a Float**: `to_float64(int64_value)` produce `result<float64, ConversionError>` cuando el valor entero no pueda representarse con exactitud en el formato flotante sin pérdida de información. No se realiza redondeo silencioso.
+- **Float a Entero**: `to_int64(float_value)` produce `result<int64, ConversionError>`. No se realiza truncamiento ni redondeo silencioso.
+- **Float a Float**: `to_float32(float64_value)` produce `result<float32, ConversionError>` si existe pérdida de precisión.
+
+
+### 9.8 Conversión a string (`to_string`)
+
+La operación `to_string` permite convertir explícitamente valores a su representación textual:
+
+    let string text = to_string(43);
+
+Ningún valor se convierte automáticamente a texto. En Evo-Script v0.1 no se define parsing inverso desde texto hacia números (`parse_int`, `parse_float`).
+
+
+### 9.9 Composición en pipelines
+
+Las operaciones de conversión pueden componerse de forma natural dentro de pipelines:
+
+    source
+    |> to_int128
+
+o:
+
+    source
+    |> to_int64
+
+
+### 9.10 Operaciones aritméticas y ausencia de promoción automática
+
+Una operación aritmética no debe cambiar silenciosamente el tipo numérico del resultado
+para evitar un desbordamiento (por ejemplo, `int32 + int32` no se promociona automáticamente
+a `int64`). La semántica completa de operadores aritméticos queda pendiente para su
+especificación dedicada.
+
+
+### 9.11 Conceptos no incluidos en v0.1
+
+Quedan formalmente fuera de la especificación de conversiones de Evo-Script v0.1:
+
+1. **Casts implícitos o estilo C / Rust**: No existen `as`, `cast`, `transmute` ni reinterpretación de memoria.
+2. **Promociones automáticas**: No existen widening implícito ni conversiones silenciosas.
+3. **Redondeo o truncamiento automático**: Las conversiones fallan explícitamente en lugar de distorsionar datos.
+4. **Parsing inverso**: No se definen `parse_int` ni `parse_float`.
+5. **Tipos no existentes**: No existe `float128` ni `to_float128`.
+6. **Mecanismos alternativos**: No existen `convert_to_*` ni generic conversion functions.
+7. **Desempaquetado de Result**: No se introducen `?`, `unwrap`, `expect` ni `match`.
+
+
+## 10. Funciones
 
 La unidad semántica fundamental de ejecución y cómputo se denomina `Function`.
 
@@ -1202,7 +1345,7 @@ Ejemplo:
     }
 
 
-### 9.1 Declaración
+### 10.1 Declaración
 
 La palabra clave `fn` inicia textualmente la declaración de una función.
 
@@ -1210,7 +1353,7 @@ Semánticamente representa una `Function`. El parser reconoce el token `fn`,
 pero el significado y modelo semántico de `Function` pertenece a Evo-Script.
 
 
-### 9.2 Nombre
+### 10.2 Nombre
 
 En la declaración:
 
@@ -1219,7 +1362,7 @@ En la declaración:
 el identificador `guardar` define el nombre de la función dentro del programa.
 
 
-### 9.3 Argumentos
+### 10.3 Argumentos
 
 La regla oficial para la declaración de argumentos en Evo-Script es:
 
@@ -1242,7 +1385,7 @@ Una función puede declarar múltiples argumentos separados por comas:
     fn ejemplo(int id, float amount, Trabajador trabajador) -> ...
 
 
-### 9.4 Tipo de resultado
+### 10.4 Tipo de resultado
 
 La cláusula:
 
@@ -1263,7 +1406,7 @@ Ejemplos:
 En Evo-Script v0.1 toda función declara su tipo de resultado de forma explícita.
 
 
-### 9.5 Correspondencia
+### 10.5 Correspondencia
 
 Las llaves delimitadoras:
 
@@ -1283,7 +1426,7 @@ Semánticamente, una `Function` posee una correspondencia asociada:
     └── correspondence
 
 
-### 9.6 Sintaxis y semántica
+### 10.6 Sintaxis y semántica
 
 Existe una separación estricta entre la representación textual y la
 semántica del lenguaje:
@@ -1310,6 +1453,8 @@ semántica del lenguaje:
 | `let tipo nombre = valor;` | `Immutable binding` |
 | `=` | `Value association in let` |
 | `;` | `End of declaration/operation` |
+| `to_tipo(valor)` | `Explicit type conversion` |
+| `valor \|> to_tipo` | `Composed explicit conversion` |
 
 El parser futuro reconocerá la representación textual y generará la estructura
 correspondiente; Evo-Script define el significado y las reglas semánticas
