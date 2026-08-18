@@ -1225,8 +1225,8 @@ No existe una familia alternativa como `convert_to_tipo`, ni palabras clave de c
 
 Una conversión se considera **garantizada** cuando todos los valores posibles del
 tipo origen tienen representación exacta dentro del tipo destino sin riesgo de
-pérdida de rango ni precisión (por ejemplo, ampliaciones entre enteros del mismo signo:
-`int8` $\rightarrow$ `int16`, `int64` $\rightarrow$ `int128`, `uint8` $\rightarrow$ `uint16`).
+pérdida de rango ni precisión (por ejemplo: `int8` $\rightarrow$ `int16`,
+`int64` $\rightarrow$ `int128`, `uint8` $\rightarrow$ `uint16`, `uint64` $\rightarrow$ `int128`).
 
 En estos casos, la operación produce directamente el tipo destino:
 
@@ -1267,10 +1267,33 @@ de Result (`?`, `unwrap`, `match`).
 
 ### 9.6 Conversiones entre signed y unsigned
 
-Las conversiones entre enteros con signo y sin signo nunca se presumen seguras:
+Las conversiones entre enteros con signo y sin signo se rigen estrictamente por la
+regla universal de representación exacta del dominio completo del tipo origen dentro
+del tipo destino. La clasificación no depende únicamente de la presencia o ausencia
+de signo, sino de la relación de rangos entre ambos tipos:
 
-- `int32` $\rightarrow$ `uint32`: requiere `to_uint32(value)` y produce `result<uint32, ConversionError>`.
-- `uint32` $\rightarrow$ `int32`: requiere `to_int32(value)` y produce `result<int32, ConversionError>`.
+- **Conversiones signed/unsigned garantizadas**:
+  Cuando el tipo destino tiene capacidad suficiente para albergar exactamente todo
+  el rango no negativo del tipo origen sin signo:
+  - `uint8` $\rightarrow$ `int16`
+  - `uint16` $\rightarrow$ `int32`
+  - `uint32` $\rightarrow$ `int64`
+  - `uint64` $\rightarrow$ `int128`
+
+  Ejemplo:
+  ```text
+  let uint64 source = 100;
+  let int128 target = to_int128(source); // Produce int128 directamente
+  ```
+  Aun siendo garantizada, sigue requiriendo la invocación explícita de `to_tipo`
+  (`let int128 target = source;` es inválido).
+
+- **Conversiones signed/unsigned potencialmente fallables**:
+  Cuando existe al menos un valor válido del tipo origen que no cabe en el tipo destino:
+  - `int32` $\rightarrow$ `uint32`: los valores negativos de `int32` no pueden representarse en `uint32`. Requiere `to_uint32(value)` y produce `result<uint32, ConversionError>`.
+  - `uint32` $\rightarrow$ `int32`: los valores de `uint32` mayores a $2^{31}-1$ no caben en `int32`. Requiere `to_int32(value)` y produce `result<int32, ConversionError>`.
+  - `int8` $\rightarrow$ `uint8`: los valores negativos no pueden representarse en `uint8`. Requiere `to_uint8(value)` y produce `result<uint8, ConversionError>`.
+  - `uint128` $\rightarrow$ `int128`: los valores de `uint128` mayores a $2^{127}-1$ no caben en `int128`. Requiere `to_int128(value)` y produce `result<int128, ConversionError>`.
 
 Evo-Script no realiza reinterpretación de bits ni comportamiento de wrapping silencioso.
 
