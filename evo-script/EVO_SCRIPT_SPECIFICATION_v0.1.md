@@ -523,9 +523,11 @@ es permitir cómputos numéricos donde el programador no fija de antemano el tam
 de representación del resultado. En Evo-Script v0.1 `dynamic` es exclusivamente
 un tipo numérico; no representa "cualquier objeto", ni tipos heterogéneos, ni
 introduce dynamic dispatch, reflexión o runtime member lookup estilo C#, ni tiene
-relación con `dyn` de Rust. Su representación técnica en Rust no corresponde a un
-tipo primitivo de tamaño fijo único, sino a una representación interna dinámica
-suficiente para albergar y expandir números exactos.
+relación con `dyn` de Rust. `dynamic` utiliza una representación numérica interna
+dinámica: para enteros, dicha representación puede expandirse para conservar
+exactamente el resultado matemático; para valores de punto flotante, continúan
+aplicando las reglas y limitaciones de `float`, `float32` y `float64`.
+
 
 Estos tipos nativos no se definen como macros textuales ni reemplazos del parser.
 
@@ -1344,15 +1346,47 @@ Ningún valor se convierte automáticamente a texto. En Evo-Script v0.1 no se de
 
 ### 9.9 Conversiones desde dynamic
 
-Para convertir un valor numérico de tipo `dynamic` hacia un tipo numérico de tamaño fijo, se utiliza la familia estándar `to_tipo`:
+Toda conversión explícita desde `dynamic` hacia cualquier tipo numérico de tamaño fijo
+es **semánticamente potencialmente fallable** y posee una firma de retorno estable:
 
-    let dynamic value = 100;
-    let int64 target = to_int64(value);
+    result<T, ConversionError>
 
-- Si el valor concreto almacenado en `dynamic` puede representarse exactamente en el tipo destino según las reglas universales de rango y exactitud, la operación produce directamente dicho tipo (`int64`).
-- Si el valor concreto no puede representarse exactamente en el tipo destino, produce `result<T, ConversionError>`.
+Dado que el dominio representable por `dynamic` no está acotado por los límites
+de ningún tipo numérico fijo particular, la operación no puede garantizar estáticamente
+que el valor concreto quepa en el tipo destino. Por tanto, su firma no varía según
+el valor en tiempo de ejecución:
 
-Asimismo, `to_string(dynamic_value)` permite convertir explícitamente el valor dinámico a texto. No se introducen métodos como `dynamic.as_int64` ni operadores de casteo (`as`, `cast`).
+    to_int(dynamic_value)    -> result<int, ConversionError>
+    to_int8(dynamic_value)   -> result<int8, ConversionError>
+    to_int16(dynamic_value)  -> result<int16, ConversionError>
+    to_int32(dynamic_value)  -> result<int32, ConversionError>
+    to_int64(dynamic_value)  -> result<int64, ConversionError>
+    to_int128(dynamic_value) -> result<int128, ConversionError>
+
+    to_uint8(dynamic_value)   -> result<uint8, ConversionError>
+    to_uint16(dynamic_value)  -> result<uint16, ConversionError>
+    to_uint32(dynamic_value)  -> result<uint32, ConversionError>
+    to_uint64(dynamic_value)  -> result<uint64, ConversionError>
+    to_uint128(dynamic_value) -> result<uint128, ConversionError>
+
+    to_float(dynamic_value)   -> result<float, ConversionError>
+    to_float32(dynamic_value) -> result<float32, ConversionError>
+    to_float64(dynamic_value) -> result<float64, ConversionError>
+
+Incluso cuando un binding `dynamic` contenga un valor pequeño que cabe en el tipo destino:
+
+    let dynamic value = 10;
+    to_int64(value) // Produce result<int64, ConversionError> (con éxito en esa ejecución)
+
+La operación produce una variante de éxito que contiene el valor `int64`, pero el tipo
+estático de la expresión continúa siendo `result<int64, ConversionError>`. Si el valor
+no puede representarse exactamente en el destino por rango o precisión, produce una
+variante de error con `ConversionError`.
+
+Asimismo, `to_string(dynamic_value)` produce directamente `string` como representación
+textual explícita del valor dinámico. No se introducen métodos como `dynamic.as_int64`
+ni operadores de casteo (`as`, `cast`).
+
 
 
 ### 9.10 Composición en pipelines
