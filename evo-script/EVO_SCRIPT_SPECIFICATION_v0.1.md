@@ -490,6 +490,7 @@ Evo-Script v0.1 define exactamente la siguiente tabla de tipos nativos:
 | `float` | `f64` |
 | `bool` | `bool` |
 | `string` | `&str` / `String` según requerimiento técnico de ownership |
+| `dynamic` | Representación numérica dinámica interna |
 | `int8` | `i8` |
 | `int16` | `i16` |
 | `int32` | `i32` |
@@ -517,7 +518,17 @@ visible del lenguaje: el programador de Evo-Script utiliza exclusivamente `strin
 Aspectos como ownership, borrowing y lifetimes del texto son detalles internos de
 implementación.
 
+El tipo `dynamic` es un tipo numérico especial nativo de Evo-Script. Su propósito
+es permitir cómputos numéricos donde el programador no fija de antemano el tamaño
+de representación del resultado. En Evo-Script v0.1 `dynamic` es exclusivamente
+un tipo numérico; no representa "cualquier objeto", ni tipos heterogéneos, ni
+introduce dynamic dispatch, reflexión o runtime member lookup estilo C#, ni tiene
+relación con `dyn` de Rust. Su representación técnica en Rust no corresponde a un
+tipo primitivo de tamaño fijo único, sino a una representación interna dinámica
+suficiente para albergar y expandir números exactos.
+
 Estos tipos nativos no se definen como macros textuales ni reemplazos del parser.
+
 
 
 ### 7.2 Tipos definidos
@@ -1082,7 +1093,7 @@ finaliza su ciclo de vida.
 
 Evo-Script distingue formalmente las siguientes convenciones de nombres:
 
-- **Tipos nativos**: conservan exactamente los nombres definidos por Evo-Script (`int`, `float`, `bool`, `string`, `int8`, `int16`, `int32`, `int64`, `int128`, `uint8`, `uint16`, `uint32`, `uint64`, `uint128`, `float32`, `float64`).
+- **Tipos nativos**: conservan exactamente los nombres definidos por Evo-Script (`int`, `float`, `bool`, `string`, `dynamic`, `int8`, `int16`, `int32`, `int64`, `int128`, `uint8`, `uint16`, `uint32`, `uint64`, `uint128`, `float32`, `float64`).
 - **Tipos definidos por el programa**: se nombran en `PascalCase` (`Trabajador`, `Dias`, `Resultado`, `Evento`).
 - **Bindings**: se nombran en `snake_case` (`edad`, `first_name`, `last_name`, `id_colonia`, `current_user`). No se utiliza `camelCase`.
 
@@ -1130,6 +1141,20 @@ El valor asignado puede ser cualquier variante válida de un `enum`:
       y: 20
   };
   ```
+
+#### 8.7.4 Tipo dynamic
+
+`dynamic` permite asociar un valor numérico cuya representación no se restringe
+anticipadamente a un tamaño entero de representación:
+
+    let dynamic result = a + b;
+    let dynamic value = 100;
+
+Los bindings de tipo `dynamic` son **completamente inmutables** y siguen todas
+las reglas de `let` (inicialización obligatoria, sin reasignación, sin shadowing,
+nombres en `snake_case`). `dynamic` describe la representación del valor numérico,
+no constituye un modificador de mutabilidad (`mut`, `var`).
+
 
 
 ### 8.8 Regla de terminación con punto y coma (`;`)
@@ -1317,7 +1342,20 @@ La operación `to_string` permite convertir explícitamente valores a su represe
 Ningún valor se convierte automáticamente a texto. En Evo-Script v0.1 no se define parsing inverso desde texto hacia números (`parse_int`, `parse_float`).
 
 
-### 9.9 Composición en pipelines
+### 9.9 Conversiones desde dynamic
+
+Para convertir un valor numérico de tipo `dynamic` hacia un tipo numérico de tamaño fijo, se utiliza la familia estándar `to_tipo`:
+
+    let dynamic value = 100;
+    let int64 target = to_int64(value);
+
+- Si el valor concreto almacenado en `dynamic` puede representarse exactamente en el tipo destino según las reglas universales de rango y exactitud, la operación produce directamente dicho tipo (`int64`).
+- Si el valor concreto no puede representarse exactamente en el tipo destino, produce `result<T, ConversionError>`.
+
+Asimismo, `to_string(dynamic_value)` permite convertir explícitamente el valor dinámico a texto. No se introducen métodos como `dynamic.as_int64` ni operadores de casteo (`as`, `cast`).
+
+
+### 9.10 Composición en pipelines
 
 Las operaciones de conversión pueden componerse de forma natural dentro de pipelines:
 
@@ -1328,14 +1366,6 @@ o:
 
     source
     |> to_int64
-
-
-### 9.10 Operaciones aritméticas y ausencia de promoción automática
-
-Una operación aritmética no debe cambiar silenciosamente el tipo numérico del resultado
-para evitar un desbordamiento (por ejemplo, `int32 + int32` no se promociona automáticamente
-a `int64`). La semántica completa de operadores aritméticos queda pendiente para su
-especificación dedicada.
 
 
 ### 9.11 Conceptos no incluidos en v0.1
@@ -1372,7 +1402,43 @@ Una expresión puede utilizarse directamente como el valor en una declaración `
     let bool allowed = active && age >= 18;
 
 
-### 10.2 Operadores aritméticos
+### 10.2 Tipado contextual de literales numéricos
+
+Los literales numéricos en Evo-Script no se definen como valores previamente tipados
+que posteriormente deban convertirse. Un literal numérico adquiere su tipo a partir
+del contexto numérico explícitamente requerido.
+
+Ejemplo:
+
+    let int64 value = 100;
+
+En este caso, el literal `100` nace semánticamente como `int64`. No ocurre una
+conversión implícita `int -> int64` ni una promoción de tipos.
+
+Ejemplos canónicos de tipado contextual:
+
+    let int8 level = 5;
+    let int64 population = 100;
+    let int128 total = 500;
+    let uint8 percentage = 100;
+    let uint64 identifier = 1000;
+    let float32 price = 10.5;
+    let float64 amount = 10.5;
+    let dynamic count = 100;
+
+Reglas de tipado contextual:
+
+1. **Representabilidad obligatoria**: El literal debe ser exactamente representable por el tipo requerido.
+   - `let uint8 value = 100;` es válido porque `100` cabe en `uint8`.
+   - `let uint8 value = 300;` es inválido porque `300` excede el rango de `uint8`. No se realiza wrapping, truncamiento ni saturación silenciosa.
+2. **Literales sin contexto**: Cuando un literal numérico no posee un contexto de tipo que determine una representación específica, adopta los tipos por defecto del lenguaje:
+   - Literal entero sin contexto: produce `int` (`i32`).
+   - Literal decimal sin contexto: produce `float` (`f64`).
+3. **Propagación del contexto en expresiones `let`**: En una declaración como `let int64 total = value + 1;`, si la expresión opera en el contexto de `int64`, el literal `1` nace directamente como `int64`. Esto no constituye inferencia general de tipos ni relaja la prohibición de conversiones implícitas entre bindings existentes.
+4. **Literales de punto flotante**: El contexto asigna el tipo `float32` o `float64`. En Evo-Script v0.1 no se extienden reglas sobre algoritmos de parsing decimal/binario o notación científica avanzada.
+
+
+### 10.3 Operadores aritméticos
 
 Evo-Script v0.1 define exactamente cinco operadores aritméticos binarios:
 
@@ -1386,12 +1452,65 @@ Evo-Script v0.1 define exactamente cinco operadores aritméticos binarios:
 
 Reglas:
 
-1. **Conservación de tipo**: Una operación entre operandos del mismo tipo numérico produce como resultado ese mismo tipo semántico (por ejemplo, `int32 + int32` produce `int32`).
+1. **Conservación de tipo**: Una operación entre operandos del mismo tipo numérico de tamaño fijo produce como resultado ese mismo tipo semántico (por ejemplo, `int32 + int32` produce `int32`).
 2. **Ausencia de promoción automática**: Las operaciones aritméticas no promocionan silenciosamente sus tipos (por ejemplo, `int32 + int32` no se convierte automáticamente en `int64` para prevenir desbordamientos).
 3. **Compatibilidad estricta**: Operaciones entre tipos distintos (como `int32 + int64` o `int + float`) no realizan conversiones implícitas; requieren conversiones explícitas mediante `to_tipo`.
 
 
-### 10.3 Operadores de comparación
+### 10.4 Overflow en tipos de tamaño fijo y OverflowError
+
+Para los tipos numéricos de tamaño fijo (`int8`, `int16`, `int32`, `int64`, `int128`, `uint8`..`uint128`, `float32`, `float64`), un resultado que no puede representarse dentro del rango del tipo produce una condición de **overflow**.
+
+Ejemplo:
+
+    let int8 a = 127;
+    let int8 b = 1;
+    let int8 result = a + b; // El resultado matemático 128 no cabe en int8
+
+Reglas de overflow:
+
+1. **Sin promoción automática**: El lenguaje nunca cambia silenciosamente el tipo para evitar un error (`int8 + int8` no se transforma en `int16`).
+2. **Fallo con OverflowError**: Cuando una operación bajo un tipo fijo produce un valor fuera del rango representable, la evaluación falla con `OverflowError`.
+3. **Sin wrapping modular**: Evo-Script no realiza wrapping silencioso (`127 + 1` en `int8` no produce `-128`).
+4. **Sin saturación**: No se realiza saturación automática (`127 + 1` en `int8` no produce `127`).
+5. **Negación unaria y rango**: La negación numérica `-value` sobre tipos fijos también produce `OverflowError` si el valor resultante no cabe en el tipo (por ejemplo, negar el valor mínimo representable en un entero con signo).
+6. **Separación semántica de errores**:
+   - `OverflowError`: ocurre durante la evaluación de una operación numérica bajo un tipo fijo cuando el resultado no cabe en dicho tipo.
+   - `ConversionError`: ocurre cuando se solicita una conversión explícita `to_tipo` y el valor de origen no puede representarse en el destino.
+7. **No afecta firmas con Result**: `OverflowError` es un error de evaluación aritmética; no altera la firma conceptual de los operadores para envolverlos en `result<T, E>`.
+
+
+### 10.5 Evaluación numérica dinámica con dynamic
+
+Evo-Script proporciona el tipo especial `dynamic` como alternativa explícita para evaluaciones numéricas donde el programador no desea restringir de antemano el tamaño de representación del resultado.
+
+```text
+let dynamic result = a + b;
+```
+
+Reglas de evaluación bajo contexto `dynamic`:
+
+1. **Participación desde el inicio de la evaluación**: El contexto `dynamic` se aplica a la evaluación numérica de la expresión desde su origen. No ocurre una evaluación previa en un tipo fijo que cause overflow para luego intentar guardarse en `dynamic`:
+   $$\text{Expresión} \longrightarrow \text{Evaluación dinámica} \longrightarrow \text{Resultado matemático exacto} \longrightarrow \text{Representación suficiente} \longrightarrow \text{dynamic}$$
+2. **Comparación Fijo vs Dynamic**:
+   - **Tipo fijo**:
+     ```text
+     let int8 fixed = a + b; // Produce OverflowError si el resultado no cabe en int8
+     ```
+   - **Tipo dynamic**:
+     ```text
+     let dynamic dynamic_result = a + b; // Conserva el valor exacto (128) en una representación suficiente sin OverflowError
+     ```
+3. **Conservación exacta de enteros y precisión arbitraria**: Para operaciones enteras, `dynamic` garantiza la conservación exacta del resultado matemático. Si el resultado excede el tamaño de `int128`/`uint128`, utiliza internamente una representación de precisión arbitraria. No se introducen tipos visibles adicionales como `bigint`, `int256` ni `int512`.
+4. **dynamic no significa imprecisión**: Para enteros, `dynamic` garantiza exactitud matemática absoluta, no aproximación.
+5. **dynamic y punto flotante**: `dynamic` no introduce precisión arbitraria para flotantes ni el tipo `float128`. Las operaciones flotantes se rigen por las reglas de los tipos flotantes definidos (`float`, `float32`, `float64`).
+6. **Sin conversiones implícitas de operandos**: Declarar un resultado como `dynamic` no vuelve válidas operaciones entre operandos incompatibles. Por ejemplo, operar `int32` con `int64` requiere conversión explícita:
+   ```text
+   let dynamic result = to_int64(a) + b;
+   ```
+
+
+### 10.6 Operadores de comparación
 
 Evo-Script v0.1 define seis operadores de comparación:
 
@@ -1415,7 +1534,7 @@ Ejemplos:
     let bool same = first == second;
 
 
-### 10.4 Operadores lógicos
+### 10.7 Operadores lógicos
 
 Evo-Script v0.1 define tres operadores lógicos:
 
@@ -1436,7 +1555,7 @@ Ejemplo:
     let bool allowed = active && age >= 18;
 
 
-### 10.5 Operadores unarios
+### 10.8 Operadores unarios
 
 Evo-Script v0.1 define dos operadores unarios prefijos:
 
@@ -1452,7 +1571,7 @@ Ejemplo:
 No se incluyen operadores unarios de incremento (`++`), decremento (`--`), complemento bit a bit (`~`), referencias (`&`) ni desreferencia (`*`).
 
 
-### 10.6 Agrupación y precedencia
+### 10.9 Agrupación y precedencia
 
 Los paréntesis `( )` permiten agrupar expresiones para controlar explícitamente el orden de evaluación:
 
@@ -1475,7 +1594,7 @@ Ejemplos:
 - `a > 10 && b < 20` equivale semánticamente a `(a > 10) && (b < 20)`.
 
 
-### 10.7 Pipeline (`|>`)
+### 10.10 Pipeline (`|>`)
 
 Evo-Script preserva su operador nativo de pipeline `|>` para la composición secuencial de datos y operaciones:
 
@@ -1485,7 +1604,7 @@ Evo-Script preserva su operador nativo de pipeline `|>` para la composición sec
 `|>` no es un operador bitwise ni debe confundirse con la disyunción lógica `||`.
 
 
-### 10.8 Ausencia de operadores de asignación y mutación
+### 10.11 Ausencia de operadores de asignación y mutación
 
 Debido a la inmutabilidad intrínseca de los bindings, Evo-Script no posee operadores generales de asignación ni mutación:
 
@@ -1501,7 +1620,7 @@ Ejemplos inválidos:
     ++age;        // Inválido
 
 
-### 10.9 Operadores y conceptos excluidos de v0.1
+### 10.12 Operadores y conceptos excluidos de v0.1
 
 Quedan formalmente fuera de Evo-Script v0.1:
 
@@ -1509,15 +1628,17 @@ Quedan formalmente fuera de Evo-Script v0.1:
 2. **Mutación y asignación**: No existen `=`, `+=`, `++`, `--`.
 3. **Casteo**: No existen `as` ni `cast` (se utiliza exclusivamente la familia `to_tipo`).
 4. **Punteros y referencias**: No existen operadores `&` ni `*`.
+5. **Tipos no numéricos en dynamic**: `dynamic` no soporta structs, enums ni dispatch polimórfico dinámico.
+6. **Tipos enteros artificiales visibles**: No existen `bigint`, `int256` ni `int512`.
 
 
-### 10.10 Semántica pendiente
+### 10.13 Semántica pendiente
 
 Permanecen explícitamente pendientes para su definición en especificaciones posteriores:
 
-1. **Comportamiento exacto de overflow aritmético**: No se define aún si el desbordamiento numérico produce un error de ejecución, un `ArithmeticError`, un `Result` u otra representación. Se establece únicamente que no se resuelve mediante promociones implícitas de tipo.
-2. **Tipado contextual de literales numéricos**: La forma exacta en que literales como `100` adquieren su tipo específico dentro de una declaración permanece abierta.
-3. **Literales cerrados**: Los literales booleanos `true` y `false` corresponden a `bool`; los literales delimitados por comillas `"..."` corresponden a `string`.
+1. **División por cero**: La semántica exacta y diagnóstico ante la división entre cero permanece abierta (no se introduce `DivisionByZeroError` en v0.1).
+2. **Detalles avanzados de parsing en flotantes**: Algoritmos de parsing textual detallado y soporte de notación científica avanzada en literales float.
+3. **Mecanismos generales de captura de errores**: No se introducen construcciones de manejo de excepciones o captura de errores de evaluación (`try`/`catch`).
 
 
 ## 11. Funciones
@@ -1647,6 +1768,10 @@ semántica del lenguaje:
 | `;` | `End of declaration/operation` |
 | `to_tipo(valor)` | `Explicit type conversion` |
 | `valor \|> to_tipo` | `Composed explicit conversion` |
+| `literal numérico` | `Contextual numeric literal` |
+| `let int64 x = 100;` | `Literal typed as int64 by context` |
+| `let dynamic x = expresión;` | `Dynamic numeric binding` |
+| `OverflowError` | `Fixed-width arithmetic overflow` |
 | `a + b` | `Addition expression` |
 | `a - b` | `Subtraction expression` |
 | `a * b` | `Multiplication expression` |
