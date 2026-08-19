@@ -2824,6 +2824,7 @@ Existe una separación estricta entre la representación textual y la semántica
 | `:` | `Signature satisfaction marker / field init` |
 | `bind modulo::firma to "ruta/archivo.efn";` | `Functional Composition Binding in .root` |
 | `to` | `Binding target delimiter in .root` |
+| `entry "ruta/archivo.efn";` | `Application Entry Selection in .main` |
 | `module Nombre { ... }` | `Evo Module declaration in .emod` |
 | `publish Simbolo;` | `Public modular surface entry in .emod` |
 | `tipo nombre` | `Value Parameter` |
@@ -3242,7 +3243,7 @@ Un archivo `.main` (Evo Application Main) define el punto de inicio y la semánt
 
 Existe una estricta separación de responsabilidades entre `.root` y `.main`:
 - **`.root`**: Define **CÓMO** se compone la aplicación (selecciona qué Function Implementation satisface cada Signature mediante declaraciones `bind`).
-- **`.main`**: Define **CÓMO** arranca la aplicación y **CUÁNTO TIEMPO** permanece viva (identifica la operación inicial y posee el Application Main Loop).
+- **`.main`**: Define **CÓMO** arranca la aplicación y **CUÁNTO TIEMPO** permanece viva (selecciona la Function Implementation inicial mediante `entry` y posee el Application Main Loop).
 
 Flujo conceptual de arranque y ejecución de una aplicación estructurada:
 
@@ -3255,9 +3256,11 @@ validate composition bindings
             ↓
        resolve .main
             ↓
+    validate entry target
+            ↓
 start Application Main Loop
             ↓
-  initiate initial operation
+invoke initial public fn
             ↓
     application alive
             │
@@ -3275,10 +3278,119 @@ Reglas normativas del proceso de arranque:
 1. **Validación de `.root` previa a `.main`**: Antes de iniciar el Application Main Loop, el archivo `.root` debe ser cargado, resuelto y validado en su totalidad. Si existe cualquier error de composición (firmas no resueltas, implementaciones faltantes, discordancias `SignatureMismatchError` o bindings duplicados), el proyecto es rechazado y el Application Main Loop **nunca se inicia**.
 2. **`.root` no controla el ciclo de vida**: El archivo `.root` finaliza su responsabilidad cuando la composición queda validada; no inicia ni detiene el Application Main Loop.
 3. **`.main` no realiza composición**: El archivo `.main` no contiene declaraciones `bind` ni sustituye la composición de `.root`.
-4. **Operación inicial**: `.main` identifica la Function Implementation inicial que arranca la ejecución dentro de la aplicación ya compuesta.
-5. **Dependencias de la operación inicial**: La Function Implementation inicial puede declarar Value Parameters o Signature Dependency Parameters (`modulo::firma nombre_local`) según las reglas normales del lenguaje, los cuales se satisfacen mediante los bindings previamente resueltos por `.root`.
+4. **Validación de `entry` previa al Main Loop**: La declaración `entry` de `.main` se valida completamente antes de iniciar el Application Main Loop. Si el archivo destino no existe, no es un `.efn`, carece de `public fn` o sus dependencias no pueden resolverse mediante `.root`, el Application Main Loop **nunca se inicia**.
 
-#### 12.9.3 Distinción formal entre Function return y Application exit
+#### 12.9.3 Sintaxis oficial de selección de entrada (`entry ...`)
+
+La sintaxis oficial y normativa para declarar la selección de la operación inicial en un archivo `.main` es:
+
+```text
+entry "ruta/relativa/archivo.efn";
+```
+
+Ejemplo canónico:
+
+```text
+entry "functions/application.efn";
+```
+
+Reglas normativas de `entry`:
+
+1. **Declaración estructural**: `entry` es una declaración estructural de alto nivel exclusiva de archivos `.main`. No es una Function Call, no es una expresión evaluable, no es un runtime statement, no es un `Value` ni una asignación de variable.
+2. **Unicidad de `entry` en `.main`**: Todo archivo `.main` debe contener **exactamente una** declaración `entry "..."`. Declarar múltiples `entry` en el mismo `.main` es inválido y produce un error estático de validación. No existe prioridad ni reglas de *"primer entry gana"* ni *"último entry gana"*.
+   - **Ejemplo válido**:
+     ```text
+     entry "functions/application.efn";
+     ```
+   - **Ejemplo inválido**:
+     ```text
+     entry "functions/application.efn";
+     entry "functions/other.efn"; // Inválido: múltiples declaraciones entry
+     ```
+3. **Destino exclusivo a archivos `.efn`**: El literal de texto de `entry` debe apuntar única y exclusivamente a un archivo con extensión `.efn`. Apuntar a `.esig`, `.emod`, `.root`, `.elib` u otras extensiones es inválido:
+   - **Válido**: `entry "functions/application.efn";`
+   - **Inválido**: `entry "values/search.esig";`, `entry "values/values.emod";`, `entry "application.root";`, `entry "library.elib";`
+4. **Destino a archivo, no a función calificada**: Dado que todo archivo `.efn` posee exactamente una `public fn`, `entry` referencia la ruta al archivo `.efn`, nunca un nombre de función calificado. La única `public fn` del archivo seleccionado es la operación inicial que ejecuta el runtime.
+   - **Válido**: `entry "functions/application.efn";`
+   - **Inválido**: `entry "functions/application.efn"::initialize;`, `entry application::initialize;`, `entry initialize;`
+5. **Libertad en el nombre de la función inicial**: La `public fn` principal del `.efn` seleccionado no está obligada a llamarse literalmente `main`. Puede nombrarse libremente según las reglas de Function Identity (por ejemplo, `initialize`, `start_application`, `boot`, `execute`):
+   ```text
+   public fn initialize() -> InitResult {
+       return InitResult::Ready;
+   }
+   ```
+6. **Resolución de ruta relativa a Project Root**: La ruta textual indicada en `entry "..."` se resuelve de forma relativa al directorio que contiene el archivo `.root` del proyecto estructurado (Project Root).
+7. **Ausencia de bloque envolvente**: El archivo `.main` no requiere ni admite bloques envolventes (`main application { ... }` ni `application { ... }` son inválidos). La sentencia `entry` se declara directamente a nivel de archivo.
+8. **Ausencia de lógica y otras construcciones en `.main`**: El archivo `.main` no contiene funciones (`public fn`, `private fn`), variables (`let`), sentencias de control (`return`, `when`), llamadas a funciones, ni declaraciones `bind`, `import`, `esig`, `struct`, `enum` o `publish`.
+9. **Condiciones estáticas de validación**: Una declaración `entry "ruta/archivo.efn";` es válida únicamente si:
+   - Existe exactamente un archivo `.main` en el proyecto estructurado.
+   - El archivo `.main` contiene exactamente una declaración `entry`.
+   - La ruta relativa existe y es accesible desde el Project Root.
+   - El archivo destino es un `.efn` válido.
+   - El `.efn` contiene exactamente una `public fn`.
+   - Las dependencias requeridas por esa `public fn` (Value Parameters o Signature Dependency Parameters) pueden satisfacerse mediante la composición resuelta en `.root`.
+10. **Inyección funcional en la función inicial**: La Function Implementation inicial puede declarar Signature Dependency Parameters (`modulo::firma nombre_local`). Estas dependencias no se inyectan en `.main`, sino que son resueltas por el runtime a través de los bindings declarados en `.root`:
+    ```text
+    public fn initialize(window::open open_window, config::load load_config) -> InitResult
+    ```
+11. **Distinción entre `entry` y `bind`**:
+    - `bind`: Asocia una Signature requerida (`.esig`) con su implementación (`.efn`) en `.root`.
+    - `entry`: Selecciona la Function Implementation inicial (`.efn`) que arranca la aplicación en `.main`.
+12. **`entry` no satisface firmas**: `entry` no declara satisfacción contractual (`: modulo::firma`). La función seleccionada puede o no implementar una firma según su propia definición, pero `.main` no interviene en contratos modulares.
+13. **Operación inicial única e incondicional**: En Evo-Script v0.1 existe exactamente una operación inicial por aplicación. No se admiten cadenas de inicialización múltiples (`pre-main`, `post-main`) ni entradas condicionales (`entry ... when linux` es inválido).
+14. **Universalidad de `.main`**: Un único formato `.main` sirve para cualquier tipo de aplicación estructurada (gráfica, consola, interactiva o servicio). No existen modos especiales (`gui main`, `server main`).
+
+#### 12.9.4 Ejemplo canónico completo de aplicación estructurada
+
+A continuación se ilustra la interacción canónica entre `.root`, `.main`, los proveedores de dependencias y la función inicial de entrada:
+
+Estructura física del proyecto:
+
+```text
+project/
+├── application.root
+├── application.main
+├── functions/
+│   └── application.efn
+└── providers/
+    ├── window_native.efn
+    └── config_file.efn
+```
+
+Contenido de los artefactos:
+
+- **`application.root`** (Functional Composition Root):
+  ```text
+  bind window::open to "providers/window_native.efn";
+  bind config::load to "providers/config_file.efn";
+  ```
+
+- **`application.main`** (Evo Application Main):
+  ```text
+  entry "functions/application.efn";
+  ```
+
+- **`functions/application.efn`** (Implementación inicial de la aplicación):
+  ```text
+  import window::open;
+  import config::load;
+
+  public fn initialize(window::open open_window, config::load load_config) -> InitResult {
+      load_config();
+      open_window();
+
+      return InitResult::Ready;
+  }
+  ```
+
+En este modelo:
+- `application.root` define qué implementaciones concretas satisfacen las firmas `window::open` y `config::load`.
+- `application.main` selecciona `functions/application.efn` como punto de arranque mediante `entry`.
+- `functions/application.efn` requiere sus dependencias mediante Signature Dependency Parameters (`window::open open_window`, `config::load load_config`) sin conocer los archivos proveedores concretos.
+- `application.main` desconoce por completo los proveedores `window_native.efn` y `config_file.efn`.
+- El runtime valida `.root` y `.main`, inicia el Application Main Loop e invoca `initialize`.
+
+#### 12.9.5 Distinción formal entre Function return y Application exit
 
 Evo-Script distingue formalmente entre finalizar la evaluación de una función y terminar la ejecución global de la aplicación:
 
@@ -3288,9 +3400,9 @@ Evo-Script distingue formalmente entre finalizar la evaluación de una función 
    ```text
    Function return != Application exit
    ```
-   Ejemplo conceptual:
+   Ejemplo:
    ```text
-   public fn initialize(window::open open_window) -> InitResult {
+   public fn initialize(...) -> InitResult {
        // Inicializa componentes y abre interfaz
        return InitResult::Ready;
    }
@@ -3298,23 +3410,18 @@ Evo-Script distingue formalmente entre finalizar la evaluación de una función 
    Cuando `initialize` ejecuta su `return InitResult::Ready;`, la evaluación de `initialize` concluye, pero si el Application Main Loop permanece activo (por ejemplo, atendiendo eventos de ventana, interacción del usuario o solicitudes del host), la aplicación permanece viva.
 4. **Las alternativas de dominio no son señales de salida**: Retornar un valor como `SearchResult::NotFound` o `InitResult::Error("fallo")` constituye la entrega normal de un `Value` de tipo enum y no detiene automáticamente el Application Main Loop.
 
-#### 12.9.4 Ámbito de aplicación del modelo
+#### 12.9.6 Ámbito de aplicación del modelo
 
 1. **Universalidad para aplicaciones estructuradas**: El Application Main Loop modela el ciclo de vida de cualquier aplicación estructurada (gráfica con ventanas, de terminal interactiva o tipo servicio/servidor). Las aplicaciones gráficas no requieren implementar bucles infinitos para mantener viva su interfaz.
-2. **Scripts autocontenidos**: Un script simple `.efn` ejecutado directamente no requiere `.root` ni `.main`. Su evaluación concluye inmediatamente cuando su única `public fn` ejecuta su `return`, entregando el resultado directamente al host exterior sin Application Main Loop.
+2. **Scripts autocontenidos**: Un script simple `.efn` ejecutado directamente no requiere `.root`, `.main` ni `entry`. Su evaluación concluye inmediatamente cuando su única `public fn` ejecuta su `return`, entregando el resultado directamente al host exterior sin Application Main Loop.
 3. **Unicidad de `.main`**: Toda aplicación estructurada posee exactamente un archivo `.main`. No se admiten archivos `.main` múltiples, anidados, incluidos ni heredados.
-4. **Estructura interna de `.main`**:
-   - `.main` no contiene implementaciones (`public fn` ni `private fn`).
-   - `.main` no publica símbolos (`publish`).
-   - `.main` no declara firmas (`esig`).
-   - `.main` no satisface firmas (`: modulo::firma`).
+4. **Librerías reutilizables**: Una librería reutilizable (`.elib`) no representa una aplicación directamente ejecutable y no requiere archivo `.main` ni declaración `entry`.
 
-#### 12.9.5 Aspectos explícitamente pendientes de especificación posterior
+#### 12.9.7 Aspectos explícitamente pendientes de especificación posterior
 
 Para mantener la precisión y pureza de este bloque normativo, se delimitan los aspectos que quedan expresamente reservados para decisiones de diseño posteriores:
-1. **Sintaxis textual exacta de selección en `.main`**: La gramática concreta mediante la cual `.main` selecciona formalmente la Function Implementation inicial queda pendiente. Ejemplos conceptuales exploratorios previos (como `entry "..."` o `start "..."`) no constituyen sintaxis normativa en v0.1.
-2. **Mecanismo exacto de terminación (`Exit Mechanism`)**: La sintaxis u operación mediante la cual una aplicación solicita formalmente al runtime terminar el Application Main Loop (sea mediante capacidades del host, eventos de ventana o peticiones del runtime) queda pendiente de diseño posterior. No se introducen palabras clave oficiales como `exit`, `quit`, `stop` ni `shutdown`.
-3. **Interacción detallada entre EvaluationErrors y terminación global**: La semántica precisa de cómo fallos de evaluación no capturables (`EvaluationError`) interactúan con el Application Main Loop se reserva para el bloque correspondiente.
+1. **Mecanismo exacto de terminación (`Exit Mechanism`)**: La sintaxis u operación mediante la cual una aplicación solicita formalmente al runtime terminar el Application Main Loop (sea mediante capacidades del host, eventos de ventana o peticiones del runtime) queda pendiente de diseño posterior. No se introducen palabras clave oficiales como `exit`, `quit`, `stop` ni `shutdown`.
+2. **Interacción detallada entre EvaluationErrors y terminación global**: La semántica precisa de cómo fallos de evaluación no capturables (`EvaluationError`) interactúan con el Application Main Loop se reserva para el bloque correspondiente.
 
 
 ### 12.10 Librerías reutilizables (.elib)
@@ -3580,7 +3687,10 @@ Contenido y responsabilidades de cada artefacto:
   ```text
   bind laundry::washes_clothes to "washer.efn";
   ```
-- **`application.main`**: Identifica la operación de inicio de la aplicación.
+- **`application.main`** (Evo Application Main):
+  ```text
+  entry "washer.efn";
+  ```
 
 #### 12.13.4 Diagrama de responsabilidades semánticas de proyecto
 
