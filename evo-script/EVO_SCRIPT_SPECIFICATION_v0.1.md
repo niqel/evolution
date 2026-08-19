@@ -3929,7 +3929,7 @@ Estos nombres de carpetas representan patrones organizacionales sugeridos y no c
 
 ## 13. Elementos léxicos y convenciones de nombres
 
-Esta sección formaliza las decisiones léxicas, el principio de palabras reservadas y las convenciones de nombres acordadas para Evo-Script v0.1.
+Esta sección formaliza las decisiones léxicas, la codificación del código fuente, los delimitadores de comentarios, el principio de palabras reservadas, las gramáticas de identificadores y literales, y las convenciones de nombres para Evo-Script v0.1.
 
 
 ### 13.1 Comentarios
@@ -3965,16 +3965,19 @@ Evo-Script v0.1 define exactamente una única forma oficial de comentario:
      // segunda línea de contexto
      // tercera línea de explicación
      ```
+4. **Interacción con literales de texto**:
+   - La secuencia `//` situada dentro de un string literal (`"https://example.com"`) no inicia un comentario; el reconocimiento del contenido del string tiene precedencia.
+   - Una vez iniciado un comentario mediante `//` fuera de un string literal, todo el contenido hasta el salto de línea es ignorado como comentario, incluso si contiene comillas (`// "esto sigue siendo comentario"`).
 
 
-### 13.2 Palabras reservadas (Keywords)
+### 13.2 Palabras reservadas (Keywords) y tokens literales reservados
 
 1. **Principio de reserva efectiva**:
    > Una palabra es una *keyword* reservada en Evo-Script v0.1 única y exclusivamente si forma parte activa de la gramática y construcciones semánticas definidas en esta versión.
    - No se reservan palabras de forma preventiva para características hipotéticas o futuras provenientes de otros lenguajes (palabras como `class`, `interface`, `trait`, `async`, `await`, `package`, `library`, `dependency`, `version`, `install` o `require` **NO** son keywords en v0.1).
    - Las extensiones de archivo reservadas (`.elib`, `.evo`) no constituyen palabras clave del lenguaje (las palabras `library` o `package` no son keywords en v0.1).
-2. **Catálogo de palabras reservadas en v0.1**:
-   Las siguientes palabras constituyen las palabras reservadas oficiales de Evo-Script v0.1:
+2. **Catálogo de palabras estructurales reservadas (Structural Keywords)**:
+   Las siguientes palabras constituyen las palabras reservadas estructurales oficiales de Evo-Script v0.1:
    - `let`: Declaración de bindings locales inmutables.
    - `struct`: Definición de tipos de estructura de datos.
    - `enum`: Definición de tipos de enumeración y variantes.
@@ -3993,17 +3996,203 @@ Evo-Script v0.1 define exactamente una única forma oficial de comentario:
    - `entry`: Declaración de selección de entrada inicial (`.main`).
    - `this`: Marcador de posición contextual en pipelines.
    - `use`: Iniciador de operaciones sobre scopes en pipelines.
-3. **Prohibición de uso como identificadores**:
-   - Ninguna palabra reservada puede utilizarse como identificador de función, firma, binding, parámetro, campo, tipo, variante de enum o módulo.
-   - **Ejemplo conceptual inválido**:
+3. **Tokens literales reservados (Reserved Literal Tokens)**:
+   - `true`: Literal booleano de valor verdadero.
+   - `false`: Literal booleano de valor falso.
+   - Los tokens `true` y `false` son **Boolean Literal Tokens**, no Structural Keywords; sin embargo, están lexicalmente reservados y no pueden emplearse como identificadores.
+4. **Prohibición de uso como identificadores**:
+   - Ninguna palabra estructural reservada ni token literal reservado puede utilizarse como identificador de función, firma, binding, parámetro, campo, tipo, variante de enum o módulo.
+   - **Ejemplos conceptuales inválidos**:
      ```text
      let int return = 10; // Inválido: 'return' es una palabra reservada
+     let int true = 10;   // Inválido: 'true' es un token literal reservado
      ```
-4. **Estado de literales booleanos**:
-   - Los identificadores `true` y `false` se emplean en ejemplos como literales booleanos. Su categorización formal dentro del léxico (literal booleano vs token reservado) se definirá en el bloque posterior de gramática de literales, preservando la compatibilidad de todos los ejemplos existentes.
 
 
-### 13.3 Convenciones de nombres (Naming Conventions)
+### 13.3 Codificación del código fuente y espacios en blanco (Whitespace)
+
+1. **Codificación oficial del código fuente (Source Encoding)**:
+   - Todo archivo de código fuente Evo-Script v0.1 (`.efn`, `.esig`, `.estc`, `.enum`, `.emod`, `.root`, `.main`) se interpreta de forma canónica como texto codificado en **UTF-8 sin marca de orden de bytes (UTF-8 without BOM)**.
+   - La presencia de BOM no forma parte del formato canónico del lenguaje.
+2. **Espacios en blanco reconocidos (Whitespace)**:
+   - Evo-Script v0.1 reconoce formalmente como caracteres de espacio en blanco para separación léxica:
+     - Espacio (`space`, ASCII `0x20`)
+     - Tabulación horizontal (`tab`, `\t`, ASCII `0x09`)
+     - Salto de línea (`line feed`, `LF`, `\n`, ASCII `0x0A`)
+     - Retorno de carro (`carriage return`, `CR`, `\r`, ASCII `0x0D`)
+3. **Función del espacio en blanco**:
+   - El espacio en blanco actúa exclusivamente como separador de tokens contiguos cuando sea necesario para evitar ambigüedades.
+   - No produce valores semánticos (`Values`) ni posee significado en tiempo de ejecución.
+   - Las siguientes dos declaraciones son semánticamente equivalentes:
+     ```text
+     let int age = 43;
+     ```
+     ```text
+     let
+         int
+         age
+         =
+         43
+         ;
+     ```
+4. **Insensibilidad a la indentación**:
+   - Evo-Script **NO es sensible a la indentación** (*not indentation-sensitive*).
+   - Los espacios o tabulaciones al inicio de línea no abren ni cierran scopes, no crean bloques, no alteran la precedencia y no influyen en la correspondencia estructural.
+   - Todos los bloques estructurales se delimitan explícitamente mediante llaves (`{ ... }`).
+5. **Comportamiento de saltos de línea (Newlines)**:
+   - Fuera de comentarios de una línea (`//`) y literales de texto (`"..."`), los saltos de línea funcionan como espacios en blanco ordinarios.
+   - En comentarios de línea, el salto de línea físico finaliza el comentario.
+   - En literales de texto, un salto de línea físico entre comillas es inválido.
+
+
+### 13.4 Gramática de identificadores (Identifier Grammar)
+
+1. **Definición formal**:
+   La gramática léxica de identificadores en Evo-Script v0.1 se define formalmente como:
+
+   ```text
+   ascii_lowercase_letter
+       := "a".."z"
+
+   ascii_uppercase_letter
+       := "A".."Z"
+
+   ascii_letter
+       := ascii_lowercase_letter
+        | ascii_uppercase_letter
+
+   digit
+       := "0".."9"
+
+   identifier
+       := ascii_letter (ascii_letter | digit | "_")*
+   ```
+
+2. **Primer carácter obligatorio**:
+   - Un identificador **debe** comenzar obligatoriamente con una letra ASCII (`a-z` o `A-Z`).
+   - No se admite el carácter guion bajo (`_`) ni dígitos numéricos (`0-9`) como primer carácter.
+   - **Ejemplos válidos**: `worker`, `worker2`, `worker_id`, `SearchResult`.
+   - **Ejemplos inválidos**:
+     ```text
+     2worker      // Inválido: inicia con dígito
+     _worker      // Inválido: no existe leading underscore
+     __worker     // Inválido: no existe leading underscore
+     _            // Inválido: no se admite guion bajo solitario
+     ```
+3. **Uso de guion bajo (`_`)**:
+   - El carácter guion bajo (`_`) solo puede aparecer a partir de la segunda posición del identificador (`worker_id`, `current_user`, `Search_Result`).
+4. **Exclusividad ASCII**:
+   - Los identificadores en Evo-Script v0.1 se limitan estrictamente a letras ASCII.
+   - **NO se admiten caracteres Unicode** dentro de identificadores.
+   - **Ejemplos inválidos como identificadores**:
+     ```text
+     niño       // Inválido: carácter Unicode 'ñ'
+     año        // Inválido: carácter Unicode 'ñ'
+     México     // Inválido: carácter Unicode 'é'
+     búsqueda   // Inválido: carácter Unicode 'ú'
+     χρήστης    // Inválido: alfabeto griego
+     日本       // Inválido: caracteres CJK
+     ```
+   - La codificación UTF-8 del archivo fuente permite caracteres Unicode en el contenido de strings o comentarios, pero **no** en los identificadores del programa.
+5. **Sensibilidad a mayúsculas y minúsculas (Case-Sensitivity)**:
+   - Los identificadores en Evo-Script son estrictamente **case-sensitive**.
+   - `worker`, `Worker` y `WORKER` constituyen tres identificadores distintos y no intercambiables.
+   - No existe resolución insensible a mayúsculas ni normalización automática de casing.
+6. **Separación entre gramática léxica y convenciones de nombres**:
+   - La gramática de identificadores define qué secuencias de caracteres son léxicamente válidas para el lenguaje.
+   - Las convenciones de nombres (Sección 13.7) definen el estilo nominal requerido para cada clase de símbolo semántico (`PascalCase`, `snake_case`).
+
+
+### 13.5 Literales booleanos (Boolean Literals)
+
+1. **Definición formal**:
+   Evo-Script v0.1 define exactamente dos literales booleanos:
+
+   ```text
+   boolean_literal
+       := "true"
+        | "false"
+   ```
+
+2. **Tipado estricto**:
+   - `true` produce un valor de tipo semántico `bool`.
+   - `false` produce un valor de tipo semántico `bool`.
+   - No existe tipado contextual que permita a un literal booleano producir `int`, `string` o `dynamic`.
+3. **Minúsculas obligatorias**:
+   - Los literales booleanos deben escribirse estrictamente en minúsculas (`true`, `false`).
+   - Debido a la sensibilidad a mayúsculas (*case-sensitivity*), formas como `True`, `False`, `TRUE`, `FALSE` o `TrUe` **NO** son literales booleanos.
+4. **Ausencia de literales alternativos**:
+   - No existen en Evo-Script literales como `yes`, `no`, `on`, `off`, ni valores numéricos `1` o `0` interpretados como booleanos.
+   - No existe conversión implícita entre números y booleanos.
+
+
+### 13.6 Literales de texto (String Literals) y secuencias de escape
+
+1. **Forma canónica**:
+   Evo-Script v0.1 posee exactamente una forma oficial de literal de texto:
+
+   ```text
+   "texto"
+   ```
+
+   El literal se delimita exclusivamente mediante comillas dobles (`"`).
+2. **Ausencia de sintaxis alternativas**:
+   - **No existen comillas simples**: `'texto'` no es un literal de texto válido (Evo-Script v0.1 no define tipo `char` ni literales de carácter).
+   - **No existen cadenas crudas (raw strings)**: No se admite sintaxis como `r"..."`, `r#"..."#` ni `` `...` ``.
+   - **No existe interpolación de cadenas**: No se admite sintaxis como `$"..."`, `f"..."` ni `"${...}"`. Toda concatenación o formato debe realizarse mediante funciones y capacidades normales.
+3. **Contenido Unicode directo en UTF-8**:
+   - Un string literal puede contener directamente cualquier carácter Unicode válido codificado en UTF-8:
+     ```text
+     let string pais = "México";
+     let string autor = "José";
+     let string termino = "niño";
+     let string saludo = "你好";
+     let string pais_origen = "日本";
+     ```
+4. **Secuencias de escape oficiales**:
+   Evo-Script v0.1 soporta **única y exclusivamente** las siguientes 5 secuencias de escape:
+
+   | Secuencia | Representación semántica |
+   | :--- | :--- |
+   | `\"` | Comilla doble (`"`) |
+   | `\\` | Barra invertida (`\`) |
+   | `\n` | Salto de línea (`LF`, `0x0A`) |
+   | `\r` | Retorno de carro (`CR`, `0x0D`) |
+   | `\t` | Tabulación horizontal (`TAB`, `0x09`) |
+
+   **Ejemplos válidos**:
+   ```text
+   let string saludo = "Hola\nMundo";
+   let string cita = "Dijo \"hola\" a todos";
+   let string ruta = "C:\\documents\\file.txt";
+   let string columnas = "uno\tdos\ttres";
+   ```
+5. **Escapes desconocidos inválidos**:
+   - Toda secuencia de escape no reconocida (por ejemplo, `\q`, `\z`, `\a`, `\e`) es **inválida** y produce un error léxico.
+   - Los escapes desconocidos no se preservan literalmente ni se ignoran silenciosamente.
+6. **Ausencia de sintaxis de escape Unicode numérico**:
+   - Evo-Script v0.1 **no define** secuencias de escape numéricas como `\u0041`, `\u{0041}`, `\x41` ni `\U00000041`.
+   - Los caracteres Unicode se escriben directamente como texto UTF-8 dentro del literal.
+7. **Prohibición de saltos de línea físicos en el código fuente**:
+   - Un string literal **no puede** contener saltos de línea físicos entre sus comillas delimitadoras.
+   - El siguiente código es **inválido**:
+     ```text
+     let string texto = "Hola
+     Mundo"; // Inválido: salto de línea físico en string literal
+     ```
+   - Para representar un salto de línea en el valor del string, debe utilizarse la secuencia de escape `\n`:
+     ```text
+     let string texto = "Hola\nMundo"; // Válido
+     ```
+8. **Delimitación y terminación**:
+   - Un string literal comienza con una comilla doble `"` y concluye en la siguiente comilla doble `"` no escapada.
+   - La secuencia `\"` no finaliza el string literal; representa una comilla doble dentro del contenido del texto.
+9. **Tipo semántico y string vacío**:
+   - Todo literal de texto produce un valor de tipo semántico **`string`**.
+   - La cadena vacía `""` es un string literal válido de longitud cero de tipo `string`. No representa ausencia ni valor `null` (Evo-Script no posee `null`).
+
+
+### 13.7 Convenciones de nombres (Naming Conventions)
 
 Evo-Script distingue formalmente entre los identificadores semánticos del código y los nombres físicos de los archivos en el sistema de archivos:
 
@@ -4011,7 +4200,7 @@ Evo-Script distingue formalmente entre los identificadores semánticos del códi
 Semantic identifiers (código) != Physical artifact filenames (archivos)
 ```
 
-#### 13.3.1 Identificadores semánticos en el código
+#### 13.7.1 Identificadores semánticos en el código
 
 1. **`PascalCase` para tipos de datos**:
    - Todo tipo definido por el usuario o programa (`struct`, `enum`) se nombra en `PascalCase`.
@@ -4046,7 +4235,7 @@ Semantic identifiers (código) != Physical artifact filenames (archivos)
    - El identificador lógico de un módulo (`module nombre { ... }`) se declara en `snake_case`.
    - **Ejemplos**: `values`, `employee_values`, `file_system`, `laundry`.
 
-#### 13.3.2 Nombres físicos de artefactos (`kebab-case`)
+#### 13.7.2 Nombres físicos de artefactos (`kebab-case`)
 
 1. **Convención `kebab-case` para el sistema de archivos**:
    - Los nombres físicos de los archivos de artefactos Evo-Script utilizan **`kebab-case`** (palabras en minúsculas separadas por guiones `-` cuando constan de múltiples términos).
@@ -4081,22 +4270,20 @@ Semantic identifiers (código) != Physical artifact filenames (archivos)
    - Las reglas exactas de localización y resolución física de módulos en el sistema de archivos permanecen delimitadas para el bloque de resolución física de módulos.
 
 
-### 13.4 Delimitación del alcance léxico en v0.1
+### 13.8 Cierre formal del bloque léxico en Evo-Script v0.1
 
-Para mantener la precisión metodológica del diseño, se formaliza el estado de las decisiones léxicas:
+Con las formalizaciones establecidas en este capítulo y en las secciones numéricas correspondientes, el modelo léxico fundamental de Evo-Script v0.1 queda plenamente definido y cerrado:
 
-1. **Aspectos formalizados y cerrados en este bloque**:
-   - Comentarios de una sola línea mediante `//`.
-   - Prohibición explícita de comentarios multilínea (`/* ... */`).
-   - Principio de palabras reservadas efectivas (únicamente keywords realmente utilizadas en v0.1).
-   - Catálogo normativo de palabras reservadas en v0.1.
-   - Convención `PascalCase` para tipos (`struct`, `enum`) y variantes de enum.
-   - Convención `snake_case` para funciones, firmas, bindings, parámetros, campos y módulos.
-   - Convención `kebab-case` para nombres físicos de archivos de artefactos.
-2. **Aspectos pendientes de definición en revisiones léxicas posteriores**:
-   - Gramática formal completa de identificadores (conjunto de caracteres permitidos, ASCII vs Unicode, guion bajo inicial `_`).
-   - Reglas formales globales de sensibilidad a mayúsculas y minúsculas (*case-sensitivity*).
-   - Gramática formal de espacios en blanco (*whitespace*, tabulaciones, saltos de línea e indentación).
-   - Gramática formal de literales booleanos (`true`, `false`).
-   - Gramática formal de literales de texto (`string`), caracteres de escape y cadenas multilínea.
-   - Codificación oficial del código fuente (UTF-8, manejo de BOM).
+1. **Aspectos formalizados y cerrados**:
+   - Delimitación de comentarios (`//`) y ausencia de comentarios multilínea.
+   - Principio de palabras reservadas efectivas y catálogo normativo de keywords estructurales.
+   - Tokens literales reservados (`true`, `false`).
+   - Codificación obligatoria del código fuente en UTF-8 sin BOM.
+   - Caracteres de espacio en blanco reconocidos e insensibilidad a la indentación.
+   - Gramática formal y exclusividad ASCII de identificadores con sensibilidad a mayúsculas/minúsculas.
+   - Gramática y tipado estricto de literales booleanos.
+   - Gramática, secuencias de escape exactas y delimitación de literales de texto (`string`).
+   - Gramática de literales numéricos (`int`, `float`).
+   - Convenciones de nombres semánticos (`PascalCase`, `snake_case`) y físicos (`kebab-case`).
+2. **Delimitación de alcance**:
+   - El cierre formal del bloque léxico no constituye la congelación total de la especificación general de Evo-Script v0.1, continuando el desarrollo de los bloques semánticos y modulares restantes conforme a la metodología establecida.
