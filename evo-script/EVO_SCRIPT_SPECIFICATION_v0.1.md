@@ -2028,7 +2028,7 @@ No se incluyen operadores unarios de incremento (`++`), decremento (`--`), compl
 
 ### 10.11 Agrupación y precedencia
 
-Los paréntesis `( )` permiten agrupar expresiones para controlar explícitamente la estructura sintáctica y el orden de evaluación:
+Los paréntesis `( )` permiten establecer explícitamente la agrupación sintáctica de una expresión:
 
     (a + b) * c
 
