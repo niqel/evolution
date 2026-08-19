@@ -1937,14 +1937,16 @@ Los operadores de comparación **no son encadenables**:
 
 #### 10.8.6 Evaluación de izquierda a derecha en operadores binarios
 
-1. **Orden estricto de evaluación de operandos**:
-   Para cualquier expresión binaria `left OP right` (incluyendo comparaciones y operaciones aritméticas), la evaluación procede estrictamente de izquierda a derecha:
+1. **Orden de evaluación en operadores binarios ordinarios**:
+   Para los operadores binarios que no aplican cortocircuito (aritméticos y de comparación), la evaluación procede estrictamente de izquierda a derecha:
    1. Se evalúa el operando izquierdo (`left`).
    2. Si la evaluación de `left` concluye exitosamente con un valor normal, se evalúa el operando derecho (`right`).
-   3. Se aplica el operador `OP` sobre ambos valores normales.
-2. **Propagación de `EvaluationError` en operando izquierdo**:
+   3. Se aplica el operador sobre ambos valores normales.
+2. **Operadores lógicos y cortocircuito**:
+   En los operadores lógicos `&&` y `||`, la evaluación también comienza siempre por el operando izquierdo, pero la evaluación del operando derecho queda sujeta a la semántica formal de cortocircuito (Sección 10.9).
+3. **Propagación de `EvaluationError` en operando izquierdo**:
    Si la evaluación de `left` produce un error de evaluación (`EvaluationError`, como `DivisionByZeroError`, `OverflowError` o `ConversionError`), la evaluación del operando derecho `right` **no llega a ejecutarse** y el fallo se propaga inmediatamente hacia afuera. Esta detención deriva de la propagación universal de errores de evaluación y no constituye cortocircuito lógico.
-3. **Propagación de `EvaluationError` en operando derecho**:
+4. **Propagación de `EvaluationError` en operando derecho**:
    Si `left` se evalúa exitosamente pero `right` produce un `EvaluationError`, la operación binaria no produce su valor normal y el error se propaga hacia el exterior.
 
 
@@ -1984,30 +1986,180 @@ Evo-Script v0.1 establece normativamente la regla de **agrupación explícita me
    El lenguaje rechaza expresiones como `a == b && c != d` sin permitir que se resuelvan por precedencia implícita. La estructura lógica debe quedar visualmente inequívoca mediante `(a == b) && (c != d)`.
 4. **Valores booleanos simples**:
    Los identificadores o expresiones booleanas simples (como `active`, `!ready`, `worker.active`) pueden participar directamente como operandos lógicos sin paréntesis obligatorios: `active && authorized`, `ready || cached`.
-5. **Independencia del cortocircuito booleano**:
-   La regla de paréntesis define la estructura sintáctica obligatoria; la semántica exacta del cortocircuito lógico booleano (*short-circuit* para `false && ...` y `true || ...`) permanece como especificación formal independiente.
+5. **Interacción con el cortocircuito booleano**:
+   La regla de paréntesis define la estructura sintáctica obligatoria; la evaluación en runtime de los operandos lógicos aplica la semántica formal de cortocircuito definida en la Sección 10.9.
 
 
-### 10.9 Operadores lógicos
+### 10.9 Operadores lógicos y cortocircuito (Short-Circuit Evaluation)
 
 Evo-Script v0.1 define tres operadores lógicos:
 
-| Operador | Significado | Ejemplo |
-| :--- | :--- | :--- |
-| `&&` | AND lógico | `active && authorized` |
-| `\|\|` | OR lógico | `active \|\| administrator` |
-| `!` | Negación lógica (NOT) | `!disabled` |
+| Operador | Significado | Tipado formal | Ejemplo |
+| :--- | :--- | :--- | :--- |
+| `&&` | AND lógico con cortocircuito | `bool × bool -> bool` | `active && authorized` |
+| `\|\|` | OR lógico con cortocircuito | `bool × bool -> bool` | `active \|\| administrator` |
+| `!` | Negación lógica (NOT) | `bool -> bool` | `!disabled` |
 
-Reglas:
+Reglas normativas generales:
 
-- Operan exclusivamente sobre valores de tipo `bool` y producen un resultado `bool`.
-- No se introducen palabras clave alternativas como `and`, `or` o `not`.
-- El operador `!` actúa exclusivamente como negación booleana; no cumple funciones de unwrapping, aserción ni propagación de errores.
-- Cuando una expresión de comparación participa como operando de `&&` o `||`, debe agruparse explícitamente entre paréntesis según la regla normativa definida en la Sección 10.8.7.
+1. **Tipado booleano estricto (Sin Truthiness)**:
+   - Los operadores lógicos operan **única y exclusivamente sobre valores de tipo `bool`** y producen exactamente un valor de tipo `bool`.
+   - Evo-Script no implementa conversiones implícitas a booleano (*truthiness*). Expresiones como `1 && true`, `"texto" || false` o `Worker { ... } && active` son sintáctica y semánticamente inválidas (`System / Validation Error`).
+2. **Operador unario `!`**:
+   - Actúa exclusivamente como negación booleana sobre un valor `bool`. No cumple funciones de unwrapping, aserción ni propagación de errores. No aplica cortocircuito.
+3. **Naturaleza de expresión**:
+   - Las operaciones lógicas son `Expressions` monovalor. No constituyen sentencias de control de flujo (`if`, `else`) ni `Operation Statements` (`a && b;` es inválido como sentencia).
 
-Ejemplo:
 
-    let bool allowed = active && (age >= 18);
+#### 10.9.1 Semántica de cortocircuito de `&&` (Logical AND)
+
+Para una expresión `left && right`:
+
+1. Se evalúa el operando izquierdo (`left`).
+2. `left` debe evaluarse exitosamente a un valor de tipo `bool`.
+3. **Condición de cortocircuito (`false`)**:
+   - Si `left == false`, el resultado final de la expresión es inmediatamente `false` y el operando derecho (`right` / `RHS`) **NO se evalúa**.
+4. **Evaluación de operando derecho (`true`)**:
+   - Si `left == true`, se evalúa el operando derecho (`right`), el cual debe producir un valor de tipo `bool`. El resultado final de la expresión es exactamente el valor producido por `right`.
+
+Resumen:
+- `false && RHS` $\rightarrow$ `false` (`RHS` no se evalúa).
+- `true && RHS` $\rightarrow$ se evalúa `RHS` $\rightarrow$ resultado = valor de `RHS`.
+
+
+#### 10.9.2 Semántica de cortocircuito de `||` (Logical OR)
+
+Para una expresión `left || right`:
+
+1. Se evalúa el operando izquierdo (`left`).
+2. `left` debe evaluarse exitosamente a un valor de tipo `bool`.
+3. **Condición de cortocircuito (`true`)**:
+   - Si `left == true`, el resultado final de la expresión es inmediatamente `true` y el operando derecho (`right` / `RHS`) **NO se evalúa**.
+4. **Evaluación de operando derecho (`false`)**:
+   - Si `left == false`, se evalúa el operando derecho (`right`), el cual debe producir un valor de tipo `bool`. El resultado final de la expresión es exactamente el valor producido por `right`.
+
+Resumen:
+- `true || RHS` $\rightarrow$ `true` (`RHS` no se evalúa).
+- `false || RHS` $\rightarrow$ se evalúa `RHS` $\rightarrow$ resultado = valor de `RHS`.
+
+
+#### 10.9.3 Tabla normativa de evaluación en runtime
+
+| Expresión | ¿Se evalúa RHS en runtime? | Resultado final |
+| :--- | :---: | :--- |
+| `false && RHS` | **No** | `false` |
+| `true && RHS` | **Sí** | Valor de `RHS` |
+| `true \|\| RHS` | **No** | `true` |
+| `false \|\| RHS` | **Sí** | Valor de `RHS` |
+
+> [!NOTE]
+> `RHS` (*Right-Hand Side*) debe ser siempre una expresión estáticamente tipada como `bool` y válida según las reglas del lenguaje, con independencia de que en runtime su evaluación pueda ser omitida por cortocircuito.
+
+
+#### 10.9.4 Separación entre validación estática y evaluación en runtime
+
+Evo-Script distingue formalmente dos niveles en el procesamiento de expresiones lógicas:
+
+1. **Validación estática (`Static Validation`)**:
+   - Se ejecuta antes del runtime y valida exhaustivamente **ambos operandos** (`left` y `right`).
+   - Ambos operandos deben ser expresiones de tipo `bool` válidas en el sistema de tipos.
+   - Los errores estructurales y de resolución (como `FunctionNotFoundError`, `FunctionArityError`, `FunctionArgumentTypeError`, `ComparisonTypeError`, `FieldNotFoundError`, `FieldAccessTypeError`) invalidan y rechazan el programa antes de la ejecución, **sin importar** si en runtime el operando derecho hubiese sido omitido por cortocircuito:
+     ```text
+     false && funcion_inexistente()   // Inválido: FunctionNotFoundError antes de ejecutar
+     false && 10                      // Inválido: tipo int no admitido en operador lógico
+     true || "texto"                  // Inválido: tipo string no admitido en operador lógico
+     ```
+2. **Evaluación en runtime (`Runtime Evaluation`)**:
+   - Durante la ejecución, el evaluador procesa de izquierda a derecha y aplica las reglas de cortocircuito para inhibir la evaluación de `RHS` cuando el resultado queda determinado por `left`.
+
+
+#### 10.9.5 Interacción con EvaluationError y efectos externos
+
+1. **`EvaluationError` en operando izquierdo**:
+   - Si `left` produce un error de evaluación (`EvaluationError`, por ejemplo `DivisionByZeroError`), la evaluación actual aborta y `RHS` **no se evalúa**. Esta omisión no es cortocircuito lógico booleano, sino la consecuencia de la propagación del fallo de evaluación.
+2. **`EvaluationError` en `RHS` cuando es evaluado**:
+   - Si las reglas de cortocircuito requieren evaluar `RHS` (`true && RHS` o `false || RHS`) y `RHS` produce un `EvaluationError`, el fallo detiene la evaluación y se propaga hacia el exterior.
+3. **Inexistencia de `EvaluationError` en `RHS` omitido**:
+   - Si `RHS` es omitido por cortocircuito, cualquier fallo de evaluación que hubiese ocurrido exclusivamente durante su ejecución en runtime **no ocurre**:
+     ```text
+     false && ((10 / 0) > 1)          // Válido: División entre cero en RHS no ocurre en runtime
+     true || (overflow_val + 1 > 0)   // Válido: Overflow en RHS no ocurre en runtime
+     ```
+   - Regla fundamental: *lo que no se evalúa en runtime no puede producir EvaluationError*.
+4. **Efectos externos en `RHS` omitido**:
+   - Si `RHS` invoca una función o Signature Dependency Parameter con efectos externos y `RHS` es omitido por cortocircuito, dicha función **no se ejecuta** y sus efectos externos no tienen lugar:
+     ```text
+     autorizado || solicitar_autorizacion()
+     ```
+     Si `autorizado == true`, `solicitar_autorizacion()` no se ejecuta.
+   - Evo-Script no incorpora anotaciones de pureza ni sistemas de efectos (`IO`); la ausencia de efectos es el resultado natural de la no evaluación de la subexpresión.
+
+
+#### 10.9.6 Encadenamiento homogéneo de operadores lógicos
+
+Evo-Script permite encadenar múltiples instancias del **mismo operador lógico** sin requerir paréntesis adicionales:
+
+1. **Encadenamiento de `&&`**:
+   - `a && b && c` se asocia estructuralmente por la izquierda como `(a && b) && c`.
+   - **Evaluación secuencial con cortocircuito**:
+     1. Se evalúa `a`. Si `a == false` $\rightarrow$ resultado `false`; `b` y `c` **no se evalúan**.
+     2. Si `a == true` $\rightarrow$ se evalúa `b`. Si `b == false` $\rightarrow$ resultado `false`; `c` **no se evalúa**.
+     3. Si `b == true` $\rightarrow$ se evalúa `c` y el resultado final es el valor de `c`.
+2. **Encadenamiento de `||`**:
+   - `a || b || c` se asocia estructuralmente por la izquierda como `(a || b) || c`.
+   - **Evaluación secuencial con cortocircuito**:
+     1. Se evalúa `a`. Si `a == true` $\rightarrow$ resultado `true`; `b` y `c` **no se evalúan**.
+     2. Si `a == false` $\rightarrow$ se evalúa `b`. Si `b == true` $\rightarrow$ resultado `true`; `c` **no se evalúa**.
+     3. Si `b == false` $\rightarrow$ se evalúa `c` y el resultado final es el valor de `c`.
+
+
+#### 10.9.7 Exigencia estricta de paréntesis al mezclar `&&` y `||`
+
+Evo-Script v0.1 **prohíbe la mezcla directa de operadores `&&` y `||` sin paréntesis explícitos**:
+
+1. **Prohibición de precedencia implícita entre `&&` y `||`**:
+   - A pesar de que la tabla general define una jerarquía de operadores, el lenguaje **no permite** que expresiones que combinan conjunciones y disyunciones se resuelvan por precedencia implícita.
+   - La intención sintáctica debe quedar visual y estructuralmente inequívoca mediante paréntesis obligatorios.
+2. **Formas inválidas**:
+   ```text
+   a && b || c              // Inválido: mezcla && y || sin agrupación explícita
+   a || b && c              // Inválido: mezcla || y && sin agrupación explícita
+   a && b || c && d         // Inválido: mezcla sin agrupación explícita
+   a || b && c || d         // Inválido: mezcla sin agrupación explícita
+   (age >= 18) && active || admin // Inválido: mezcla sin paréntesis lógicos
+   ```
+3. **Formas válidas**:
+   ```text
+   (a && b) || c            // Válido: conjunción agrupada explícitamente
+   a && (b || c)            // Válido: disyunción agrupada explícitamente
+   a || (b && c)            // Válido: conjunción agrupada explícitamente
+   (a || b) && c            // Válido: disyunción agrupada explícitamente
+   ((age >= 18) && active) || admin // Válido: agrupación lógica completa
+   ```
+
+
+#### 10.9.8 Composición canónica con comparaciones y bindings
+
+- **Conjunción con comparación agrupada**:
+  ```text
+  let bool permitido = (age >= 18) && active;
+  ```
+- **Conjunción de comparaciones encadenadas**:
+  ```text
+  let bool en_rango = (a < b) && (b < c);
+  ```
+- **Conjunción múltiple con comparación**:
+  ```text
+  let bool acceso_completo = (age >= 18) && active && authorized;
+  ```
+- **Disyunción con comparación y bindings**:
+  ```text
+  let bool encontrado = (name == "Juan") || cached || local;
+  ```
+- **Retorno con composición lógica**:
+  ```text
+  return (worker.age >= 18) && worker.active;
+  ```
 
 
 ### 10.10 Operadores unarios
@@ -2046,7 +2198,10 @@ Evo-Script v0.1 define la jerarquía completa de precedencia y asociatividad de 
 8. **Pipeline** (`|>`) — asociatividad por la izquierda (menor precedencia de todos los operadores).
 
 > [!IMPORTANT]
-> A pesar de la jerarquía de precedencia general, cuando una expresión de comparación participa como operando de un operador lógico (`&&` o `||`), la sintaxis de Evo-Script exige **agrupación explícita obligatoria con paréntesis** (Sección 10.8.7). No se admite confiar en precedencia implícita para mezclar comparaciones con operadores lógicos.
+> A pesar de la jerarquía de precedencia general, la sintaxis de Evo-Script exige **agrupación explícita obligatoria con paréntesis** en los siguientes casos:
+> 1. Cuando una expresión de comparación participa como operando de `&&` o `||` (Sección 10.8.7).
+> 2. Cuando se mezclan operadores `&&` y `||` en una misma expresión lógica (Sección 10.9.7).
+> No se admite confiar en precedencia implícita en estas combinaciones.
 
 Ejemplos:
 
@@ -2054,6 +2209,7 @@ Ejemplos:
 - `worker.name |> to_string` equivale semánticamente a `(worker.name) |> to_string`.
 - `a + b * c` equivale semánticamente a `a + (b * c)`.
 - `(a > 10) && (b < 20)` define la conjunción explícita de dos comparaciones agrupadas.
+- `(a && b) || c` define la disyunción explícita de una conjunción agrupada con un tercer operando.
 - `a + b |> to_string` equivale semánticamente a `(a + b) |> to_string`.
 - `(a > b) |> to_string` equivale semánticamente a `(a > b) |> to_string`.
 
@@ -2374,10 +2530,9 @@ Quedan formalmente fuera de Evo-Script v0.1:
 
 ### 10.16 Semántica pendiente
 
-Dentro del subsistema de expresiones y operadores en Evo-Script v0.1, permanecen como especificaciones pendientes para bloques posteriores:
+Dentro del subsistema de expresiones y operadores en Evo-Script v0.1, permanece como especificación pendiente para bloques posteriores:
 
-1. **Semántica formal exacta de cortocircuito booleano**: Las condiciones y garantías formales de omisión de evaluación del operando derecho (*RHS*) en conjunciones (`false && RHS`) y disyunciones (`true || RHS`).
-2. **Semántica de truncamiento y signo en división y residuo**: Las reglas exactas de redondeo/truncamiento en la división entera con signo (`/`) y el signo del residuo (`%`).
+1. **Semántica de truncamiento y signo en división y residuo**: Las reglas exactas de redondeo/truncamiento en la división entera con signo (`/`) y el signo del residuo (`%`).
 
 
 ## 11. Funciones
