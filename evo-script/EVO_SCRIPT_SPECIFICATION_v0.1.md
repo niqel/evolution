@@ -549,7 +549,7 @@ La definición correspondiente determina su naturaleza.
 
 ### 7.3 Struct
 
-`struct` define exclusivamente una estructura de datos.
+`struct` define exclusivamente una estructura inmutable de datos (`AND data`).
 
 Un `struct` no posee funciones, métodos, constructores, herencia, interfaces,
 comportamiento ni lógica asociada. No describe clases, objetos ni entidades
@@ -610,73 +610,136 @@ simplemente contiene un campo de tipo `Pais`. No constituye herencia, relación
 orientada a objetos ni clase contenida.
 
 
-#### 7.3.4 Construcción de valores struct
+#### 7.3.4 Construcción de valores struct (Struct Construction Expression)
 
-Evo-Script no utiliza la palabra clave `new` ni constructores asociados para
-instanciar un `struct`.
+1. **Construcción como expresión**:
+   - La construcción de un valor struct (`Struct Construction Expression`) es una `Expression` que produce un nuevo valor inmutable del tipo struct correspondiente.
+   - Evo-Script no utiliza la palabra clave `new`, constructores de objetos ni métodos `init`.
+   - La construcción se realiza directamente especificando el nombre del tipo seguido de sus campos y valores entre llaves:
+     ```text
+     Trabajador {
+         edad: 43
+         name: "Gustavo"
+         last_name: "Melendez"
+     }
+     ```
+2. **Semántica de datos conjuntos (`AND Data`)**:
+   - Un struct representa la conjunción obligatoria de todos sus campos declarados. Para construir un valor válido, **todos los campos declarados son estrictamente obligatorios**.
+   - No existen valores por defecto implícitos (no se asume `0`, `""` ni `false`) ni existe `null` como mecanismo para omitir campos. La omisión de cualquier campo es un error de validación estática.
+3. **Unicidad de campos en la construcción**:
+   - Cada campo declarado debe aparecer **exactamente una vez** dentro de la construcción.
+   - No se permiten campos duplicados ni campos desconocidos que no formen parte de la definición del tipo.
+4. **Correspondencia exacta de tipos**:
+   - Cada expresión asignada a un campo (`nombre: expresion`) debe producir exactamente el tipo declarado para dicho campo en la definición del struct. No aplican conversiones implícitas. Si se requiere una conversión, debe realizarse explícitamente (`to_tipo`).
+5. **Identificación por nombre**:
+   - El orden textual en que se inicializan los campos durante la construcción no altera la identidad semántica del valor, ya que los campos se vinculan por su nombre:
+     ```text
+     Trabajador {
+         edad: 43
+         name: "Gustavo"
+         last_name: "Melendez"
+     }
+     ```
+     y:
+     ```text
+     Trabajador {
+         name: "Gustavo"
+         last_name: "Melendez"
+         edad: 43
+     }
+     ```
+     producen valores equivalentes.
 
-La construcción de un valor se realiza directamente mediante el nombre del tipo:
 
-    Trabajador {
-        edad: 43
-        name: "Gustavo"
-        last_name: "Melendez"
-    }
+#### 7.3.5 Acceso a campos de struct (Field Access)
 
-La construcción `NombreTipo { ... }` produce directamente un valor del tipo
-`NombreTipo`.
+1. **Sintaxis formal**:
+   Evo-Script v0.1 define formalmente el acceso a campos (`Field Access Expression`) mediante la sintaxis:
+
+   ```text
+   field_access
+       := expression "." field_name
+   ```
+
+   El operador oficial de acceso a campos es el punto (`.`). No se admiten operadores alternativos como `->`, `::`, `?.` ni `[]` para acceder a campos de structs.
+2. **Evaluación y tipado de Field Access**:
+   - `Field Access` es una `Expression` que evalúa la expresión del receptor (*receiver*) y proyecta exactamente el valor del campo solicitado.
+   - El tipo resultante de `expression.field_name` es **exactamente el tipo declarado para dicho campo** en la definición del struct. No existe conversión implícita durante el acceso a campos:
+     ```text
+     let Trabajador trabajador = Trabajador {
+         edad: 43
+         name: "Gustavo"
+         last_name: "Melendez"
+     };
+
+     let int edad = trabajador.edad;       // Produce int
+     let string nombre = trabajador.name;   // Produce string
+     ```
+3. **Restricción de tipo de receptor (Receiver Struct-Only)**:
+   - El acceso a campos solo es válido sobre expresiones cuyo tipo semántico sea un `struct`.
+   - **Tipos nativos**: No se permite acceso a campos sobre tipos nativos (`int`, `float`, `bool`, `string`, `dynamic`). Expresiones como `10.value`, `true.value` o `"texto".length` son inválidas y producen el error estático **`FieldAccessTypeError`**.
+   - **Enums**: No se permite acceso directo a campos sobre valores de tipo `enum` (por ejemplo `resultado.trabajador` es inválido). Los enums representan alternativas disjuntas (`OR alternatives`) y deben seleccionarse obligatoriamente mediante `when` antes de acceder a los campos del struct contenido.
+4. **Validación de campos inexistentes**:
+   - Si el receptor es un struct válido pero el campo solicitado no existe en su definición (por ejemplo `trabajador.salario`), el programa es inválido y produce el error estático **`FieldNotFoundError`**.
+   - Tanto `FieldNotFoundError` como `FieldAccessTypeError` pertenecen a la categoría de **errores de validación del sistema** (`SystemError`); se detectan antes de la evaluación normal y **no** constituyen errores de evaluación (`EvaluationError`).
+5. **Encadenamiento y asociatividad (Chaining)**:
+   - El acceso a campos puede encadenarse para navegar a través de composiciones de structs.
+   - El encadenamiento se asocia estrictamente de **izquierda a derecha**:
+     ```text
+     colonia.pais.name
+     ```
+     equivale semánticamente a:
+     ```text
+     (colonia.pais).name
+     ```
+6. **Receptor como llamada a función**:
+   - El receptor de un acceso a campo puede ser cualquier expresión que produzca un struct, incluyendo una llamada a función:
+     ```text
+     buscar_trabajador(id).name
+     buscar_colonia(id).pais.name
+     ```
+7. **Contextos de uso de Field Access**:
+   - `Field Access` es una `Expression` ordinaria que produce un valor y puede utilizarse en cualquier contexto donde se espera un `Value`:
+     - Inicializador de `let`: `let string nombre = trabajador.name;`
+     - Argumento de llamada: `procesar(trabajador.name);`
+     - Retorno de función: `return trabajador.name;`
+     - Entrada de pipeline: `trabajador.name |> normalizar |> guardar;`
+     - Expresiones aritméticas / lógicas / comparaciones: `trabajador.edad + 10`, `trabajador.name == "Gustavo"`
+8. **Prohibición de Field Access como Operation Statement**:
+   - Un acceso a campo es una expresión de valor, **NO** un `Operation Statement`. Sentencias como `trabajador.name;` son sintácticamente inválidas.
+9. **Precedencia de Field Access**:
+   - El acceso a campos es una operación postfix de la más alta precedencia, agrupándose antes de operadores aritméticos, comparaciones, operadores lógicos y pipelines:
+     - `trabajador.edad + 10` equivale a `(trabajador.edad) + 10`.
+     - `trabajador.name |> normalizar` equivale a `(trabajador.name) |> normalizar`.
 
 
-#### 7.3.5 Diferencia entre definición y construcción
+#### 7.3.6 Inmutabilidad y ausencia de mutación en structs
 
-Existe una distinción sintáctica y semántica fundamental:
-
-- **Definición**: declara la estructura mediante `tipo nombre;`.
-  ```text
-  struct Trabajador {
-      int edad;
-      string name;
-  }
-  ```
-- **Construcción**: inicializa los datos mediante `nombre: valor`.
-  ```text
-  Trabajador {
-      edad: 43
-      name: "Gustavo"
-  }
-  ```
-
-El carácter dos puntos (`:`) pertenece exclusivamente a la asignación de valor a
-un campo durante la construcción; no se utiliza para declarar campos en la definición.
-
-
-#### 7.3.6 Reglas de construcción
-
-Durante la construcción de un `struct` en Evo-Script v0.1 aplican las siguientes
-reglas:
-
-1. **Campos obligatorios**: Todos los campos definidos en el `struct` son
-   obligatorios. No existen valores por defecto implícitos (no se asume `0`,
-   `""` ni `false`) ni existe `null` como mecanismo para omitir campos.
-2. **Campos desconocidos o duplicados**: No pueden proporcionarse campos no
-   declarados en la definición del `struct`, ni puede repetirse un mismo campo.
-3. **Orden de campos**: El orden en que se asignan los campos durante la
-   construcción no altera la identidad semántica del valor. Los campos se
-   identifican exclusivamente por su nombre:
-
-       Trabajador {
-           edad: 43
-           name: "Gustavo"
-       }
-
-   y:
-
-       Trabajador {
-           name: "Gustavo"
-           edad: 43
-       }
-
-   producen valores equivalentes.
+1. **Ausencia de asignación a campos (No Field Assignment)**:
+   - Los campos de un `struct` son estrictamente de solo lectura una vez construido el valor.
+   - Evo-Script **NO define asignación a campos**. Expresiones como las siguientes son inválidas:
+     ```text
+     trabajador.name = "Juan";   // Inválido: no existe asignación a campos
+     trabajador.edad = 44;       // Inválido: no existe asignación a campos
+     ```
+   - El carácter `=` solo se utiliza en declaraciones de binding inmutable `let` y no adquiere semántica de operador de asignación.
+2. **Ausencia de setters y propiedades mutables**:
+   - No existen métodos setter, propiedades modificables ni sintaxis de actualización destructiva.
+3. **Reconstrucción inmutable de valores**:
+   - Para representar una versión modificada de los datos, se construye un nuevo valor struct explícito:
+     ```text
+     let Trabajador trabajador_actualizado = Trabajador {
+         edad: trabajador.edad
+         name: "Juan"
+         last_name: trabajador.last_name
+     };
+     ```
+   - `trabajador` permanece intacto e inmutable como el valor original; `trabajador_actualizado` constituye un nuevo valor estructurado independiente.
+   - Evo-Script v0.1 no define sintaxis abreviada de actualización destructiva ni operadores copy-update (como `..trabajador` o `with`).
+4. **Ausencia de métodos y orientación a objetos**:
+   - `Field Access` (`.`) sirve única y exclusivamente para proyectar campos de datos de structs.
+   - **NO se admiten métodos de miembros**: llamadas como `trabajador.guardar()`, `trabajador.get_name()` o `trabajador.name()` son inválidas.
+   - El comportamiento se organiza exclusivamente en funciones y firmas independientes (`guardar_trabajador(trabajador)` o `trabajador |> guardar_trabajador`).
 
 
 #### 7.3.7 Structs recursivos
@@ -692,9 +755,11 @@ representación formal de ausencia.
 Evo-Script mantiene una separación total entre la estructura de datos y las
 operaciones que actúan sobre ella:
 
-- `struct`: define datos.
-- `NombreTipo { ... }`: construye un valor de datos.
+- `struct`: define tipos de datos (`AND data`).
+- `NombreTipo { ... }`: construye un nuevo valor estructurado inmutable.
+- `valor.campo`: proyecta un campo del valor estructurado.
 - `fn`: define comportamiento y funciones de transformación.
+- `when`: selecciona alternativas en tipos enumerados (`OR alternatives`).
 
 Ejemplo conceptual:
 
@@ -1826,16 +1891,19 @@ El uso de paréntesis tiene como único propósito la agrupación sintáctica; n
 
 Evo-Script v0.1 define la jerarquía completa de precedencia y asociatividad de operadores de la siguiente manera (de mayor a menor precedencia):
 
-1. **Operadores unarios prefijos** (`!`, `-`) — asociatividad por la derecha.
-2. **Multiplicativos** (`*`, `/`, `%`) — asociatividad por la izquierda.
-3. **Aditivos** (`+`, `-`) — asociatividad por la izquierda.
-4. **Comparaciones** (`<`, `<=`, `>`, `>=`, `==`, `!=`) — no encadenables.
-5. **Conjunción lógica** (`&&`) — asociatividad por la izquierda.
-6. **Disyunción lógica** (`||`) — asociatividad por la izquierda.
-7. **Pipeline** (`|>`) — asociatividad por la izquierda (menor precedencia de todos los operadores).
+1. **Acceso a campos** (`.`) — asociatividad por la izquierda (operación postfix de mayor precedencia).
+2. **Operadores unarios prefijos** (`!`, `-`) — asociatividad por la derecha.
+3. **Multiplicativos** (`*`, `/`, `%`) — asociatividad por la izquierda.
+4. **Aditivos** (`+`, `-`) — asociatividad por la izquierda.
+5. **Comparaciones** (`<`, `<=`, `>`, `>=`, `==`, `!=`) — no encadenables.
+6. **Conjunción lógica** (`&&`) — asociatividad por la izquierda.
+7. **Disyunción lógica** (`||`) — asociatividad por la izquierda.
+8. **Pipeline** (`|>`) — asociatividad por la izquierda (menor precedencia de todos los operadores).
 
 Ejemplos:
 
+- `worker.age + 10` equivale semánticamente a `(worker.age) + 10`.
+- `worker.name |> to_string` equivale semánticamente a `(worker.name) |> to_string`.
 - `a + b * c` equivale semánticamente a `a + (b * c)`.
 - `a > 10 && b < 20` equivale semánticamente a `(a > 10) && (b < 20)`.
 - `a + b |> to_string` equivale semánticamente a `(a + b) |> to_string`.
@@ -2944,6 +3012,8 @@ Los errores de resolución y validación local de funciones pertenecen a la cate
 | `FunctionArgumentTypeError` | El tipo producido por un argumento no coincide exactamente con el tipo del parámetro correspondiente. |
 | `DuplicateFunctionError` | Dos funciones declaran el mismo nombre dentro del mismo archivo `.efn`. |
 | `FunctionCallCycleError` | Se detecta recursión directa o un ciclo indirecto en el grafo de llamadas. |
+| `FieldNotFoundError` | Se intenta acceder a un campo que no existe en la definición del struct receptor. |
+| `FieldAccessTypeError` | Se intenta acceder a un campo mediante `.` sobre un receptor cuyo tipo no es struct. |
 
 #### 11.13.3 Distinción formal de categorías de error
 
@@ -2951,7 +3021,7 @@ Evo-Script distingue formalmente tres categorías ortogonales de fallos o altern
 
 | Categoría | Naturaleza | Momento de detección | Ejemplo | Manejo en Evo-Script |
 | :--- | :--- | :--- | :--- | :--- |
-| **System / Validation Error** | Invalidez estructural o de resolución del programa | Antes de la evaluación | `FunctionNotFoundError`, `FunctionArityError`, `DuplicateFunctionError` | El programa se rechaza; no es evaluable. |
+| **System / Validation Error** | Invalidez estructural o de resolución del programa | Antes de la evaluación | `FunctionNotFoundError`, `FunctionArityError`, `DuplicateFunctionError`, `FieldNotFoundError`, `FieldAccessTypeError` | El programa se rechaza; no es evaluable. |
 | **Evaluation Error** | Fallo en la evaluación de una expresión en un programa válido | Durante la evaluación | `DivisionByZeroError`, `OverflowError`, `ConversionError` | Detiene la evaluación y se propaga al host/runtime exterior. |
 | **Domain Alternative** | Resultado o caso normal esperado del dominio del programa | Durante la evaluación | `BuscarTrabajadorResult::Error(string)`, `SearchResult::NotFound` | Valor normal `Value` de tipo `enum`; inspeccionable con `when`. |
 
@@ -2983,6 +3053,7 @@ Existe una separación estricta entre la representación textual y la semántica
 | `nombre()` | `Zero-arity function call expression` |
 | `nombre(args...);` | `Operation Statement (Function call with discarded normal Value)` |
 | `pipeline;` | `Operation Statement (Pipeline with discarded normal Value)` |
+| `expresion.campo` | `Field Access Expression (Projection of struct field)` |
 | `{ ... }` | `Function Body / Correspondence` |
 | `struct Nombre { ... }` | `Struct definition` |
 | `tipo nombre;` | `Field` |
