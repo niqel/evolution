@@ -1628,19 +1628,114 @@ Reglas normativas:
 
 Evo-Script v0.1 define exactamente cinco operadores aritméticos binarios:
 
-| Operador | Operación | Ejemplo |
-| :--- | :--- | :--- |
-| `+` | Suma | `a + b` |
-| `-` | Resta | `a - b` |
-| `*` | Multiplicación | `a * b` |
-| `/` | División | `a / b` |
-| `%` | Residuo | `a % b` |
+| Operador | Operación semántica | Resultado producido | Ejemplo |
+| :--- | :--- | :--- | :--- |
+| `+` | Suma | Suma numérica | `a + b` |
+| `-` | Resta | Diferencia numérica | `a - b` |
+| `*` | Multiplicación | Producto numérico | `a * b` |
+| `/` | División | Cociente numérico (*Quotient*) | `a / b` |
+| `%` | Residuo | Residuo entero (*Remainder*) | `a % b` |
 
-Reglas:
+Reglas normativas generales:
 
-1. **Conservación de tipo**: Una operación entre operandos del mismo tipo numérico de tamaño fijo produce como resultado ese mismo tipo semántico (por ejemplo, `int32 + int32` produce `int32`).
-2. **Ausencia de promoción automática**: Las operaciones aritméticas no promocionan silenciosamente sus tipos (por ejemplo, `int32 + int32` no se convierte automáticamente en `int64` para prevenir desbordamientos).
-3. **Compatibilidad estricta**: Operaciones entre tipos distintos (como `int32 + int64` o `int + float`) no realizan conversiones implícitas; requieren conversiones explícitas mediante `to_tipo`.
+1. **Expresiones de valor (Value Expressions)**: Toda operación aritmética es una `Value Expression` que produce exactamente un valor normal (`Value`) del tipo numérico correspondiente cuando su evaluación tiene éxito. No constituyen `Operation Statements` (`a + b;` o `a / b;` como sentencias aisladas son inválidas).
+2. **Conservación de tipo semántico**: Una operación entre operandos del mismo tipo numérico de tamaño fijo produce como resultado ese mismo tipo semántico (por ejemplo, `int32 + int32` produce `int32`, `float64 / float64` produce `float64`).
+3. **Ausencia de conversión o promoción automática**: No existe widening, coerción ni promoción silenciosa de tipos (por ejemplo, `int32 + int32` no se convierte automáticamente en `int64`).
+4. **Compatibilidad estricta**: Los operandos izquierdo y derecho deben ser exactamente del mismo tipo numérico semántico (`int == int`, `int64 == int64`, `uint32 == uint32`, `float64 == float64`). Operaciones con tipos heterogéneos (`int / int64`, `int / float`, `int32 % int64`) son estáticamente inválidas y requieren conversión explícita mediante la familia `to_tipo`.
+
+
+#### 10.3.1 Semántica de división (`/`) y truncamiento hacia cero
+
+El operador de división `/` produce exclusivamente el **cociente numérico** (`Quotient`):
+
+1. **División entera con signo (`Integer Division`)**:
+   - Aplica a todos los tipos enteros con signo (`int`, `int8`, `int16`, `int32`, `int64`, `int128`).
+   - El cociente entero se calcula mediante **truncamiento estricto hacia cero** (*Truncation Toward Zero*), descartando la parte fraccionaria en dirección a cero.
+   - Evo-Script **no utiliza división de piso** (*floor division* hacia $-\infty$), redondeo al entero más cercano ni techo hacia $+\infty$.
+   - **Ejemplos normativos con signo**:
+     ```text
+     10 / 3    ->  3
+     -10 / 3   -> -3
+     10 / -3   -> -3
+     -10 / -3  ->  3
+     ```
+     En particular, `-10 / 3` produce `-3` (y no `-4`).
+2. **División entera sin signo (`Unsigned Integer Division`)**:
+   - Aplica a todos los tipos enteros sin signo (`uint8`, `uint16`, `uint32`, `uint64`, `uint128`).
+   - Produce el cociente entero no negativo exacto:
+     ```text
+     let uint32 dividendo = 10;
+     let uint32 divisor = 3;
+     let uint32 cociente = dividendo / divisor; // Produce 3
+     ```
+3. **División de punto flotante (`Floating Division`)**:
+   - Aplica a los tipos flotantes definidos (`float`, `float32`, `float64`) cuando ambos operandos son del mismo tipo:
+     ```text
+     10.0 / 4.0   -> 2.5
+     ```
+   - Produce un cociente flotante del mismo tipo semántico.
+
+
+#### 10.3.2 Semántica de residuo entero (`%`)
+
+El operador `%` produce exclusivamente el **residuo entero** (`Remainder`):
+
+1. **Definición matemática formal**:
+   Para toda división entera válida, el residuo satisface invariablemente la identidad:
+   $$\text{dividend} = (\text{quotient} \times \text{divisor}) + \text{remainder}$$
+   donde $\text{quotient} = \text{dividend} / \text{divisor}$ según la regla de truncamiento hacia cero.
+2. **Residuo entero con signo**:
+   - Cuando $\text{remainder} \ne 0$, el signo del residuo coincide **con el signo del dividendo** (no con el del divisor).
+   - **Ejemplos normativos con signo**:
+     ```text
+     10 % 3    ->  1
+     -10 % 3   -> -1
+     10 % -3   ->  1
+     -10 % -3  -> -1
+     ```
+   - **Comprobación de la identidad**:
+     - `-10 / 3` produce `-3`.
+     - `-10 % 3` produce `-1`.
+     - Identidad: $(-3 \times 3) + (-1) = -9 - 1 = -10$.
+3. **Magnitud del residuo**:
+   Para cualquier divisor distinto de cero sobre enteros con signo, la magnitud absoluta del residuo es estrictamente menor que la del divisor: $|\text{remainder}| < |\text{divisor}|$.
+4. **División exacta y residuo cero**:
+   Cuando la división es exacta (`12 / 3` $\rightarrow$ `4`), el residuo es exactamente `0` (`12 % 3` $\rightarrow$ `0`). No existe signo observable para el cero entero.
+5. **Residuo entero sin signo**:
+   Para enteros unsigned (`uint8`..`uint128`), el residuo satisface $0 \le \text{remainder} < \text{divisor}$ para todo divisor no nulo (`10 % 3` $\rightarrow$ `1` en contexto unsigned).
+
+
+#### 10.3.3 Prohibición de residuo (`%`) sobre punto flotante en v0.1
+
+Evo-Script v0.1 establece formalmente que el operador `%` **no existe sobre tipos de punto flotante**:
+
+1. **Exclusividad para enteros**: El operador `%` está definido única y exclusivamente para tipos enteros (`int`, `int8`..`int128`, `uint8`..`uint128`).
+2. **Invalidez estática en flotantes**:
+   - `float % float` $\rightarrow$ Inválido.
+   - `float32 % float32` $\rightarrow$ Inválido.
+   - `float64 % float64` $\rightarrow$ Inválido.
+   - No se definen operaciones de *floating remainder*, *floating modulo* ni funciones IEEE `fmod` para el operador `%`.
+3. **Rechazo en validación estática**:
+   - Expresiones como `10.0 % 4.0` o `10.0 % 0.0` son rechazadas durante la **validación estática** (`System / Validation Error`) antes de cualquier ejecución en runtime por constituir una combinación no admitida de operador y tipo.
+   - Por tanto, `10.0 % 0.0` **no alcanza la evaluación runtime** ni produce `DivisionByZeroError`, sino que invalida el programa antes de la ejecución.
+
+
+#### 10.3.4 Matriz normativa de operaciones de división y residuo
+
+| Operación | ¿Válida estáticamente? | Tipo resultante / Fallo semántico |
+| :--- | :---: | :--- |
+| `int / int` (enteros con signo) | Sí | Cociente entero (`int`) con truncamiento hacia cero |
+| `int % int` (enteros con signo) | Sí | Residuo entero (`int`) con signo del dividendo |
+| `uint / uint` (enteros sin signo) | Sí | Cociente entero (`uint`) |
+| `uint % uint` (enteros sin signo) | Sí | Residuo entero (`uint`) |
+| `float / float` (flotantes) | Sí | Cociente flotante (`float`) |
+| `float % float` (flotantes) | **No** | Invalidez en validación estática (`System / Validation Error`) |
+| `integer / 0` | Sí (estática) | Fallo en runtime con `DivisionByZeroError` |
+| `integer % 0` | Sí (estática) | Fallo en runtime con `DivisionByZeroError` |
+| `float / 0.0` (o `-0.0`) | Sí (estática) | Fallo en runtime con `DivisionByZeroError` |
+| `float % 0.0` | **No** | Invalidez en validación estática (`System / Validation Error`) |
+| `signed_fixed_min / -1` | Sí (estática) | Fallo en runtime con `OverflowError` |
+| `signed_fixed_min % -1` | Sí (estática) | Fallo en runtime con `OverflowError` |
 
 
 ### 10.4 Overflow en tipos de tamaño fijo y OverflowError
@@ -1661,26 +1756,30 @@ Reglas de overflow:
 4. **Sin wrapping modular**: Evo-Script no realiza wrapping silencioso (`127 + 1` en `int8` no produce `-128`).
 5. **Sin saturación**: No se realiza saturación automática (`127 + 1` en `int8` no produce `127`).
 6. **Negación unaria y rango**: La negación numérica `-value` sobre tipos fijos también produce `OverflowError` si el valor resultante no cabe en el tipo (por ejemplo, negar el valor mínimo representable en un entero con signo).
-7. **Naturaleza de OverflowError**: `OverflowError` es un fallo de evaluación aritmética; no es un valor normal, no forma parte del tipo normal de la expresión (`int8 | OverflowError` no existe), no se envuelve en `Result` y no es capturable desde dentro de Evo-Script v0.1.
+7. **Caso extremo de división `MIN_VALUE / -1`**: Para los tipos enteros con signo de tamaño fijo (`int8`, `int16`, `int32`, `int64`, `int128`), dividir el valor mínimo representable entre `-1` genera un cociente matemático positivo que excede la capacidad máxima del tipo. La operación produce `OverflowError`.
+8. **Caso extremo de residuo `MIN_VALUE % -1`**: Para los tipos enteros con signo de tamaño fijo, calcular el residuo del valor mínimo representable entre `-1` también produce `OverflowError`. Aunque el residuo matemático sería cero, Evo-Script define formalmente que `/` y `%` comparten el mismo límite de desbordamiento en enteros con signo de tamaño fijo para garantizar consistencia en sus dominios operacionales.
+9. **Inaplicabilidad a enteros sin signo**: Los casos de desbordamiento por divisor `-1` no aplican a los tipos sin signo (`uint8`..`uint128`), ya que el valor `-1` no pertenece al tipo unsigned correspondiente.
+10. **Naturaleza de OverflowError**: `OverflowError` es un fallo de evaluación aritmética; no es un valor normal, no forma parte del tipo normal de la expresión (`int8 | OverflowError` no existe), no se envuelve en `Result` y no es capturable desde dentro de Evo-Script v0.1.
 
 
 ### 10.5 División y residuo entre cero (DivisionByZeroError)
 
-Dividir entre cero o calcular el residuo con un divisor igual a cero no constituye una operación válida en Evo-Script. Cuando el segundo operando de una operación `/` o `%` es numéricamente igual a cero, la evaluación aritmética falla con:
+Dividir entre cero o calcular el residuo con un divisor igual a cero no constituye una operación válida en Evo-Script. Cuando el segundo operando de una operación `/` o de una operación válida `%` es numéricamente igual a cero, la evaluación aritmética falla con:
 
     DivisionByZeroError
 
 Reglas:
 
 1. **Conservación de tipo normal**: Las operaciones `/` y `%` conservan su tipo semántico normal (`int`, `float64`, etc.). `DivisionByZeroError` no forma parte del tipo normal de retorno.
-2. **Operaciones cubiertas**: Aplica de manera uniforme tanto a la división (`a / b`) como al residuo (`a % b`). No existen errores separados como `RemainderByZeroError` ni `ModuloByZeroError`.
-3. **Tipos enteros**: Aplica a todos los tipos enteros (`int`, `int8`..`int128`, `uint8`..`uint128`).
+2. **Operaciones cubiertas**: Aplica de manera uniforme tanto a la división (`a / b`) en enteros y flotantes, como al residuo (`a % b`) en su dominio entero válido. No existen errores separados como `RemainderByZeroError` ni `ModuloByZeroError`.
+3. **Tipos enteros**: Aplica a todos los tipos enteros (`int`, `int8`..`int128`, `uint8`..`uint128`) tanto para `/` como para `%`:
    ```text
    let int64 value = 100;
    let int64 divisor = 0;
    let int64 result = value / divisor; // Falla la evaluación con DivisionByZeroError
+   let int64 rem = value % divisor;    // Falla la evaluación con DivisionByZeroError
    ```
-4. **Punto flotante**: Aplica a todos los tipos flotantes (`float`, `float32`, `float64`). Evo-Script no produce silenciosamente `Infinity`, `+Infinity`, `-Infinity` ni `NaN` como resultado normal de una división entre cero.
+4. **Punto flotante en división (`/`)**: Aplica a todos los tipos flotantes (`float`, `float32`, `float64`) para el operador `/`. Evo-Script no produce silenciosamente `Infinity`, `+Infinity`, `-Infinity` ni `NaN` como resultado normal de una división entre cero.
    - Divisores `0.0` y `-0.0` se consideran numéricamente cero:
      ```text
      10.0 / 0.0  // Produce DivisionByZeroError
@@ -1688,6 +1787,7 @@ Reglas:
      0.0 / 0.0   // Produce DivisionByZeroError
      0 / 0       // Produce DivisionByZeroError
      ```
+   - Recordatorio: `10.0 % 0.0` no alcanza `DivisionByZeroError` porque `%` sobre flotantes es rechazado antes de la evaluación por validación estática (Sección 10.3.3).
 5. **Tipo dynamic**: La evaluación bajo contexto `dynamic` no valida la división entre cero; la evaluación termina con `DivisionByZeroError` antes de producir un valor dynamic:
    ```text
    let dynamic result = 100 / 0; // Falla la evaluación con DivisionByZeroError
@@ -1716,14 +1816,17 @@ Reglas de evaluación bajo contexto `dynamic`:
      ```text
      let dynamic dynamic_result = a + b; // Conserva el valor exacto (128) en una representación suficiente sin OverflowError
      ```
-3. **Conservación exacta de enteros y precisión arbitraria**: Para operaciones enteras, `dynamic` garantiza la conservación exacta del resultado matemático. Si el resultado excede el tamaño de `int128`/`uint128`, utiliza internamente una representación de precisión arbitraria. No se introducen tipos visibles adicionales como `bigint`, `int256` ni `int512`.
-4. **dynamic no significa imprecisión**: Para enteros, `dynamic` garantiza exactitud matemática absoluta, no aproximación.
-5. **dynamic y punto flotante**: `dynamic` no introduce precisión arbitraria para flotantes ni el tipo `float128`. Las operaciones flotantes se rigen por las reglas de los tipos flotantes definidos (`float`, `float32`, `float64`).
-6. **Sin conversiones implícitas de operandos**: Declarar un resultado como `dynamic` no vuelve válidas operaciones entre operandos incompatibles. Por ejemplo, operar `int32` con `int64` requiere conversión explícita:
+3. **División entera bajo dynamic**: Cuando una operación de división entera se evalúa bajo contexto `dynamic`, conserva exactamente la semántica matemática de cociente truncado hacia cero. La evaluación dinámica utiliza representación suficiente sin convertir la operación en división flotante.
+4. **Residuo entero bajo dynamic**: Cuando una operación `%` sobre enteros se evalúa bajo contexto `dynamic`, conserva la identidad $\text{dividend} = (\text{quotient} \times \text{divisor}) + \text{remainder}$ con truncamiento hacia cero.
+5. **dynamic no habilita `%` sobre punto flotante**: El contexto `dynamic` no altera las reglas de compatibilidad de operadores; una expresión como `let dynamic r = 10.0 % 4.0;` sigue siendo inválida estáticamente porque `%` no admite tipos flotantes.
+6. **Conservación exacta de enteros y precisión arbitraria**: Para operaciones enteras, `dynamic` garantiza la conservación exacta del resultado matemático. Si el resultado excede el tamaño de `int128`/`uint128`, utiliza internamente una representación de precisión arbitraria. No se introducen tipos visibles adicionales como `bigint`, `int256` ni `int512`.
+7. **dynamic no significa imprecisión**: Para enteros, `dynamic` garantiza exactitud matemática absoluta, no aproximación.
+8. **dynamic y punto flotante**: `dynamic` no introduce precisión arbitraria para flotantes ni el tipo `float128`. Las operaciones flotantes se rigen por las reglas de los tipos flotantes definidos (`float`, `float32`, `float64`).
+9. **Sin conversiones implícitas de operandos**: Declarar un resultado como `dynamic` no vuelve válidas operaciones entre operandos incompatibles. Por ejemplo, operar `int32` con `int64` requiere conversión explícita:
    ```text
    let dynamic result = to_int64(a) + b;
    ```
-7. **Errores de evaluación en dynamic**: Si una operación dentro de una expresión `dynamic` resulta matemáticamente inválida (como división entre cero), la evaluación falla con el error correspondiente (`DivisionByZeroError`) antes de producir un valor `dynamic`.
+10. **Errores de evaluación en dynamic**: Si una operación dentro de una expresión `dynamic` resulta matemáticamente inválida (como división o residuo entre cero), la evaluación falla con `DivisionByZeroError` antes de producir un valor `dynamic`.
 
 
 ### 10.7 Errores de evaluación y ausencia de captura
@@ -1818,6 +1921,22 @@ Evo-Script v0.1 **no define mecanismos de captura ni manejo de excepciones**:
 
 1. **Límite exterior**: Al no existir captura interna en el lenguaje, todo error de evaluación se propaga hasta el límite exterior del entorno que inició la ejecución de Evo-Script (el host o runtime), el cual es responsable de registrar o reportar el diagnóstico correspondiente.
 2. **Independencia de implementación Rust**: La ausencia de tipos `Result` y excepciones en la semántica visible de Evo-Script no prohíbe que la implementación interna del compilador, parser, runtime o crates Rust (`evo-values`, `evo-query`, `evo-shell`, providers) utilice `Result<T, E>` u otros patrones técnicos de Rust para implementar el comportamiento del lenguaje.
+
+
+#### 10.7.7 Nota de diseño futura para Evo-Script v0.2: operación `divide(...)`
+
+Se registra exclusivamente con carácter de **nota de diseño prospectiva NO operativa para una posible versión v0.2** la idea conceptual de una operación funcional:
+
+    divide(...)
+
+1. **Motivación conceptual**:
+   - En Evo-Script v0.1, el operador aritmético `/` produce un cociente numérico y falla con `DivisionByZeroError` ante divisores nulos, mientras que `%` produce el residuo entero.
+   - En una versión futura (v0.2), podría explorarse la introducción de una operación `divide(...)` que modele explícitamente a nivel de dominio un resultado compuesto mediante un `enum`, conteniendo información de cociente, residuo y una alternativa de dominio ante divisiones no realizables.
+2. **Delimitación estricta en Evo-Script v0.1**:
+   - En Evo-Script v0.1, `divide` **NO es palabra clave**, **NO es función estándar**, **NO es builtin**, **NO es operador** ni constituye una firma o capability reservada.
+   - No se define una forma oficial ni variantes para dicho enum prospectivo.
+   - No se introducen tipos `Result<T, E>`, tuplas, retornos múltiples ni genéricos.
+   - Definir un enum de usuario en v0.1 **no captura automáticamente** el fallo `DivisionByZeroError` originado por el operador `/`.
 
 
 ### 10.8 Operadores de comparación
@@ -2530,9 +2649,7 @@ Quedan formalmente fuera de Evo-Script v0.1:
 
 ### 10.16 Semántica pendiente
 
-Dentro del subsistema de expresiones y operadores en Evo-Script v0.1, permanece como especificación pendiente para bloques posteriores:
-
-1. **Semántica de truncamiento y signo en división y residuo**: Las reglas exactas de redondeo/truncamiento en la división entera con signo (`/`) y el signo del residuo (`%`).
+Dentro del subsistema de expresiones y operadores en Evo-Script v0.1, no existen especificaciones semánticas pendientes. Todos los aspectos léxicos, sintácticos, de tipado, precedencia, evaluación, cortocircuito, división, residuo y propagación de errores se encuentran formalmente definidos y cerrados.
 
 
 ## 11. Funciones
