@@ -2445,13 +2445,25 @@ La invocación directa y la composición en pipeline responden a las reglas sem�
 - **Aridad >= 2**: En un pipeline, `value |> operation(this, arg)` requiere obligatoriamente el placeholder contextual `this` en la primera posición.
 
 
-### 11.8 Resolución local e identidad de función
+### 11.8 Resolución de llamadas, espacios semánticos y desambiguación
 
-Dentro del ámbito de un archivo `.efn`, la resolución de llamadas a funciones opera bajo reglas estrictas de identidad y unicidad local.
+Dentro del ámbito de un archivo `.efn`, la resolución de identificadores y llamadas opera bajo reglas estrictas de separación semántica, identidad y unicidad local.
 
-#### 11.8.1 Identidad de función
+#### 11.8.1 Espacios semánticos y clases de símbolos
 
-La identidad de una función dentro de un archivo `.efn` está determinada única y exclusivamente por su **nombre**:
+Evo-Script v0.1 distingue formalmente distintas clases de símbolos en espacios semánticos separados:
+
+- **Function Implementations**: Funciones locales (`public fn`, `private fn`) definidas dentro del archivo `.efn`.
+- **Signatures**: Contratos públicos (`esig`) disponibles mediante declaraciones `import modulo::firma`.
+- **Types**: Estructuras y enumeraciones locales o compartidas (`struct`, `enum`, tipos nativos).
+- **Modules**: Módulos lógicos (`module`) que agrupan y publican firmas y tipos.
+- **Bindings**: Identificadores locales inmutables asociados a valores (`let`, parámetros).
+
+Esta separación semántica garantiza una resolución determinista e inequívoca sin introducir conceptos orientados a objetos como namespaces de clases o interfaces con despacho dinámico.
+
+#### 11.8.2 Identidad de función local
+
+La identidad de una Function Implementation dentro de un archivo `.efn` está determinada única y exclusivamente por su **nombre**:
 
 $$\text{Function Identity} = \text{function name}$$
 
@@ -2461,13 +2473,15 @@ No forman parte de la identidad de una función:
 - Los tipos de los argumentos.
 - El modificador de visibilidad (`public` o `private`).
 
-Por tanto, cada nombre de función debe ser estrictamente único dentro del archivo `.efn`.
+Por tanto, cada nombre de función local debe ser estrictamente único dentro del archivo `.efn`.
 
-#### 11.8.2 Prohibición de sobrecarga (No Function Overloading)
+#### 11.8.3 Prohibición de sobrecarga y unicidad de funciones locales
 
-Evo-Script v0.1 **no admite sobrecarga de funciones** (`function overloading`). Declarar múltiples funciones con el mismo nombre dentro del mismo `.efn` es semánticamente inválido y produce un error de sistema `DuplicateFunctionError`.
+Evo-Script v0.1 **no admite sobrecarga de funciones** (`function overloading`). Declarar múltiples funciones locales con el mismo nombre dentro del mismo `.efn` es semánticamente inválido y produce un error de sistema `DuplicateFunctionError`.
 
-Ejemplo inválido por variación de tipos:
+`DuplicateFunctionError` aplica exclusivamente a colisiones entre múltiples Function Implementations locales dentro del mismo archivo `.efn`. La declaración `import modulo::firma;` introduce una Signature en el espacio de dependencias, **no crea una Function Implementation local adicional**, y por tanto no produce `DuplicateFunctionError` frente a una función local homónima.
+
+Ejemplo inválido por variación de tipos (funciones locales):
 ```text
 private fn calculate(int value) -> int {
     return value;
@@ -2477,9 +2491,9 @@ private fn calculate(string value) -> string {
     return value;
 }
 ```
-*Inválido*: Ambas funciones declaran el mismo nombre `calculate`, violando la unicidad de identidad (`DuplicateFunctionError`).
+*Inválido*: Ambas funciones locales declaran el mismo nombre `calculate`, violando la unicidad de identidad (`DuplicateFunctionError`).
 
-Ejemplo inválido por variación de aridad:
+Ejemplo inválido por variación de aridad (funciones locales):
 ```text
 private fn calculate(int value) -> int {
     return value;
@@ -2491,7 +2505,7 @@ private fn calculate(int value, int other) -> int {
 ```
 *Inválido*: Variar la cantidad de parámetros no crea una función distinta (`DuplicateFunctionError`).
 
-Ejemplo inválido por variación de tipo de resultado:
+Ejemplo inválido por variación de tipo de resultado (funciones locales):
 ```text
 private fn calculate(int value) -> int {
     return value;
@@ -2503,18 +2517,65 @@ private fn calculate(int value) -> string {
 ```
 *Inválido*: El tipo de retorno no participa en la identidad ni en la resolución (`DuplicateFunctionError`).
 
-#### 11.8.3 Resolución local por nombre
+#### 11.8.4 Resolución de llamadas a funciones no calificadas
 
-Al encontrar una expresión de llamada `nombre(args...)` dentro de un archivo `.efn`, el sistema resuelve la función mediante el siguiente proceso inequívoco:
+Al encontrar una expresión de llamada `nombre(args...)` dentro de un archivo `.efn`, el sistema resuelve la operación considerando los siguientes espacios:
 
-1. **Búsqueda por nombre**: Se busca una función declarada en el archivo `.efn` cuyo nombre coincida exactamente con `nombre`.
-2. **Validación de unicidad**: Debe existir exactamente una función con dicho nombre. Si no existe ninguna función con ese identificador en el ámbito local, se produce `FunctionNotFoundError`.
-3. **Validación de aridad**: Se verifica que la cantidad de argumentos coincida exactamente con los parámetros de la función encontrada (Sección 11.9).
-4. **Validación de tipos**: Se verifica que los tipos de los argumentos coincidan exactamente con los tipos de los parámetros (Sección 11.9).
-5. **Evaluación de argumentos**: Se evalúan los argumentos de izquierda a derecha (Sección 11.10).
-6. **Ejecución**: Se ejecuta el cuerpo de la función y se produce su resultado tipado.
+1. **Function Implementation local**: Se busca una función declarada localmente en el archivo `.efn` cuyo nombre coincida exactamente con `nombre`.
+2. **Signature importada**: Se busca una firma importada mediante `import` cuyo nombre local visible coincida con `nombre` (sea su nombre original o su alias local asignado con `as`).
+
+Los posibles resultados de la búsqueda son:
+
+- **Solo existe función local**: Se resuelve como una llamada a la Function Implementation local del archivo.
+- **Solo existe firma importada**: Se resuelve como una llamada a la capacidad provista por la Signature importada.
+- **No existe ninguna coincidencia**: La llamada no puede resolverse y produce un error de resolución `FunctionNotFoundError`.
+- **Existen simultáneamente función local y firma importada con el mismo nombre**: Se produce un conflicto semántico por ambigüedad. Evo-Script v0.1 **no utiliza precedencia implícita** (no existe regla de *"local gana"*, *"import gana"*, *"más cercano gana"* ni orden de declaración). Esta colisión hace el programa inválido y requiere obligatoriamente desambiguación mediante alias explícito en la cláusula `import`.
+
+Una vez resuelto el destino de la llamada:
+1. **Validación de aridad**: Se verifica que la cantidad de argumentos provistos coincida exactamente con la aridad de la función o firma resuelta (Sección 11.9).
+2. **Validación de tipos**: Se verifica que los tipos de los argumentos coincidan exactamente con los tipos de los parámetros (Sección 11.9).
+3. **Evaluación de argumentos**: Se evalúan los argumentos de izquierda a derecha (Sección 11.10).
+4. **Ejecución / Delegación**: Se ejecuta el cuerpo de la función local o se delega la ejecución de la capacidad importada, produciendo el resultado tipado correspondiente.
 
 El contexto receptor (por ejemplo, el tipo de un binding `let int x = calculate(...)`) nunca participa en la resolución de la función; la función se resuelve siempre de forma determinista y exclusiva por su nombre.
+
+#### 11.8.5 Desambiguación obligatoria mediante alias ante colisión de llamadas
+
+Cuando un archivo `.efn` contiene una función local y simultáneamente importa una firma con el mismo nombre, la llamada no calificada es ambigua. La situación debe resolverse asignando un alias explícito a la firma importada mediante la cláusula `as`:
+
+Ejemplo inválido por colisión no resuelta:
+```text
+import values::search;
+
+private fn search(int id) -> SearchResult {
+    return SearchResult::NotFound;
+}
+
+public fn execute(int id) -> SearchResult {
+    return search(id); // Inválido: llamada ambigua entre Function local y Signature importada
+}
+```
+
+Ejemplo corregido mediante alias explícito:
+```text
+import values::search as external_search;
+
+private fn search(int id) -> SearchResult {
+    return SearchResult::NotFound;
+}
+
+public fn execute(int id) -> SearchResult {
+    let SearchResult local_result = search(id);
+    let SearchResult imported_result = external_search(id);
+
+    return imported_result;
+}
+```
+
+En este diseño:
+- `search(id)` invoca de forma inequívoca la Function Implementation local.
+- `external_search(id)` invoca de forma inequívoca la Signature importada.
+- No existe ambigüedad y la resolución permanece determinista sin reglas mágicas de prioridad.
 
 
 ### 11.9 Validación de aridad y tipos de argumentos
@@ -2693,7 +2754,7 @@ Los errores de resolución y validación local de funciones pertenecen a la cate
 
 | Error del Sistema | Condición semántica |
 | :--- | :--- |
-| `FunctionNotFoundError` | Se invoca un nombre de función que no existe en el archivo local. |
+| `FunctionNotFoundError` | Se invoca un nombre de función que no existe en el archivo local ni en las firmas importadas. |
 | `FunctionArityError` | La cantidad de argumentos suministrados no coincide con la aridad declarada. |
 | `FunctionArgumentTypeError` | El tipo producido por un argumento no coincide exactamente con el tipo del parámetro correspondiente. |
 | `DuplicateFunctionError` | Dos funciones declaran el mismo nombre dentro del mismo archivo `.efn`. |
@@ -2903,11 +2964,11 @@ Evo-Script prohíbe el acoplamiento directo entre implementaciones y organiza la
         │
    implementation.efn
    ```
-3. **Declaración de dependencias mediante `import`**: Para utilizar una firma publicada por un módulo, el archivo debe declararla explícitamente mediante `import`:
+3. **Declaración de dependencias mediante `import`**: Para utilizar o satisfacer una firma publicada por un módulo, el archivo debe declararla explícitamente mediante `import`:
    ```text
    import module::signature;
    ```
-   Opcionalmente con un alias local para evitar colisiones de nombres:
+   Opcionalmente con un alias local para evitar colisiones de nombres en llamadas:
    ```text
    import module::signature as alias_local;
    ```
@@ -2923,17 +2984,26 @@ Evo-Script prohíbe el acoplamiento directo entre implementaciones y organiza la
    - El carácter `:` en este contexto significa estrictamente *"satisface / implementa la firma"*.
    - No representa herencia, subtipado, tipo de parámetro ni interfaz orientada a objetos.
    - La implementación referencia exclusivamente el nombre calificado de la firma (`: values::search`) y **no duplica** los parámetros ni la sintaxis de la firma después de `:`.
-6. **Comprobación exacta de coincidencia contractual**: La `public fn` que declara satisfacer `: modulo::firma` debe coincidir exactamente con la declaración en `.esig` en:
+6. **Resolución exclusiva de Signatures tras `:`**: El marcador `:` resuelve identificadores **únicamente en el espacio semántico de Signatures** calificadas publicadas por módulos `.emod`. Nunca puede resolverse como una función local, un binding, un valor ni una variante de enum.
+7. **No redundancia entre `import` y `:` en el implementador**:
+   - `import values::search;` declara la dependencia estructural y hace conocida la Signature y su cierre transitivo de tipos al archivo.
+   - `: values::search` declara que la `public fn` local satisface ese contrato.
+   - Ambos son requeridos en la forma canónica del implementador y cumplen funciones ortogonales.
+8. **Ausencia de colisión en el implementador**: La Signature importada (`values::search`) y la Function Implementation local (`search`) pertenecen a clases semánticas distintas. La cláusula `import values::search;` no reserva el nombre `search` como una función local, por lo que declarar `public fn search(...) : values::search` es completamente válido y no produce `DuplicateFunctionError`.
+9. **Invarianza de la identidad de la Signature frente a alias**: Si un archivo declara `import values::search as imported_search;`, el alias `imported_search` define únicamente el nombre local disponible para llamadas dentro de ese archivo. La identidad formal de la firma continúa siendo `values::search`. Por consiguiente, la satisfacción contractual tras `:` debe referenciar siempre la identidad real (`: values::search`) y nunca el alias (`: imported_search` es inválido).
+10. **Comprobación exacta de coincidencia contractual**: La `public fn` que declara satisfacer `: modulo::firma` debe coincidir exactamente con la declaración en `.esig` en:
    - Nombre de la función.
    - Cantidad de argumentos (aridad).
    - Orden posicional de los argumentos.
    - Tipos exactos de los argumentos.
    - Tipo exacto de resultado.
    No se permiten conversiones implícitas, promociones ni widening para satisfacer una firma.
-7. **Error de discordancia contractual (`SignatureMismatchError`)**: Si una función declara satisfacer `: modulo::firma` pero su firma implementada difiere en nombre, aridad, tipos o retorno respecto de la `.esig` publicada, el programa es inválido y produce un error de validación `SignatureMismatchError` (categoría `SystemError`).
-8. **Diferenciación entre consumidor e implementador**:
-   - **Consumidor**: Declara `import values::search;` e invoca la firma `search(id)` en su código sin conocer ni referenciar el archivo `search.efn`.
+11. **Error de discordancia contractual (`SignatureMismatchError`)**: Si una función declara satisfacer `: modulo::firma` pero su firma implementada difiere en nombre, aridad, tipos o retorno respecto de la `.esig` publicada, el programa es inválido y produce un error de validación `SignatureMismatchError` (categoría `SystemError`).
+12. **Diferenciación entre consumidor e implementador**:
+   - **Consumidor**: Declara `import values::search;` e invoca la firma `search(id)` (o su alias `alias(id)`) en su código sin conocer ni referenciar el archivo `search.efn`.
    - **Implementador**: Declara `import values::search;` y define su `public fn search(...) : values::search { ... }` para satisfacer el contrato.
+13. **Ausencia de llamadas calificadas en v0.1**: En Evo-Script v0.1, las llamadas a capacidades importadas se invocan exclusivamente mediante su nombre local no calificado (`search(id)`) o alias asignado (`alias(id)`). No se introduce sintaxis de llamada calificada tipo `values::search(id)` en expresiones evaluables.
+14. **Asistencia para herramientas y editores (Nota no normativa)**: La presencia explícita de `import values::search;` al inicio del archivo permite que herramientas de desarrollo, servidores de lenguaje (LSP) y entornos integrados (IDEs) conozcan de antemano el conjunto de firmas disponibles para el archivo, facilitando el autocompletado y la sugerencia de firmas válidas tras escribir `:`.
 
 
 ### 12.7 Módulos (.emod) y selección granular de dependencias
