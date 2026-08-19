@@ -2895,7 +2895,7 @@ Evo-Script v0.1 define formalmente el modelo de archivos, artefactos modulares y
 El lenguaje permite dos modalidades de uso:
 
 1. **Script autocontenido**: Un único archivo `.efn` que contiene toda su lógica, tipos locales y funciones auxiliares, ejecutable de forma directa sin requerir infraestructura de proyecto.
-2. **Proyecto estructurado**: Un conjunto de artefactos especializados con responsabilidades delimitadas (`.root`, `.main` / `.elib`, `.emod`, `.esig`, `.estc`, `.enum`, `.efn`).
+2. **Proyecto estructurado**: Un conjunto de artefactos especializados con responsabilidades delimitadas (`.root`, `.main`, `.emod`, `.esig`, `.estc`, `.enum`, `.efn`).
 
 
 ### 12.1 Extensiones oficiales y responsabilidades
@@ -2911,11 +2911,12 @@ Cada extensión de archivo en Evo-Script expresa su responsabilidad semántica p
 | `.emod` | Evo Module | Módulo, frontera semántica y catálogo de firmas públicas |
 | `.root` | Evo Project Root | Raíz de resolución y Functional Composition Root de un proyecto estructurado |
 | `.main` | Evo Application Main | Selección de la operación inicial, Application Main Loop y ciclo de vida de la aplicación |
-| `.elib` | Evo Library | Agrupación semántica reutilizable de módulos de librería |
-| `.evo` | Evo Package | Artefacto distribuible / paquete del ecosistema Evo |
+| `.elib` | Evo Library | Extensión reservada para librerías reutilizables (no especificada operativamente en v0.1) |
+| `.evo` | Evo Package | Extensión reservada para paquetes y artefactos distribuibles (no especificada operativamente en v0.1) |
 
-Regla de exclusión de extensiones alternativas:
+Regla de exclusión y estado de extensiones:
 - La extensión oficial para módulos es estrictamente `.emod` (no se admite `.mod`).
+- Las extensiones `.elib` y `.evo` quedan expresamente **reservadas** para especificaciones futuras y no poseen semántica operativa en Evo-Script v0.1 (`reserved != usable`, `reserved != partially specified`).
 - No existen extensiones no oficiales como `.evo-script`, `.evostruct`, `.evoenum` ni `.efun`.
 
 
@@ -3591,31 +3592,60 @@ Evo-Script v0.1 define con precisión formal la relación entre los fallos de ev
 1. **Universalidad para aplicaciones estructuradas**: El Application Main Loop modela el ciclo de vida de cualquier aplicación estructurada (gráfica con ventanas, de terminal interactiva o tipo servicio/servidor). Las aplicaciones gráficas no requieren implementar bucles infinitos para mantener viva su interfaz.
 2. **Scripts autocontenidos**: Un script simple `.efn` ejecutado directamente no requiere `.root`, `.main` ni `entry`. Su evaluación concluye inmediatamente cuando su única `public fn` ejecuta su `return`, entregando el resultado directamente al host exterior sin Application Main Loop.
 3. **Unicidad de `.main`**: Toda aplicación estructurada posee exactamente un archivo `.main`. No se admiten archivos `.main` múltiples, anidados, incluidos ni heredados.
-4. **Librerías reutilizables**: Una librería reutilizable (`.elib`) no representa una aplicación directamente ejecutable y no requiere archivo `.main` ni declaración `entry`.
+4. **Librerías reutilizables (.elib)**: El modelo formal de librerías reutilizables queda reservado para futuras especificaciones (véase la Sección 12.10). Una aplicación estructurada en v0.1 se define íntegramente mediante `.root` y `.main`.
 
 #### 12.9.9 Cierre normativo de .main en v0.1
 
 Todos los aspectos arquitectónicos y semánticos fundamentales de `.main`, Application Main Loop, Application Lifetime, Application Exit Request y la relación con EvaluationError quedan plenamente formalizados y cerrados para la especificación oficial de Evo-Script v0.1.
 
 
-### 12.10 Librerías reutilizables (.elib)
+### 12.10 Librerías reutilizables (.elib) - Estado reservado
 
-Una agrupación reutilizable de módulos se declara mediante un archivo `.elib` (Evo Library):
+La extensión `.elib` (Evo Library) queda expresamente **reservada** para especificaciones futuras del ecosistema Evo-Script y se encuentra **fuera del alcance operativo de Evo-Script v0.1**:
 
-1. **Naturaleza de `.elib`**: Una librería agrupa módulos `.emod` para su distribución y consumo estructurado por otros proyectos o aplicaciones.
-2. **Composición sin `.main`**: Un proyecto de librería posee `.root` y `.elib`, pero no requiere `.main` al no constituir por sí mismo una aplicación directamente ejecutable.
-3. **Consumo granular por firma**: El consumo de capacidades provistas por una librería continúa realizándose mediante importación granular de firmas individuales (`.esig`).
+1. **Motivo del aplazamiento**: El diseño completo y riguroso de librerías reutilizables no puede delimitarse de manera aislada sin definir un conjunto coordinado de responsabilidades que incluyen:
+   - **Creación y exportación de librerías**: La forma formal en que un paquete o biblioteca declara y expone sus módulos públicos frente a otros proyectos.
+   - **Consumo inter-proyecto**: La sintaxis y semántica mediante la cual una aplicación o proyecto externo referencia, importa y consume contratos o módulos de una librería de terceros.
+   - **Declaración y resolución física de dependencias**: Localización física de librerías en el sistema de archivos (rutas de búsqueda locales, carpetas de usuario o sistema, registros remotos) y resolución del grafo transitivo de dependencias.
+   - **Versionado e inmutabilidad**: Reglas de versionado semántico, rangos de compatibilidad y fijación de versiones (`version locks`).
+   - **Instalación y distribución**: Comandos o herramientas de instalación, restauración y gestión de paquetes (`package manager`).
+2. **Fuera de alcance en Evo-Script v0.1**: En Evo-Script v0.1:
+   - **NO se define cómo crear formalmente una librería** (no existe sintaxis como `library { ... }`, `lib { ... }`, `modules { ... }` ni `publish library`).
+   - **NO se define cómo consumir una librería externa** (no existen sentencias como `import library ...`, `use library ...`, `dependency ...`, `reference ...` ni `package ...`).
+   - **NO se define la resolución física de dependencias externas** (no se definen rutas de búsqueda de librerías, registros ni resolución en repositorios).
+   - **NO se define versionado ni manifiestos** (no existen `version = "1.0.0"`, `evo.toml`, `evo.json` ni archivos de manifiesto).
+   - **NO se define gestor de paquetes ni herramientas de construcción** (no existen `install`, `restore`, `build`, `pack` ni `Evo Package Manager`).
+3. **Autosuficiencia de Evo-Script v0.1**: Evo-Script v0.1 es plenamente autosuficiente para construir proyectos y aplicaciones estructuradas completas sin requerir `.elib`:
+   ```text
+   .emod          -> publica contratos (firmas) y tipos compartidos
+   .esig          -> define contratos funcionales
+   .estc / .enum  -> define estructuras y enumeraciones compartidas
+   .efn           -> implementa funciones
+   .root          -> resuelve la composición funcional del proyecto
+   .main          -> selecciona la entrada inicial y administra el ciclo de vida
+   ```
+   Todo proyecto estructurado en v0.1 organiza sus módulos e implementaciones directamente dentro de su propio Project Root.
+4. **Ausencia de nuevos tipos o palabras clave**: No se introducen en v0.1 tipos de datos nativos como `Library`, `Package`, `Dependency`, `Version` ni `PackageReference`, ni palabras clave como `library`, `package`, `dependency`, `install` o `require`. Tampoco se introducen abstracciones genéricas, traits ni constructos de primer orden para módulos o librerías.
+5. **Diferenciación conceptual: Reservado no es utilizable**:
+   ```text
+   reserved != usable
+   reserved != partially specified
+   ```
+   La extensión `.elib` permanece reservada como identificador nominal del ecosistema, pero carece de gramática operativa en v0.1.
 
 
-### 12.11 Artefacto distribuible (.evo)
+### 12.11 Artefacto distribuible (.evo) - Estado reservado
 
-La extensión `.evo` está reservada exclusivamente para el artefacto distribuible o paquete empaquetado del ecosistema Evo:
+La extensión `.evo` (Evo Package / artefacto distribuible) queda expresamente **reservada** para especificaciones futuras del ecosistema Evo:
 
-1. **Naturaleza del paquete**: `.evo` representa el paquete empaquetado final de una aplicación o librería (contenedor de proyecto, módulos, metadatos y código preparado).
-2. **No es código fuente**: `.evo` no es una extensión para archivos de código fuente general (las fuentes utilizan `.efn`, `.esig`, `.estc`, `.enum`, `.emod`, `.root`, `.main`, `.elib`).
-3. **Ortogonalidad entre empaquetado y compilación**: El empaquetado `.evo` no impone ni presupone un modelo específico de compilación (como bytecode o binario nativo AOT).
-4. **Formato físico desacoplado**: El formato físico interno del archivo `.evo` (compresión, manifiestos binarios) queda fuera del alcance de v0.1.
-5. **No obligatorio para scripts simples**: Un archivo `.efn` autocontenido se ejecuta directamente sin necesidad de empaquetarse en un `.evo`.
+1. **Naturaleza del concepto**: `.evo` representa conceptualmente el artefacto empaquetado final para la distribución de aplicaciones o módulos preparados para ejecución o consumo.
+2. **Fuera de alcance en Evo-Script v0.1**: En Evo-Script v0.1:
+   - **NO se define el formato físico interno** de `.evo` (formatos de archivo, contenedores, compresión ni metadatos binarios).
+   - **NO se define el sistema de empaquetado** (no se definen procesos de empaquetado, manifiestos ni herramientas de construcción/compilación de paquetes).
+   - **NO se define instalación ni distribución** de archivos `.evo` (no existen registros de paquetes, servidores de publicación ni clientes de distribución).
+3. **No es código fuente**: `.evo` no es una extensión para archivos de código fuente (las fuentes utilizan estrictamente `.efn`, `.esig`, `.estc`, `.enum`, `.emod`, `.root` y `.main`).
+4. **Relación futura desacoplada con `.elib`**: Una especificación futura podrá vincular librerías de fuentes (`.elib`) con artefactos empaquetados (`.evo`), pero dicha correspondencia no se prejuzga ni se cierra de forma prematura en v0.1 (no se asume que todo `.evo` es una librería ni que todo `.evo` es una aplicación).
+5. **Innecesario para scripts autocontenidos y aplicaciones v0.1**: Los scripts `.efn` y los proyectos estructurados con `.root` y `.main` se ejecutan directamente en v0.1 sin requerir contenedor ni empaquetado `.evo`.
 
 
 ### 12.12 Frontera con el entorno de ejecución (Host / Runtime)
@@ -3873,11 +3903,10 @@ Contenido y responsabilidades de cada artefacto:
                               │
                             .root
                               │
-                 ┌────────────┴────────────┐
-                 ▼                         ▼
-        application (.main)        library (.elib)
-                 │                         │
-                 └────────────┬────────────┘
+                              ▼
+                     application (.main)
+                [.elib reservado a futuro]
+                              │
                               ▼
                             .emod
                               │
