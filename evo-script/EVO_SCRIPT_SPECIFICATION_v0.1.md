@@ -3925,3 +3925,178 @@ Los proyectos pueden organizar sus artefactos por responsabilidades semánticas 
 - `domain/`: Aloja definiciones de datos y alternativas `.estc` y `.enum`.
 
 Estos nombres de carpetas representan patrones organizacionales sugeridos y no constituyen palabras reservadas del lenguaje.
+
+
+## 13. Elementos léxicos y convenciones de nombres
+
+Esta sección formaliza las decisiones léxicas, el principio de palabras reservadas y las convenciones de nombres acordadas para Evo-Script v0.1.
+
+
+### 13.1 Comentarios
+
+Evo-Script v0.1 define exactamente una única forma oficial de comentario:
+
+1. **Comentarios de una línea (`//`)**:
+   - La secuencia `//` inicia un comentario que se extiende hasta el final de la línea física actual.
+   - El contenido posterior a `//` en la misma línea es ignorado por el análisis léxico y no forma parte de los tokens evaluables del programa.
+   - **Ejemplos válidos**:
+     ```text
+     let int age = 43; // edad actual
+
+     // comentario de línea completa
+     let bool active = true;
+     ```
+2. **Ausencia de comentarios multilínea**:
+   - Evo-Script v0.1 **NO** define ni soporta delimitadores de comentarios multilínea (`/* ... */`).
+   - Construcciones como las siguientes son **inválidas**:
+     ```text
+     /* comentario */ // Inválido
+
+     /*
+        comentario
+        multilinea
+     */ // Inválido
+     ```
+   - No se admiten sintaxis alternativas como `#`, `##`, `<!-- -->`, `///` ni `/** */`.
+3. **Múltiples líneas de comentarios**:
+   - Para documentar o comentar múltiples líneas consecutivas, cada línea debe prefijarse individualmente con `//`:
+     ```text
+     // primera línea de documentación
+     // segunda línea de contexto
+     // tercera línea de explicación
+     ```
+
+
+### 13.2 Palabras reservadas (Keywords)
+
+1. **Principio de reserva efectiva**:
+   > Una palabra es una *keyword* reservada en Evo-Script v0.1 única y exclusivamente si forma parte activa de la gramática y construcciones semánticas definidas en esta versión.
+   - No se reservan palabras de forma preventiva para características hipotéticas o futuras provenientes de otros lenguajes (palabras como `class`, `interface`, `trait`, `async`, `await`, `package`, `library`, `dependency`, `version`, `install` o `require` **NO** son keywords en v0.1).
+   - Las extensiones de archivo reservadas (`.elib`, `.evo`) no constituyen palabras clave del lenguaje (las palabras `library` o `package` no son keywords en v0.1).
+2. **Catálogo de palabras reservadas en v0.1**:
+   Las siguientes palabras constituyen las palabras reservadas oficiales de Evo-Script v0.1:
+   - `let`: Declaración de bindings locales inmutables.
+   - `struct`: Definición de tipos de estructura de datos.
+   - `enum`: Definición de tipos de enumeración y variantes.
+   - `fn`: Declaración de funciones.
+   - `public`: Modificador de visibilidad pública para funciones.
+   - `private`: Modificador de visibilidad privada para funciones.
+   - `return`: Sentencia de retorno de valor en funciones.
+   - `when`: Expresión de correspondencia y selección de variantes de enum.
+   - `esig`: Declaración de contratos de firmas públicas (`.esig`).
+   - `import`: Declaración de dependencia estructural modular.
+   - `as`: Declaración de alias local para importaciones.
+   - `module`: Declaración de catálogo y frontera de módulo (`.emod`).
+   - `publish`: Declaración de publicación de firmas y tipos en módulos (`.emod`).
+   - `bind`: Declaración de correspondencia de composición funcional (`.root`).
+   - `to`: Delimitador de destino en declaraciones `bind ... to ...` (`.root`).
+   - `entry`: Declaración de selección de entrada inicial (`.main`).
+   - `this`: Marcador de posición contextual en pipelines.
+   - `use`: Iniciador de operaciones sobre scopes en pipelines.
+3. **Prohibición de uso como identificadores**:
+   - Ninguna palabra reservada puede utilizarse como identificador de función, firma, binding, parámetro, campo, tipo, variante de enum o módulo.
+   - **Ejemplo conceptual inválido**:
+     ```text
+     let int return = 10; // Inválido: 'return' es una palabra reservada
+     ```
+4. **Estado de literales booleanos**:
+   - Los identificadores `true` y `false` se emplean en ejemplos como literales booleanos. Su categorización formal dentro del léxico (literal booleano vs token reservado) se definirá en el bloque posterior de gramática de literales, preservando la compatibilidad de todos los ejemplos existentes.
+
+
+### 13.3 Convenciones de nombres (Naming Conventions)
+
+Evo-Script distingue formalmente entre los identificadores semánticos del código y los nombres físicos de los archivos en el sistema de archivos:
+
+```text
+Semantic identifiers (código) != Physical artifact filenames (archivos)
+```
+
+#### 13.3.1 Identificadores semánticos en el código
+
+1. **`PascalCase` para tipos de datos**:
+   - Todo tipo definido por el usuario o programa (`struct`, `enum`) se nombra en `PascalCase`.
+   - **Ejemplos**: `Worker`, `SearchResult`, `ApplicationState`, `UserAddress`, `InitResult`.
+2. **`PascalCase` para variantes de enumeraciones**:
+   - Toda variante de un `enum` se nombra en `PascalCase`.
+   - **Ejemplos**: `Found`, `NotFound`, `Ready`, `InvalidRequest`, `ServiceUnavailable`, `Ok`, `Error`.
+3. **`snake_case` para funciones y firmas**:
+   - Toda Function Implementation (`public fn`, `private fn`) se nombra en `snake_case`.
+   - Toda Signature (`.esig`) se nombra en `snake_case`.
+   - **Ejemplos**: `search_worker`, `save_file`, `process_request`, `calculate_total`, `washes_clothes`.
+4. **`snake_case` para bindings locales**:
+   - Todo binding declarado mediante `let` se nombra en `snake_case`.
+   - **Ejemplos**: `worker`, `worker_id`, `current_user`, `search_result`, `application_state`.
+5. **`snake_case` para parámetros de funciones**:
+   - **Value Parameters**: Los nombres locales de parámetros de datos se declaran en `snake_case`:
+     ```text
+     public fn search_worker(int worker_id) -> SearchResult
+     ```
+   - **Signature Dependency Parameters**: Los nombres locales de parámetros de dependencia de firma se declaran en `snake_case`:
+     ```text
+     public fn initialize(window::open open_window, config::load load_config) -> InitResult
+     ```
+   - **Distinción terminológica entre Parámetro y Argumento**:
+     - `worker_id` en la cabecera `fn search_worker(int worker_id)` es el nombre del **Parámetro** (`snake_case`).
+     - `current_id` en la llamada `search_worker(current_id)` es la expresión/binding utilizada como **Argumento** (`snake_case`).
+     - Evo-Script v0.1 no soporta argumentos con nombre (`named arguments`).
+6. **`snake_case` para campos**:
+   - Campos de estructuras `struct`: se nombran en `snake_case` (`id`, `worker_id`, `first_name`, `last_name`, `creation_date`).
+   - Campos nombrados en variantes estructuradas de `enum`: se nombran en `snake_case` (`error_message`, `error_code`, `user_id`).
+7. **`snake_case` para módulos**:
+   - El identificador lógico de un módulo (`module nombre { ... }`) se declara en `snake_case`.
+   - **Ejemplos**: `values`, `employee_values`, `file_system`, `laundry`.
+
+#### 13.3.2 Nombres físicos de artefactos (`kebab-case`)
+
+1. **Convención `kebab-case` para el sistema de archivos**:
+   - Los nombres físicos de los archivos de artefactos Evo-Script utilizan **`kebab-case`** (palabras en minúsculas separadas por guiones `-` cuando constan de múltiples términos).
+   - Los archivos de una sola palabra (`worker.estc`, `washer.efn`, `application.root`, `application.main`) son conformes a la convención kebab-case al no requerir separador.
+   - **Ejemplos**:
+     - `search-result.enum`
+     - `worker.estc`
+     - `search-worker.esig`
+     - `search-database.efn`
+     - `employee-values.emod`
+     - `application.root`
+     - `application.main`
+2. **Restricción estricta de `kebab-case` al sistema de archivos**:
+   - `kebab-case` aplica **única y exclusivamente a nombres de archivos físicos**.
+   - **NO** se utiliza `kebab-case` para identificadores evaluables dentro del código Evo-Script, ya que el carácter `-` está reservado como operador aritmético de resta.
+   - **Ejemplo**: `search_worker` es el identificador semántico válido de la función; `search-worker.efn` es el nombre del archivo físico.
+3. **Correspondencia nominal entre símbolos semánticos y artefactos físicos**:
+   A continuación se ilustra la correspondencia entre la convención de nombres semánticos y físicos:
+
+   | Símbolo semántico | Convención semántica | Artefacto físico | Convención física |
+   | :--- | :--- | :--- | :--- |
+   | `SearchResult` (enum) | `PascalCase` | `search-result.enum` | `kebab-case` |
+   | `Worker` (struct) | `PascalCase` | `worker.estc` | `kebab-case` |
+   | `search_worker` (signature) | `snake_case` | `search-worker.esig` | `kebab-case` |
+   | `search_database` (function) | `snake_case` | `search-database.efn` | `kebab-case` |
+   | `employee_values` (module) | `snake_case` | `employee-values.emod` | `kebab-case` |
+   | `application` (root) | `snake_case` | `application.root` | `kebab-case` |
+   | `application` (main) | `snake_case` | `application.main` | `kebab-case` |
+
+4. **Ausencia de algoritmo automático de resolución física en v0.1**:
+   - Esta correspondencia expresa la **convención oficial de nombrado**, pero **NO** define un algoritmo automático de transformación (`PascalCase -> kebab-case` o `snake_case -> kebab-case`).
+   - Las reglas exactas de localización y resolución física de módulos en el sistema de archivos permanecen delimitadas para el bloque de resolución física de módulos.
+
+
+### 13.4 Delimitación del alcance léxico en v0.1
+
+Para mantener la precisión metodológica del diseño, se formaliza el estado de las decisiones léxicas:
+
+1. **Aspectos formalizados y cerrados en este bloque**:
+   - Comentarios de una sola línea mediante `//`.
+   - Prohibición explícita de comentarios multilínea (`/* ... */`).
+   - Principio de palabras reservadas efectivas (únicamente keywords realmente utilizadas en v0.1).
+   - Catálogo normativo de palabras reservadas en v0.1.
+   - Convención `PascalCase` para tipos (`struct`, `enum`) y variantes de enum.
+   - Convención `snake_case` para funciones, firmas, bindings, parámetros, campos y módulos.
+   - Convención `kebab-case` para nombres físicos de archivos de artefactos.
+2. **Aspectos pendientes de definición en revisiones léxicas posteriores**:
+   - Gramática formal completa de identificadores (conjunto de caracteres permitidos, ASCII vs Unicode, guion bajo inicial `_`).
+   - Reglas formales globales de sensibilidad a mayúsculas y minúsculas (*case-sensitivity*).
+   - Gramática formal de espacios en blanco (*whitespace*, tabulaciones, saltos de línea e indentación).
+   - Gramática formal de literales booleanos (`true`, `false`).
+   - Gramática formal de literales de texto (`string`), caracteres de escape y cadenas multilínea.
+   - Codificación oficial del código fuente (UTF-8, manejo de BOM).
