@@ -742,15 +742,143 @@ orientada a objetos ni clase contenida.
    - El comportamiento se organiza exclusivamente en funciones y firmas independientes (`guardar_trabajador(trabajador)` o `trabajador |> guardar_trabajador`).
 
 
-#### 7.3.7 Structs recursivos
+#### 7.3.7 Composición estructural finita y grafo acíclico de dependencias de tipos
 
-Los structs recursivos directos (como `struct Nodo { Nodo siguiente; }`) quedan
-explícitamente fuera de la especificación de Evo-Script v0.1. El lenguaje no ha
-incorporado aún mecanismos de direccionamiento, `Option`, referencias ni
-representación formal de ausencia.
+Evo-Script v0.1 establece normativamente el principio de **composición estructural finita**:
+
+1. **Valores estructurales finitos**:
+   - Todo `struct` representa una conjunción finita de datos (`AND data`).
+   - Todo `enum` representa una disyunción finita de alternativas de datos (`OR alternatives`).
+   - Todo valor estructural instanciado en Evo-Script v0.1 debe ser estrictamente finito en memoria y representación.
+2. **Grafo de dependencias de tipos estructurales (`Type Dependency Graph`)**:
+   - Cada tipo estructural declarado por el usuario (`struct` o `enum`) constituye un nodo en el `Type Dependency Graph`.
+   - Se genera una arista de dependencia estructural dirigida $A \to B$ cuando un valor de tipo $A$ contiene estructuralmente un valor de tipo $B$:
+     - El tipo declarado de un campo dentro de un `struct`.
+     - El tipo de carga asociada transportado por una variante de un `enum` (`Variante(Tipo)`).
+     - El tipo declarado de un campo dentro de una variante estructurada de un `enum` (`Variante { Tipo campo; }`).
+   - Los tipos nativos escalares (`int`, `int8`..`int128`, `uint8`..`uint128`, `float`, `float32`, `float64`, `bool`, `string`, `dynamic`) no son tipos recursivos de usuario y no generan aristas hacia otros structs o enums.
+3. **Exigencia normativa de Grafo Acíclico Dirigido (DAG)**:
+   - El `Type Dependency Graph` de todo proyecto o artefacto en Evo-Script v0.1 debe ser estrictamente un **Grafo Acíclico Dirigido (DAG)** (*Directed Acyclic Graph*).
+   - No se exige que el grafo sea un árbol: se admiten dependencias convergentes ($A \to D$ y $B \to D$) y cadenas profundas de composición ($A \to B \to C \to D \to E$), siempre y cuando ninguna ruta genere un ciclo de vuelta.
+   - Las dependencias convergentes representan uso compartido del tipo en distintas estructuras, **sin implicar** compartición de instancias mutables en tiempo de ejecución (se mantiene la semántica de valores inmutables puros).
 
 
-#### 7.3.8 Separación entre datos y comportamiento
+#### 7.3.8 Prohibición formal de tipos recursivos y ciclos estructurales
+
+Queda estrictamente prohibida cualquier forma de recursión en el grafo de dependencias de tipos estructurales:
+
+1. **Recursión directa en structs**:
+   - Un `struct` no puede contenerse estructuralmente a sí mismo:
+     ```text
+     struct Node {
+         int value;
+         Node next;   // Inválido: dependencia directa Node -> Node
+     }
+     ```
+   - Invalidez: `RecursiveTypeCycleError`.
+2. **Recursión indirecta entre structs**:
+   - Dos o más structs no pueden formar un ciclo de contención mutua:
+     ```text
+     struct A {
+         B b;
+     }
+
+     struct B {
+         A a;         // Inválido: ciclo A -> B -> A
+     }
+     ```
+   - Invalidez: `RecursiveTypeCycleError`.
+3. **Ciclos de longitud arbitraria**:
+   - Rutas como $A \to B \to C \to A$ son igualmente detectadas y rechazadas con `RecursiveTypeCycleError`.
+4. **Recursión directa e indirecta en enums**:
+   - Una variante de un `enum` no puede contener como carga su propio tipo ni un ciclo indirecto de enums:
+     ```text
+     enum Node {
+         End
+         Next(Node)   // Inválido: dependencia directa Node -> Node
+     }
+     ```
+   - Invalidez: `RecursiveTypeCycleError`.
+5. **Ciclos mixtos entre structs y enums**:
+   - Las dependencias entre structs y variantes de enums no pueden cerrarse cíclicamente:
+     ```text
+     struct Worker {
+         int id;
+         WorkerResult result;
+     }
+
+     enum WorkerResult {
+         Empty
+         Found(Worker) // Inválido: ciclo mixto Worker -> WorkerResult -> Worker
+     }
+     ```
+   - Invalidez: `RecursiveTypeCycleError`.
+6. **Independencia del orden de declaración**:
+   - La presencia de un ciclo invalida el conjunto de tipos con independencia del orden en que aparezcan declarados o resueltos en el código fuente.
+7. **Error del Sistema: `RecursiveTypeCycleError`**:
+   - Pertenece a la categoría de **errores de validación del sistema** (`SystemError`).
+   - Se detecta durante el análisis y validación estática del proyecto, **antes de la evaluación normal en runtime**.
+   - No es un `EvaluationError`, no es un `Value`, no es capturable y no se modela como un *runtime stack overflow* ni como agotamiento de memoria.
+   - **Distinción formal con `FunctionCallCycleError`**:
+     - `FunctionCallCycleError` valida el grafo de llamadas entre funciones (evita recursión de ejecución).
+     - `RecursiveTypeCycleError` valida el grafo de dependencias de tipos estructurales (garantiza valores finitos).
+
+
+#### 7.3.9 Composición estructural unidireccional y navegación de relaciones
+
+Evo-Script v0.1 define una separación conceptual estricta entre la **composición estructural de datos** y la **navegación de relaciones del dominio**:
+
+1. **Composición estructural unidireccional**:
+   - La composición de datos opera en una única dirección acíclica elegida por el diseñador:
+     ```text
+     struct Pais {
+         int id;
+         string name;
+     }
+
+     struct Estado {
+         int id;
+         string name;
+         Pais pais;    // Válido: dependencia unidireccional Estado -> Pais
+     }
+     ```
+   - `Estado` contiene a `Pais`; `Pais` **no contiene estructuralmente** a `Estado`.
+2. **Relación inversa mediante comportamiento (Funciones / Queries)**:
+   - Una relación conceptual bidireccional del dominio **no se modela mediante contención estructural mutua**, sino mediante funciones explícitas:
+     - Composición estructural: `Estado -> Pais` (datos inmutables).
+     - Navegación inversa: función independiente `states_by_country(int country_id)` o capability que consulta o proyecta los estados asociados.
+3. **Identificadores sin semántica mágica**:
+   - Modelar relaciones mediante claves numéricas (como `int pais_id`) no altera la naturaleza del campo:
+     ```text
+     struct Estado {
+         int id;
+         string name;
+         int pais_id;  // Campo escalar de tipo int ordinario
+     }
+     ```
+   - `pais_id` es un valor `int` simple; el sufijo `_id` no introduce llaves foráneas automáticas, relaciones implícitas de base de datos ni punteros en v0.1.
+4. **Prohibición de funciones y Signature Dependencies en structs**:
+   - Los campos de un `struct` son **exclusivamente Values de datos**.
+   - No se permite almacenar punteros a funciones, métodos, clausuras, firmas (`.esig`) ni `Signature Dependency Parameters` dentro de un `struct`.
+   - Las `Signature Dependency Parameters` son contratos de capacidades resolubles en funciones, **no son valores de datos** de primer orden y no pueden almacenarse como campos.
+5. **Ausencia de modelos de objetos y referencias**:
+   - Evo-Script v0.1 no introduce tipos referencia, punteros, `Box`, `Rc`, `Arc`, `GC`, valores `null`, `lazy loading` ni propiedades de navegación de tipo ORM para enlazar estructuras.
+
+
+#### 7.3.10 Notas de diseño prospectivas para Evo-Script v0.2
+
+Se registran exclusivamente como **candidatos conceptuales de diseño futuro para una versión v0.2**, sin carácter operativo en Evo-Script v0.1:
+
+1. **Candidato futuro: Colección homogénea (`Homogeneous Collection`)**:
+   - Idea conceptual para representar secuencias o conjuntos materializados de cardinalidad uno-a-muchos sobre un tipo concreto, evitando la exposición de genéricos generales.
+   - **Principio de preservación del DAG**: Si en una versión futura se introduce una colección homogénea, una contención como `Pais -> Collection[Estado]` junto con `Estado -> Pais` seguirá constituyendo un ciclo estructural ($Pais \to Estado \to Pais$) y será igualmente rechazada con `RecursiveTypeCycleError`. Las colecciones no constituyen un mecanismo para eludir la prohibición de ciclos estructurales.
+   - **Alcance en v0.1**: En Evo-Script v0.1 **no existen arrays ni colecciones** (`Estado[]`, `[Estado]`, `Array<Estado>`, `List<Estado>`). No se define sintaxis de colección, alocación, indexación, mutación ni tamaño fijo/dinámico.
+2. **Candidato futuro: Definición de relaciones (`Relationship Definition`)**:
+   - Idea conceptual para declarar metadatos de relación entre identidades de tipos fuera de la definición de campos de structs, permitiendo que mecanismos de consulta y navegación (como EvoQ) recorran relaciones en ambas direcciones.
+   - **Alcance en v0.1**: En Evo-Script v0.1 **no existen palabras clave de relación** (`relationship`, `relation`, `foreign`, `references`, `has_many`, `belongs_to`), ni restricciones relacionales de base de datos, ni integración operativa con EvoQ.
+
+
+#### 7.3.11 Separación entre datos y comportamiento
 
 Evo-Script mantiene una separación total entre la estructura de datos y las
 operaciones que actúan sobre ella:
@@ -3438,6 +3566,7 @@ Los errores de resolución y validación local de funciones pertenecen a la cate
 | `FieldNotFoundError` | Se intenta acceder a un campo que no existe en la definición del struct receptor. |
 | `FieldAccessTypeError` | Se intenta acceder a un campo mediante `.` sobre un receptor cuyo tipo no es struct. |
 | `ComparisonTypeError` | Los tipos de los operandos en una comparación no coinciden exactamente o no son compatibles con el operador. |
+| `RecursiveTypeCycleError` | Se detecta un ciclo de dependencias estructurales directas o indirectas entre structs y/o enums. |
 
 #### 11.13.3 Distinción formal de categorías de error
 
@@ -3445,7 +3574,7 @@ Evo-Script distingue formalmente tres categorías ortogonales de fallos o altern
 
 | Categoría | Naturaleza | Momento de detección | Ejemplo | Manejo en Evo-Script |
 | :--- | :--- | :--- | :--- | :--- |
-| **System / Validation Error** | Invalidez estructural o de resolución del programa | Antes de la evaluación | `FunctionNotFoundError`, `FunctionArityError`, `DuplicateFunctionError`, `FieldNotFoundError`, `FieldAccessTypeError`, `ComparisonTypeError` | El programa se rechaza; no es evaluable. |
+| **System / Validation Error** | Invalidez estructural o de resolución del programa | Antes de la evaluación | `FunctionNotFoundError`, `FunctionArityError`, `DuplicateFunctionError`, `FunctionCallCycleError`, `FieldNotFoundError`, `FieldAccessTypeError`, `ComparisonTypeError`, `RecursiveTypeCycleError` | El programa se rechaza; no es evaluable. |
 | **Evaluation Error** | Fallo en la evaluación de una expresión en un programa válido | Durante la evaluación | `DivisionByZeroError`, `OverflowError`, `ConversionError` | Detiene la evaluación y se propaga al host/runtime exterior. |
 | **Domain Alternative** | Resultado o caso normal esperado del dominio del programa | Durante la evaluación | `BuscarTrabajadorResult::Error(string)`, `SearchResult::NotFound` | Valor normal `Value` de tipo `enum`; inspeccionable con `when`. |
 
