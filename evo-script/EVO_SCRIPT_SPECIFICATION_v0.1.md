@@ -2455,8 +2455,12 @@ Las expresiones aritméticas, lógicas y literales solo son válidas donde se es
   ```
 - **Función con let y operation statement**:
   ```text
-  public fn process(Source source, destination::save save) -> ProcessResult {
-      let Data data = read(source);
+  public fn process(
+      Source source,
+      source::read read_source,
+      destination::save save
+  ) -> ProcessResult {
+      let Data data = read_source(source);
 
       save(data);
 
@@ -2465,7 +2469,11 @@ Las expresiones aritméticas, lógicas y literales solo son válidas donde se es
   ```
 - **Función con pipeline como Operation Statement**:
   ```text
-  public fn update_worker(Worker worker, storage::save save) -> UpdateResult {
+  public fn update_worker(
+      Worker worker,
+      worker::validate validate,
+      storage::save save
+  ) -> UpdateResult {
       worker
       |> validate
       |> save;
