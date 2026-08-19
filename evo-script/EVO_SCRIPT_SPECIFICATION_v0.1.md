@@ -2822,6 +2822,8 @@ Existe una separación estricta entre la representación textual y la semántica
 | `modulo::firma nombre_local` | `Signature Dependency Parameter` |
 | `public fn ... -> Tipo : modulo::firma` | `Function Implementation satisfying Signature` |
 | `:` | `Signature satisfaction marker / field init` |
+| `bind modulo::firma to "ruta/archivo.efn";` | `Functional Composition Binding in .root` |
+| `to` | `Binding target delimiter in .root` |
 | `module Nombre { ... }` | `Evo Module declaration in .emod` |
 | `publish Simbolo;` | `Public modular surface entry in .emod` |
 | `tipo nombre` | `Value Parameter` |
@@ -3060,7 +3062,7 @@ Evo-Script prohíbe el acoplamiento directo entre implementaciones y organiza la
 15. **Desacoplamiento total del consumidor inyectado**: El archivo `process.efn` conoce exclusivamente la firma `values::search` y sus tipos asociados (`SearchResult`, `Worker`). No conoce el archivo `search.efn`, su ubicación física ni sus funciones privadas.
 16. **Ausencia de llamadas calificadas en v0.1**: En Evo-Script v0.1, las llamadas a capacidades importadas o inyectadas se invocan exclusivamente mediante su nombre local no calificado (`search(id)`) o alias asignado (`alias(id)`). No se introduce sintaxis de llamada calificada tipo `values::search(id)` en expresiones evaluables.
 17. **Asistencia para herramientas y editores (Nota no normativa)**: La presencia explícita de `import values::search;` al inicio del archivo permite que herramientas de desarrollo, servidores de lenguaje (LSP) y entornos integrados (IDEs) conozcan de antemano el conjunto de firmas disponibles para el archivo, facilitando el autocompletado y la sugerencia de firmas válidas al declarar parámetros de dependencia o escribir `:`.
-18. **Composición de dependencias y estado de `.root`**: El enlace formal entre una Function Implementation que requiere una Signature (`values::search search`) y la Function Implementation que la satisface (`: values::search`) es responsabilidad del archivo `.root` del proyecto. La sintaxis de composición, reglas de cableado, selección entre múltiples implementaciones y resolución física quedan explícitamente reservadas para el diseño posterior de `.root`.
+18. **Composición de dependencias mediante `.root`**: El enlace formal entre una Signature pública requerida (`values::search`) y la Function Implementation concreta que la satisface (`: values::search`) se declara formalmente en el archivo `.root` del proyecto mediante sentencias `bind values::search to "ruta/archivo.efn";` (ver Sección 12.8).
 19. **Delimitación de capacidades no definidas**: En v0.1 no se define reenvío de dependencias (`dependency forwarding`, ej. `another(search)`), almacenamiento de dependencias en structs/enums, ni retorno de dependencias desde funciones.
 
 
@@ -3106,13 +3108,115 @@ Reglas normativas:
    - `TipoEnum::Variante` (por ejemplo, `SearchResult::Found`).
 
 
-### 12.8 Raíz de proyecto (.root)
+### 12.8 Raíz de proyecto (.root) y Functional Composition Root
 
-Un archivo `.root` (Evo Project Root) establece la raíz estructural y el límite superior de resolución semántica de un proyecto estructurado:
+Un archivo `.root` (Evo Project Root) cumple dos responsabilidades arquitectónicas fundamentales en un proyecto estructurado:
 
-1. **Obligatoriedad en proyectos estructurados**: Todo proyecto Evo-Script multi-archivo que utilice comunicaciones entre artefactos (`.emod`, `.esig`, `.estc`, `.enum`) debe poseer exactamente un archivo `.root` en su nivel superior.
-2. **Innecesario en scripts autocontenidos**: Un script simple `.efn` ejecutado directamente no requiere `.root`.
-3. **Naturaleza no ejecutable**: El archivo `.root` no ejecuta código, no es un namespace y no importa módulos de forma automática; actúa como ancla de resolución del árbol del proyecto.
+1. **Raíz estructural del proyecto**: Establece el límite superior de resolución semántica y física del árbol de artefactos del proyecto.
+2. **Functional Composition Root**: Actúa como raíz de composición funcional, seleccionando mediante declaraciones `bind` qué Function Implementation concreta (`.efn`) satisface cada Evo Signature pública (`.esig`) requerida por el proyecto.
+
+#### 12.8.1 Naturaleza del Functional Composition Root
+
+- **Composición funcional de contratos e implementaciones**: `.root` vincula identidades lógicas de contratos con archivos de implementación física:
+  ```text
+  Signature (Evo Signature) ──► Function Implementation (.efn)
+  ```
+- **No es un contenedor IoC orientado a objetos**: `.root` no es un Object Container, Service Container ni DI Container orientado a objetos. No administra clases, objetos, constructores, métodos virtuales ni ciclos de vida de instancias (`Singleton`, `Scoped`, `Transient`).
+- **Naturaleza puramente estructural y no ejecutable**: Un archivo `.root` no contiene lógica de negocio, no implementa funciones, no declara firmas, no define structs ni enums, y no publica módulos. Es una declaración estructural procesada antes de la evaluación; no produce valores (`Value`), no puede importarse ni invocarse.
+
+#### 12.8.2 Sintaxis oficial de vinculación (`bind ... to ...`)
+
+La sintaxis oficial de una declaración de vinculación en un archivo `.root` es:
+
+```text
+bind modulo::firma to "ruta/relativa/archivo.efn";
+```
+
+Ejemplo canónico:
+
+```text
+bind values::search to "providers/search_database.efn";
+```
+
+Interpretación semántica:
+- `bind`: Palabra clave declarativa estructural de `.root`. No es una expresión, asignación ni sentencia evaluable en `.efn`.
+- `values::search`: Identificador lógico calificado de la Signature pública requerida, publicada por un `.emod`.
+- `to`: Delimitador estructural exclusivo de la gramática de `.root` que asocia la Signature con el archivo de implementación. No es un operador de expresiones generales.
+- `"providers/search_database.efn"`: Literal de texto que especifica la ruta relativa al archivo `.efn` seleccionado como implementación.
+
+#### 12.8.3 Reglas normativas de `.root`
+
+1. **Resolución física relativa al directorio de `.root`**: La ruta textual indicada en `to "..."` se interpreta siempre de forma relativa al directorio que contiene el archivo `.root`. No se admiten URLs, rutas absolutas remotas, comodines (`*`), registros de paquetes ni variables de entorno en v0.1.
+2. **Ausencia de bloque envolvente**: El archivo `.root` no requiere un bloque envolvente `root nombre { ... }`. Las declaraciones `bind` se escriben directamente a nivel de archivo.
+3. **Múltiples bindings independientes**: Un archivo `.root` puede contener tantas declaraciones `bind` independientes como requiera el proyecto:
+   ```text
+   bind values::search to "providers/search_database.efn";
+   bind filesystem::read to "providers/read_std.efn";
+   bind terminal::write to "providers/write_terminal.efn";
+   ```
+4. **Exactamente una implementación seleccionada por Signature**: Dentro de un mismo archivo `.root`, una Signature calificada puede tener exactamente una declaración `bind`. Múltiples bindings para la misma Signature producen un error de validación del sistema:
+   ```text
+   // Inválido: colisión de múltiples bindings para la misma Signature en un .root
+   bind values::search to "providers/search_database.efn";
+   bind values::search to "providers/search_memory.efn";
+   ```
+   No existe selección automática ni prioridad implícita.
+5. **Coexistencia de múltiples implementaciones físicas**: En el sistema de archivos pueden coexistir múltiples archivos `.efn` que satisfagan la misma Signature (`: values::search`):
+   ```text
+   providers/
+   ├── search_database.efn
+   ├── search_memory.efn
+   └── search_remote.efn
+   ```
+   Cada archivo `.efn` declara formalmente `: values::search`. El archivo `.root` selecciona exactamente cuál de ellos se activa para la composición concreta del proyecto.
+6. **Sustitución de implementaciones sin alterar consumidores**:
+   - Cambiar la implementación activa en el proyecto (por ejemplo, para producción, pruebas o entornos alternativos) se realiza modificando exclusivamente la sentencia `bind` en `.root`:
+     - Composición A (Base de datos):
+       ```text
+       bind values::search to "providers/search_database.efn";
+       ```
+     - Composición B (Memoria / Pruebas):
+       ```text
+       bind values::search to "providers/search_memory.efn";
+       ```
+     - Composición C (Remota):
+       ```text
+       bind values::search to "providers/search_remote.efn";
+       ```
+   - Los archivos consumidores permanecen completamente intactos e invariantes:
+     ```text
+     import values::search;
+
+     public fn process(int id, values::search search) -> SearchResult {
+         return search(id);
+     }
+     ```
+7. **Desacoplamiento total del consumidor**:
+   - Una Function Implementation consumidora (`process.efn` o llamadas directas) conoce exclusivamente la Signature (`values::search`).
+   - Desconoce por completo qué archivo `.efn` la satisface, su ubicación física y sus funciones privadas auxiliares.
+8. **Requisito de satisfacción explícita en el implementador**:
+   - El archivo `.efn` objetivo debe declarar explícitamente la cláusula contractual `: modulo::firma` (por ejemplo, `public fn search(...) : values::search`).
+   - `.root` no puede enlazar arbitrariamente un `.efn` que no declare satisfacer dicha Signature.
+9. **Condiciones de validación del binding**: Una declaración `bind modulo::firma to "ruta.efn";` es válida si y solo si:
+   - `modulo::firma` existe como Signature pública publicada por un `.emod` accesible.
+   - El archivo objetivo `.efn` existe en la ruta relativa especificada.
+   - El archivo `.efn` posee su única función pública (`public fn`).
+   - Dicha `public fn` declara explícitamente `: modulo::firma`.
+   - La `public fn` coincide exactamente en nombre, aridad, orden y tipos de parámetros, y tipo de resultado con la declaración `.esig`. Si difiere, se produce `SignatureMismatchError`.
+   - No existe otro binding para la misma Signature en ese archivo `.root`.
+10. **Validación estática previa a la evaluación**: Todos los bindings declarados en `.root` se validan y resuelven estáticamente antes de iniciar la evaluación del programa. Un proyecto con bindings inválidos es rechazado íntegramente; no se descubren errores de composición durante la evaluación de llamadas.
+11. **Ejecución puramente funcional**: Cuando se invoca una capacidad vinculada (sea mediante llamada directa `search(id)` o parámetro de dependencia `search(id)`), el runtime despacha la ejecución directamente a la `public fn` del `.efn` seleccionado por `.root`. Cada invocación constituye una ejecución funcional normal que evalúa argumentos y produce un resultado tipado (`Value`).
+12. **Alcance uniforme de composición en el proyecto**: Una declaración `bind` en `.root` aplica uniformemente a todas las necesidades de esa Signature en todo el proyecto, tanto para llamadas directas como para Signature Dependency Parameters. No existen bindings locales por función en v0.1.
+13. **Prohibición de `bind` en otros artefactos**: La declaración `bind` no puede utilizarse dentro de archivos `.efn` ni `.emod`.
+14. **Independencia de `.esig` y `.efn` frente a `.root`**: Las firmas `.esig` y las implementaciones `.efn` no contienen referencias a `.root` ni a rutas de composición. La relación es estrictamente unidireccional: `.root` referencia a `.esig` y a `.efn`.
+15. **Prohibición de `publish` en `.root`**: `.root` no publica símbolos; la superficie modular pública pertenece exclusivamente a `.emod`.
+16. **Unicidad de `.root` en proyectos estructurados**: Todo proyecto estructurado posee exactamente un archivo `.root`. No se admiten raíces anidadas, encadenadas ni herencia de raíces (`include root`, `extends root` son inválidos).
+17. **Innecesario en scripts autocontenidos**: Un script simple `.efn` sin dependencias externas se ejecuta directamente sin necesidad de `.root`.
+18. **Inaplicabilidad a structs y enums**: `bind` aplica exclusivamente a Evo Signatures. Declarar `bind modulo::MiStruct to ...` o `bind modulo::MiEnum to ...` es inválido.
+19. **Destino exclusivo a archivos `.efn`**: El lado derecho de `bind` referencia siempre la ruta al archivo `.efn`, nunca una función calificada (`"archivo.efn::funcion"` es inválido).
+20. **Orden textual irrelevante**: El orden físico de las sentencias `bind` en `.root` no tiene relevancia semántica ni define prioridades (no existe regla de *"primer bind gana"* ni *"último bind gana"*).
+21. **Ausencia de condicionales en `.root` en v0.1**: No existen cláusulas condicionales (`when`, `if`, `platform`, `fallback`). Cada binding es incondicional dentro del archivo `.root`.
+22. **Separación entre composición (.root) y punto de entrada (.main)**: `.root` define la composición de dependencias de todo el proyecto, mientras que `.main` identifica la operación inicial que arranca una aplicación ejecutable.
 
 
 ### 12.9 Puntos de entrada de aplicación (.main) y librerías (.elib)
@@ -3188,11 +3292,35 @@ Características:
 - No requiere `.esig`, `.estc`, `.enum`, `.root` ni `.main`.
 - Se ejecuta directamente por un host/runtime Evo-Script.
 
-#### 12.12.2 Módulo canónico completo con implementador, consumidor inyectado y consumidor directo (`values`)
+#### 12.12.2 Proyecto canónico estructurado con Functional Composition Root (`project/`)
 
-A continuación se presenta un ejemplo canónico completo de definición de tipos compartidos, contrato público, módulo, implementador, consumidor inyectado y consumidor directo:
+A continuación se presenta un ejemplo canónico completo de un proyecto estructurado con tipos compartidos, contrato público, módulo, múltiples implementaciones físicas, consumidor inyectado, consumidor directo y el Functional Composition Root (`application.root`):
 
-- **`worker.estc`** (Struct compartido):
+Estructura física de archivos:
+
+```text
+project/
+├── application.root
+│
+├── values/
+│   ├── values.emod
+│   ├── search.esig
+│   ├── SearchResult.enum
+│   └── Worker.estc
+│
+├── providers/
+│   ├── search_database.efn
+│   ├── search_memory.efn
+│   └── search_remote.efn
+│
+└── functions/
+    ├── process.efn
+    └── consumer.efn
+```
+
+Contenido de los artefactos:
+
+- **`Worker.estc`** (Struct compartido):
   ```text
   struct Worker {
       int id;
@@ -3200,7 +3328,7 @@ A continuación se presenta un ejemplo canónico completo de definición de tipo
   }
   ```
 
-- **`search_result.enum`** (Enum compartido):
+- **`SearchResult.enum`** (Enum compartido):
   ```text
   enum SearchResult {
       Found(Worker)
@@ -3223,7 +3351,7 @@ A continuación se presenta un ejemplo canónico completo de definición de tipo
   }
   ```
 
-- **`search.efn`** (Implementador que satisface la firma):
+- **`providers/search_database.efn`** (Implementación A que satisface la firma):
   ```text
   import values::search;
 
@@ -3234,7 +3362,29 @@ A continuación se presenta un ejemplo canónico completo de definición de tipo
   }
   ```
 
-- **`process.efn`** (Consumidor inyectado que requiere la capacidad):
+- **`providers/search_memory.efn`** (Implementación B que satisface la firma):
+  ```text
+  import values::search;
+
+  public fn search(int id) -> SearchResult
+      : values::search
+  {
+      return SearchResult::NotFound;
+  }
+  ```
+
+- **`providers/search_remote.efn`** (Implementación C que satisface la firma):
+  ```text
+  import values::search;
+
+  public fn search(int id) -> SearchResult
+      : values::search
+  {
+      return SearchResult::NotFound;
+  }
+  ```
+
+- **`functions/process.efn`** (Consumidor inyectado que requiere la capacidad):
   ```text
   import values::search;
 
@@ -3243,7 +3393,7 @@ A continuación se presenta un ejemplo canónico completo de definición de tipo
   }
   ```
 
-- **`consumer.efn`** (Consumidor directo que utiliza la capacidad):
+- **`functions/consumer.efn`** (Consumidor directo que utiliza la capacidad):
   ```text
   import values::search;
 
@@ -3252,12 +3402,22 @@ A continuación se presenta un ejemplo canónico completo de definición de tipo
   }
   ```
 
+- **`application.root`** (Functional Composition Root):
+  ```text
+  bind values::search to "providers/search_database.efn";
+  ```
+
 En este modelo:
-- `search.efn` implementa y satisface `: values::search`.
-- `process.efn` requiere explícitamente `values::search` como Signature Dependency Parameter en su lista de parámetros (`values::search search`).
-- `consumer.efn` importa y utiliza directamente `values::search` a nivel de archivo.
-- Ni `process.efn` ni `consumer.efn` conocen el archivo de implementación `search.efn`.
 - `values.emod` publica exclusivamente `Worker`, `SearchResult` y `search`.
+- Coexisten tres implementaciones físicas distintas que satisfacen `: values::search` (`search_database.efn`, `search_memory.efn`, `search_remote.efn`).
+- `application.root` compone el proyecto seleccionando una única implementación concreta (`bind values::search to "providers/search_database.efn";`).
+- `functions/process.efn` requiere `values::search` mediante un Signature Dependency Parameter (`values::search search`) sin conocer la implementación concreta.
+- `functions/consumer.efn` importa y utiliza directamente `values::search` a nivel de archivo sin conocer la implementación concreta.
+- **Sustitución de implementación sin alterar consumidores**: Para cambiar el proveedor a memoria (por ejemplo, para pruebas automáticas), se modifica exclusivamente `application.root`:
+  ```text
+  bind values::search to "providers/search_memory.efn";
+  ```
+  Tanto `process.efn` como `consumer.efn` y los proveedores permanecen completamente inalterados. Esto demuestra Inversión de Control Funcional pura sin constructores ni instancias de objetos.
 
 #### 12.12.3 Proyecto estructurado completo (`laundry/`)
 
@@ -3324,7 +3484,10 @@ Contenido y responsabilidades de cada artefacto:
   }
   ```
 
-- **`application.root`**: Declara la raíz de resolución del proyecto `laundry`.
+- **`application.root`** (Functional Composition Root):
+  ```text
+  bind laundry::washes_clothes to "washer.efn";
+  ```
 - **`application.main`**: Identifica la operación de inicio de la aplicación.
 
 #### 12.12.4 Diagrama de responsabilidades semánticas de proyecto
