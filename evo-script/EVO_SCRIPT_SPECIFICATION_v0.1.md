@@ -2165,33 +2165,49 @@ Dentro del alcance delimitado para Evo-Script v0.1, no existen temas semánticos
 
 La unidad semántica fundamental de ejecución y cómputo se denomina `Function`.
 
-La forma textual general definida en Evo-Script v0.1 es:
+En Evo-Script v0.1 existen dos representaciones para funciones:
 
-    fn nombre(tipo argumento, tipo argumento) -> tipo {
+1. **Implementación de función (`Function Implementation`)**: declarada dentro de archivos `.efn`, con visibilidad explícita (`public fn` o `private fn`), cuerpo delimitado por `{ ... }` y un único `return expresion;` obligatorio.
+2. **Firma de función (`Function Signature`)**: declarada dentro de archivos `.esig`, con la forma `fn nombre(argumentos) -> Tipo;`, sin cuerpo ni modificadores de visibilidad.
+
+La forma textual general de una implementación de función en Evo-Script v0.1 es:
+
+    public fn nombre(tipo argumento, tipo argumento) -> tipo {
+        cero_o_mas_bindings_let
+        return expresion;
+    }
+
+o para funciones auxiliares privadas:
+
+    private fn nombre(tipo argumento, tipo argumento) -> tipo {
         cero_o_mas_bindings_let
         return expresion;
     }
 
 Ejemplo canónico:
 
-    fn sumar(int numero, int numero2) -> int {
+    public fn sumar(int numero, int numero2) -> int {
         return numero + numero2;
     }
 
 
-### 11.1 Declaración
+### 11.1 Declaración y visibilidad
 
 La palabra clave `fn` inicia textualmente la declaración de una función.
 
-Semánticamente representa una `Function`. El parser reconoce el token `fn`,
-pero el significado y modelo semántico de `Function` pertenece a Evo-Script.
+En archivos de implementación `.efn`, la visibilidad de cada función debe ser explícita:
+
+- `public`: declara la única función pública principal del archivo `.efn`.
+- `private`: declara funciones auxiliares de uso estrictamente local dentro del mismo archivo `.efn`.
+
+No existe visibilidad implícita. En firmas públicas `.esig`, la función es pública por naturaleza y se declara directamente como `fn nombre(...) -> Tipo;` sin modificadores de visibilidad.
 
 
 ### 11.2 Nombre
 
 En la declaración:
 
-    fn guardar(...)
+    public fn guardar(...)
 
 el identificador `guardar` define el nombre de la función dentro del programa.
 
@@ -2216,7 +2232,7 @@ Ejemplos válidos conceptuales:
 
 Una función puede declarar múltiples argumentos separados por comas:
 
-    fn ejemplo(int id, float amount, Trabajador trabajador) -> ...
+    public fn ejemplo(int id, float amount, Trabajador trabajador) -> ...
 
 
 ### 11.4 Tipo de resultado
@@ -2254,7 +2270,8 @@ Reglas normativas:
 
 La correspondencia de una función está delimitada por llaves `{ ... }` y posee la siguiente estructura:
 
-    Function
+    Function Implementation (.efn)
+    ├── visibility (public | private)
     ├── name
     ├── arguments
     ├── result type (-> Tipo)
@@ -2264,15 +2281,15 @@ La correspondencia de una función está delimitada por llaves `{ ... }` y posee
 
 Ejemplos válidos:
 
-- **Función directa**:
+- **Función pública directa**:
   ```text
-  fn multiplicar(int a, int b) -> int {
+  public fn multiplicar(int a, int b) -> int {
       return a * b;
   }
   ```
 - **Función con bindings intermedios**:
   ```text
-  fn calcular_total(int precio, int impuesto) -> int {
+  public fn calcular_total(int precio, int impuesto) -> int {
       let int subtotal = precio + impuesto;
       let int resultado = subtotal * 2;
 
@@ -2281,14 +2298,14 @@ Ejemplos válidos:
   ```
 - **Función con pipeline**:
   ```text
-  fn sumar_texto(int a, int b) -> string {
+  public fn sumar_texto(int a, int b) -> string {
       return a + b
           |> to_string;
   }
   ```
 - **Función con when**:
   ```text
-  fn obtener_mensaje(BuscarTrabajadorResultado resultado) -> string {
+  public fn obtener_mensaje(BuscarTrabajadorResultado resultado) -> string {
       return when resultado {
           BuscarTrabajadorResultado::Encontrado(Trabajador trabajador)
               => trabajador.name
@@ -2309,7 +2326,9 @@ Existe una separación estricta entre la representación textual y la semántica
 
 | Sintaxis | Semántica |
 | :--- | :--- |
-| `fn` | `Function` |
+| `public fn` | `Public principal function in .efn` |
+| `private fn` | `File-local helper function in .efn` |
+| `fn ... -> Tipo;` | `Function signature in .esig` |
 | `tipo nombre` | `Argument` |
 | `-> tipo` | `Result type declaration` |
 | `return expresion;` | `Explicit function result declaration` |
@@ -2366,6 +2385,314 @@ Existe una separación estricta entre la representación textual y la semántica
 | `Tipo::Variante { campo: Tipo binding; }` | `Structured variant field extraction` |
 | `=>` | `Correspondence marker inside when` |
 
-El parser futuro reconocerá la representación textual y generará la estructura
-correspondiente; Evo-Script define el significado y las reglas semánticas
-de cada elemento.
+
+## 12. Modelo de archivos, módulos y ejecución
+
+Evo-Script v0.1 define formalmente el modelo de archivos, artefactos modulares y fronteras de ejecución guiado por un principio fundamental:
+
+> **Principio de distribución estructural**: La complejidad estructural aparece únicamente cuando aparece distribución estructural.
+
+El lenguaje permite dos modalidades de uso:
+
+1. **Script autocontenido**: Un único archivo `.efn` que contiene toda su lógica, tipos locales y funciones auxiliares, ejecutable de forma directa sin requerir infraestructura de proyecto.
+2. **Proyecto estructurado**: Un conjunto de artefactos especializados con responsabilidades delimitadas (`.root`, `.main` / `.elib`, `.emod`, `.esig`, `.estc`, `.enum`, `.efn`).
+
+
+### 12.1 Extensiones oficiales y responsabilidades
+
+Cada extensión de archivo en Evo-Script expresa su responsabilidad semántica principal:
+
+| Extensión | Nombre | Responsabilidad semántica principal |
+| :--- | :--- | :--- |
+| `.efn` | Evo Function | Implementación de función o script autocontenido ejecutable |
+| `.esig` | Evo Signature | Contrato público de una función (firma sin cuerpo) |
+| `.estc` | Evo Struct | Definición compartible de struct |
+| `.enum` | Enum | Definición compartible de enum |
+| `.emod` | Evo Module | Módulo, frontera semántica y catálogo de firmas públicas |
+| `.root` | Evo Project Root | Raíz de resolución de un proyecto estructurado |
+| `.main` | Evo Application Entry | Selección del punto de entrada ejecutable de una aplicación |
+| `.elib` | Evo Library | Agrupación semántica reutilizable de módulos de librería |
+| `.evo` | Evo Package | Artefacto distribuible / paquete del ecosistema Evo |
+
+Regla de exclusión de extensiones alternativas:
+- La extensión oficial para módulos es estrictamente `.emod` (no se admite `.mod`).
+- No existen extensiones no oficiales como `.evo-script`, `.evostruct`, `.evoenum` ni `.efun`.
+
+
+### 12.2 Script autocontenido (.efn)
+
+Un archivo `.efn` puede constituir por sí mismo un programa Evo-Script completamente ejecutable.
+
+Reglas normativas:
+
+1. **Autocontención**: Un script `.efn` no requiere `.root`, `.main`, `.emod`, `.esig`, `.estc`, `.enum`, `.elib` ni `.evo` si toda la semántica requerida está contenida dentro del propio archivo.
+2. **Exactamente una función pública**: Un archivo `.efn` contiene exactamente una función `public fn` principal. No se permiten múltiples funciones `public` en el mismo `.efn`.
+3. **Cero o más funciones privadas**: Un archivo `.efn` puede declarar cero o más funciones `private fn` auxiliares.
+4. **Visibilidad explícita obligatoria**: Toda función dentro de un `.efn` debe declarar explícitamente `public` o `private`. No existe visibilidad implícita ni por defecto.
+5. **Tipos locales**: Un `.efn` puede declarar definiciones locales de `struct` y `enum`. Estos tipos pertenecen exclusivamente al archivo y no requieren `.estc` ni `.enum` mientras no crucen fronteras hacia otros archivos Evo-Script.
+6. **Participación de tipos locales en la frontera con el host**: Los tipos locales pueden utilizarse libremente como argumentos o tipo de retorno de la `public fn` principal, en bindings intermedios, en `return` y en `when`. El host/runtime que ejecuta el script recibe el valor semántico resultante.
+7. **Ausencia de `.esig` en scripts directos**: La `public fn` de un script `.efn` ejecutado directamente por el host no requiere una firma `.esig`.
+
+
+### 12.3 Visibilidad de funciones dentro de .efn
+
+Los modificadores de visibilidad `public` y `private` aplican exclusivamente a funciones declaradas dentro de archivos `.efn`:
+
+- `public fn`: Declara la operación principal del archivo. Constituye el punto de interacción externo frente al host que ejecuta el script o frente a la firma `.esig` que implementa.
+- `private fn`: Declara una función auxiliar interna. Solo puede ser invocada por otras funciones dentro del mismo archivo `.efn`. No puede ser accedida desde otro archivo, no puede registrarse en un `.emod` ni puede referenciarse mediante `.esig`.
+
+En Evo-Script v0.1 no se aplican modificadores `public`/`private` a structs, enums ni signatures en archivos externos; su visibilidad se rige por su presencia modular.
+
+
+### 12.4 Tipos locales vs tipos compartidos (.estc y .enum)
+
+Evo-Script distingue formalmente entre tipos locales a un archivo y tipos compartidos entre múltiples archivos:
+
+1. **Tipo local**: Declarado dentro de un archivo `.efn`. Solo existe en el ámbito léxico de ese archivo. Ningún otro archivo Evo-Script puede referenciarlo ni nombrarlo (`let TipoLocal x = ...` en otro archivo es inválido).
+2. **Tipo compartido**: Cuando un tipo de datos necesita participar en comunicaciones entre distintos archivos Evo-Script (por ejemplo, en los argumentos o resultado de una `.esig`), debe extraerse a su propio archivo especializado:
+   - Struct compartido $\rightarrow$ archivo `.estc` (contiene una única definición `struct Nombre { ... }`).
+   - Enum compartido $\rightarrow$ archivo `.enum` (contiene una única definición `enum Nombre { ... }`).
+3. **Principio de frontera**:
+   - Tipo utilizado únicamente dentro del mismo `.efn` $\rightarrow$ permanece local.
+   - Tipo que cruza una frontera entre archivos Evo-Script $\rightarrow$ debe residir en `.estc` o `.enum`.
+
+
+### 12.5 Firmas públicas de funciones (.esig)
+
+Un archivo `.esig` (Evo Signature) declara formal y exclusivamente el contrato público de una función:
+
+```text
+fn nombre(tipo argumento, tipo argumento) -> Tipo;
+```
+
+Reglas normativas:
+
+1. **Sintaxis de firma**: La declaración consiste en `fn`, nombre, lista de argumentos tipados, cláusula `-> Tipo` y punto y coma final (`;`).
+2. **Ausencia de cuerpo**: Un archivo `.esig` no posee cuerpo `{ ... }`, correspondencia ni sentencias `return`.
+3. **Pública por naturaleza**: Toda firma en un `.esig` es intrínsecamente pública. No admite modificadores `public` ni `private`.
+4. **Contrato de acción, no interfaz de objeto**: `.esig` modela directamente la acción requerida, no una interfaz de clase u objeto. Evo-Script no define `interface`, `trait` ni `dyn`.
+5. **No crea funciones como valores**: `.esig` define un contrato invocable, no un valor de primer orden de tipo función. No introduce lambdas, clausuras ni tipos función manipulables como datos.
+6. **Tipos permitidos**: Una `.esig` solo puede utilizar tipos nativos o tipos compartidos (`.estc`, `.enum`). No puede utilizar tipos locales de un `.efn`.
+
+
+### 12.6 Comunicación entre archivos y satisfacción de contratos
+
+Evo-Script prohíbe el acoplamiento directo entre implementaciones:
+
+1. **Prohibición de acceso directo `.efn` $\rightarrow$ `.efn`**: Un archivo de implementación `.efn` nunca puede depender ni invocar directamente a otro archivo `.efn`.
+2. **Canal de comunicación formal**: La comunicación entre archivos distintos ocurre exclusivamente a través de firmas `.esig` catalogadas en módulos `.emod`:
+   ```text
+   consumer.efn
+        │
+        │ requiere una operación
+        ▼
+   module.emod
+        │
+        │ ofrece
+        ▼
+   operation.esig
+        │
+        ├──► input.estc
+        │
+        ├──► result.enum
+        │
+        │ satisfecha por
+        ▼
+   implementation.efn
+   ```
+3. **Satisfacción de contrato**: Un archivo `.efn` satisface una `.esig` cuando su única `public fn` coincide exactamente en:
+   - Nombre de la función.
+   - Cantidad y orden de los argumentos.
+   - Tipos de los argumentos.
+   - Tipo de resultado.
+   No se permiten conversiones implícitas para satisfacer una firma.
+4. **Desacoplamiento de implementación**: El consumidor conoce exclusivamente la `.esig` y sus tipos asociados. No conoce el nombre del archivo `.efn`, su ubicación física ni sus funciones privadas.
+5. **Modelado explícito de resultados**: Los resultados esperados y manejables de una firma se modelan mediante tipos `enum` de dominio (por ejemplo, variantes `Ok` y `Error(string)` como valores normales), manteniéndolos estrictamente separados de los errores de evaluación del lenguaje (`ConversionError`, `OverflowError`, `DivisionByZeroError`).
+
+
+### 12.7 Módulos (.emod) y selección granular de dependencias
+
+Un archivo `.emod` (Evo Module) define la identidad semántica y la frontera de capacidades de un módulo:
+
+1. **Frontera semántica vs carpeta física**: Una carpeta física organiza archivos en disco; un `.emod` delimita la superficie modular semántica del conjunto. La presencia de un archivo en una carpeta no lo hace automáticamente público si no está registrado en el `.emod`.
+2. **Catálogo de capacidades**: El `.emod` registra las firmas públicas `.esig` que ofrece el módulo.
+3. **Ausencia de `namespace`**: Evo-Script no introduce la palabra clave `namespace`.
+4. **Selección por firma individual**: Un consumidor selecciona una capacidad concreta de un módulo por su firma (`signature`), no importando automáticamente todo el contenido del módulo. Utilizar una operación `modulo::operacion` no hace visibles el resto de operaciones del módulo.
+5. **Cierre transitivo de tipos limitado**: Al seleccionar una `.esig`, se resuelven exclusivamente los tipos compartidos (`.estc`, `.enum`) directamente requeridos por los argumentos y resultado de dicha firma, junto con los tipos anidados por estos. Esto no expone otros tipos no relacionados del módulo.
+6. **Independencia del mecanismo `use`**: La palabra clave `use` conserva estrictamente su semántica de activación de `Scope`. La sintaxis textual para la selección de dependencias modulares se definirá en especificaciones posteriores.
+
+
+### 12.8 Raíz de proyecto (.root)
+
+Un archivo `.root` (Evo Project Root) establece la raíz estructural y el límite superior de resolución semántica de un proyecto estructurado:
+
+1. **Obligatoriedad en proyectos estructurados**: Todo proyecto Evo-Script multi-archivo que utilice comunicaciones entre artefactos (`.emod`, `.esig`, `.estc`, `.enum`) debe poseer exactamente un archivo `.root` en su nivel superior.
+2. **Innecesario en scripts autocontenidos**: Un script simple `.efn` ejecutado directamente no requiere `.root`.
+3. **Naturaleza no ejecutable**: El archivo `.root` no ejecuta código, no es un namespace y no importa módulos de forma automática; actúa como ancla de resolución del árbol del proyecto.
+
+
+### 12.9 Puntos de entrada de aplicación (.main) y librerías (.elib)
+
+1. **Aplicaciones ejecutables (`.main`)**:
+   - Un proyecto estructurado que se ejecuta como aplicación define su punto de entrada mediante un archivo `.main` (Evo Application Entry).
+   - El `.main` identifica y selecciona la operación inicial que arranca la aplicación.
+   - El `.main` no implementa la lógica de la función ni contiene código ejecutable de negocio; la implementación reside en un `.efn`.
+   - La función seleccionada no está obligada a llamarse literalmente `main`.
+   - Un script `.efn` autocontenido no requiere `.main`.
+2. **Librerías reutilizables (`.elib`)**:
+   - Una agrupación reutilizable de módulos se declara mediante un archivo `.elib` (Evo Library).
+   - Una librería agrupa módulos `.emod` para su consumo estructurado.
+   - Un proyecto de librería posee `.root` y `.elib`, pero no requiere `.main` al no constituir una aplicación directamente ejecutable.
+   - El consumo de capacidades desde una librería continúa siendo por firma individual (`.esig`).
+
+
+### 12.10 Artefacto distribuible (.evo)
+
+La extensión `.evo` está reservada exclusivamente para el artefacto distribuible o paquete empaquetado del ecosistema Evo:
+
+1. **Naturaleza del paquete**: `.evo` representa el paquete empaquetado final de una aplicación o librería (contenedor de proyecto, módulos, metadatos y código preparado).
+2. **No es código fuente**: `.evo` no es una extensión para archivos de código fuente general (las fuentes utilizan `.efn`, `.esig`, `.estc`, `.enum`, `.emod`, `.root`, `.main`, `.elib`).
+3. **Ortogonalidad entre empaquetado y compilación**: El empaquetado `.evo` no impone ni presupone un modelo específico de compilación (como bytecode o binario nativo AOT).
+4. **Formato físico desacoplado**: El formato físico interno del archivo `.evo` (compresión, manifiestos binarios) queda fuera del alcance de v0.1.
+5. **No obligatorio para scripts simples**: Un archivo `.efn` autocontenido se ejecuta directamente sin necesidad de empaquetarse en un `.evo`.
+
+
+### 12.11 Frontera con el entorno de ejecución (Host / Runtime)
+
+Existe una separación conceptual estricta entre la semántica interna de Evo-Script y el entorno exterior que inicia y hospeda la ejecución:
+
+1. **Producción de valores semánticos puros**: Una función pública de un `.efn` produce como resultado un valor semántico del sistema de tipos de Evo-Script (`Value`).
+2. **Materialización del resultado**: El valor semántico producido no es inherentemente JSON, XML, texto plano, bytes ni stdout. El host/runtime es el único responsable de materializar dicho valor según el medio exterior correspondiente (CLI, API HTTP, log, etc.).
+3. **Suministro de entradas desde el host**: El host/runtime proporciona las entradas requeridas por la función pública convirtiendo sus representaciones externas en valores semánticos de Evo-Script compatibles con la firma.
+4. **Ausencia de interfaces de serialización en el lenguaje**: Evo-Script no incluye interfaces ni traits como `Serializable`, `Serialize` o `Deserialize`. Los tipos del lenguaje no requieren implementar codecs para participar en la frontera con el host.
+5. **Conocimiento de tipos locales por el host**: Aunque un tipo local a un `.efn` no puede ser nombrado por otros archivos Evo-Script, el runtime que ejecuta el script conoce su definición semántica y puede materializar sus valores hacia el host.
+6. **Propagación de fallos de evaluación hacia el host**:
+   - **Evaluación válida**: El host recibe el `Value` semántico producido.
+   - **Alternativa de dominio**: Valores como `Result::Error("mensaje")` son valores normales de dominio entregados como `Value`.
+   - **Fallo de evaluación**: Errores del lenguaje (`ConversionError`, `OverflowError`, `DivisionByZeroError`) detienen la evaluación y se propagan directamente hasta el límite exterior del host/runtime como fallos de ejecución.
+
+
+### 12.12 Ejemplos canónicos y modelos arquitectónicos
+
+#### 12.12.1 Script autocontenido completo (`washer.efn`)
+
+```text
+struct Clothes {
+    string name;
+}
+
+enum WashResult {
+    Ok(Clothes)
+    Error(string)
+}
+
+private fn validate(Clothes clothes) -> bool {
+    return clothes.name != "";
+}
+
+public fn washes_clothes(Clothes clothes) -> WashResult {
+    let bool valid = validate(clothes);
+
+    return when valid {
+        true  => WashResult::Ok(clothes)
+        false => WashResult::Error("Ropa inválida")
+    };
+}
+```
+
+Características:
+- `Clothes` y `WashResult` son tipos locales a `washer.efn`.
+- `validate` es una función auxiliar privada (`private fn`).
+- `washes_clothes` es la única función pública (`public fn`).
+- No requiere `.esig`, `.estc`, `.enum`, `.root` ni `.main`.
+- Se ejecuta directamente por un host/runtime Evo-Script.
+
+#### 12.12.2 Proyecto estructurado completo (`laundry/`)
+
+Estructura física de archivos:
+
+```text
+laundry/
+├── application.root
+├── application.main
+│
+├── laundry.emod
+│
+├── clothes.estc
+├── washes_clothes_result.enum
+├── washes_clothes.esig
+└── washer.efn
+```
+
+Contenido y responsabilidades de cada artefacto:
+
+- **`clothes.estc`** (Struct compartido):
+  ```text
+  struct Clothes {
+      string name;
+  }
+  ```
+
+- **`washes_clothes_result.enum`** (Enum compartido):
+  ```text
+  enum WashesClothesResult {
+      Ok(Clothes)
+      Error(string)
+  }
+  ```
+
+- **`washes_clothes.esig`** (Firma pública / Contrato):
+  ```text
+  fn washes_clothes(Clothes clothes) -> WashesClothesResult;
+  ```
+
+- **`washer.efn`** (Implementación):
+  ```text
+  private fn validate(Clothes clothes) -> bool {
+      return clothes.name != "";
+  }
+
+  public fn washes_clothes(Clothes clothes) -> WashesClothesResult {
+      let bool valid = validate(clothes);
+
+      return when valid {
+          true  => WashesClothesResult::Ok(clothes)
+          false => WashesClothesResult::Error("Ropa inválida")
+      };
+  }
+  ```
+
+- **`laundry.emod`**: Registra y ofrece la capacidad `washes_clothes.esig`.
+- **`application.root`**: Declara la raíz de resolución del proyecto `laundry`.
+- **`application.main`**: Identifica la operación de inicio de la aplicación.
+
+#### 12.12.3 Diagrama de responsabilidades semánticas de proyecto
+
+```text
+                      structured project
+                              │
+                            .root
+                              │
+                 ┌────────────┴────────────┐
+                 ▼                         ▼
+        application (.main)        library (.elib)
+                 │                         │
+                 └────────────┬────────────┘
+                              ▼
+                            .emod
+                              │
+                            .esig
+                            /   \
+                        .estc   .enum
+                            \   /
+                            .efn
+```
+
+#### 12.12.4 Organización arquitectónica por responsabilidades
+
+Los proyectos pueden organizar sus artefactos por responsabilidades semánticas (por ejemplo, `use_cases/`, `agents/`, `domain/`):
+- `use_cases/`: Aloja firmas `.esig` que modelan las acciones requeridas.
+- `agents/`: Aloja implementaciones `.efn` que satisfacen las firmas.
+- `domain/`: Aloja definiciones de datos y alternativas `.estc` y `.enum`.
+
+Estos nombres de carpetas representan patrones organizacionales sugeridos y no constituyen palabras reservadas del lenguaje.
