@@ -2173,14 +2173,14 @@ En Evo-Script v0.1 existen dos representaciones para funciones:
 La forma textual general de una implementación de función en Evo-Script v0.1 es:
 
     public fn nombre(tipo argumento, tipo argumento) -> tipo {
-        cero_o_mas_bindings_let
+        cero_o_mas_body_statements
         return expresion;
     }
 
 o para funciones auxiliares privadas:
 
     private fn nombre(tipo argumento, tipo argumento) -> tipo {
-        cero_o_mas_bindings_let
+        cero_o_mas_body_statements
         return expresion;
     }
 
@@ -2302,22 +2302,134 @@ Reglas normativas:
 8. **Ámbito de return**: `return` solo tiene significado dentro de la correspondencia de una `Function`. No es un operador ni puede utilizarse a nivel global.
 
 
-### 11.6 Estructura de la correspondencia (Correspondence)
+### 11.6 Estructura de la correspondencia y cuerpo de función (Function Body)
 
-La correspondencia de una función está delimitada por llaves `{ ... }` y posee la siguiente estructura:
+La correspondencia o cuerpo de una función (`Function Body`) está delimitada por llaves `{ ... }` y posee la siguiente estructura:
 
     Function Implementation (.efn)
     ├── visibility (public | private)
     ├── name
-    ├── arguments
+    ├── parameters (Value Parameters / Signature Dependency Parameters)
     ├── result type (-> Tipo)
-    └── correspondence
-        ├── cero o más let bindings inmutables
-        └── exactamente un return expresion;
+    └── Function Body / Correspondence ({ ... })
+        ├── zero or more Body Statements
+        │   ├── Let Binding Statement (`let Tipo nombre = expression;`)
+        │   └── Operation Statement
+        │       ├── Function Call (`nombre(args...);`)
+        │       └── Pipeline Expression (`source |> op1 |> op2;`)
+        └── exactly one Final Return (`return expression;`)
 
-Ejemplos válidos:
+#### 11.6.1 Sentencias del cuerpo (Body Statements)
 
-- **Función pública directa**:
+Evo-Script v0.1 reconoce **exactamente dos clases** de sentencias en el cuerpo de una función previas al `return` final:
+
+1. **Sentencia de binding (`Let Binding Statement`)**:
+   - Declara un binding inmutable asociando un nombre tipado con el valor producido por una expresión:
+     ```text
+     let Tipo nombre = expresion;
+     ```
+   - El valor resultante se conserva en el ámbito léxico de la función para ser utilizado por sentencias posteriores o por el `return` final.
+   - Preserva todas las reglas de inmutabilidad, ausencia de reasignación y tipado estricto (Sección 8).
+
+2. **Sentencia de operación (`Operation Statement`)**:
+   - Representa una operación evaluable ejecutada por sus efectos o capacidad de cómputo dentro de la secuencia de una función, cuyo valor normal resultante **no se conserva en un binding ni constituye el resultado final** de la función.
+   - Las únicas dos formas válidas de `Operation Statement` en Evo-Script v0.1 son:
+     ```text
+     function_call;
+     pipeline_expression;
+     ```
+
+#### 11.6.2 Semántica del Operation Statement y descarte del valor normal
+
+1. **Evaluación normal y descarte intencional**:
+   - Una sentencia de operación se evalúa normalmente según las reglas estándar de Function Calls o Pipelines.
+   - El valor tipado normal (`Value`) producido por la operación es **descartado deliberadamente** por el llamador al no asociarse a un binding:
+     ```text
+     Function Call / Pipeline
+               ↓
+     produces typed Value
+               ↓
+       Operation Statement
+               ↓
+     normal Value discarded
+               ↓
+       continue evaluation
+     ```
+2. **El descarte de valor NO es `void` ni `Unit`**:
+   - Descartar el valor normal de una llamada no altera el tipo declarado de la función invocada. Si una firma declara `esig open() -> WindowResult;`, la llamada `open_window();` produce normalmente `WindowResult`, pero el llamador elige no utilizar dicho valor.
+   - Evo-Script v0.1 **NO** introduce tipos `void`, `Unit`, `()`, ni procedimientos sin retorno. Toda función y firma continúa declarando un tipo de retorno obligatorio.
+3. **Ausencia de sintaxis especial para descarte**:
+   - No se requieren palabras clave ni comodines como `_`, `discard`, `ignore`, `let _` ni `drop`.
+4. **Descarte de alternativas de dominio (Domain Alternatives)**:
+   - Si una operación retorna un enum de dominio (por ejemplo `SaveResult::Saved` o `SaveResult::Error("fallo")`), el llamador puede utilizarla como `Operation Statement` si decide no inspeccionar el resultado.
+5. **Los errores de evaluación (EvaluationError) NUNCA se descartan**:
+   - Si un `Operation Statement` produce un error de evaluación (`DivisionByZeroError`, `OverflowError`, `ConversionError`), dicho error **no puede ser descartado**:
+     ```text
+     operation_a(); // Falla con EvaluationError
+     operation_b(); // NO se evalúa
+     return result; // NO se evalúa
+     ```
+   - La evaluación actual aborta inmediatamente y el fallo se propaga hacia afuera hasta el Evo Runtime (Sección 10.7 y 12.9.7).
+6. **Los errores estáticos / de validación (System / Validation Errors) NUNCA se descartan**:
+   - Invalideces como firmas no encontradas, discordancia de aridad o tipos incompatibles invalidan el programa antes de la evaluación.
+
+#### 11.6.3 Pipelines como Operation Statements
+
+1. **Pipeline completo con terminación en punto y coma**:
+   - Un pipeline completo puede utilizarse como `Operation Statement` terminando la expresión con punto y coma (`;`):
+     ```text
+     worker
+     |> validate
+     |> save;
+     ```
+2. **Operador oficial de pipeline**:
+   - El operador de pipeline es única y exclusivamente `|>`.
+   - Para operaciones de aridad 1: `valor |> operacion`
+   - Para operaciones de aridad $\ge 2$: `valor |> operacion(this, arg)`
+3. **Punto y coma al final del pipeline**:
+   - El punto y coma (`;`) finaliza la sentencia completa del pipeline; no se coloca `;` en cada stage intermedio.
+
+#### 11.6.4 Prohibición de Expression Statements generales
+
+Evo-Script v0.1 **NO define Expression Statements generales**. Las expresiones arbitrarias terminadas en punto y coma que no sean una Function Call ni una Pipeline Expression son **inválidas**:
+
+- `10 + 20;` (Inválido: expresión aritmética como statement)
+- `true;` (Inválido: literal booleano como statement)
+- `worker;` (Inválido: binding como statement)
+- `"hello";` (Inválido: literal de texto como statement)
+- `SearchResult::NotFound;` (Inválido: variante de enum como statement)
+- `worker.name;` (Inválido: acceso a campo como statement)
+- `active && ready;` (Inválido: expresión lógica como statement)
+
+Las expresiones aritméticas, lógicas y literales solo son válidas donde se espera un `Value` (inicializador de `let`, argumento de llamada, expresión de `return`, entrada de pipeline).
+
+#### 11.6.5 Orden secuencial estricto de evaluación (Top-to-Bottom)
+
+1. **Garantía de orden secuencial**:
+   - Las sentencias del cuerpo de la función (`Body Statements`) se evalúan estrictamente en orden textual de arriba hacia abajo (*top-to-bottom*).
+   - El runtime / evaluador **no puede reordenar** estas operaciones:
+     ```text
+     let Config config = load_config(); // 1. Se evalúa load_config() y se crea config
+     validate_config(config);          // 2. Se evalúa validate_config
+     open_window();                     // 3. Se evalúa open_window
+     return InitResult::Ready;          // 4. Se evalúa el return final
+     ```
+2. **Coordinación de capacidades con efectos**:
+   - En operaciones con efectos externos sobre el entorno o interfaz, el orden textual garantiza la secuencia de invocación requerida (`load_config();` precede estrictamente a `open_window();`).
+
+#### 11.6.6 El retorno final (Final Return)
+
+1. **Obligatoriedad y posición final estricta**:
+   - Toda función concluye obligatoriamente con exactamente una sentencia `return expresion;`.
+   - `return` debe ser estrictamente la última sentencia del cuerpo. No se admiten sentencias posteriores a `return`.
+2. **Ausencia de retornos tempranos (No Early Return)**:
+   - No existen retornos tempranos ni condicionales (`early return`). No se admiten múltiples sentencias `return`.
+3. **Independencia frente al ciclo de vida**:
+   - `Function return` finaliza la evaluación de la función; no es un `Application Exit Request` ni termina el Application Main Loop.
+
+#### 11.6.7 Ejemplos canónicos válidos
+
+- **Función pura directa**:
   ```text
   public fn multiplicar(int a, int b) -> int {
       return a * b;
@@ -2332,7 +2444,36 @@ Ejemplos válidos:
       return resultado;
   }
   ```
-- **Función con pipeline**:
+- **Función con sentencias de operación secuenciales**:
+  ```text
+  public fn initialize(window::open open_window, config::load load_config) -> InitResult {
+      load_config();
+      open_window();
+
+      return InitResult::Ready;
+  }
+  ```
+- **Función con let y operation statement**:
+  ```text
+  public fn process(Source source, destination::save save) -> ProcessResult {
+      let Data data = read(source);
+
+      save(data);
+
+      return ProcessResult::Completed;
+  }
+  ```
+- **Función con pipeline como Operation Statement**:
+  ```text
+  public fn update_worker(Worker worker, storage::save save) -> UpdateResult {
+      worker
+      |> validate
+      |> save;
+
+      return UpdateResult::Success;
+  }
+  ```
+- **Función con return pipeline**:
   ```text
   public fn sumar_texto(int a, int b) -> string {
       return a + b
@@ -2829,10 +2970,12 @@ Existe una separación estricta entre la representación textual y la semántica
 | `publish Simbolo;` | `Public modular surface entry in .emod` |
 | `tipo nombre` | `Value Parameter` |
 | `-> tipo` | `Result type declaration` |
-| `return expresion;` | `Explicit function result declaration` |
+| `return expresion;` | `Explicit function result declaration (Final Return)` |
 | `nombre(args...)` | `Function call expression` |
 | `nombre()` | `Zero-arity function call expression` |
-| `{ ... }` | `Correspondence` |
+| `nombre(args...);` | `Operation Statement (Function call with discarded normal Value)` |
+| `pipeline;` | `Operation Statement (Pipeline with discarded normal Value)` |
+| `{ ... }` | `Function Body / Correspondence` |
 | `struct Nombre { ... }` | `Struct definition` |
 | `tipo nombre;` | `Field` |
 | `Nombre { ... }` | `Struct construction` |
@@ -2845,9 +2988,9 @@ Existe una separación estricta entre la representación textual y la semántica
 | `Variante { ... }` | `Structured variant` |
 | `Tipo::Variante { ... }` | `Structured variant construction` |
 | `let` | `Binding declaration` |
-| `let tipo nombre = valor;` | `Immutable binding` |
+| `let tipo nombre = valor;` | `Let Binding Statement (Immutable binding)` |
 | `=` | `Value association in let` |
-| `;` | `End of declaration/operation` |
+| `;` | `End of declaration / Body Statement delimiter` |
 | `to_tipo(valor)` | `Explicit type conversion` |
 | `ConversionError` | `Explicit type conversion evaluation error` |
 | `valor \|> to_tipo` | `Composed explicit conversion` |
