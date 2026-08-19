@@ -3278,7 +3278,7 @@ Reglas normativas del proceso de arranque:
 1. **Validación de `.root` previa a `.main`**: Antes de iniciar el Application Main Loop, el archivo `.root` debe ser cargado, resuelto y validado en su totalidad. Si existe cualquier error de composición (firmas no resueltas, implementaciones faltantes, discordancias `SignatureMismatchError` o bindings duplicados), el proyecto es rechazado y el Application Main Loop **nunca se inicia**.
 2. **`.root` no controla el ciclo de vida**: El archivo `.root` finaliza su responsabilidad cuando la composición queda validada; no inicia ni detiene el Application Main Loop.
 3. **`.main` no realiza composición**: El archivo `.main` no contiene declaraciones `bind` ni sustituye la composición de `.root`.
-4. **Validación de `entry` previa al Main Loop**: La declaración `entry` de `.main` se valida completamente antes de iniciar el Application Main Loop. Si el archivo destino no existe, no es un `.efn`, carece de `public fn` o sus dependencias no pueden resolverse mediante `.root`, el Application Main Loop **nunca se inicia**.
+4. **Validación de `entry` previa al Main Loop**: La declaración `entry` de `.main` se valida completamente antes de iniciar el Application Main Loop. Si el archivo destino no existe, no es un `.efn`, carece de `public fn`, declara Value Parameters, o sus dependencias de firma no pueden resolverse mediante `.root`, el Application Main Loop **nunca se inicia**.
 
 #### 12.9.3 Sintaxis oficial de selección de entrada (`entry ...`)
 
@@ -3322,23 +3322,70 @@ Reglas normativas de `entry`:
 6. **Resolución de ruta relativa a Project Root**: La ruta textual indicada en `entry "..."` se resuelve de forma relativa al directorio que contiene el archivo `.root` del proyecto estructurado (Project Root).
 7. **Ausencia de bloque envolvente**: El archivo `.main` no requiere ni admite bloques envolventes (`main application { ... }` ni `application { ... }` son inválidos). La sentencia `entry` se declara directamente a nivel de archivo.
 8. **Ausencia de lógica y otras construcciones en `.main`**: El archivo `.main` no contiene funciones (`public fn`, `private fn`), variables (`let`), sentencias de control (`return`, `when`), llamadas a funciones, ni declaraciones `bind`, `import`, `esig`, `struct`, `enum` o `publish`.
-9. **Condiciones estáticas de validación**: Una declaración `entry "ruta/archivo.efn";` es válida únicamente si:
-   - Existe exactamente un archivo `.main` en el proyecto estructurado.
-   - El archivo `.main` contiene exactamente una declaración `entry`.
-   - La ruta relativa existe y es accesible desde el Project Root.
-   - El archivo destino es un `.efn` válido.
-   - El `.efn` contiene exactamente una `public fn`.
-   - Las dependencias requeridas por esa `public fn` (Value Parameters o Signature Dependency Parameters) pueden satisfacerse mediante la composición resuelta en `.root`.
-10. **Inyección funcional en la función inicial**: La Function Implementation inicial puede declarar Signature Dependency Parameters (`modulo::firma nombre_local`). Estas dependencias no se inyectan en `.main`, sino que son resueltas por el runtime a través de los bindings declarados en `.root`:
+9. **Parámetros permitidos en Application Entry (Restricción de Value Parameters en v0.1)**:
+   - `.root` proporciona resolución estructural exclusivamente para **Signature Dependency Parameters** (`modulo::firma nombre_local`) mediante sentencias `bind`.
+   - `.root` **NO** proporciona ni suministra **Value Parameters** (`int width`, `string title`, `Worker worker`).
+   - En funciones normales del lenguaje, los Value Parameters son proporcionados por el código que realiza la invocación (`resize(800)`).
+   - En el Application Entry (`entry "..."`), la función inicial es invocada directamente por el runtime al arrancar la aplicación. Dado que Evo-Script v0.1 no define mecanismos para suministrar argumentos de datos a la entrada de la aplicación (no existen argumentos CLI / `argv`, valores por defecto en parámetros, valores implícitos ni inyección mágica desde el host), la `public fn` seleccionada como Application Entry **debe declarar exactamente CERO Value Parameters**.
+   - La `public fn` seleccionada como Application Entry puede declarar **cero o más Signature Dependency Parameters**, los cuales son resueltos a través de la composición de `.root`.
+   - **Forma permitida para Application Entry**:
+     ```text
+     Entry Parameters :=
+         cero Signature Dependency Parameters
+         |
+         uno o más Signature Dependency Parameters
+     ```
+   - **Ejemplo válido sin parámetros**:
+     ```text
+     public fn initialize() -> InitResult {
+         return InitResult::Ready;
+     }
+     ```
+   - **Ejemplo válido con Signature Dependency Parameters**:
+     ```text
+     import window::open;
+     import config::load;
+
+     public fn initialize(window::open open_window, config::load load_config) -> InitResult {
+         load_config();
+         open_window();
+         return InitResult::Ready;
+     }
+     ```
+   - **Ejemplo inválido como Application Entry**:
+     ```text
+     import window::open;
+
+     public fn initialize(int width, window::open open_window) -> InitResult {
+         ...
+     }
+     ```
+     Si este `.efn` es seleccionado mediante `entry "functions/application.efn";`, el proyecto es inválido estáticamente y es rechazado antes de iniciar el Application Main Loop porque nadie suministra el valor para `width`.
+   - **Alcance restringido a Application Entry**: Esta restricción aplica exclusivamente a la función seleccionada como Application Entry en `.main`. Las funciones normales de Evo-Script continúan pudiendo declarar Value Parameters con total libertad:
+     ```text
+     public fn resize(int width) -> ResizeResult { ... } // Válido como función normal
+     public fn process(int id, values::search search) -> SearchResult { ... } // Válido como función normal
+     ```
+     Si `process.efn` fuera seleccionado mediante `entry "functions/process.efn";`, sería inválido como Application Entry debido a `int id` (no debido a `values::search search`).
+10. **Condiciones estáticas de validación**: Una declaración `entry "ruta/archivo.efn";` es válida únicamente si:
+    - Existe exactamente un archivo `.main` en el proyecto estructurado.
+    - El archivo `.main` contiene exactamente una declaración `entry`.
+    - La ruta relativa existe y es accesible desde el Project Root.
+    - El archivo destino es un `.efn` válido.
+    - El `.efn` contiene exactamente una `public fn`.
+    - La `public fn` seleccionada declara **CERO** Value Parameters.
+    - La `public fn` seleccionada declara cero o más Signature Dependency Parameters (`modulo::firma nombre_local`), y todas sus dependencias de firma pueden satisfacerse mediante la composición resuelta en `.root`.
+    - Cumple todas las demás reglas normales de Function Implementation.
+11. **Inyección funcional en la función inicial**: La Function Implementation inicial puede declarar Signature Dependency Parameters (`modulo::firma nombre_local`). Estas dependencias no se inyectan en `.main`, sino que son resueltas por el runtime a través de los bindings declarados en `.root`:
     ```text
     public fn initialize(window::open open_window, config::load load_config) -> InitResult
     ```
-11. **Distinción entre `entry` y `bind`**:
+12. **Distinción entre `entry` y `bind`**:
     - `bind`: Asocia una Signature requerida (`.esig`) con su implementación (`.efn`) en `.root`.
     - `entry`: Selecciona la Function Implementation inicial (`.efn`) que arranca la aplicación en `.main`.
-12. **`entry` no satisface firmas**: `entry` no declara satisfacción contractual (`: modulo::firma`). La función seleccionada puede o no implementar una firma según su propia definición, pero `.main` no interviene en contratos modulares.
-13. **Operación inicial única e incondicional**: En Evo-Script v0.1 existe exactamente una operación inicial por aplicación. No se admiten cadenas de inicialización múltiples (`pre-main`, `post-main`) ni entradas condicionales (`entry ... when linux` es inválido).
-14. **Universalidad de `.main`**: Un único formato `.main` sirve para cualquier tipo de aplicación estructurada (gráfica, consola, interactiva o servicio). No existen modos especiales (`gui main`, `server main`).
+13. **`entry` no satisface firmas**: `entry` no declara satisfacción contractual (`: modulo::firma`). La función seleccionada puede o no implementar una firma según su propia definición, pero `.main` no interviene en contratos modulares.
+14. **Operación inicial única e incondicional**: En Evo-Script v0.1 existe exactamente una operación inicial por aplicación. No se admiten cadenas de inicialización múltiples (`pre-main`, `post-main`) ni entradas condicionales (`entry ... when linux` es inválido).
+15. **Universalidad de `.main`**: Un único formato `.main` sirve para cualquier tipo de aplicación estructurada (gráfica, consola, interactiva o servicio). No existen modos especiales (`gui main`, `server main`).
 
 #### 12.9.4 Ejemplo canónico completo de aplicación estructurada
 
@@ -3387,6 +3434,7 @@ En este modelo:
 - `application.root` define qué implementaciones concretas satisfacen las firmas `window::open` y `config::load`.
 - `application.main` selecciona `functions/application.efn` como punto de arranque mediante `entry`.
 - `functions/application.efn` requiere sus dependencias mediante Signature Dependency Parameters (`window::open open_window`, `config::load load_config`) sin conocer los archivos proveedores concretos.
+- `functions/application.efn` no declara ningún Value Parameter, cumpliendo la regla de entrada de aplicación de v0.1.
 - `application.main` desconoce por completo los proveedores `window_native.efn` y `config_file.efn`.
 - El runtime valida `.root` y `.main`, inicia el Application Main Loop e invoca `initialize`.
 
