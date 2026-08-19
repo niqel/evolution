@@ -542,9 +542,10 @@ En Evo-Script v0.1 existen conceptualmente dos mecanismos para definir tipos:
 - `struct`
 - `enum`
 
-Una función o estructura que hace referencia a un tipo definido no necesita
-conocer internamente si el identificador corresponde a un `struct` o a un `enum`.
-La definición correspondiente determina su naturaleza.
+Los tipos definidos pueden originarse como tipos locales dentro de un archivo `.efn` o como tipos compartidos declarados en artefactos especializados (`.estc` y `.enum`), publicados por un módulo `.emod` e importados explícitamente al `Type Space` local mediante cláusulas `import modulo::Tipo;` (o con alias mediante `import modulo::Tipo as Alias;`).
+
+Una función o estructura que hace referencia a un tipo definido no necesita conocer internamente si el identificador corresponde a un `struct` o a un `enum`. La definición correspondiente determina su naturaleza.
+
 
 
 ### 7.3 Struct
@@ -2866,6 +2867,7 @@ Una Function Implementation puede declarar explícitamente que requiere una capa
 
 Ejemplo canónico:
 
+    import values::SearchResult;
     import values::search;
 
     public fn process(int id, values::search search) -> SearchResult {
@@ -3349,6 +3351,7 @@ Cuando un archivo `.efn` contiene una función local y simultáneamente importa 
 
 Ejemplo inválido por colisión no resuelta:
 ```text
+import values::SearchResult;
 import values::search;
 
 private fn search(int id) -> SearchResult {
@@ -3362,6 +3365,7 @@ public fn execute(int id) -> SearchResult {
 
 Ejemplo corregido mediante alias explícito:
 ```text
+import values::SearchResult;
 import values::search as external_search;
 
 private fn search(int id) -> SearchResult {
@@ -3567,6 +3571,7 @@ Los errores de resolución y validación local de funciones pertenecen a la cate
 | `FieldAccessTypeError` | Se intenta acceder a un campo mediante `.` sobre un receptor cuyo tipo no es struct. |
 | `ComparisonTypeError` | Los tipos de los operandos en una comparación no coinciden exactamente o no son compatibles con el operador. |
 | `RecursiveTypeCycleError` | Se detecta un ciclo de dependencias estructurales directas o indirectas entre structs y/o enums. |
+| `TypeNameCollisionError` | Dos declaraciones de tipos o importaciones intentan registrar el mismo identificador local dentro del Type Space. |
 
 #### 11.13.3 Distinción formal de categorías de error
 
@@ -3574,7 +3579,7 @@ Evo-Script distingue formalmente tres categorías ortogonales de fallos o altern
 
 | Categoría | Naturaleza | Momento de detección | Ejemplo | Manejo en Evo-Script |
 | :--- | :--- | :--- | :--- | :--- |
-| **System / Validation Error** | Invalidez estructural o de resolución del programa | Antes de la evaluación | `FunctionNotFoundError`, `FunctionArityError`, `DuplicateFunctionError`, `FunctionCallCycleError`, `FieldNotFoundError`, `FieldAccessTypeError`, `ComparisonTypeError`, `RecursiveTypeCycleError` | El programa se rechaza; no es evaluable. |
+| **System / Validation Error** | Invalidez estructural o de resolución del programa | Antes de la evaluación | `FunctionNotFoundError`, `FunctionArityError`, `DuplicateFunctionError`, `FunctionCallCycleError`, `FieldNotFoundError`, `FieldAccessTypeError`, `ComparisonTypeError`, `RecursiveTypeCycleError`, `TypeNameCollisionError` | El programa se rechaza; no es evaluable. |
 | **Evaluation Error** | Fallo en la evaluación de una expresión en un programa válido | Durante la evaluación | `DivisionByZeroError`, `OverflowError`, `ConversionError` | Detiene la evaluación y se propaga al host/runtime exterior. |
 | **Domain Alternative** | Resultado o caso normal esperado del dominio del programa | Durante la evaluación | `BuscarTrabajadorResult::Error(string)`, `SearchResult::NotFound` | Valor normal `Value` de tipo `enum`; inspeccionable con `when`. |
 
@@ -3588,8 +3593,8 @@ Existe una separación estricta entre la representación textual y la semántica
 | `public fn` | `Public principal function in .efn` |
 | `private fn` | `File-local helper function in .efn` |
 | `esig nombre(args...) -> Tipo;` | `Evo Signature declaration in .esig` |
-| `import modulo::firma;` | `Granular signature dependency declaration` |
-| `import modulo::firma as alias;` | `Granular signature dependency with local alias` |
+| `import modulo::simbolo;` | `Granular published symbol import declaration (.efn, .estc, .enum, .esig)` |
+| `import modulo::simbolo as alias;` | `Granular published symbol import with local alias` |
 | `modulo::simbolo` | `Qualified modular symbol reference` |
 | `modulo::firma nombre_local` | `Signature Dependency Parameter` |
 | `public fn ... -> Tipo : modulo::firma` | `Function Implementation satisfying Signature` |
@@ -3724,11 +3729,12 @@ En Evo-Script v0.1 no se aplican modificadores `public`/`private` a structs, enu
 
 Evo-Script distingue formalmente entre tipos locales a un archivo y tipos compartidos entre múltiples archivos:
 
-1. **Tipo local**: Declarado dentro de un archivo `.efn`. Solo existe en el ámbito léxico de ese archivo. Ningún otro archivo Evo-Script puede referenciarlo ni nombrarlo (`let TipoLocal x = ...` en otro archivo es inválido).
-2. **Tipo compartido**: Cuando un tipo de datos necesita participar en comunicaciones entre distintos archivos Evo-Script (por ejemplo, en los argumentos o resultado de una `.esig`), debe extraerse a su propio archivo especializado:
-   - Struct compartido $\rightarrow$ archivo `.estc` (contiene una única definición `struct Nombre { ... }`).
-   - Enum compartido $\rightarrow$ archivo `.enum` (contiene una única definición `enum Nombre { ... }`).
-3. **Principio de frontera**:
+1. **Tipo local**: Declarado dentro de un archivo `.efn`. Solo existe en el ámbito léxico de ese archivo. Ningún otro archivo Evo-Script puede referenciarlo ni nombrarlo (`let TipoLocal x = ...` en otro archivo es inválido). Los tipos locales no son publicables por módulos `.emod` ni importables por otros artefactos.
+2. **Tipo compartido**: Cuando un tipo de datos necesita participar en comunicaciones entre distintos archivos Evo-Script (por ejemplo, como campo de otro struct en `.estc`, como carga de una variante en `.enum`, o en los argumentos o resultado de una `.esig` o `.efn`), debe extraerse a su propio archivo especializado:
+   - Struct compartido $\rightarrow$ archivo `.estc` (contiene una única definición `struct Nombre { ... }`, precedida opcionalmente por cláusulas `import`).
+   - Enum compartido $\rightarrow$ archivo `.enum` (contiene una única definición `enum Nombre { ... }`, precedida opcionalmente por cláusulas `import`).
+3. **Publicación e importación de tipos compartidos**: Para que un tipo compartido pueda ser consumido por otros artefactos, debe ser publicado por un módulo `.emod` (`publish Nombre;`) e importado explícitamente en el artefacto consumidor mediante `import modulo::Nombre;` (o con alias `import modulo::Nombre as Alias;`).
+4. **Principio de frontera**:
    - Tipo utilizado únicamente dentro del mismo `.efn` $\rightarrow$ permanece local.
    - Tipo que cruza una frontera entre archivos Evo-Script $\rightarrow$ debe residir en `.estc` o `.enum`.
 
@@ -3743,13 +3749,13 @@ esig nombre(tipo argumento1, tipo argumento2) -> Tipo;
 
 Reglas normativas:
 
-1. **Sintaxis oficial de firma**: La declaración consiste exclusivamente en la palabra clave `esig`, el identificador de la firma, la lista de argumentos tipados posicionales, la cláusula `-> Tipo` y el punto y coma final (`;`).
+1. **Sintaxis oficial de firma**: La declaración consiste exclusivamente en la palabra clave `esig`, el identificador de la firma, la lista de argumentos tipados posicionales, la cláusula `-> Tipo` y el punto y coma final (`;`). Puede estar precedida por cero o más cláusulas `import modulo::Tipo;` al inicio del archivo para importar los tipos compartidos requeridos por sus parámetros o resultado.
 2. **Diferenciación estricta entre `esig` y `fn`**: La palabra clave `esig` declara exclusivamente contratos de firma sin cuerpo. La palabra clave `fn` (`public fn` / `private fn`) declara exclusivamente implementaciones de función dentro de `.efn`.
 3. **Ausencia de cuerpo y sentencias**: Un archivo `.esig` no posee cuerpo `{ ... }`, correspondencia, bindings locales ni sentencias `return`.
 4. **Pública por naturaleza**: Toda firma en un `.esig` es intrínsecamente pública. No admite modificadores de visibilidad (`public esig` y `private esig` son inválidos).
 5. **Contrato de acción, no interfaz de objeto**: `.esig` modela directamente la acción requerida, no una interfaz de clase u objeto. Evo-Script no define `interface`, `trait`, `class` ni despacho dinámico `dyn`.
 6. **No crea funciones como valores**: `.esig` define un contrato invocable, no un valor de primer orden de tipo función (`Function Value`). No introduce lambdas, clausuras, function pointers como valores ni tipos función manipulables como datos.
-7. **Tipos permitidos**: Una `.esig` solo puede utilizar tipos nativos o tipos compartidos (`.estc`, `.enum`). No puede utilizar tipos locales de un `.efn`.
+7. **Tipos permitidos**: Una `.esig` solo puede utilizar tipos nativos o tipos compartidos (`.estc`, `.enum`) explícitamente importados mediante `import modulo::Tipo;`. No puede utilizar tipos locales de un `.efn`.
 8. **Desacoplamiento total**: Una `.esig` no contiene ninguna referencia a archivos `.efn` ni a implementaciones concretas.
 
 
@@ -3820,6 +3826,7 @@ Evo-Script prohíbe el acoplamiento directo entre implementaciones y organiza la
     - **Consumo directo**: El archivo importa la firma (`import values::search;`) y la invoca directamente (`search(id)`). La capacidad está disponible a nivel de archivo.
     - **Consumo mediante Signature Dependency Parameter**: Una Function Implementation declara formalmente que requiere una capacidad específica en su lista de parámetros (`modulo::firma nombre_local`):
       ```text
+      import values::SearchResult;
       import values::search;
 
       public fn process(int id, values::search search) -> SearchResult {
@@ -3869,20 +3876,214 @@ Reglas normativas:
 4. **Prohibición estricta de publicar `.efn`**: Un `.emod` **nunca publica archivos `.efn`**, funciones privadas ni tipos locales a una implementación. Las implementaciones permanecen completamente ocultas detrás de los contratos públicos.
 5. **Ausencia de `namespace`**: Evo-Script no introduce la palabra clave `namespace`. La pertenencia modular se expresa mediante nombres calificados con `::`.
 
-#### 12.7.2 Importación granular y nombres calificados (`::`)
+#### 12.7.2 Importación universal de símbolos publicados (`import` y `as`)
 
-1. **Importación granular de firmas**: La cláusula `import module::signature;` importa exclusivamente la capacidad indicada. No importa todo el módulo ni hace visibles otras firmas publicadas por `values.emod` (como `save` o `delete`).
-2. **Cierre transitivo de tipos limitado**: Al importar una firma mediante `import module::signature;`, se hacen resolubles automáticamente la firma y el conjunto mínimo de tipos compartidos (`.estc` y `.enum`) requeridos directamente por sus parámetros y resultado, así como los subtipos anidados en estos. No se hacen disponibles tipos compartidos no relacionados del módulo.
-   - Si `search.esig` requiere `SearchResult.enum`, y `SearchResult.enum` compone `Worker.estc`, entonces `import values::search;` hace resolubles `search`, `SearchResult` y `Worker`.
-   - Si el módulo publica adicionalmente `DeleteResult.enum` o `Address.estc`, estos permanecen no disponibles a menos que sean explícitamente importados o requeridos por otra firma.
-3. **Uso de alias local (`as`)**: Cuando se declara `import modulo::firma as alias;`, el nombre local accesible en el archivo es exclusivamente `alias`. El nombre original `firma` no se hace visible localmente por esa declaración, lo que permite resolver posibles colisiones de nombres entre distintos módulos.
-4. **Separación estricta entre `import` y `use`**:
-   - `import`: Declara una dependencia modular estructural / semántica en tiempo de análisis.
-   - `use`: Activa un `Scope` de capacidades durante la ejecución.
-   No se reutiliza `use` para importación modular ni `import` para activación de Scopes.
-5. **Calificación mediante `::`**: El operador `::` denota calificación y pertenencia lógica de un símbolo dentro de un contexto nombrado:
-   - `modulo::simbolo` (por ejemplo, `values::search`).
-   - `TipoEnum::Variante` (por ejemplo, `SearchResult::Found`).
+Evo-Script v0.1 define una **sintaxis única y universal** para la importación explícita de cualquier símbolo publicado por un módulo:
+
+```text
+import modulo::simbolo;
+```
+
+o con alias local explícito:
+
+```text
+import modulo::simbolo as nombre_local;
+```
+
+Reglas normativas:
+
+1. **Sintaxis uniforme para firmas y tipos compartidos**: La misma construcción textual `import modulo::simbolo;` se utiliza para importar cualquier categoría de símbolo publicado:
+   - Firmas de funciones (`.esig`): `import workers::search;`
+   - Structs compartidos (`.estc`): `import workers::Worker;`
+   - Enums compartidos (`.enum`): `import workers::SearchResult;`
+2. **Prohibición de palabras clave diferenciadas de importación**: No existen palabras clave ni formas alternativas como `import type`, `import struct` ni `import enum`. El parser reconoce la forma única `import modulo::simbolo;`, y la categoría semántica del símbolo importado determina su espacio de nombres local.
+3. **Condición de publicación previa**: Un símbolo solo puede importarse si ha sido explícitamente incluido en la cláusula `publish` del módulo `.emod` correspondiente. Intentar importar un símbolo no publicado o privado es un error de análisis estático.
+4. **Importación estrictamente granular**: Toda declaración `import` importa exactamente un símbolo calificado. Quedan prohibidos los comodines (`import modulo::*;`, `import * from modulo;`) y la apertura implícita de todo el espacio del módulo (`import modulo;`).
+5. **Declaración estructural top-level**: Las cláusulas `import` son declaraciones estructurales de nivel superior. Deben ubicarse estrictamente al inicio de los archivos que las admiten (`.efn`, `.estc`, `.enum`, `.esig`), antes de cualquier declaración que utilice los nombres locales introducidos. No se permiten declaraciones `import` anidadas dentro de funciones, structs, ramas de `when` ni expresiones evaluables.
+6. **Naturaleza estática no ejecutable**: `import` no es una sentencia ejecutable (`Operation Statement` o `Body Statement`), no ejecuta código en runtime ni produce valores. Se procesa exclusivamente durante el análisis semántico de dependencias.
+7. **Separación estricta entre `import` y `use`**:
+   - `import`: declara dependencias estructurales y semánticas de símbolos publicados en tiempo de análisis.
+   - `use`: activa un `Scope` de capacidades en tiempo de ejecución.
+   No se utiliza `use` para importar tipos o firmas ni `import` para activar Scopes.
+
+
+#### 12.7.3 Separación de espacios semánticos (`Signature Space` y `Type Space`)
+
+Evo-Script organiza los símbolos locales disponibles en un archivo en espacios semánticos formalmente diferenciados:
+
+1. **Registro en Semantic Spaces según la categoría del símbolo**:
+   - **`Signature Space`**: Al importar una firma (`import workers::search;`), el símbolo entra al `Signature Space` local. Se utiliza para llamadas a capacidades funcionales directas o como tipo formal en `Signature Dependency Parameters` (`workers::search search`).
+   - **`Type Space`**: Al importar un struct (`import workers::Worker;`) o un enum (`import workers::SearchResult;`), el símbolo entra al `Type Space` local. Se utiliza en todas las posiciones sintácticas donde se espera un nombre de tipo.
+2. **Unificación en `Type Space`**: Dentro de un mismo archivo, el `Type Space` aloja tanto los tipos definidos localmente (structs y enums locales en `.efn`) como los tipos compartidos importados.
+3. **Uso no calificado del nombre local de tipo**: Una vez importado un tipo en `Type Space` (por ejemplo `import workers::Worker;`), su uso local se realiza **exclusivamente mediante su nombre local no calificado** (`Worker`) o su alias (`Employee`).
+4. **Prohibición de uso calificado de tipos**: No se admite el uso de nombres calificados en posiciones ordinarias de tipos. Escribir `let workers::Worker w = ...;`, `workers::Worker { ... }` o `public fn f(workers::Worker w) -> ...` es sintácticamente inválido. La forma obligatoria y canónica es importar previamente el tipo (`import workers::Worker;`) y utilizar su nombre local simple (`Worker`).
+   - *Excepción normativa de diseño*: En `Signature Dependency Parameters`, la identidad formal de la firma se escribe calificada (`workers::search search`) para distinguir formalmente el contrato requerido del identificador local del parámetro.
+
+
+#### 12.7.4 Uso de tipos compartidos importados en artefactos (`.efn`, `.estc`, `.enum`, `.esig`)
+
+Los tipos compartidos importados en `Type Space` pueden utilizarse en cualquier artefacto que admita declaraciones `import`:
+
+1. **En implementaciones de funciones (`.efn`)**:
+   - Tipo de parámetros: `public fn save(Worker worker) -> SaveResult { ... }`
+   - Tipo de resultado: `public fn current_worker() -> Worker { ... }`
+   - Declaraciones de binding `let`: `let Worker worker = ...;`
+   - Expresiones de construcción de struct: `Worker { id: 10, name: "Juan" }`
+   - Referencias y variantes de enum: `SearchResult::Found(worker)`, `SearchResult::NotFound`
+   - Ramas de selección exhaustiva en `when`: `when (result) { SearchResult::Found(w) => w.name, ... }`
+2. **En definiciones de structs compartidos (`.estc`)**:
+   - Un archivo `.estc` puede declarar cero o más cláusulas `import` al inicio para importar otros tipos compartidos requeridos por sus campos:
+     ```text
+     import geography::Pais;
+
+     struct Estado {
+         int id;
+         string name;
+         Pais pais;
+     }
+     ```
+   - El archivo sigue definiendo exactamente una única estructura compartida. Las cláusulas `import` no constituyen definiciones adicionales de tipos.
+3. **En definiciones de enums compartidos (`.enum`)**:
+   - Un archivo `.enum` puede declarar cero o más cláusulas `import` al inicio para importar los tipos de datos requeridos por sus variantes:
+     ```text
+     import workers::Worker;
+
+     enum SearchResult {
+         Found(Worker)
+         NotFound
+     }
+     ```
+   - Las variantes estructuradas también pueden utilizar tipos importados:
+     ```text
+     import workers::Worker;
+
+     enum SearchResult {
+         NotFound
+         Found {
+             Worker worker;
+         }
+     }
+     ```
+   - El archivo sigue definiendo exactamente un único enum compartido.
+4. **En firmas públicas de funciones (`.esig`)**:
+   - Un archivo `.esig` puede declarar cero o más cláusulas `import` al inicio para importar los tipos compartidos requeridos por sus parámetros o su retorno:
+     ```text
+     import workers::SearchResult;
+
+     esig search(int id) -> SearchResult;
+     ```
+   - El archivo sigue conteniendo exactamente una única declaración de firma (`esig`).
+5. **Artefactos que no admiten `import`**:
+   - `.main`: Contiene exclusivamente la sentencia de selección de entrada `entry`.
+   - `.root`: Contiene exclusivamente sentencias de vinculación `bind ... to ...`.
+   - `.emod`: Contiene exclusivamente sentencias `publish`.
+
+
+#### 12.7.5 Cierre de dependencias de tipos (`Type Dependency Closure`) y de firmas (`Signature Type Closure`)
+
+Evo-Script define formalmente la distinción entre **resolución semántica transitiva** e **importación local en el espacio de nombres**:
+
+1. **Cierre de dependencias de tipo (`Type Dependency Closure`)**:
+   - Para cualquier tipo compartido $T$, su `Type Dependency Closure(T)` es el conjunto transitivo de todos los tipos de usuario necesarios para conocer de forma completa su estructura de campos y variantes.
+   - Si `Worker` compone `Address`, y `Address` compone `Country`, entonces $\text{Type Dependency Closure}(\text{Worker}) = \{\text{Worker}, \text{Address}, \text{Country}\}$.
+2. **Resolución transitiva no implica importación local**:
+   - Al declarar `import workers::Worker;`, el compilador/analizador resuelve transitivamente todo el cierre para validar tipos, tamaños y accesos a campos anidados.
+   - Sin embargo, **solo `Worker` ingresa al `Type Space` local** del archivo consumidor. Los tipos transitivos (`Address`, `Country`) **no se importan automáticamente** ni están disponibles como nombres locales.
+3. **Acceso a campos anidados sin importación local**:
+   - Gracias a la resolución semántica del cierre, una expresión de acceso a campos anidados es completamente válida sin requerir importar los tipos intermedios:
+     ```text
+     import workers::Worker;
+
+     public fn city_of(Worker worker) -> string {
+         return worker.address.city; // Válido: el tipo de address se conoce transitivamente
+     }
+     ```
+4. **Nombrar o construir directamente tipos transitivos exige `import` explícito**:
+   - Si un archivo desea nombrar directamente `Address` en un binding `let` o construirlo directamente mediante `Address { ... }`, debe importar explícitamente dicho tipo:
+     ```text
+     import workers::Worker;
+     import workers::Address; // Requerido para nombrar 'Address' localmente
+
+     let Address addr = Address { city: "Monterrey" };
+     ```
+5. **Cierre de tipos en firmas (`Signature Type Closure`)**:
+   - Al importar una firma (`import workers::search;`), el compilador resuelve el cierre de tipos requerido por su contrato (`SearchResult`, `Worker`, etc.).
+   - No obstante, la declaración `import workers::search;` **no introduce `SearchResult` ni `Worker` en el `Type Space` local**. Si el archivo consumidor utiliza `SearchResult` como tipo de retorno o en bindings `let`, debe declarar adicionalmente `import workers::SearchResult;`.
+
+
+#### 12.7.6 Cierre público de tipos (`Public Type Closure`)
+
+Todo módulo que exponga símbolos públicos debe garantizar la integridad de su superficie:
+
+1. **Resolubilidad del cierre público**: Si un módulo publica una firma o un tipo compartido, todos los tipos de usuario que formen parte de su `Type Dependency Closure` o `Signature Type Closure` deben ser semánticamente accesibles y resolubles a través de interfaces publicadas.
+2. **Prohibición de contratos incompletos o inaccesibles**: Un módulo no puede publicar una firma o un tipo que dependa de un tipo local no publicado o inaccesible externamente.
+3. **Cierre a través de módulos lógicos**: El cierre de tipos puede componer tipos compartidos procedentes de distintos módulos lógicos. Las reglas de localización física de archivos y módulos continúan como especificación pendiente.
+
+
+#### 12.7.7 Aliases de tipos con `as`, convenciones y colisiones (`TypeNameCollisionError`)
+
+1. **Uso de alias local con `as`**: La cláusula `as` permite asignar un nombre local alternativo a un tipo importado:
+   ```text
+   import hr::Worker as HrWorker;
+   import sales::Worker as SalesWorker;
+   ```
+2. **Invarianza de la identidad formal del tipo**:
+   - El alias define únicamente el identificador local visible en el `Type Space` de ese archivo.
+   - La **identidad formal y semántica** del tipo sigue siendo `hr::Worker` o `sales::Worker`.
+   - El alias no crea un tipo nuevo, no es un `typedef`, no introduce un subtipo ni crea un wrapper. La igualdad estructural (`==`, `!=`) y la compatibilidad de tipos operan exclusivamente sobre la identidad semántica real.
+3. **Convenciones de nombres para aliases**:
+   - Todo alias asignado a un tipo (`struct` o `enum`) ingresa a `Type Space` y debe nombrarse obligatoriamente en **`PascalCase`** (`HrWorker`, `SalesWorker`, `WorkerResult`).
+   - Todo alias asignado a una `Signature` ingresa a `Signature Space` y debe nombrarse obligatoriamente en **`snake_case`** (`search_employee`).
+4. **Error del Sistema: `TypeNameCollisionError`**:
+   - Si dos declaraciones intentan registrar el mismo identificador dentro del `Type Space` del mismo archivo, el programa es inválido y produce **`TypeNameCollisionError`**:
+     - Dos importaciones de tipos que comparten el mismo nombre local:
+       ```text
+       import hr::Worker;
+       import sales::Worker; // Error: TypeNameCollisionError (Worker ya existe en Type Space)
+       ```
+     - Un tipo local y un tipo importado con el mismo nombre:
+       ```text
+       import hr::Worker;
+       struct Worker { ... } // Error: TypeNameCollisionError
+       ```
+     - Dos aliases de tipos que asignan el mismo identificador:
+       ```text
+       import hr::Worker as Employee;
+       import sales::Worker as Employee; // Error: TypeNameCollisionError
+       ```
+     - Importación duplicada exacta del mismo tipo:
+       ```text
+       import hr::Worker;
+       import hr::Worker; // Error: TypeNameCollisionError
+       ```
+     - Un struct y un enum que comparten el mismo nombre local dentro del mismo archivo.
+   - `TypeNameCollisionError` pertenece a la categoría de **errores de validación del sistema** (`SystemError`); se detecta durante el análisis estático antes de la evaluación normal en runtime.
+
+
+#### 12.7.8 Preservación del Type Dependency Graph y detección de ciclos intermodulares (`RecursiveTypeCycleError`)
+
+1. **Importación no crea dependencia estructural automática**: Una cláusula `import modulo::Tipo;` hace disponible el símbolo en `Type Space`, pero **no genera una arista en el Type Dependency Graph** a menos que el tipo importado se utilice estructuralmente como campo de un struct o carga de un enum.
+2. **Inclusión de tipos compartidos en el Grafo Global de Tipos**: Cuando un struct o enum utiliza un tipo importado en su composición, dicha arista dirigida participa plenamente en el `Type Dependency Graph` global del proyecto.
+3. **Detección de ciclos a través de fronteras de módulos**: La exigencia de que el grafo de dependencias de tipos sea un **DAG** aplica universalmente a todo el proyecto. Un ciclo estructural no se evade distribuyendo los tipos en distintos archivos o módulos lógicos:
+   ```text
+   // En modulo_a / Estado.estc
+   import modulo_b::Pais;
+   struct Estado { Pais pais; } // Arista Estado -> Pais
+
+   // En modulo_b / Pais.estc
+   import modulo_a::Estado;
+   struct Pais { Estado estado; } // Arista Pais -> Estado
+   ```
+   El grafo global contiene el ciclo $Estado \to Pais \to Estado$. El proyecto se rechaza en validación estática con **`RecursiveTypeCycleError`**.
+4. **Invalidez de aliases para eludir ciclos**: Los aliases no alteran la identidad formal de los tipos, por lo que su uso no oculta ni evita la detección de un ciclo estructural.
+
+
+#### 12.7.9 Calificación mediante `::` y delimitación del alcance
+
+El operador `::` denota calificación y pertenencia lógica de un símbolo dentro de un contexto nombrado:
+
+- `modulo::simbolo` (por ejemplo, `values::search`, `values::Worker` en declaraciones `import`, `publish` o `Signature Dependency Parameters`).
+- `TipoEnum::Variante` (por ejemplo, `SearchResult::Found`, `SearchResult::NotFound`).
 
 
 ### 12.8 Raíz de proyecto (.root) y Functional Composition Root
@@ -4508,6 +4709,8 @@ Contenido de los artefactos:
 
 - **`SearchResult.enum`** (Enum compartido):
   ```text
+  import values::Worker;
+
   enum SearchResult {
       Found(Worker)
       NotFound
@@ -4517,6 +4720,8 @@ Contenido de los artefactos:
 
 - **`search.esig`** (Firma pública / Contrato):
   ```text
+  import values::SearchResult;
+
   esig search(int id) -> SearchResult;
   ```
 
@@ -4531,6 +4736,7 @@ Contenido de los artefactos:
 
 - **`providers/search_database.efn`** (Implementación A que satisface la firma):
   ```text
+  import values::SearchResult;
   import values::search;
 
   public fn search(int id) -> SearchResult
@@ -4542,6 +4748,7 @@ Contenido de los artefactos:
 
 - **`providers/search_memory.efn`** (Implementación B que satisface la firma):
   ```text
+  import values::SearchResult;
   import values::search;
 
   public fn search(int id) -> SearchResult
@@ -4553,6 +4760,7 @@ Contenido de los artefactos:
 
 - **`providers/search_remote.efn`** (Implementación C que satisface la firma):
   ```text
+  import values::SearchResult;
   import values::search;
 
   public fn search(int id) -> SearchResult
@@ -4564,6 +4772,7 @@ Contenido de los artefactos:
 
 - **`functions/process.efn`** (Consumidor inyectado que requiere la capacidad):
   ```text
+  import values::SearchResult;
   import values::search;
 
   public fn process(int id, values::search search) -> SearchResult {
@@ -4573,6 +4782,7 @@ Contenido de los artefactos:
 
 - **`functions/consumer.efn`** (Consumidor directo que utiliza la capacidad):
   ```text
+  import values::SearchResult;
   import values::search;
 
   public fn execute(int id) -> SearchResult {
@@ -4625,6 +4835,8 @@ Contenido y responsabilidades de cada artefacto:
 
 - **`washes_clothes_result.enum`** (Enum compartido):
   ```text
+  import laundry::Clothes;
+
   enum WashesClothesResult {
       Ok(Clothes)
       Error(string)
@@ -4633,6 +4845,9 @@ Contenido y responsabilidades de cada artefacto:
 
 - **`washes_clothes.esig`** (Firma pública / Contrato):
   ```text
+  import laundry::Clothes;
+  import laundry::WashesClothesResult;
+
   esig washes_clothes(Clothes clothes) -> WashesClothesResult;
   ```
 
@@ -4647,6 +4862,8 @@ Contenido y responsabilidades de cada artefacto:
 
 - **`washer.efn`** (Implementación que satisface la firma):
   ```text
+  import laundry::Clothes;
+  import laundry::WashesClothesResult;
   import laundry::washes_clothes;
 
   private fn prepare(Clothes clothes) -> Clothes {
