@@ -714,7 +714,7 @@ Ejemplo conceptual:
         Error(GuardarError)
     }
 
-    fn guardar(Colonia colonia) -> GuardarColoniaResult {
+    public fn guardar(Colonia colonia) -> GuardarColoniaResult {
         ...
     }
 
@@ -987,7 +987,7 @@ Reglas normativas:
        Error(BuscarError)
    }
 
-   fn buscar(int id) -> BuscarTrabajadorResult {
+   public fn buscar(int id) -> BuscarTrabajadorResult {
        ...
    }
    ```
@@ -1714,11 +1714,11 @@ Como Evo-Script v0.1 no define mecanismos de captura de errores de evaluación, 
 3. **Declaraciones return**: `return expresion;` solo declara como resultado el valor producido exitosamente por `expresion`. Si la evaluación de `expresion` falla, el fallo ocurre **antes** de que `return` pueda completarse; la función no retorna un valor y el fallo se propaga al contexto que invocó la función.
 4. **Llamadas entre funciones**: Si una función invocada falla durante su evaluación, la función llamadora tampoco produce su valor normal:
    ```text
-   fn dividir(int a, int b) -> int {
+   private fn dividir(int a, int b) -> int {
        return a / b;
    }
 
-   fn calcular(int a, int b) -> int {
+   public fn calcular(int a, int b) -> int {
        return dividir(a, b) + 10;
    }
    ```
@@ -1866,7 +1866,7 @@ El pipeline en Evo-Script es estrictamente **monovalor** y opera mediante compos
 
 Para operaciones cuya firma requiere exactamente un argumento:
 
-    fn to_string(int value) -> string
+    fn to_string(int value) -> string;
 
 la forma canónica y obligatoria en el pipeline es:
 
@@ -1889,7 +1889,7 @@ Para operaciones cuya firma requiere dos o más argumentos, el valor transportad
 
 Ejemplo:
 
-    fn sumar(int a, int b) -> int {
+    public fn sumar(int a, int b) -> int {
         return a + b;
     }
 
@@ -1962,7 +1962,7 @@ Reglas:
    ```
 2. **Con `return`**: Una función puede declarar una expresión pipeline como su resultado:
    ```text
-   fn calcular_texto(int a, int b) -> string {
+   public fn calcular_texto(int a, int b) -> string {
        return a + b
            |> to_string;
    }
@@ -1986,15 +1986,15 @@ Reglas:
 #### 10.12.9 Ejemplo canónico completo
 
 ```text
-fn sumar(int value, int amount) -> int {
+private fn sumar(int value, int amount) -> int {
     return value + amount;
 }
 
-fn multiplicar(int value, int factor) -> int {
+private fn multiplicar(int value, int factor) -> int {
     return value * factor;
 }
 
-fn calcular(int value) -> string {
+public fn calcular(int value) -> string {
     return value
         |> sumar(this, 20)
         |> multiplicar(this, 2)
@@ -2110,15 +2110,15 @@ enum BuscarTrabajadorResultado {
     Error(string)
 }
 
-fn buscar_trabajador(int id) -> BuscarTrabajadorResultado {
+private fn buscar_trabajador(int id) -> BuscarTrabajadorResultado {
     correspondencia
 }
 
-fn describir_trabajador(Trabajador trabajador) -> string {
+private fn describir_trabajador(Trabajador trabajador) -> string {
     correspondencia
 }
 
-fn obtener_mensaje(BuscarTrabajadorResultado resultado) -> string {
+public fn obtener_mensaje(BuscarTrabajadorResultado resultado) -> string {
     return when resultado {
         BuscarTrabajadorResultado::Encontrado(Trabajador trabajador)
             => describir_trabajador(trabajador)
@@ -2586,23 +2586,20 @@ enum WashResult {
     Error(string)
 }
 
-private fn validate(Clothes clothes) -> bool {
-    return clothes.name != "";
+private fn prepare(Clothes clothes) -> Clothes {
+    return clothes;
 }
 
 public fn washes_clothes(Clothes clothes) -> WashResult {
-    let bool valid = validate(clothes);
+    let Clothes prepared = prepare(clothes);
 
-    return when valid {
-        true  => WashResult::Ok(clothes)
-        false => WashResult::Error("Ropa inválida")
-    };
+    return WashResult::Ok(prepared);
 }
 ```
 
 Características:
 - `Clothes` y `WashResult` son tipos locales a `washer.efn`.
-- `validate` es una función auxiliar privada (`private fn`).
+- `prepare` es una función auxiliar privada (`private fn`).
 - `washes_clothes` es la única función pública (`public fn`).
 - No requiere `.esig`, `.estc`, `.enum`, `.root` ni `.main`.
 - Se ejecuta directamente por un host/runtime Evo-Script.
@@ -2648,17 +2645,14 @@ Contenido y responsabilidades de cada artefacto:
 
 - **`washer.efn`** (Implementación):
   ```text
-  private fn validate(Clothes clothes) -> bool {
-      return clothes.name != "";
+  private fn prepare(Clothes clothes) -> Clothes {
+      return clothes;
   }
 
   public fn washes_clothes(Clothes clothes) -> WashesClothesResult {
-      let bool valid = validate(clothes);
+      let Clothes prepared = prepare(clothes);
 
-      return when valid {
-          true  => WashesClothesResult::Ok(clothes)
-          false => WashesClothesResult::Error("Ropa inválida")
-      };
+      return WashesClothesResult::Ok(prepared);
   }
   ```
 
