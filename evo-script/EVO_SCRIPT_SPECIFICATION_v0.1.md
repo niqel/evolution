@@ -3245,7 +3245,7 @@ Existe una estricta separación de responsabilidades entre `.root` y `.main`:
 - **`.root`**: Define **CÓMO** se compone la aplicación (selecciona qué Function Implementation satisface cada Signature mediante declaraciones `bind`).
 - **`.main`**: Define **CÓMO** arranca la aplicación y **CUÁNTO TIEMPO** permanece viva (selecciona la Function Implementation inicial mediante `entry` y posee el Application Main Loop).
 
-Flujo conceptual de arranque y ejecución de una aplicación estructurada:
+Flujo conceptual de arranque, ejecución y ciclo de vida de una aplicación estructurada:
 
 ```text
     structured project
@@ -3267,9 +3267,9 @@ invoke initial public fn
             ├─► processes runtime / window / interactive events
             │
             ▼
-   exit condition / request
+Application Exit Request (e.g. Super + Q, UI action, etc.)
             ↓
- Application Main Loop ends
+ Application Main Loop terminates
             ↓
    application terminates
 ```
@@ -3438,14 +3438,78 @@ En este modelo:
 - `application.main` desconoce por completo los proveedores `window_native.efn` y `config_file.efn`.
 - El runtime valida `.root` y `.main`, inicia el Application Main Loop e invoca `initialize`.
 
-#### 12.9.5 Distinción formal entre Function return y Application exit
+#### 12.9.5 Semántica de terminación (Application Exit Request)
+
+La terminación del Application Main Loop y el cierre de la aplicación se rigen formalmente por el concepto de **Application Exit Request**:
+
+1. **Definición de Application Exit Request**: Un `Application Exit Request` es una solicitud procesada por el runtime para finalizar el Application Main Loop de una aplicación activa.
+2. **Flujo unificado de terminación**:
+   ```text
+   Application Exit Request
+           ↓
+   Application Main Loop terminates
+           ↓
+      application terminates
+   ```
+3. **Responsabilidad del runtime (no es keyword del lenguaje)**:
+   - La terminación de una aplicación pertenece al ciclo de vida administrado por el runtime, no a sentencias imperativas de control del lenguaje.
+   - Evo-Script **NO** introduce keywords como `exit`, `quit`, `stop`, `shutdown` ni `terminate`. No existe la sentencia `exit;`.
+   - `Application Exit Request` **NO** es un tipo de datos (`Value`), enum de dominio, `bool`, `string` ni resultado de función. No existen `ExitValue`, `SystemExit Value`, `ApplicationExit enum`, `MainResult` ni `ExitCode`.
+   - Una función no requiere retornar ningún valor especial para terminar la aplicación (no existe `return Exit;`).
+4. **Combinación estándar del runtime (`Super + Q`)**:
+   - Evo Runtime establece la combinación **`Super + Q`** como vía de entrada estándar universal para solicitar el cierre de la aplicación activa.
+   - **Terminología `Super`**: Se utiliza formalmente `Super` como término multiplataforma para designar la tecla Super (comúnmente identificada físicamente como tecla Windows en teclados estándar).
+   - **Naturaleza en el runtime**: `Super + Q` es un input binding / política de ciclo de vida del runtime, **no es sintaxis ni palabra clave del lenguaje Evo-Script**.
+   - Flujo ante el atajo:
+     ```text
+     user presses Super + Q
+             ↓
+     runtime receives shortcut
+             ↓
+     runtime processes Application Exit Request
+             ↓
+     Application Main Loop terminates
+             ↓
+        application terminates
+     ```
+5. **Unificación semántica: Múltiples fuentes (`Exit Sources`), una sola semántica**:
+   - Existe una separación conceptual formal entre la fuente que origina la solicitud (`Exit Source`) y la semántica de terminación (`Exit Semantics`):
+     ```text
+     Exit Source != Exit Semantics
+     ```
+   - Diversas fuentes convergen en el mismo `Application Exit Request`:
+     ```text
+     Super + Q ──────────┐
+                         │
+     botón [X] ──────────┤
+                         ├──> Application Exit Request
+     menú Exit ──────────┤
+                         │
+     comando terminal ───┘
+                                 ↓
+                       Application Main Loop terminates
+                                 ↓
+                         application terminates
+     ```
+   - **Botón cerrar [X]**: El comportamiento de los controles de ventana es definido por la lógica de la aplicación o su entorno de interfaz. Cerrar una ventana puede o no emitir un `Application Exit Request` según determine la aplicación (cerrar una ventana no equivale universalmente a terminar la aplicación).
+   - **Comando de terminal**: Si una aplicación interactiva de terminal procesa el comando de texto `"exit"`, se trata de una entrada textual interpretada por dicha aplicación, no de una keyword del lenguaje.
+   - **Garantía del runtime**: Aunque una aplicación no implemente botones de cierre, menús o comandos específicos, el runtime garantiza la disponibilidad universal de `Super + Q` para emitir el `Application Exit Request`.
+6. **Ciclo de vida unívoco y sin reinicio**:
+   - El Application Main Loop termina una sola vez. No existe reinicio automático (`automatic restart`), recreación de loop ni resurrección de la aplicación dentro de la misma ejecución.
+   - La terminación del Main Loop no introduce `break` ni `continue` (no se modela como un `break` imperativo).
+   - Preserva estrictamente la ausencia de recursión y la detección de `FunctionCallCycleError` en el grafo de llamadas de funciones.
+   - No se diseñan APIs concretas de interfaz en este bloque (no Window API, Button API, Menu API, Terminal Command API, Event API, ni Signatures oficiales como `application::exit` o `runtime::exit`).
+   - No se introducen callbacks ni hooks de terminación (`on_exit`, `before_exit`, `shutdown handler`, cleanup callbacks, destructores) ni modelos de confirmación/veto ("Are you sure?", veto exit).
+
+#### 12.9.6 Distinción formal entre Function return y Application exit
 
 Evo-Script distingue formalmente entre finalizar la evaluación de una función y terminar la ejecución global de la aplicación:
 
 1. **`Function return`**: La sentencia `return expresion;` finaliza estrictamente la correspondencia de la Function Implementation evaluada y produce su valor tipado (`Value`).
-2. **`Application exit`**: Ocurre única y exclusivamente cuando finaliza el **Application Main Loop**.
+2. **`Application exit`**: Ocurre única y exclusivamente cuando finaliza el **Application Main Loop** tras procesar un **Application Exit Request**.
 3. **Independencia del retorno de la función inicial**: La terminación de la función inicial no implica el cierre de la aplicación:
    ```text
+   Function return != Application Exit Request
    Function return != Application exit
    ```
    Ejemplo:
@@ -3458,18 +3522,17 @@ Evo-Script distingue formalmente entre finalizar la evaluación de una función 
    Cuando `initialize` ejecuta su `return InitResult::Ready;`, la evaluación de `initialize` concluye, pero si el Application Main Loop permanece activo (por ejemplo, atendiendo eventos de ventana, interacción del usuario o solicitudes del host), la aplicación permanece viva.
 4. **Las alternativas de dominio no son señales de salida**: Retornar un valor como `SearchResult::NotFound` o `InitResult::Error("fallo")` constituye la entrega normal de un `Value` de tipo enum y no detiene automáticamente el Application Main Loop.
 
-#### 12.9.6 Ámbito de aplicación del modelo
+#### 12.9.7 Ámbito de aplicación del modelo
 
 1. **Universalidad para aplicaciones estructuradas**: El Application Main Loop modela el ciclo de vida de cualquier aplicación estructurada (gráfica con ventanas, de terminal interactiva o tipo servicio/servidor). Las aplicaciones gráficas no requieren implementar bucles infinitos para mantener viva su interfaz.
 2. **Scripts autocontenidos**: Un script simple `.efn` ejecutado directamente no requiere `.root`, `.main` ni `entry`. Su evaluación concluye inmediatamente cuando su única `public fn` ejecuta su `return`, entregando el resultado directamente al host exterior sin Application Main Loop.
 3. **Unicidad de `.main`**: Toda aplicación estructurada posee exactamente un archivo `.main`. No se admiten archivos `.main` múltiples, anidados, incluidos ni heredados.
 4. **Librerías reutilizables**: Una librería reutilizable (`.elib`) no representa una aplicación directamente ejecutable y no requiere archivo `.main` ni declaración `entry`.
 
-#### 12.9.7 Aspectos explícitamente pendientes de especificación posterior
+#### 12.9.8 Aspectos explícitamente pendientes de especificación posterior
 
-Para mantener la precisión y pureza de este bloque normativo, se delimitan los aspectos que quedan expresamente reservados para decisiones de diseño posteriores:
-1. **Mecanismo exacto de terminación (`Exit Mechanism`)**: La sintaxis u operación mediante la cual una aplicación solicita formalmente al runtime terminar el Application Main Loop (sea mediante capacidades del host, eventos de ventana o peticiones del runtime) queda pendiente de diseño posterior. No se introducen palabras clave oficiales como `exit`, `quit`, `stop` ni `shutdown`.
-2. **Interacción detallada entre EvaluationErrors y terminación global**: La semántica precisa de cómo fallos de evaluación no capturables (`EvaluationError`) interactúan con el Application Main Loop se reserva para el bloque correspondiente.
+Para mantener la precisión y pureza de este bloque normativo, se delimita el aspecto que queda expresamente reservado para decisiones de diseño posteriores:
+1. **Interacción detallada entre EvaluationErrors y terminación global**: La relación semántica precisa entre fallos de evaluación no capturables en runtime (`EvaluationError`) y la terminación global del Application Main Loop se reserva para su bloque de diseño correspondiente. Se formaliza que un `EvaluationError` (fallo de evaluación) y un `Application Exit Request` (terminación limpia solicitada) son conceptos estrictamente diferenciados.
 
 
 ### 12.10 Librerías reutilizables (.elib)
