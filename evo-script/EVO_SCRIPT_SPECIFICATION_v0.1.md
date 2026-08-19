@@ -1505,7 +1505,7 @@ Reglas fundamentales de evaluación:
 Una expresión puede utilizarse directamente como el valor en una declaración `let`:
 
     let int total = price + tax;
-    let bool allowed = active && age >= 18;
+    let bool allowed = active && (age >= 18);
 
 
 ### 10.2 Tipado contextual y sintaxis de literales numéricos
@@ -1822,26 +1822,170 @@ Evo-Script v0.1 **no define mecanismos de captura ni manejo de excepciones**:
 
 ### 10.8 Operadores de comparación
 
-Evo-Script v0.1 define seis operadores de comparación:
+Evo-Script v0.1 define seis operadores de comparación divididos en dos familias formales:
 
-| Operador | Significado | Ejemplo |
-| :--- | :--- | :--- |
-| `==` | Igual a | `a == b` |
-| `!=` | Diferente de | `a != b` |
-| `<` | Menor que | `a < b` |
-| `<=` | Menor o igual que | `a <= b` |
-| `>` | Mayor que | `a > b` |
-| `>=` | Mayor o igual que | `a >= b` |
+1. **Operadores de igualdad (`Equality Operators`)**:
+   - `==` (Igual a)
+   - `!=` (Diferente de)
+2. **Operadores de orden (`Ordering Operators`)**:
+   - `<` (Menor que)
+   - `<=` (Menor o igual que)
+   - `>` (Mayor que)
+   - `>=` (Mayor o igual que)
 
-Reglas:
+Toda expresión de comparación (`Comparison Expression`) produce como resultado normal exactamente un valor de tipo `bool`.
 
-- El resultado semántico de toda comparación es un valor de tipo `bool`.
-- No se introducen identificadores textuales como `equals`, `greater_than` o `less_than` para las expresiones generales del lenguaje (las construcciones semánticas de consulta de EvoQ son independientes).
 
-Ejemplos:
+#### 10.8.1 Principio general de tipado en comparaciones
 
-    let bool adult = age >= 18;
-    let bool same = first == second;
+Evo-Script v0.1 **no realiza conversiones implícitas, promociones ni coerciones** entre tipos durante una comparación.
+
+1. **Regla de identidad exacta de tipos**:
+   Para cualquier operador de comparación `left OP right`, el tipo semántico exacto del operando izquierdo (`left_type`) debe coincidir exactamente con el tipo semántico del operando derecho (`right_type`).
+2. **Rechazo por discrepancia de tipos (`ComparisonTypeError`)**:
+   Si los tipos de los operandos no coinciden exactamente, o si el tipo no es compatible con el operador específico (por ejemplo comparar `int` con `int64`, `int` con `float`, `string` con operadores de orden, o `dynamic` directamente), el programa es inválido y se rechaza estáticamente con el error:
+
+   ```text
+   ComparisonTypeError
+   ```
+
+   `ComparisonTypeError` pertenece a la categoría de **errores de validación del sistema** (`SystemError`); se detecta antes de la evaluación normal y **no** es un error de evaluación (`EvaluationError`).
+3. **Conversión explícita requerida**:
+   Para comparar valores de representaciones distintas, el programador debe convertir explícitamente uno de los operandos mediante la familia `to_tipo`:
+   ```text
+   to_int64(a) == b
+   ```
+
+
+#### 10.8.2 Semántica de operadores de igualdad (`==`, `!=`)
+
+Los operadores `==` y `!=` determinan la equivalencia semántica de valores del mismo tipo exacto:
+
+1. **Numéricos concretos**:
+   - Se permite la igualdad entre operandos del mismo tipo numérico concreto:
+     - Enteros con signo: `int`, `int8`, `int16`, `int32`, `int64`, `int128`.
+     - Enteros sin signo: `uint8`, `uint16`, `uint32`, `uint64`, `uint128`.
+     - Flotantes: `float`, `float32`, `float64`.
+   - Comparaciones entre tipos numéricos distintos (como `int == int64` o `int32 == uint32`) son inválidas y producen `ComparisonTypeError`.
+2. **Booleanos (`bool`)**:
+   - `bool == bool` y `bool != bool` comparan el valor de verdad.
+   - Ejemplos: `active == true`, `ready != false`.
+3. **Cadenas de texto (`string`)**:
+   - `string == string` y `string != string` comparan la igualdad por el **contenido textual completo** en codificación UTF-8.
+   - No evalúan identidad de memoria, dirección de punteros ni identidad de objetos.
+   - Ejemplo: `"hola" == "hola"` produce `true`.
+4. **Estructuras (`struct`) - Igualdad estructural (`Structural Equality`)**:
+   - `struct_a == struct_b` es válido únicamente si ambos operandos son exactamente del mismo tipo `struct`.
+   - La igualdad de structs es estrictamente **estructural**: dos valores de struct son iguales si y solo si todos sus campos correspondientes son iguales entre sí.
+   - Si un campo contiene otro `struct`, la igualdad se aplica recursivamente sobre los campos del struct anidado.
+   - No existe igualdad por referencia ni identidad de objeto; dos instancias independientes con campos idénticos producen `true`.
+5. **Enumeraciones (`enum`) - Igualdad de variantes y cargas**:
+   - `enum_a == enum_b` es válido únicamente si ambos operandos pertenecen exactamente al mismo tipo `enum`.
+   - La igualdad de enums se evalúa según la regla:
+     1. Si representan **variantes distintas**, producen `false` (no error).
+     2. Si representan la **misma variante simple**, producen `true`.
+     3. Si representan la **misma variante con valores asociados o estructurados**, comparan sus cargas (*payloads*) aplicando recursivamente la igualdad estructural de sus respectivos tipos.
+   - `==` determina únicamente la equivalencia de dos valores enum; no sustituye la descomposición ni correspondencia exhaustiva proporcionada por `when`.
+6. **Prohibición sobre `dynamic`**:
+   - `dynamic` no admite comparación directa con `==` ni `!=` (`dynamic_a == dynamic_b` produce `ComparisonTypeError`).
+   - Para comparar valores dinámicos, deben convertirse explícitamente a un tipo concreto (`to_int(dynamic_a) == to_int(dynamic_b)`).
+7. **Prohibición sobre Signatures y Funciones**:
+   - Las firmas de función (`Signature Dependency Parameters`) y las funciones no son valores de primer orden y no pueden compararse con `==` ni `!=`.
+
+
+#### 10.8.3 Semántica de operadores de orden (`<`, `<=`, `>`, `>=`)
+
+Los operadores `<`, `<=`, `>`, `>=` evalúan relaciones de orden estricto o no estricto:
+
+1. **Restricción exclusiva a tipos numéricos concretos**:
+   - Los operadores de orden solo están permitidos entre operandos del **mismo tipo numérico concreto**:
+     - `int < int`, `int64 >= int64`, `uint32 > uint32`, `float64 <= float64`.
+2. **Prohibición de orden en otros tipos**:
+   - **Cadenas (`string`)**: No se admite orden lexicográfico mediante operadores (`"a" < "b"` es inválido y produce `ComparisonTypeError`).
+   - **Booleanos (`bool`)**: No poseen orden (`false < true` es inválido y produce `ComparisonTypeError`).
+   - **Estructuras (`struct`)**: No poseen orden natural (`worker_a < worker_b` produce `ComparisonTypeError`).
+   - **Enumeraciones (`enum`)**: No poseen orden por discriminante u ordinal (`resultado_a < resultado_b` produce `ComparisonTypeError`).
+   - **Dinámicos (`dynamic`)**: Requieren conversión explícita previa (`to_int(dynamic_a) < to_int(dynamic_b)`).
+
+
+#### 10.8.4 Matriz normativa de tipos comparables
+
+| Tipo | `==` `!=` (Igualdad) | `<` `<=` `>` `>=` (Orden) | Observaciones |
+| :--- | :---: | :---: | :--- |
+| **Enteros con signo** (`int`, `int8`, `int16`, `int32`, `int64`, `int128`) | Sí | Sí | Mismo tipo exacto. Sin promoción automática. |
+| **Enteros sin signo** (`uint8`, `uint16`, `uint32`, `uint64`, `uint128`) | Sí | Sí | Mismo tipo exacto. Sin coerción de signo. |
+| **Flotantes** (`float`, `float32`, `float64`) | Sí | Sí | Mismo tipo exacto. |
+| **Booleano** (`bool`) | Sí | No | Sin orden relacional. |
+| **Cadena** (`string`) | Sí | No | Igualdad por contenido UTF-8. Sin orden lexicográfico por operador. |
+| **Estructura** (`struct`) | Sí | No | Igualdad estructural campo por campo. Mismo tipo struct. |
+| **Enumeración** (`enum`) | Sí | No | Misma variante y cargas iguales. Mismo tipo enum. |
+| **Dinámico** (`dynamic`) | No | No | Requiere conversión explícita (`to_int`, `to_float64`). |
+| **Signature Dependency** | No | No | No es un valor de primer orden. |
+| **Function** | No | No | No es un valor de primer orden. |
+
+
+#### 10.8.5 Prohibición de encadenamiento de comparaciones (No Comparison Chaining)
+
+Los operadores de comparación **no son encadenables**:
+
+- Expresiones como `a < b < c`, `a == b == c` o `a <= b >= c` son **sintácticamente inválidas**.
+- Evo-Script no realiza reescritura implícita de encadenamientos. Para expresar rangos o condiciones conjuntas, deben escribirse explícitamente como operaciones lógicas con paréntesis obligatorios:
+  ```text
+  (a < b) && (b < c)
+  ```
+
+
+#### 10.8.6 Evaluación de izquierda a derecha en operadores binarios
+
+1. **Orden estricto de evaluación de operandos**:
+   Para cualquier expresión binaria `left OP right` (incluyendo comparaciones y operaciones aritméticas), la evaluación procede estrictamente de izquierda a derecha:
+   1. Se evalúa el operando izquierdo (`left`).
+   2. Si la evaluación de `left` concluye exitosamente con un valor normal, se evalúa el operando derecho (`right`).
+   3. Se aplica el operador `OP` sobre ambos valores normales.
+2. **Propagación de `EvaluationError` en operando izquierdo**:
+   Si la evaluación de `left` produce un error de evaluación (`EvaluationError`, como `DivisionByZeroError`, `OverflowError` o `ConversionError`), la evaluación del operando derecho `right` **no llega a ejecutarse** y el fallo se propaga inmediatamente hacia afuera. Esta detención deriva de la propagación universal de errores de evaluación y no constituye cortocircuito lógico.
+3. **Propagación de `EvaluationError` en operando derecho**:
+   Si `left` se evalúa exitosamente pero `right` produce un `EvaluationError`, la operación binaria no produce su valor normal y el error se propaga hacia el exterior.
+
+
+#### 10.8.7 Regla de paréntesis obligatorios con operadores lógicos (`&&`, `||`)
+
+Evo-Script v0.1 establece normativamente la regla de **agrupación explícita mediante paréntesis**:
+
+1. **Comparaciones aisladas**:
+   Una expresión de comparación individual no requiere paréntesis cuando se utiliza en declaraciones `let`, argumentos o `return`:
+   ```text
+   let bool adulto = age >= 18;
+   let bool mismo_nombre = worker.name == other_worker.name;
+   let bool mismo_trabajador = worker == other_worker;
+   return worker.age >= 18;
+   ```
+2. **Comparaciones como operandos de `&&` o `||`**:
+   Cuando una expresión de comparación participa como operando de una conjunción (`&&`) o disyunción (`||`), **debe estar explícitamente agrupada entre paréntesis**:
+   - **Válidos**:
+     ```text
+     (age >= 18) && active
+     active && (age >= 18)
+     (age >= 18) && (status == 1)
+     (name == "Juan") || active
+     active || (name != "Pedro")
+     (name == "Juan") || (name != "Pedro")
+     (worker.age >= 18) && worker.active
+     ```
+   - **Inválidos**:
+     ```text
+     age >= 18 && active              // Inválido: falta agrupación explícita
+     active && age >= 18              // Inválido: falta agrupación explícita
+     age >= 18 && status == 1         // Inválido: falta agrupación explícita
+     name == "Juan" || active         // Inválido: falta agrupación explícita
+     name == "Juan" || name != "Pedro" // Inválido: falta agrupación explícita
+     ```
+3. **Ausencia de resolución por precedencia implícita**:
+   El lenguaje rechaza expresiones como `a == b && c != d` sin permitir que se resuelvan por precedencia implícita. La estructura lógica debe quedar visualmente inequívoca mediante `(a == b) && (c != d)`.
+4. **Valores booleanos simples**:
+   Los identificadores o expresiones booleanas simples (como `active`, `!ready`, `worker.active`) pueden participar directamente como operandos lógicos sin paréntesis obligatorios: `active && authorized`, `ready || cached`.
+5. **Independencia del cortocircuito booleano**:
+   La regla de paréntesis define la estructura sintáctica obligatoria; la semántica exacta del cortocircuito lógico booleano (*short-circuit* para `false && ...` y `true || ...`) permanece como especificación formal independiente.
 
 
 ### 10.9 Operadores lógicos
@@ -1859,10 +2003,11 @@ Reglas:
 - Operan exclusivamente sobre valores de tipo `bool` y producen un resultado `bool`.
 - No se introducen palabras clave alternativas como `and`, `or` o `not`.
 - El operador `!` actúa exclusivamente como negación booleana; no cumple funciones de unwrapping, aserción ni propagación de errores.
+- Cuando una expresión de comparación participa como operando de `&&` o `||`, debe agruparse explícitamente entre paréntesis según la regla normativa definida en la Sección 10.8.7.
 
 Ejemplo:
 
-    let bool allowed = active && age >= 18;
+    let bool allowed = active && (age >= 18);
 
 
 ### 10.10 Operadores unarios
@@ -1883,7 +2028,7 @@ No se incluyen operadores unarios de incremento (`++`), decremento (`--`), compl
 
 ### 10.11 Agrupación y precedencia
 
-Los paréntesis `( )` permiten agrupar expresiones para controlar explícitamente el orden de evaluación:
+Los paréntesis `( )` permiten agrupar expresiones para controlar explícitamente la estructura sintáctica y el orden de evaluación:
 
     (a + b) * c
 
@@ -1900,14 +2045,17 @@ Evo-Script v0.1 define la jerarquía completa de precedencia y asociatividad de 
 7. **Disyunción lógica** (`||`) — asociatividad por la izquierda.
 8. **Pipeline** (`|>`) — asociatividad por la izquierda (menor precedencia de todos los operadores).
 
+> [!IMPORTANT]
+> A pesar de la jerarquía de precedencia general, cuando una expresión de comparación participa como operando de un operador lógico (`&&` o `||`), la sintaxis de Evo-Script exige **agrupación explícita obligatoria con paréntesis** (Sección 10.8.7). No se admite confiar en precedencia implícita para mezclar comparaciones con operadores lógicos.
+
 Ejemplos:
 
 - `worker.age + 10` equivale semánticamente a `(worker.age) + 10`.
 - `worker.name |> to_string` equivale semánticamente a `(worker.name) |> to_string`.
 - `a + b * c` equivale semánticamente a `a + (b * c)`.
-- `a > 10 && b < 20` equivale semánticamente a `(a > 10) && (b < 20)`.
+- `(a > 10) && (b < 20)` define la conjunción explícita de dos comparaciones agrupadas.
 - `a + b |> to_string` equivale semánticamente a `(a + b) |> to_string`.
-- `a > b |> to_string` equivale semánticamente a `(a > b) |> to_string`.
+- `(a > b) |> to_string` equivale semánticamente a `(a > b) |> to_string`.
 
 
 ### 10.12 Pipeline (`|>`) y placeholder contextual `this`
@@ -2226,7 +2374,10 @@ Quedan formalmente fuera de Evo-Script v0.1:
 
 ### 10.16 Semántica pendiente
 
-Dentro del alcance delimitado para Evo-Script v0.1, no existen temas semánticos pendientes en el subsistema de expresiones y operadores.
+Dentro del subsistema de expresiones y operadores en Evo-Script v0.1, permanecen como especificaciones pendientes para bloques posteriores:
+
+1. **Semántica formal exacta de cortocircuito booleano**: Las condiciones y garantías formales de omisión de evaluación del operando derecho (*RHS*) en conjunciones (`false && RHS`) y disyunciones (`true || RHS`).
+2. **Semántica de truncamiento y signo en división y residuo**: Las reglas exactas de redondeo/truncamiento en la división entera con signo (`/`) y el signo del residuo (`%`).
 
 
 ## 11. Funciones
@@ -3014,6 +3165,7 @@ Los errores de resolución y validación local de funciones pertenecen a la cate
 | `FunctionCallCycleError` | Se detecta recursión directa o un ciclo indirecto en el grafo de llamadas. |
 | `FieldNotFoundError` | Se intenta acceder a un campo que no existe en la definición del struct receptor. |
 | `FieldAccessTypeError` | Se intenta acceder a un campo mediante `.` sobre un receptor cuyo tipo no es struct. |
+| `ComparisonTypeError` | Los tipos de los operandos en una comparación no coinciden exactamente o no son compatibles con el operador. |
 
 #### 11.13.3 Distinción formal de categorías de error
 
@@ -3021,7 +3173,7 @@ Evo-Script distingue formalmente tres categorías ortogonales de fallos o altern
 
 | Categoría | Naturaleza | Momento de detección | Ejemplo | Manejo en Evo-Script |
 | :--- | :--- | :--- | :--- | :--- |
-| **System / Validation Error** | Invalidez estructural o de resolución del programa | Antes de la evaluación | `FunctionNotFoundError`, `FunctionArityError`, `DuplicateFunctionError`, `FieldNotFoundError`, `FieldAccessTypeError` | El programa se rechaza; no es evaluable. |
+| **System / Validation Error** | Invalidez estructural o de resolución del programa | Antes de la evaluación | `FunctionNotFoundError`, `FunctionArityError`, `DuplicateFunctionError`, `FieldNotFoundError`, `FieldAccessTypeError`, `ComparisonTypeError` | El programa se rechaza; no es evaluable. |
 | **Evaluation Error** | Fallo en la evaluación de una expresión en un programa válido | Durante la evaluación | `DivisionByZeroError`, `OverflowError`, `ConversionError` | Detiene la evaluación y se propaga al host/runtime exterior. |
 | **Domain Alternative** | Resultado o caso normal esperado del dominio del programa | Durante la evaluación | `BuscarTrabajadorResult::Error(string)`, `SearchResult::NotFound` | Valor normal `Value` de tipo `enum`; inspeccionable con `when`. |
 
