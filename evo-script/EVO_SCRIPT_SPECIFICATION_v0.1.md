@@ -1770,7 +1770,7 @@ Dividir entre cero o calcular el residuo con un divisor igual a cero no constitu
 
 Reglas:
 
-1. **Conservación de tipo normal**: Las operaciones `/` y `%` conservan su tipo semántico normal (`int`, `float64`, etc.). `DivisionByZeroError` no forma parte del tipo normal de retorno.
+1. **Conservación de tipo normal**: La operación `/` conserva el tipo semántico numérico de sus operandos (`int`, `float64`, etc.). La operación `%` conserva el tipo semántico entero de sus operandos dentro de su dominio válido (`int`, `uint32`, etc.). `DivisionByZeroError` no forma parte del tipo normal de retorno de ninguna de las dos expresiones.
 2. **Operaciones cubiertas**: Aplica de manera uniforme tanto a la división (`a / b`) en enteros y flotantes, como al residuo (`a % b`) en su dominio entero válido. No existen errores separados como `RemainderByZeroError` ni `ModuloByZeroError`.
 3. **Tipos enteros**: Aplica a todos los tipos enteros (`int`, `int8`..`int128`, `uint8`..`uint128`) tanto para `/` como para `%`:
    ```text
