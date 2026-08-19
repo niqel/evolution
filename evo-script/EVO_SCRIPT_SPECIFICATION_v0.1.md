@@ -3260,11 +3260,14 @@ validate composition bindings
             ↓
 start Application Main Loop
             ↓
-invoke initial public fn
+invoke initial public fn / evaluations
             ↓
     application alive
             │
-            ├─► processes runtime / window / interactive events
+            ├─► normal evaluation ──────► produces Value (evaluation completed)
+            │
+            ├─► failing evaluation ─────► EvaluationError propagates outward to Evo Runtime
+            │                             (Application Main Loop remains active)
             │
             ▼
 Application Exit Request (e.g. Super + Q, UI action, etc.)
@@ -3522,17 +3525,77 @@ Evo-Script distingue formalmente entre finalizar la evaluación de una función 
    Cuando `initialize` ejecuta su `return InitResult::Ready;`, la evaluación de `initialize` concluye, pero si el Application Main Loop permanece activo (por ejemplo, atendiendo eventos de ventana, interacción del usuario o solicitudes del host), la aplicación permanece viva.
 4. **Las alternativas de dominio no son señales de salida**: Retornar un valor como `SearchResult::NotFound` o `InitResult::Error("fallo")` constituye la entrega normal de un `Value` de tipo enum y no detiene automáticamente el Application Main Loop.
 
-#### 12.9.7 Ámbito de aplicación del modelo
+#### 12.9.7 Interacción entre EvaluationError, Application Main Loop y ciclo de vida
+
+Evo-Script v0.1 define con precisión formal la relación entre los fallos de evaluación (`EvaluationError`) y el ciclo de vida de la aplicación (`Application Lifetime`):
+
+1. **Origen y naturaleza del `EvaluationError`**: Un `EvaluationError` ocurre exclusivamente durante la evaluación de una expresión u operación concreta dentro de una Function Implementation (`ConversionError`, `OverflowError`, `DivisionByZeroError`). Pertenece al proceso de cómputo funcional y no al ciclo de vida global de la aplicación.
+2. **Propagación hacia afuera hasta el runtime**:
+   - Cuando ocurre un `EvaluationError`, la evaluación actual se aborta inmediatamente y no se produce el `Value` esperado.
+   - El fallo se propaga hacia afuera a través de la cadena de llamadas (`Function Call Chain`) hasta alcanzar el límite del **Evo Runtime / Host** que solicitó la evaluación:
+     ```text
+     failing expression
+             ↑
+        current Function
+             ↑
+         caller Function
+             ↑
+         caller Function
+             ↑
+        Evo Runtime / Host
+     ```
+3. **Naturaleza no capturable en Evo-Script v0.1**: Conforme a la Sección 10.7, el `EvaluationError` no es capturable dentro del código Evo-Script (no existen `try`, `catch`, `throw`, `recover`, `rescue` ni tipos de error en el lenguaje).
+4. **Independencia fundamental frente al Application Main Loop**:
+   - Un `EvaluationError` por sí mismo **NO** termina automáticamente el Application Main Loop.
+   - El Application Main Loop no forma parte del grafo de llamadas funcionales por el que se propaga el error.
+   - Mientras el **Application Main Loop** continúe activo en el runtime, la aplicación permanece viva:
+     ```text
+     failed evaluation != dead application
+     EvaluationError != Application Exit Request
+     EvaluationError != Application Main Loop termination
+     EvaluationError != Application exit
+     ```
+5. **Diferenciación estricta de tres resultados semánticos**:
+   - **`Function return`**: Produce un resultado tipado (`Value`) tras completar la evaluación normalmente.
+   - **`EvaluationError`**: Fallo de evaluación que aborta la computación actual y se propaga hacia afuera al Evo Runtime sin terminar el Application Main Loop.
+   - **`Application Exit Request`**: Solicitud de ciclo de vida (vía `Super + Q` o acciones de aplicación) que finaliza el Application Main Loop y provoca la terminación de la aplicación.
+   ```text
+   Function return
+         ↓
+       Value
+         ↓
+   evaluation completed
+
+
+   EvaluationError
+         ↓
+   current evaluation aborted
+         ↓
+   failure propagated to Evo Runtime (Main Loop remains active)
+
+
+   Application Exit Request
+         ↓
+   Application Main Loop terminates
+         ↓
+   application terminates
+   ```
+6. **Las alternativas de dominio y fallos de evaluación no son solicitudes de salida**:
+   - Valores como `SearchResult::NotFound` o `InitResult::Error("fallo")` son `Values` normales de enum de dominio.
+   - Ni los valores de dominio ni los `EvaluationError` se transforman implícitamente en `Application Exit Request`.
+7. **Error durante la función de entrada inicial**: Si durante la evaluación de la función inicial seleccionada por `entry` ocurre un `EvaluationError`, dicha evaluación aborta y el fallo se propaga al Evo Runtime; no se genera automáticamente un `Application Exit Request` ni se introducen políticas especiales de startup failure en v0.1.
+8. **Ausencia de estado de error en el Application Main Loop**: El runtime no crea estados de error en el sistema de tipos (no existen `MainLoop::Failed`, `Application::Failed` ni `RuntimeState::Error`). No se diseñan en v0.1 interfaces de diagnóstico/error (`Error UI`), trazabilidad gráfica ni mecanismos de reintento automático (`retry`).
+
+#### 12.9.8 Ámbito de aplicación del modelo
 
 1. **Universalidad para aplicaciones estructuradas**: El Application Main Loop modela el ciclo de vida de cualquier aplicación estructurada (gráfica con ventanas, de terminal interactiva o tipo servicio/servidor). Las aplicaciones gráficas no requieren implementar bucles infinitos para mantener viva su interfaz.
 2. **Scripts autocontenidos**: Un script simple `.efn` ejecutado directamente no requiere `.root`, `.main` ni `entry`. Su evaluación concluye inmediatamente cuando su única `public fn` ejecuta su `return`, entregando el resultado directamente al host exterior sin Application Main Loop.
 3. **Unicidad de `.main`**: Toda aplicación estructurada posee exactamente un archivo `.main`. No se admiten archivos `.main` múltiples, anidados, incluidos ni heredados.
 4. **Librerías reutilizables**: Una librería reutilizable (`.elib`) no representa una aplicación directamente ejecutable y no requiere archivo `.main` ni declaración `entry`.
 
-#### 12.9.8 Aspectos explícitamente pendientes de especificación posterior
+#### 12.9.9 Cierre normativo de .main en v0.1
 
-Para mantener la precisión y pureza de este bloque normativo, se delimita el aspecto que queda expresamente reservado para decisiones de diseño posteriores:
-1. **Interacción detallada entre EvaluationErrors y terminación global**: La relación semántica precisa entre fallos de evaluación no capturables en runtime (`EvaluationError`) y la terminación global del Application Main Loop se reserva para su bloque de diseño correspondiente. Se formaliza que un `EvaluationError` (fallo de evaluación) y un `Application Exit Request` (terminación limpia solicitada) son conceptos estrictamente diferenciados.
+Todos los aspectos arquitectónicos y semánticos fundamentales de `.main`, Application Main Loop, Application Lifetime, Application Exit Request y la relación con EvaluationError quedan plenamente formalizados y cerrados para la especificación oficial de Evo-Script v0.1.
 
 
 ### 12.10 Librerías reutilizables (.elib)
