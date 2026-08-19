@@ -2320,7 +2320,397 @@ Ejemplos válidos:
   ```
 
 
-### 11.7 Sintaxis y semántica
+### 11.7 Llamadas de funciones (Function Calls)
+
+Una llamada de función (`Function Call`) es una `Expression` de Evo-Script que invoca una función resoluble en el contexto local, evalúa sus argumentos y produce un único valor tipado correspondiente al tipo de resultado declarado en `-> Tipo`.
+
+#### 11.7.1 Forma general
+
+La sintaxis canónica de una llamada de función es:
+
+    nombre(argumento1, argumento2, ..., argumentoN)
+
+Ejemplos:
+
+    sumar(10, 20)
+
+    prepare(clothes)
+
+    process(to_int64(value))
+
+Si una función auxiliar declara:
+
+    private fn double(int value) -> int {
+        return value * 2;
+    }
+
+la expresión `double(10)` produce un valor de tipo `int` (en este caso `20`).
+
+#### 11.7.2 Ejemplo canónico de llamadas locales
+
+```text
+private fn double(int value) -> int {
+    return value * 2;
+}
+
+private fn add(int value, int amount) -> int {
+    return value + amount;
+}
+
+public fn calculate(int value) -> int {
+    let int doubled = double(value);
+
+    return add(doubled, 10);
+}
+```
+
+En este ejemplo canónico:
+- `double` y `add` son funciones auxiliares privadas (`private fn`).
+- `calculate` es la única función pública principal (`public fn`).
+- La llamada directa `double(value)` asigna el valor resultante al binding inmutable `doubled`.
+- La llamada directa `add(doubled, 10)` evalúa sus argumentos posicionales con tipos exactos y produce el resultado retornado por `calculate`.
+
+#### 11.7.3 Invocación de aridad cero
+
+Toda función declarada sin argumentos debe invocarse obligatoriamente utilizando paréntesis vacíos:
+
+    operacion()
+
+Ejemplo:
+
+```text
+private fn get_value() -> int {
+    return 10;
+}
+
+public fn run() -> int {
+    return get_value();
+}
+```
+
+Reglas normativas:
+1. **Obligatoriedad de los paréntesis**: No se permite invocar una función sin argumentos omitiendo los paréntesis (`let int x = get_value;` es inválido).
+2. **Diferenciación estricta**: Los paréntesis vacíos `()` garantizan la distinción inequívoca entre una invocación de función y la referencia a un identificador o binding.
+
+#### 11.7.4 Argumentos posicionales
+
+La correspondencia entre los argumentos suministrados en una llamada y los parámetros declarados por la función es estrictamente posicional:
+
+```text
+private fn subtract(int left, int right) -> int {
+    return left - right;
+}
+```
+
+En la llamada:
+
+    subtract(a, b)
+
+el primer argumento `a` se asocia con `left` y el segundo argumento `b` se asocia con `right`. El orden de los argumentos es determinante.
+
+En Evo-Script v0.1 quedan formalmente excluidos:
+- Argumentos con nombre (`named arguments` o `keyword arguments`).
+- Argumentos por defecto (`default arguments`).
+- Argumentos de longitud variable (`variadic arguments`).
+
+#### 11.7.5 Llamadas anidadas y participación en expresiones
+
+Una llamada de función puede participar en cualquier contexto sintáctico donde una expresión de su tipo de resultado sea válida:
+
+1. **Llamadas anidadas (`Nested Calls`)**:
+   ```text
+   process(normalize(value))
+   ```
+2. **Inicialización de bindings**:
+   ```text
+   let int x = calculate(value);
+   ```
+3. **Sentencias return**:
+   ```text
+   return calculate(value);
+   ```
+4. **Expresiones aritméticas y lógicas**:
+   ```text
+   calculate(value) + 10
+   ```
+5. **Stages de pipeline**:
+   ```text
+   value |> calculate(this, 10)
+   ```
+
+#### 11.7.6 Relación con el pipeline
+
+La invocación directa y la composición en pipeline responden a las reglas semánticas ya establecidas:
+- **Aridad 1**: En un pipeline, `value |> normalize` constituye la forma canónica de composición monovalor. No se transforma textualmente en `normalize(value)`, aunque semánticamente ambos entreguen `value` a la operación. La forma `value |> normalize()` no está permitida como stage de pipeline.
+- **Aridad >= 2**: En un pipeline, `value |> operation(this, arg)` requiere obligatoriamente el placeholder contextual `this` en la primera posición.
+
+
+### 11.8 Resolución local e identidad de función
+
+Dentro del ámbito de un archivo `.efn`, la resolución de llamadas a funciones opera bajo reglas estrictas de identidad y unicidad local.
+
+#### 11.8.1 Identidad de función
+
+La identidad de una función dentro de un archivo `.efn` está determinada única y exclusivamente por su **nombre**:
+
+$$\text{Function Identity} = \text{function name}$$
+
+No forman parte de la identidad de una función:
+- El tipo de resultado (`-> Tipo`).
+- La cantidad de argumentos (aridad).
+- Los tipos de los argumentos.
+- El modificador de visibilidad (`public` o `private`).
+
+Por tanto, cada nombre de función debe ser estrictamente único dentro del archivo `.efn`.
+
+#### 11.8.2 Prohibición de sobrecarga (No Function Overloading)
+
+Evo-Script v0.1 **no admite sobrecarga de funciones** (`function overloading`). Declarar múltiples funciones con el mismo nombre dentro del mismo `.efn` es semánticamente inválido y produce un error de sistema `DuplicateFunctionError`.
+
+Ejemplo inválido por variación de tipos:
+```text
+private fn calculate(int value) -> int {
+    return value;
+}
+
+private fn calculate(string value) -> string {
+    return value;
+}
+```
+*Inválido*: Ambas funciones declaran el mismo nombre `calculate`, violando la unicidad de identidad (`DuplicateFunctionError`).
+
+Ejemplo inválido por variación de aridad:
+```text
+private fn calculate(int value) -> int {
+    return value;
+}
+
+private fn calculate(int value, int other) -> int {
+    return value + other;
+}
+```
+*Inválido*: Variar la cantidad de parámetros no crea una función distinta (`DuplicateFunctionError`).
+
+Ejemplo inválido por variación de tipo de resultado:
+```text
+private fn calculate(int value) -> int {
+    return value;
+}
+
+private fn calculate(int value) -> string {
+    return to_string(value);
+}
+```
+*Inválido*: El tipo de retorno no participa en la identidad ni en la resolución (`DuplicateFunctionError`).
+
+#### 11.8.3 Resolución local por nombre
+
+Al encontrar una expresión de llamada `nombre(args...)` dentro de un archivo `.efn`, el sistema resuelve la función mediante el siguiente proceso inequívoco:
+
+1. **Búsqueda por nombre**: Se busca una función declarada en el archivo `.efn` cuyo nombre coincida exactamente con `nombre`.
+2. **Validación de unicidad**: Debe existir exactamente una función con dicho nombre. Si no existe ninguna función con ese identificador en el ámbito local, se produce `FunctionNotFoundError`.
+3. **Validación de aridad**: Se verifica que la cantidad de argumentos coincida exactamente con los parámetros de la función encontrada (Sección 11.9).
+4. **Validación de tipos**: Se verifica que los tipos de los argumentos coincidan exactamente con los tipos de los parámetros (Sección 11.9).
+5. **Evaluación de argumentos**: Se evalúan los argumentos de izquierda a derecha (Sección 11.10).
+6. **Ejecución**: Se ejecuta el cuerpo de la función y se produce su resultado tipado.
+
+El contexto receptor (por ejemplo, el tipo de un binding `let int x = calculate(...)`) nunca participa en la resolución de la función; la función se resuelve siempre de forma determinista y exclusiva por su nombre.
+
+
+### 11.9 Validación de aridad y tipos de argumentos
+
+#### 11.9.1 Validación de aridad
+
+La cantidad de argumentos provistos en una llamada debe coincidir exactamente con la cantidad de parámetros declarados en la función:
+
+```text
+private fn add(int a, int b) -> int {
+    return a + b;
+}
+```
+
+- `add(10, 20)`: Válido (aridad exacta = 2).
+- `add(10)`: Inválido $\rightarrow$ `FunctionArityError`.
+- `add(10, 20, 30)`: Inválido $\rightarrow$ `FunctionArityError`.
+
+#### 11.9.2 Validación exacta de tipos
+
+Cada expresión de argumento debe producir exactamente el tipo declarado por el parámetro correspondiente en la firma de la función:
+
+```text
+private fn process(int64 value) -> int64 {
+    return value;
+}
+```
+
+Si se dispone de un valor de tipo `int`:
+```text
+let int value = 10;
+
+process(value); // Inválido -> FunctionArgumentTypeError
+```
+
+Evo-Script no realiza conversiones implícitas, promociones ni widening automático entre tipos numéricos ni de ninguna otra clase (`int != int64`). Para invocar la función, la conversión debe ser explícita:
+
+```text
+process(to_int64(value)); // Válido
+```
+
+
+### 11.10 Orden de evaluación de argumentos
+
+#### 11.10.1 Evaluación estricta de izquierda a derecha
+
+Los argumentos de una llamada de función se evalúan de forma estrictamente secuencial de izquierda a derecha (`izquierda -> derecha`):
+
+```text
+operation(
+    first(),
+    second(),
+    third()
+)
+```
+
+Orden de evaluación garantizado:
+1. Se evalúa la expresión `first()`.
+2. Se evalúa la expresión `second()`.
+3. Se evalúa la expresión `third()`.
+4. Se ejecuta `operation(...)` con los valores producidos.
+
+La implementación técnica no puede reordenar semánticamente la evaluación de los argumentos.
+
+#### 11.10.2 Fallo durante la evaluación de argumentos
+
+Si la evaluación de un argumento produce un error de evaluación (`EvaluationError`, tales como `DivisionByZeroError`, `OverflowError` o `ConversionError`):
+1. La ejecución de la función invocada **no comienza**.
+2. Los argumentos posteriores aún no evaluados **no se evalúan**.
+3. El `EvaluationError` se propaga inmediatamente hacia el exterior según las reglas de propagación de la Sección 10.7.
+
+Ejemplo conceptual:
+```text
+operation(
+    first(),
+    failing(),
+    third()
+)
+```
+Si la evaluación de `failing()` produce `DivisionByZeroError`:
+- La expresión `third()` **no se evalúa**.
+- La función `operation` **no llega a ejecutarse**.
+- El fallo `DivisionByZeroError` se propaga al contexto llamador.
+
+
+### 11.11 Forward references y visibilidad interna
+
+#### 11.11.1 Declaración sin dependencia del orden textual (Forward References)
+
+La posición textual de una función dentro de un archivo `.efn` no restringe su disponibilidad. Un archivo `.efn` se analiza y resuelve como una unidad semántica completa:
+
+```text
+public fn run(int value) -> int {
+    return double(value);
+}
+
+private fn double(int value) -> int {
+    return value * 2;
+}
+```
+
+Este código es completamente válido a pesar de que `double` se declara textualmente después de `run`. Todas las funciones declaradas en el archivo son conocidas por el resolvedor antes de iniciar la evaluación. No se exige la regla de "declaración previa al uso" (*declaration before use*) ni se describe esto como hoisting imperativo de código.
+
+#### 11.11.2 Reglas de llamadas entre funciones del mismo archivo
+
+Dentro de un mismo archivo `.efn`, todas las combinaciones de llamadas entre funciones son válidas siempre que no formen ciclos:
+
+- `private -> private`: Una función auxiliar puede invocar a otra función auxiliar local.
+- `private -> public`: Una función auxiliar puede invocar a la función pública principal del mismo archivo.
+- `public -> private`: La función pública principal puede invocar libremente cualquier función auxiliar local.
+- `public -> public`: La función pública puede invocarse a sí misma conceptualmente (sujeto a la prohibición de ciclos de v0.1).
+
+Aclaraciones normativas:
+1. `private fn` significa no accesible desde el exterior del archivo `.efn`; no implica que sea inaccesible para la función `public fn` del mismo archivo.
+2. `public fn` puede ser llamada internamente por funciones del mismo archivo, pero su modificador `public` no habilita llamadas directas desde otros archivos `.efn` (la comunicación entre archivos requiere obligatoriamente una firma `.esig` registrada en un módulo `.emod`).
+
+
+### 11.12 Grafo de llamadas y prohibición de recursión
+
+Evo-Script v0.1 **no permite recursión**.
+
+El grafo de llamadas local formado por las funciones de un archivo `.efn` debe ser un **grafo dirigido acíclico** (*Directed Acyclic Graph* o *DAG*).
+
+#### 11.12.1 Prohibición de recursión directa
+
+Una función no puede invocarse directamente a sí misma:
+
+```text
+public fn run(int value) -> int {
+    return run(value); // Inválido -> FunctionCallCycleError
+}
+```
+
+```text
+private fn calculate(int value) -> int {
+    return calculate(value); // Inválido -> FunctionCallCycleError
+}
+```
+
+#### 11.12.2 Prohibición de recursión indirecta (Ciclos)
+
+No se permiten ciclos de llamadas indirectas entre dos o más funciones, independientemente de la longitud del ciclo:
+
+```text
+private fn first(int value) -> int {
+    return second(value);
+}
+
+private fn second(int value) -> int {
+    return first(value); // Inválido -> FunctionCallCycleError
+}
+```
+
+Igualmente, cadenas como $A \rightarrow B \rightarrow C \rightarrow A$ son semánticamente inválidas.
+
+#### 11.12.3 Detección y FunctionCallCycleError
+
+El grafo de llamadas se valida semánticamente antes de la ejecución. Si se detecta cualquier ciclo directo o indirecto, se produce:
+
+    FunctionCallCycleError
+
+No se denomina `StackOverflowError` porque el programa se rechaza estáticamente/semánticamente antes de ejecutar el ciclo. No se denomina simplemente `RecursionError` para dejar explícito que cubre tanto auto-invocaciones directas como ciclos complejos entre múltiples funciones.
+
+
+### 11.13 Errores de validación y resolución del sistema
+
+Los errores de resolución y validación local de funciones pertenecen a la categoría conceptual de **errores del sistema** (`SystemError`).
+
+#### 11.13.1 Naturaleza de SystemError
+
+1. **No es un tipo del lenguaje**: `SystemError` no es un tipo de datos en Evo-Script. No existe `enum SystemError`, `result<T, SystemError>` ni `Result<T, E>`.
+2. **No son valores**: Los errores del sistema no son valores (`Value`), no poseen variantes, no pueden almacenarse en bindings (`let`), no pueden pasarse como argumentos ni declararse en cláusulas de retorno (`-> Tipo`).
+3. **No son capturables**: Evo-Script no posee estructuras de captura o manejo de excepciones (`try`, `catch`, `throw`, `recover`, `otherwise`). Un programa que contiene un error de sistema es rechazado antes de alcanzar la evaluación normal.
+
+#### 11.13.2 Errores de resolución y validación de este bloque
+
+| Error del Sistema | Condición semántica |
+| :--- | :--- |
+| `FunctionNotFoundError` | Se invoca un nombre de función que no existe en el archivo local. |
+| `FunctionArityError` | La cantidad de argumentos suministrados no coincide con la aridad declarada. |
+| `FunctionArgumentTypeError` | El tipo producido por un argumento no coincide exactamente con el tipo del parámetro correspondiente. |
+| `DuplicateFunctionError` | Dos funciones declaran el mismo nombre dentro del mismo archivo `.efn`. |
+| `FunctionCallCycleError` | Se detecta recursión directa o un ciclo indirecto en el grafo de llamadas. |
+
+#### 11.13.3 Distinción formal de categorías de error
+
+Evo-Script distingue formalmente tres categorías ortogonales de fallos o alternativas:
+
+| Categoría | Naturaleza | Momento de detección | Ejemplo | Manejo en Evo-Script |
+| :--- | :--- | :--- | :--- | :--- |
+| **System / Validation Error** | Invalidez estructural o de resolución del programa | Antes de la evaluación | `FunctionNotFoundError`, `FunctionArityError`, `DuplicateFunctionError` | El programa se rechaza; no es evaluable. |
+| **Evaluation Error** | Fallo en la evaluación de una expresión en un programa válido | Durante la evaluación | `DivisionByZeroError`, `OverflowError`, `ConversionError` | Detiene la evaluación y se propaga al host/runtime exterior. |
+| **Domain Alternative** | Resultado o caso normal esperado del dominio del programa | Durante la evaluación | `BuscarTrabajadorResult::Error(string)`, `SearchResult::NotFound` | Valor normal `Value` de tipo `enum`; inspeccionable con `when`. |
+
+
+### 11.14 Sintaxis y semántica
 
 Existe una separación estricta entre la representación textual y la semántica del lenguaje:
 
@@ -2332,6 +2722,8 @@ Existe una separación estricta entre la representación textual y la semántica
 | `tipo nombre` | `Argument` |
 | `-> tipo` | `Result type declaration` |
 | `return expresion;` | `Explicit function result declaration` |
+| `nombre(args...)` | `Function call expression` |
+| `nombre()` | `Zero-arity function call expression` |
 | `{ ... }` | `Correspondence` |
 | `struct Nombre { ... }` | `Struct definition` |
 | `tipo nombre;` | `Field` |
