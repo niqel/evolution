@@ -2908,8 +2908,8 @@ Cada extensión de archivo en Evo-Script expresa su responsabilidad semántica p
 | `.estc` | Evo Struct | Definición compartible de struct |
 | `.enum` | Enum | Definición compartible de enum |
 | `.emod` | Evo Module | Módulo, frontera semántica y catálogo de firmas públicas |
-| `.root` | Evo Project Root | Raíz de resolución de un proyecto estructurado |
-| `.main` | Evo Application Entry | Selección del punto de entrada ejecutable de una aplicación |
+| `.root` | Evo Project Root | Raíz de resolución y Functional Composition Root de un proyecto estructurado |
+| `.main` | Evo Application Main | Selección de la operación inicial, Application Main Loop y ciclo de vida de la aplicación |
 | `.elib` | Evo Library | Agrupación semántica reutilizable de módulos de librería |
 | `.evo` | Evo Package | Artefacto distribuible / paquete del ecosistema Evo |
 
@@ -3219,22 +3219,114 @@ Interpretación semántica:
 22. **Separación entre composición (.root) y punto de entrada (.main)**: `.root` define la composición de dependencias de todo el proyecto, mientras que `.main` identifica la operación inicial que arranca una aplicación ejecutable.
 
 
-### 12.9 Puntos de entrada de aplicación (.main) y librerías (.elib)
+### 12.9 Aplicación ejecutable (.main), Application Main Loop y ciclo de vida
 
-1. **Aplicaciones ejecutables (`.main`)**:
-   - Un proyecto estructurado que se ejecuta como aplicación define su punto de entrada mediante un archivo `.main` (Evo Application Entry).
-   - El `.main` identifica y selecciona la operación inicial que arranca la aplicación.
-   - El `.main` no implementa la lógica de la función ni contiene código ejecutable de negocio; la implementación reside en un `.efn`.
-   - La función seleccionada no está obligada a llamarse literalmente `main`.
-   - Un script `.efn` autocontenido no requiere `.main`.
-2. **Librerías reutilizables (`.elib`)**:
-   - Una agrupación reutilizable de módulos se declara mediante un archivo `.elib` (Evo Library).
-   - Una librería agrupa módulos `.emod` para su consumo estructurado.
-   - Un proyecto de librería posee `.root` y `.elib`, pero no requiere `.main` al no constituir una aplicación directamente ejecutable.
-   - El consumo de capacidades desde una librería continúa siendo por firma individual (`.esig`).
+Un archivo `.main` (Evo Application Main) define el punto de inicio y la semántica de ciclo de vida (`Application Lifetime`) de una aplicación Evo-Script estructurada:
+
+#### 12.9.1 Responsabilidad oficial y Application Main Loop
+
+1. **Ciclo de vida de la aplicación (`Application Lifetime`)**: El archivo `.main` posee conceptualmente el **Application Main Loop** de una aplicación estructurada.
+2. **Equivalencia fundamental**:
+   - Mientras el **Application Main Loop** permanece activo, la aplicación está viva.
+   - Cuando el **Application Main Loop** termina, la aplicación termina.
+   ```text
+   Main Loop lifetime = Application lifetime
+   ```
+3. **Loop administrado por el runtime**: El Application Main Loop es una responsabilidad estructural del runtime de Evo-Script. **No es un constructo de código escrito por el desarrollador**.
+4. **Ausencia de loops imperativos en el lenguaje**: El Application Main Loop **no introduce** al lenguaje palabras clave como `while`, `loop`, `for`, `break` ni `continue`. El desarrollador nunca escribe un bucle para mantener viva una aplicación.
+5. **No es recursión ni ciclo de llamadas**: El Application Main Loop no constituye recursión de funciones (se preserva estrictamente la regla de "sin recursión en v0.1") ni forma parte del grafo de llamadas ordinario de funciones, por lo que no genera `FunctionCallCycleError`.
+6. **No es un valor ni constructo de primer orden**: El Application Main Loop no es un tipo de datos (`Value`), no posee variantes, no se almacena en variables (`let`), no se retorna ni se pasa como argumento. No existen `MainLoop Value`, `LoopHandle` ni `ApplicationHandle`.
+7. **Ausencia de estado u objetos de aplicación OO**: No existen clases de aplicación (`MainApplication`, `App`), constructores, instancias (`new`), ni ciclos de vida de servicios orientados a objetos (`Singleton`, `Scoped`, `Transient`).
+
+#### 12.9.2 Secuencia de arranque y relación entre `.root` y `.main`
+
+Existe una estricta separación de responsabilidades entre `.root` y `.main`:
+- **`.root`**: Define **CÓMO** se compone la aplicación (selecciona qué Function Implementation satisface cada Signature mediante declaraciones `bind`).
+- **`.main`**: Define **CÓMO** arranca la aplicación y **CUÁNTO TIEMPO** permanece viva (identifica la operación inicial y posee el Application Main Loop).
+
+Flujo conceptual de arranque y ejecución de una aplicación estructurada:
+
+```text
+    structured project
+            ↓
+       resolve .root
+            ↓
+validate composition bindings
+            ↓
+       resolve .main
+            ↓
+start Application Main Loop
+            ↓
+  initiate initial operation
+            ↓
+    application alive
+            │
+            ├─► processes runtime / window / interactive events
+            │
+            ▼
+   exit condition / request
+            ↓
+ Application Main Loop ends
+            ↓
+   application terminates
+```
+
+Reglas normativas del proceso de arranque:
+1. **Validación de `.root` previa a `.main`**: Antes de iniciar el Application Main Loop, el archivo `.root` debe ser cargado, resuelto y validado en su totalidad. Si existe cualquier error de composición (firmas no resueltas, implementaciones faltantes, discordancias `SignatureMismatchError` o bindings duplicados), el proyecto es rechazado y el Application Main Loop **nunca se inicia**.
+2. **`.root` no controla el ciclo de vida**: El archivo `.root` finaliza su responsabilidad cuando la composición queda validada; no inicia ni detiene el Application Main Loop.
+3. **`.main` no realiza composición**: El archivo `.main` no contiene declaraciones `bind` ni sustituye la composición de `.root`.
+4. **Operación inicial**: `.main` identifica la Function Implementation inicial que arranca la ejecución dentro de la aplicación ya compuesta.
+5. **Dependencias de la operación inicial**: La Function Implementation inicial puede declarar Value Parameters o Signature Dependency Parameters (`modulo::firma nombre_local`) según las reglas normales del lenguaje, los cuales se satisfacen mediante los bindings previamente resueltos por `.root`.
+
+#### 12.9.3 Distinción formal entre Function return y Application exit
+
+Evo-Script distingue formalmente entre finalizar la evaluación de una función y terminar la ejecución global de la aplicación:
+
+1. **`Function return`**: La sentencia `return expresion;` finaliza estrictamente la correspondencia de la Function Implementation evaluada y produce su valor tipado (`Value`).
+2. **`Application exit`**: Ocurre única y exclusivamente cuando finaliza el **Application Main Loop**.
+3. **Independencia del retorno de la función inicial**: La terminación de la función inicial no implica el cierre de la aplicación:
+   ```text
+   Function return != Application exit
+   ```
+   Ejemplo conceptual:
+   ```text
+   public fn initialize(window::open open_window) -> InitResult {
+       // Inicializa componentes y abre interfaz
+       return InitResult::Ready;
+   }
+   ```
+   Cuando `initialize` ejecuta su `return InitResult::Ready;`, la evaluación de `initialize` concluye, pero si el Application Main Loop permanece activo (por ejemplo, atendiendo eventos de ventana, interacción del usuario o solicitudes del host), la aplicación permanece viva.
+4. **Las alternativas de dominio no son señales de salida**: Retornar un valor como `SearchResult::NotFound` o `InitResult::Error("fallo")` constituye la entrega normal de un `Value` de tipo enum y no detiene automáticamente el Application Main Loop.
+
+#### 12.9.4 Ámbito de aplicación del modelo
+
+1. **Universalidad para aplicaciones estructuradas**: El Application Main Loop modela el ciclo de vida de cualquier aplicación estructurada (gráfica con ventanas, de terminal interactiva o tipo servicio/servidor). Las aplicaciones gráficas no requieren implementar bucles infinitos para mantener viva su interfaz.
+2. **Scripts autocontenidos**: Un script simple `.efn` ejecutado directamente no requiere `.root` ni `.main`. Su evaluación concluye inmediatamente cuando su única `public fn` ejecuta su `return`, entregando el resultado directamente al host exterior sin Application Main Loop.
+3. **Unicidad de `.main`**: Toda aplicación estructurada posee exactamente un archivo `.main`. No se admiten archivos `.main` múltiples, anidados, incluidos ni heredados.
+4. **Estructura interna de `.main`**:
+   - `.main` no contiene implementaciones (`public fn` ni `private fn`).
+   - `.main` no publica símbolos (`publish`).
+   - `.main` no declara firmas (`esig`).
+   - `.main` no satisface firmas (`: modulo::firma`).
+
+#### 12.9.5 Aspectos explícitamente pendientes de especificación posterior
+
+Para mantener la precisión y pureza de este bloque normativo, se delimitan los aspectos que quedan expresamente reservados para decisiones de diseño posteriores:
+1. **Sintaxis textual exacta de selección en `.main`**: La gramática concreta mediante la cual `.main` selecciona formalmente la Function Implementation inicial queda pendiente. Ejemplos conceptuales exploratorios previos (como `entry "..."` o `start "..."`) no constituyen sintaxis normativa en v0.1.
+2. **Mecanismo exacto de terminación (`Exit Mechanism`)**: La sintaxis u operación mediante la cual una aplicación solicita formalmente al runtime terminar el Application Main Loop (sea mediante capacidades del host, eventos de ventana o peticiones del runtime) queda pendiente de diseño posterior. No se introducen palabras clave oficiales como `exit`, `quit`, `stop` ni `shutdown`.
+3. **Interacción detallada entre EvaluationErrors y terminación global**: La semántica precisa de cómo fallos de evaluación no capturables (`EvaluationError`) interactúan con el Application Main Loop se reserva para el bloque correspondiente.
 
 
-### 12.10 Artefacto distribuible (.evo)
+### 12.10 Librerías reutilizables (.elib)
+
+Una agrupación reutilizable de módulos se declara mediante un archivo `.elib` (Evo Library):
+
+1. **Naturaleza de `.elib`**: Una librería agrupa módulos `.emod` para su distribución y consumo estructurado por otros proyectos o aplicaciones.
+2. **Composición sin `.main`**: Un proyecto de librería posee `.root` y `.elib`, pero no requiere `.main` al no constituir por sí mismo una aplicación directamente ejecutable.
+3. **Consumo granular por firma**: El consumo de capacidades provistas por una librería continúa realizándose mediante importación granular de firmas individuales (`.esig`).
+
+
+### 12.11 Artefacto distribuible (.evo)
 
 La extensión `.evo` está reservada exclusivamente para el artefacto distribuible o paquete empaquetado del ecosistema Evo:
 
@@ -3245,7 +3337,7 @@ La extensión `.evo` está reservada exclusivamente para el artefacto distribuib
 5. **No obligatorio para scripts simples**: Un archivo `.efn` autocontenido se ejecuta directamente sin necesidad de empaquetarse en un `.evo`.
 
 
-### 12.11 Frontera con el entorno de ejecución (Host / Runtime)
+### 12.12 Frontera con el entorno de ejecución (Host / Runtime)
 
 Existe una separación conceptual estricta entre la semántica interna de Evo-Script y el entorno exterior que inicia y hospeda la ejecución:
 
@@ -3260,9 +3352,9 @@ Existe una separación conceptual estricta entre la semántica interna de Evo-Sc
    - **Fallo de evaluación**: Errores del lenguaje (`ConversionError`, `OverflowError`, `DivisionByZeroError`) detienen la evaluación y se propagan directamente hasta el límite exterior del host/runtime como fallos de ejecución.
 
 
-### 12.12 Ejemplos canónicos y modelos arquitectónicos
+### 12.13 Ejemplos canónicos y modelos arquitectónicos
 
-#### 12.12.1 Script autocontenido completo (`washer.efn`)
+#### 12.13.1 Script autocontenido completo (`washer.efn`)
 
 ```text
 struct Clothes {
@@ -3292,7 +3384,7 @@ Características:
 - No requiere `.esig`, `.estc`, `.enum`, `.root` ni `.main`.
 - Se ejecuta directamente por un host/runtime Evo-Script.
 
-#### 12.12.2 Proyecto canónico estructurado con Functional Composition Root (`project/`)
+#### 12.13.2 Proyecto canónico estructurado con Functional Composition Root (`project/`)
 
 A continuación se presenta un ejemplo canónico completo de un proyecto estructurado con tipos compartidos, contrato público, módulo, múltiples implementaciones físicas, consumidor inyectado, consumidor directo y el Functional Composition Root (`application.root`):
 
@@ -3419,7 +3511,7 @@ En este modelo:
   ```
   Tanto `process.efn` como `consumer.efn` y los proveedores permanecen completamente inalterados. Esto demuestra Inversión de Control Funcional pura sin constructores ni instancias de objetos.
 
-#### 12.12.3 Proyecto estructurado completo (`laundry/`)
+#### 12.13.3 Proyecto estructurado completo (`laundry/`)
 
 Estructura física de archivos:
 
@@ -3490,7 +3582,7 @@ Contenido y responsabilidades de cada artefacto:
   ```
 - **`application.main`**: Identifica la operación de inicio de la aplicación.
 
-#### 12.12.4 Diagrama de responsabilidades semánticas de proyecto
+#### 12.13.4 Diagrama de responsabilidades semánticas de proyecto
 
 ```text
                       structured project
@@ -3512,7 +3604,7 @@ Contenido y responsabilidades de cada artefacto:
                             .efn
 ```
 
-#### 12.12.5 Organización arquitectónica por responsabilidades
+#### 12.13.5 Organización arquitectónica por responsabilidades
 
 Los proyectos pueden organizar sus artefactos por responsabilidades semánticas (por ejemplo, `use_cases/`, `agents/`, `domain/`):
 - `use_cases/`: Aloja firmas `.esig` que modelan las acciones requeridas.
