@@ -1866,7 +1866,7 @@ El pipeline en Evo-Script es estrictamente **monovalor** y opera mediante compos
 
 Para operaciones cuya firma requiere exactamente un argumento:
 
-    fn to_string(int value) -> string;
+    esig to_string(int value) -> string;
 
 la forma canónica y obligatoria en el pipeline es:
 
@@ -2167,8 +2167,8 @@ La unidad semántica fundamental de ejecución y cómputo se denomina `Function`
 
 En Evo-Script v0.1 existen dos representaciones para funciones:
 
-1. **Implementación de función (`Function Implementation`)**: declarada dentro de archivos `.efn`, con visibilidad explícita (`public fn` o `private fn`), cuerpo delimitado por `{ ... }` y un único `return expresion;` obligatorio.
-2. **Firma de función (`Function Signature`)**: declarada dentro de archivos `.esig`, con la forma `fn nombre(argumentos) -> Tipo;`, sin cuerpo ni modificadores de visibilidad.
+1. **Implementación de función (`Function Implementation`)**: declarada dentro de archivos `.efn` mediante la palabra clave `fn`, con visibilidad explícita (`public fn` o `private fn`), cuerpo delimitado por `{ ... }` y un único `return expresion;` obligatorio.
+2. **Firma de función (`Function Signature`)**: declarada dentro de archivos `.esig` mediante la palabra clave `esig`, con la forma `esig nombre(argumentos) -> Tipo;`, sin cuerpo ni modificadores de visibilidad.
 
 La forma textual general de una implementación de función en Evo-Script v0.1 es:
 
@@ -2193,14 +2193,14 @@ Ejemplo canónico:
 
 ### 11.1 Declaración y visibilidad
 
-La palabra clave `fn` inicia textualmente la declaración de una función.
+La palabra clave `fn` inicia textualmente la declaración de una implementación de función dentro de un archivo `.efn`. La palabra clave `esig` inicia textualmente la declaración de una firma en un archivo `.esig`.
 
 En archivos de implementación `.efn`, la visibilidad de cada función debe ser explícita:
 
 - `public`: declara la única función pública principal del archivo `.efn`.
 - `private`: declara funciones auxiliares de uso estrictamente local dentro del mismo archivo `.efn`.
 
-No existe visibilidad implícita. En firmas públicas `.esig`, la función es pública por naturaleza y se declara directamente como `fn nombre(...) -> Tipo;` sin modificadores de visibilidad.
+No existe visibilidad implícita. En firmas públicas `.esig`, la firma es pública por naturaleza y se declara directamente como `esig nombre(...) -> Tipo;` sin modificadores de visibilidad (`public` y `private` no aplican a `.esig`).
 
 
 ### 11.2 Nombre
@@ -2718,7 +2718,14 @@ Existe una separación estricta entre la representación textual y la semántica
 | :--- | :--- |
 | `public fn` | `Public principal function in .efn` |
 | `private fn` | `File-local helper function in .efn` |
-| `fn ... -> Tipo;` | `Function signature in .esig` |
+| `esig nombre(args...) -> Tipo;` | `Evo Signature declaration in .esig` |
+| `import modulo::firma;` | `Granular signature dependency declaration` |
+| `import modulo::firma as alias;` | `Granular signature dependency with local alias` |
+| `modulo::simbolo` | `Qualified modular symbol reference` |
+| `public fn ... -> Tipo : modulo::firma` | `Function Implementation satisfying Signature` |
+| `:` | `Signature satisfaction marker / field init` |
+| `module Nombre { ... }` | `Evo Module declaration in .emod` |
+| `publish Simbolo;` | `Public modular surface entry in .emod` |
 | `tipo nombre` | `Argument` |
 | `-> tipo` | `Result type declaration` |
 | `return expresion;` | `Explicit function result declaration` |
@@ -2851,67 +2858,124 @@ Evo-Script distingue formalmente entre tipos locales a un archivo y tipos compar
 
 ### 12.5 Firmas públicas de funciones (.esig)
 
-Un archivo `.esig` (Evo Signature) declara formal y exclusivamente el contrato público de una función:
+Un archivo `.esig` (Evo Signature) declara formal y exclusivamente el contrato público de una función mediante la palabra clave `esig`:
 
 ```text
-fn nombre(tipo argumento, tipo argumento) -> Tipo;
+esig nombre(tipo argumento1, tipo argumento2) -> Tipo;
 ```
 
 Reglas normativas:
 
-1. **Sintaxis de firma**: La declaración consiste en `fn`, nombre, lista de argumentos tipados, cláusula `-> Tipo` y punto y coma final (`;`).
-2. **Ausencia de cuerpo**: Un archivo `.esig` no posee cuerpo `{ ... }`, correspondencia ni sentencias `return`.
-3. **Pública por naturaleza**: Toda firma en un `.esig` es intrínsecamente pública. No admite modificadores `public` ni `private`.
-4. **Contrato de acción, no interfaz de objeto**: `.esig` modela directamente la acción requerida, no una interfaz de clase u objeto. Evo-Script no define `interface`, `trait` ni `dyn`.
-5. **No crea funciones como valores**: `.esig` define un contrato invocable, no un valor de primer orden de tipo función. No introduce lambdas, clausuras ni tipos función manipulables como datos.
-6. **Tipos permitidos**: Una `.esig` solo puede utilizar tipos nativos o tipos compartidos (`.estc`, `.enum`). No puede utilizar tipos locales de un `.efn`.
+1. **Sintaxis oficial de firma**: La declaración consiste exclusivamente en la palabra clave `esig`, el identificador de la firma, la lista de argumentos tipados posicionales, la cláusula `-> Tipo` y el punto y coma final (`;`).
+2. **Diferenciación estricta entre `esig` y `fn`**: La palabra clave `esig` declara exclusivamente contratos de firma sin cuerpo. La palabra clave `fn` (`public fn` / `private fn`) declara exclusivamente implementaciones de función dentro de `.efn`.
+3. **Ausencia de cuerpo y sentencias**: Un archivo `.esig` no posee cuerpo `{ ... }`, correspondencia, bindings locales ni sentencias `return`.
+4. **Pública por naturaleza**: Toda firma en un `.esig` es intrínsecamente pública. No admite modificadores de visibilidad (`public esig` y `private esig` son inválidos).
+5. **Contrato de acción, no interfaz de objeto**: `.esig` modela directamente la acción requerida, no una interfaz de clase u objeto. Evo-Script no define `interface`, `trait`, `class` ni despacho dinámico `dyn`.
+6. **No crea funciones como valores**: `.esig` define un contrato invocable, no un valor de primer orden de tipo función (`Function Value`). No introduce lambdas, clausuras, function pointers como valores ni tipos función manipulables como datos.
+7. **Tipos permitidos**: Una `.esig` solo puede utilizar tipos nativos o tipos compartidos (`.estc`, `.enum`). No puede utilizar tipos locales de un `.efn`.
+8. **Desacoplamiento total**: Una `.esig` no contiene ninguna referencia a archivos `.efn` ni a implementaciones concretas.
 
 
 ### 12.6 Comunicación entre archivos y satisfacción de contratos
 
-Evo-Script prohíbe el acoplamiento directo entre implementaciones:
+Evo-Script prohíbe el acoplamiento directo entre implementaciones y organiza la comunicación mediante dependencias granulares de firmas y satisfacción explícita de contratos:
 
 1. **Prohibición de acceso directo `.efn` $\rightarrow$ `.efn`**: Un archivo de implementación `.efn` nunca puede depender ni invocar directamente a otro archivo `.efn`.
 2. **Canal de comunicación formal**: La comunicación entre archivos distintos ocurre exclusivamente a través de firmas `.esig` catalogadas en módulos `.emod`:
    ```text
    consumer.efn
         │
-        │ requiere una operación
+        │ importa la firma granular
         ▼
-   module.emod
+   import module::operation;
         │
-        │ ofrece
+        │ ofrecida por
         ▼
-   operation.esig
+   module.emod ──► operation.esig
+                        │
+                        ├──► input.estc
+                        │
+                        ├──► result.enum
+                        │
+                        │ satisfecha por
+                        ▼
+   public fn operation(...) : module::operation { ... }
         │
-        ├──► input.estc
-        │
-        ├──► result.enum
-        │
-        │ satisfecha por
-        ▼
    implementation.efn
    ```
-3. **Satisfacción de contrato**: Un archivo `.efn` satisface una `.esig` cuando su única `public fn` coincide exactamente en:
+3. **Declaración de dependencias mediante `import`**: Para utilizar una firma publicada por un módulo, el archivo debe declararla explícitamente mediante `import`:
+   ```text
+   import module::signature;
+   ```
+   Opcionalmente con un alias local para evitar colisiones de nombres:
+   ```text
+   import module::signature as alias_local;
+   ```
+4. **Posición de las declaraciones `import`**: Las cláusulas `import` son declaraciones estructurales de nivel superior y deben ubicarse estrictamente al inicio del archivo `.efn`, antes de cualquier definición de struct local, enum local, `private fn` o `public fn`. No se permiten declaraciones `import` dentro del cuerpo de una función ni como expresiones evaluables.
+5. **Satisfacción explícita mediante `:`**: Una `Function Implementation` en un archivo `.efn` declara formalmente qué firma satisface utilizando el carácter `:` seguido del nombre calificado del módulo y firma:
+   ```text
+   public fn search(int id) -> SearchResult
+       : values::search
+   {
+       return SearchResult::NotFound;
+   }
+   ```
+   - El carácter `:` en este contexto significa estrictamente *"satisface / implementa la firma"*.
+   - No representa herencia, subtipado, tipo de parámetro ni interfaz orientada a objetos.
+   - La implementación referencia exclusivamente el nombre calificado de la firma (`: values::search`) y **no duplica** los parámetros ni la sintaxis de la firma después de `:`.
+6. **Comprobación exacta de coincidencia contractual**: La `public fn` que declara satisfacer `: modulo::firma` debe coincidir exactamente con la declaración en `.esig` en:
    - Nombre de la función.
-   - Cantidad y orden de los argumentos.
-   - Tipos de los argumentos.
-   - Tipo de resultado.
-   No se permiten conversiones implícitas para satisfacer una firma.
-4. **Desacoplamiento de implementación**: El consumidor conoce exclusivamente la `.esig` y sus tipos asociados. No conoce el nombre del archivo `.efn`, su ubicación física ni sus funciones privadas.
-5. **Modelado explícito de resultados**: Los resultados esperados y manejables de una firma se modelan mediante tipos `enum` de dominio (por ejemplo, variantes `Ok` y `Error(string)` como valores normales), manteniéndolos estrictamente separados de los errores de evaluación del lenguaje (`ConversionError`, `OverflowError`, `DivisionByZeroError`).
+   - Cantidad de argumentos (aridad).
+   - Orden posicional de los argumentos.
+   - Tipos exactos de los argumentos.
+   - Tipo exacto de resultado.
+   No se permiten conversiones implícitas, promociones ni widening para satisfacer una firma.
+7. **Error de discordancia contractual (`SignatureMismatchError`)**: Si una función declara satisfacer `: modulo::firma` pero su firma implementada difiere en nombre, aridad, tipos o retorno respecto de la `.esig` publicada, el programa es inválido y produce un error de validación `SignatureMismatchError` (categoría `SystemError`).
+8. **Diferenciación entre consumidor e implementador**:
+   - **Consumidor**: Declara `import values::search;` e invoca la firma `search(id)` en su código sin conocer ni referenciar el archivo `search.efn`.
+   - **Implementador**: Declara `import values::search;` y define su `public fn search(...) : values::search { ... }` para satisfacer el contrato.
 
 
 ### 12.7 Módulos (.emod) y selección granular de dependencias
 
-Un archivo `.emod` (Evo Module) define la identidad semántica y la frontera de capacidades de un módulo:
+Un archivo `.emod` (Evo Module) define la identidad semántica y la superficie modular pública de un módulo:
 
-1. **Frontera semántica vs carpeta física**: Una carpeta física organiza archivos en disco; un `.emod` delimita la superficie modular semántica del conjunto. La presencia de un archivo en una carpeta no lo hace automáticamente público si no está registrado en el `.emod`.
-2. **Catálogo de capacidades**: El `.emod` registra las firmas públicas `.esig` que ofrece el módulo.
-3. **Ausencia de `namespace`**: Evo-Script no introduce la palabra clave `namespace`.
-4. **Selección por firma individual**: Un consumidor selecciona una capacidad concreta de un módulo por su firma (`signature`), no importando automáticamente todo el contenido del módulo. Utilizar una operación `modulo::operacion` no hace visibles el resto de operaciones del módulo.
-5. **Cierre transitivo de tipos limitado**: Al seleccionar una `.esig`, se resuelven exclusivamente los tipos compartidos (`.estc`, `.enum`) directamente requeridos por los argumentos y resultado de dicha firma, junto con los tipos anidados por estos. Esto no expone otros tipos no relacionados del módulo.
-6. **Independencia del mecanismo `use`**: La palabra clave `use` conserva estrictamente su semántica de activación de `Scope`. La sintaxis textual para la selección de dependencias modulares se definirá en especificaciones posteriores.
+#### 12.7.1 Declaración y superficie pública (`module` y `publish`)
+
+La sintaxis oficial de un archivo `.emod` define el nombre lógico del módulo y los símbolos que conforman su superficie pública mediante la palabra clave `publish`:
+
+```text
+module values {
+    publish Worker;
+    publish SearchResult;
+    publish search;
+}
+```
+
+Reglas normativas:
+1. **Identidad del módulo**: La cláusula `module Nombre { ... }` establece el identificador lógico del módulo utilizado en referencias calificadas (`values::search`, `values::Worker`).
+2. **Declaración `publish`**: Cada cláusula `publish Simbolo;` incluye explícitamente un artefacto en la superficie pública del módulo. `publish` es una declaración estructural modular; no ejecuta operaciones ni es una llamada de función.
+3. **Artefactos publicables**: Un `.emod` puede publicar exclusivamente:
+   - Firmas de funciones (`.esig`).
+   - Structs compartidos (`.estc`).
+   - Enums compartidos (`.enum`).
+4. **Prohibición estricta de publicar `.efn`**: Un `.emod` **nunca publica archivos `.efn`**, funciones privadas ni tipos locales a una implementación. Las implementaciones permanecen completamente ocultas detrás de los contratos públicos.
+5. **Ausencia de `namespace`**: Evo-Script no introduce la palabra clave `namespace`. La pertenencia modular se expresa mediante nombres calificados con `::`.
+
+#### 12.7.2 Importación granular y nombres calificados (`::`)
+
+1. **Importación granular de firmas**: La cláusula `import module::signature;` importa exclusivamente la capacidad indicada. No importa todo el módulo ni hace visibles otras firmas publicadas por `values.emod` (como `save` o `delete`).
+2. **Cierre transitivo de tipos limitado**: Al importar una firma mediante `import module::signature;`, se hacen resolubles automáticamente la firma y el conjunto mínimo de tipos compartidos (`.estc` y `.enum`) requeridos directamente por sus parámetros y resultado, así como los subtipos anidados en estos. No se hacen disponibles tipos compartidos no relacionados del módulo.
+   - Si `search.esig` requiere `SearchResult.enum`, y `SearchResult.enum` compone `Worker.estc`, entonces `import values::search;` hace resolubles `search`, `SearchResult` y `Worker`.
+   - Si el módulo publica adicionalmente `DeleteResult.enum` o `Address.estc`, estos permanecen no disponibles a menos que sean explícitamente importados o requeridos por otra firma.
+3. **Uso de alias local (`as`)**: Cuando se declara `import modulo::firma as alias;`, el nombre local accesible en el archivo es exclusivamente `alias`. El nombre original `firma` no se hace visible localmente por esa declaración, lo que permite resolver posibles colisiones de nombres entre distintos módulos.
+4. **Separación estricta entre `import` y `use`**:
+   - `import`: Declara una dependencia modular estructural / semántica en tiempo de análisis.
+   - `use`: Activa un `Scope` de capacidades durante la ejecución.
+   No se reutiliza `use` para importación modular ni `import` para activación de Scopes.
+5. **Calificación mediante `::`**: El operador `::` denota calificación y pertenencia lógica de un símbolo dentro de un contexto nombrado:
+   - `modulo::simbolo` (por ejemplo, `values::search`).
+   - `TipoEnum::Variante` (por ejemplo, `SearchResult::Found`).
 
 
 ### 12.8 Raíz de proyecto (.root)
@@ -2996,7 +3060,67 @@ Características:
 - No requiere `.esig`, `.estc`, `.enum`, `.root` ni `.main`.
 - Se ejecuta directamente por un host/runtime Evo-Script.
 
-#### 12.12.2 Proyecto estructurado completo (`laundry/`)
+#### 12.12.2 Módulo canónico completo con consumidor e implementador (`values`)
+
+A continuación se presenta un ejemplo canónico completo de definición de tipos compartidos, contrato público, módulo, implementación y consumidor:
+
+- **`worker.estc`** (Struct compartido):
+  ```text
+  struct Worker {
+      int id;
+      string name;
+  }
+  ```
+
+- **`search_result.enum`** (Enum compartido):
+  ```text
+  enum SearchResult {
+      Found(Worker)
+      NotFound
+      Error(string)
+  }
+  ```
+
+- **`search.esig`** (Firma pública / Contrato):
+  ```text
+  esig search(int id) -> SearchResult;
+  ```
+
+- **`values.emod`** (Módulo y catálogo público):
+  ```text
+  module values {
+      publish Worker;
+      publish SearchResult;
+      publish search;
+  }
+  ```
+
+- **`search.efn`** (Implementador que satisface la firma):
+  ```text
+  import values::search;
+
+  public fn search(int id) -> SearchResult
+      : values::search
+  {
+      return SearchResult::NotFound;
+  }
+  ```
+
+- **`consumer.efn`** (Consumidor que utiliza la capacidad):
+  ```text
+  import values::search;
+
+  public fn execute(int id) -> SearchResult {
+      return search(id);
+  }
+  ```
+
+En este modelo:
+- `consumer.efn` importa y utiliza `values::search`, obteniendo acceso transitivo a `SearchResult` y `Worker`. No conoce `search.efn`.
+- `search.efn` implementa y satisface `: values::search`.
+- `values.emod` publica exclusivamente `Worker`, `SearchResult` y `search`.
+
+#### 12.12.3 Proyecto estructurado completo (`laundry/`)
 
 Estructura física de archivos:
 
@@ -3032,27 +3156,39 @@ Contenido y responsabilidades de cada artefacto:
 
 - **`washes_clothes.esig`** (Firma pública / Contrato):
   ```text
-  fn washes_clothes(Clothes clothes) -> WashesClothesResult;
+  esig washes_clothes(Clothes clothes) -> WashesClothesResult;
   ```
 
-- **`washer.efn`** (Implementación):
+- **`laundry.emod`** (Módulo y catálogo público):
   ```text
+  module laundry {
+      publish Clothes;
+      publish WashesClothesResult;
+      publish washes_clothes;
+  }
+  ```
+
+- **`washer.efn`** (Implementación que satisface la firma):
+  ```text
+  import laundry::washes_clothes;
+
   private fn prepare(Clothes clothes) -> Clothes {
       return clothes;
   }
 
-  public fn washes_clothes(Clothes clothes) -> WashesClothesResult {
+  public fn washes_clothes(Clothes clothes) -> WashesClothesResult
+      : laundry::washes_clothes
+  {
       let Clothes prepared = prepare(clothes);
 
       return WashesClothesResult::Ok(prepared);
   }
   ```
 
-- **`laundry.emod`**: Registra y ofrece la capacidad `washes_clothes.esig`.
 - **`application.root`**: Declara la raíz de resolución del proyecto `laundry`.
 - **`application.main`**: Identifica la operación de inicio de la aplicación.
 
-#### 12.12.3 Diagrama de responsabilidades semánticas de proyecto
+#### 12.12.4 Diagrama de responsabilidades semánticas de proyecto
 
 ```text
                       structured project
@@ -3074,7 +3210,7 @@ Contenido y responsabilidades de cada artefacto:
                             .efn
 ```
 
-#### 12.12.4 Organización arquitectónica por responsabilidades
+#### 12.12.5 Organización arquitectónica por responsabilidades
 
 Los proyectos pueden organizar sus artefactos por responsabilidades semánticas (por ejemplo, `use_cases/`, `agents/`, `domain/`):
 - `use_cases/`: Aloja firmas `.esig` que modelan las acciones requeridas.
