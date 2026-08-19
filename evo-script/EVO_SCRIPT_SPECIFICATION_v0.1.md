@@ -2212,27 +2212,63 @@ En la declaración:
 el identificador `guardar` define el nombre de la función dentro del programa.
 
 
-### 11.3 Argumentos
+### 11.3 Parámetros de funciones (Function Parameters)
 
-La regla oficial para la declaración de argumentos en Evo-Script es:
+Evo-Script v0.1 distingue formalmente dos clases de parámetros dentro de la lista posicional de una función:
+
+1. **Parámetros de datos (`Value Parameters`)**: Representan valores de datos evaluables que participan en el cómputo de la función.
+2. **Parámetros de dependencia de firma (`Signature Dependency Parameters`)**: Declaran capacidades funcionales requeridas por la función, tipadas mediante una Evo Signature importada.
+
+Ambas clases de parámetros se escriben dentro de la misma y única lista posicional de la función, separados por comas. No existen múltiples listas de parámetros (como `fn foo(a)(b)`) ni bloques especiales (`dependencies { ... }`, `inject { ... }`, `requires { ... }`).
+
+#### 11.3.1 Parámetros de datos (Value Parameters)
+
+La regla oficial para la declaración de parámetros de datos es:
 
     tipo primero, nombre después
 
-Ejemplo:
-
-    Trabajador trabajador
-
-No se utiliza la sintaxis invertida con dos puntos (`trabajador: Trabajador`).
-
-Ejemplos válidos conceptuales:
+Ejemplos:
 
     int count
     float value
     Trabajador trabajador
 
-Una función puede declarar múltiples argumentos separados por comas:
+No se utiliza la sintaxis invertida con dos puntos (`trabajador: Trabajador`).
+
+Ejemplo de función con múltiples parámetros de datos:
 
     public fn ejemplo(int id, float amount, Trabajador trabajador) -> ...
+
+#### 11.3.2 Parámetros de dependencia de firma (Signature Dependency Parameters)
+
+Una Function Implementation puede declarar explícitamente que requiere una capacidad externa especificando una firma importada en su lista de parámetros:
+
+    modulo::firma nombre_local
+
+Ejemplo canónico:
+
+    import values::search;
+
+    public fn process(int id, values::search search) -> SearchResult {
+        return search(id);
+    }
+
+Interpretación del ejemplo:
+- `int id`: Parámetro de datos (`Value Parameter`) que recibe un valor normal de tipo `int`.
+- `values::search search`: Parámetro de dependencia de firma (`Signature Dependency Parameter`), donde:
+  - `values::search`: Identifica formalmente la Signature requerida por la función.
+  - `search`: Define el nombre local de la capacidad dentro del cuerpo de la función.
+
+Reglas normativas:
+
+1. **Obligatoriedad de `import`**: Toda Signature utilizada como parámetro de dependencia debe estar explícitamente importada al inicio del archivo `.efn` mediante `import modulo::firma;`. Declarar `values::search search` no sustituye a la cláusula `import`.
+2. **Prohibición de `esig` en parámetros**: La palabra clave `esig` está reservada exclusivamente para la declaración de contratos dentro de archivos `.esig`. La sintaxis `esig values::search search` es inválida. La forma canónica es directamente `values::search search`.
+3. **No es un tipo de datos ordinario (`Value`)**: Una Signature no forma parte del sistema de valores normales del lenguaje. No puede utilizarse como tipo de un binding (`let values::search x = ...` es inválido), como tipo de retorno de una función (`-> values::search` es inválido), como campo de una estructura (`struct Service { values::search s; }` es inválido) ni como dato asociado de un enum (`enum E { V(values::search) }` es inválido).
+4. **Ausencia de funciones de primer orden**: Un parámetro de dependencia no es un valor de primer orden (`first-class function`). No puede asignarse (`let x = search;`), retornarse (`return search;`) ni pasarse como dato genérico. No introduce lambdas, clausuras ni punteros a función como datos.
+5. **Invocación de la capacidad**: Dentro del cuerpo de la función, la capacidad requerida se invoca mediante su nombre local (`search(id)`). La llamada obedece estrictamente las reglas de validación de la Signature declarada: aridad exacta, correspondencia exacta de tipos de argumentos, evaluación de argumentos de izquierda a derecha y ausencia de conversiones implícitas.
+6. **Autonomía del nombre local**: El identificador local (`search`) es exclusivo del ámbito interno de esa función. La identidad formal y contractual de la dependencia continúa siendo `values::search`. Declarar `values::search employee_search` es válido y se invoca internamente como `employee_search(id)`.
+7. **Distinción con alias de importación**: Un alias de importación (`import values::search as imported_search;`) opera a nivel de archivo para llamadas directas, mientras que el nombre local de un Signature Dependency Parameter (`values::search search`) opera exclusivamente en el ámbito léxico de esa Function Implementation.
+8. **Asistencia de tooling (Nota no normativa)**: La presencia previa de `import values::search;` permite que editores y servidores de lenguaje (LSP) conozcan la firma y asistan al desarrollador con autocompletado y validación de tipos al declarar parámetros de dependencia e invocar sus capacidades.
 
 
 ### 11.4 Tipo de resultado
@@ -2783,11 +2819,12 @@ Existe una separación estricta entre la representación textual y la semántica
 | `import modulo::firma;` | `Granular signature dependency declaration` |
 | `import modulo::firma as alias;` | `Granular signature dependency with local alias` |
 | `modulo::simbolo` | `Qualified modular symbol reference` |
+| `modulo::firma nombre_local` | `Signature Dependency Parameter` |
 | `public fn ... -> Tipo : modulo::firma` | `Function Implementation satisfying Signature` |
 | `:` | `Signature satisfaction marker / field init` |
 | `module Nombre { ... }` | `Evo Module declaration in .emod` |
 | `publish Simbolo;` | `Public modular surface entry in .emod` |
-| `tipo nombre` | `Argument` |
+| `tipo nombre` | `Value Parameter` |
 | `-> tipo` | `Result type declaration` |
 | `return expresion;` | `Explicit function result declaration` |
 | `nombre(args...)` | `Function call expression` |
@@ -2999,11 +3036,32 @@ Evo-Script prohíbe el acoplamiento directo entre implementaciones y organiza la
    - Tipo exacto de resultado.
    No se permiten conversiones implícitas, promociones ni widening para satisfacer una firma.
 11. **Error de discordancia contractual (`SignatureMismatchError`)**: Si una función declara satisfacer `: modulo::firma` pero su firma implementada difiere en nombre, aridad, tipos o retorno respecto de la `.esig` publicada, el programa es inválido y produce un error de validación `SignatureMismatchError` (categoría `SystemError`).
-12. **Diferenciación entre consumidor e implementador**:
-   - **Consumidor**: Declara `import values::search;` e invoca la firma `search(id)` (o su alias `alias(id)`) en su código sin conocer ni referenciar el archivo `search.efn`.
-   - **Implementador**: Declara `import values::search;` y define su `public fn search(...) : values::search { ... }` para satisfacer el contrato.
-13. **Ausencia de llamadas calificadas en v0.1**: En Evo-Script v0.1, las llamadas a capacidades importadas se invocan exclusivamente mediante su nombre local no calificado (`search(id)`) o alias asignado (`alias(id)`). No se introduce sintaxis de llamada calificada tipo `values::search(id)` en expresiones evaluables.
-14. **Asistencia para herramientas y editores (Nota no normativa)**: La presencia explícita de `import values::search;` al inicio del archivo permite que herramientas de desarrollo, servidores de lenguaje (LSP) y entornos integrados (IDEs) conozcan de antemano el conjunto de firmas disponibles para el archivo, facilitando el autocompletado y la sugerencia de firmas válidas tras escribir `:`.
+12. **Modalidades de consumo e Inversión de Control Funcional**:
+    Evo-Script v0.1 admite dos formas de consumir una capacidad importada:
+    - **Consumo directo**: El archivo importa la firma (`import values::search;`) y la invoca directamente (`search(id)`). La capacidad está disponible a nivel de archivo.
+    - **Consumo mediante Signature Dependency Parameter**: Una Function Implementation declara formalmente que requiere una capacidad específica en su lista de parámetros (`modulo::firma nombre_local`):
+      ```text
+      import values::search;
+
+      public fn process(int id, values::search search) -> SearchResult {
+          return search(id);
+      }
+      ```
+      En este modo, `process` no decide qué implementación concreta ejecutará `values::search`; declara la necesidad funcional del contrato y delega la vinculación a la resolución externa del proyecto. Esto constituye **Inversión de Control Funcional** (`Functional Inversion of Control`).
+13. **Distinción fundamental entre requerir y satisfacer una Signature**:
+    - `modulo::firma nombre_local` en parámetros $\rightarrow$ La función **REQUIERE** la Signature para operar (`values::search search`).
+    - `: modulo::firma` en la declaración $\rightarrow$ La función **SATISFACE** la Signature (`public fn search(...) : values::search`).
+    Ambas declaraciones son conceptualmente opuestas y no deben confundirse.
+14. **Ausencia de conceptos de IoC orientado a objetos**:
+    La inyección de capacidades mediante Signature Dependency Parameters no introduce conceptos de Programación Orientada a Objetos:
+    - No existen `new`, constructores, instancias ni objetos de servicio.
+    - No existen contenedores IoC con estado ni ciclos de vida (`Singleton`, `Scoped`, `Transient`).
+    - La ejecución es puramente funcional: cada invocación de la capacidad ejecuta directamente la Function Implementation vinculada.
+15. **Desacoplamiento total del consumidor inyectado**: El archivo `process.efn` conoce exclusivamente la firma `values::search` y sus tipos asociados (`SearchResult`, `Worker`). No conoce el archivo `search.efn`, su ubicación física ni sus funciones privadas.
+16. **Ausencia de llamadas calificadas en v0.1**: En Evo-Script v0.1, las llamadas a capacidades importadas o inyectadas se invocan exclusivamente mediante su nombre local no calificado (`search(id)`) o alias asignado (`alias(id)`). No se introduce sintaxis de llamada calificada tipo `values::search(id)` en expresiones evaluables.
+17. **Asistencia para herramientas y editores (Nota no normativa)**: La presencia explícita de `import values::search;` al inicio del archivo permite que herramientas de desarrollo, servidores de lenguaje (LSP) y entornos integrados (IDEs) conozcan de antemano el conjunto de firmas disponibles para el archivo, facilitando el autocompletado y la sugerencia de firmas válidas al declarar parámetros de dependencia o escribir `:`.
+18. **Composición de dependencias y estado de `.root`**: El enlace formal entre una Function Implementation que requiere una Signature (`values::search search`) y la Function Implementation que la satisface (`: values::search`) es responsabilidad del archivo `.root` del proyecto. La sintaxis de composición, reglas de cableado, selección entre múltiples implementaciones y resolución física quedan explícitamente reservadas para el diseño posterior de `.root`.
+19. **Delimitación de capacidades no definidas**: En v0.1 no se define reenvío de dependencias (`dependency forwarding`, ej. `another(search)`), almacenamiento de dependencias en structs/enums, ni retorno de dependencias desde funciones.
 
 
 ### 12.7 Módulos (.emod) y selección granular de dependencias
@@ -3130,9 +3188,9 @@ Características:
 - No requiere `.esig`, `.estc`, `.enum`, `.root` ni `.main`.
 - Se ejecuta directamente por un host/runtime Evo-Script.
 
-#### 12.12.2 Módulo canónico completo con consumidor e implementador (`values`)
+#### 12.12.2 Módulo canónico completo con implementador, consumidor inyectado y consumidor directo (`values`)
 
-A continuación se presenta un ejemplo canónico completo de definición de tipos compartidos, contrato público, módulo, implementación y consumidor:
+A continuación se presenta un ejemplo canónico completo de definición de tipos compartidos, contrato público, módulo, implementador, consumidor inyectado y consumidor directo:
 
 - **`worker.estc`** (Struct compartido):
   ```text
@@ -3176,7 +3234,16 @@ A continuación se presenta un ejemplo canónico completo de definición de tipo
   }
   ```
 
-- **`consumer.efn`** (Consumidor que utiliza la capacidad):
+- **`process.efn`** (Consumidor inyectado que requiere la capacidad):
+  ```text
+  import values::search;
+
+  public fn process(int id, values::search search) -> SearchResult {
+      return search(id);
+  }
+  ```
+
+- **`consumer.efn`** (Consumidor directo que utiliza la capacidad):
   ```text
   import values::search;
 
@@ -3186,8 +3253,10 @@ A continuación se presenta un ejemplo canónico completo de definición de tipo
   ```
 
 En este modelo:
-- `consumer.efn` importa y utiliza `values::search`, obteniendo acceso transitivo a `SearchResult` y `Worker`. No conoce `search.efn`.
 - `search.efn` implementa y satisface `: values::search`.
+- `process.efn` requiere explícitamente `values::search` como Signature Dependency Parameter en su lista de parámetros (`values::search search`).
+- `consumer.efn` importa y utiliza directamente `values::search` a nivel de archivo.
+- Ni `process.efn` ni `consumer.efn` conocen el archivo de implementación `search.efn`.
 - `values.emod` publica exclusivamente `Worker`, `SearchResult` y `search`.
 
 #### 12.12.3 Proyecto estructurado completo (`laundry/`)
