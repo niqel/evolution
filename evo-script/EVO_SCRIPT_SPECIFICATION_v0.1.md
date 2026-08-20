@@ -3572,6 +3572,14 @@ Los errores de resolución y validación local de funciones pertenecen a la cate
 | `ComparisonTypeError` | Los tipos de los operandos en una comparación no coinciden exactamente o no son compatibles con el operador. |
 | `RecursiveTypeCycleError` | Se detecta un ciclo de dependencias estructurales directas o indirectas entre structs y/o enums. |
 | `TypeNameCollisionError` | Dos declaraciones de tipos o importaciones intentan registrar el mismo identificador local dentro del Type Space. |
+| `LibraryArtifactPathError` | La ruta declarada en un `artifact` es inválida (absoluta, URL, comodín o escapa del Library Base Directory). |
+| `LibraryArtifactNotFoundError` | El archivo físico declarado mediante `artifact` en `.elib` no existe en el sistema de archivos. |
+| `DuplicateLibraryArtifactError` | Dos declaraciones `artifact` registran la misma ruta física normalizada en la Active Library. |
+| `ModuleBoundaryError` | Un artefacto modular no puede asignarse a exactamente una Physical Module Boundary o existen múltiples `.emod` en el mismo directorio. |
+| `DuplicateModuleError` | Dos archivos `.emod` registrados en la Active Library declaran la misma Module Identity lógica. |
+| `ModuleNotFoundError` | Se referencia un módulo lógico que no existe entre los módulos registrados en la Active Library. |
+| `ModuleSymbolNotFoundError` | Se intenta importar o publicar un símbolo que no existe en el módulo correspondiente. |
+| `DuplicateModuleSymbolError` | Más de un artefacto registrado dentro de la misma Physical Module Boundary declara el mismo símbolo semántico. |
 
 #### 11.13.3 Distinción formal de categorías de error
 
@@ -3579,7 +3587,7 @@ Evo-Script distingue formalmente tres categorías ortogonales de fallos o altern
 
 | Categoría | Naturaleza | Momento de detección | Ejemplo | Manejo en Evo-Script |
 | :--- | :--- | :--- | :--- | :--- |
-| **System / Validation Error** | Invalidez estructural o de resolución del programa | Antes de la evaluación | `FunctionNotFoundError`, `FunctionArityError`, `DuplicateFunctionError`, `FunctionCallCycleError`, `FieldNotFoundError`, `FieldAccessTypeError`, `ComparisonTypeError`, `RecursiveTypeCycleError`, `TypeNameCollisionError` | El programa se rechaza; no es evaluable. |
+| **System / Validation Error** | Invalidez estructural o de resolución del programa | Antes de la evaluación | `FunctionNotFoundError`, `FunctionArityError`, `DuplicateFunctionError`, `FunctionCallCycleError`, `FieldNotFoundError`, `FieldAccessTypeError`, `ComparisonTypeError`, `RecursiveTypeCycleError`, `TypeNameCollisionError`, `LibraryArtifactPathError`, `LibraryArtifactNotFoundError`, `DuplicateLibraryArtifactError`, `ModuleBoundaryError`, `DuplicateModuleError`, `ModuleNotFoundError`, `ModuleSymbolNotFoundError`, `DuplicateModuleSymbolError` | El programa se rechaza; no es evaluable. |
 | **Evaluation Error** | Fallo en la evaluación de una expresión en un programa válido | Durante la evaluación | `DivisionByZeroError`, `OverflowError`, `ConversionError` | Detiene la evaluación y se propaga al host/runtime exterior. |
 | **Domain Alternative** | Resultado o caso normal esperado del dominio del programa | Durante la evaluación | `BuscarTrabajadorResult::Error(string)`, `SearchResult::NotFound` | Valor normal `Value` de tipo `enum`; inspeccionable con `when`. |
 
@@ -3595,6 +3603,7 @@ Existe una separación estricta entre la representación textual y la semántica
 | `esig nombre(args...) -> Tipo;` | `Evo Signature declaration in .esig` |
 | `import modulo::simbolo;` | `Granular published symbol import declaration (.efn, .estc, .enum, .esig)` |
 | `import modulo::simbolo as alias;` | `Granular published symbol import with local alias` |
+| `artifact "ruta/archivo";` | `Physical artifact manifest entry in .elib` |
 | `modulo::simbolo` | `Qualified modular symbol reference` |
 | `modulo::firma nombre_local` | `Signature Dependency Parameter` |
 | `public fn ... -> Tipo : modulo::firma` | `Function Implementation satisfying Signature` |
@@ -3688,15 +3697,16 @@ Cada extensión de archivo en Evo-Script expresa su responsabilidad semántica p
 | `.esig` | Evo Signature | Contrato público de una función (firma sin cuerpo) |
 | `.estc` | Evo Struct | Definición compartible de struct |
 | `.enum` | Enum | Definición compartible de enum |
-| `.emod` | Evo Module | Módulo, frontera semántica y catálogo de firmas públicas |
+| `.emod` | Evo Module | Módulo, frontera semántica y catálogo de firmas y tipos públicos |
 | `.root` | Evo Project Root | Raíz de resolución y Functional Composition Root de un proyecto estructurado |
 | `.main` | Evo Application Main | Selección de la operación inicial, Application Main Loop y ciclo de vida de la aplicación |
-| `.elib` | Evo Library | Extensión reservada para librerías reutilizables (no especificada operativamente en v0.1) |
+| `.elib` | Evo Library | Manifiesto de artefactos físicos (Physical Artifact Manifest) y unidad de resolución física del proyecto |
 | `.evo` | Evo Package | Extensión reservada para paquetes y artefactos distribuibles (no especificada operativamente en v0.1) |
 
 Regla de exclusión y estado de extensiones:
 - La extensión oficial para módulos es estrictamente `.emod` (no se admite `.mod`).
-- Las extensiones `.elib` y `.evo` quedan expresamente **reservadas** para especificaciones futuras y no poseen semántica operativa en Evo-Script v0.1 (`reserved != usable`, `reserved != partially specified`).
+- La extensión `.elib` se encuentra formalmente cerrada y especificada operativamente en Evo-Script v0.1 como manifiesto físico de artefactos (`Physical Artifact Manifest`) y unidad de resolución física.
+- La extensión `.evo` queda expresamente **reservada** para especificaciones futuras y no posee semántica operativa en Evo-Script v0.1 (`reserved != usable`, `reserved != partially specified`).
 - No existen extensiones no oficiales como `.evo-script`, `.evostruct`, `.evoenum` ni `.efun`.
 
 
@@ -4017,7 +4027,7 @@ Todo módulo que exponga símbolos públicos debe garantizar la integridad de su
 
 1. **Resolubilidad del cierre público**: Si un módulo publica una firma o un tipo compartido, todos los tipos de usuario que formen parte de su `Type Dependency Closure` o `Signature Type Closure` deben ser semánticamente accesibles y resolubles a través de interfaces publicadas.
 2. **Prohibición de contratos incompletos o inaccesibles**: Un módulo no puede publicar una firma o un tipo que dependa de un tipo local no publicado o inaccesible externamente.
-3. **Cierre a través de módulos lógicos**: El cierre de tipos puede componer tipos compartidos procedentes de distintos módulos lógicos. Las reglas de localización física de archivos y módulos continúan como especificación pendiente.
+3. **Cierre a través de módulos lógicos**: El cierre de tipos puede componer tipos compartidos procedentes de distintos módulos lógicos registrados en la Active Library (`.elib`), resolviéndose deterministamente a través de sus respectivas Physical Module Boundaries (véase la Sección 12.10).
 
 
 #### 12.7.7 Aliases de tipos con `as`, convenciones y colisiones (`TypeNameCollisionError`)
@@ -4124,7 +4134,7 @@ Interpretación semántica:
 
 #### 12.8.3 Reglas normativas de `.root`
 
-1. **Resolución física relativa al directorio de `.root`**: La ruta textual indicada en `to "..."` se interpreta siempre de forma relativa al directorio que contiene el archivo `.root`. No se admiten URLs, rutas absolutas remotas, comodines (`*`), registros de paquetes ni variables de entorno en v0.1.
+1. **Resolución física relativa al directorio de `.root`**: La ruta textual indicada en `to "..."` se interpreta siempre de forma relativa al directorio que contiene el archivo `.root`. Además, en un proyecto estructurado activo, el archivo `.efn` objetivo debe pertenecer obligatoriamente al `Physical Artifact Universe` definido por el `.elib` activo. No se admiten URLs, rutas absolutas remotas, comodines (`*`), registros de paquetes ni variables de entorno en v0.1.
 2. **Ausencia de bloque envolvente**: El archivo `.root` no requiere un bloque envolvente `root nombre { ... }`. Las declaraciones `bind` se escriben directamente a nivel de archivo.
 3. **Múltiples bindings independientes**: Un archivo `.root` puede contener tantas declaraciones `bind` independientes como requiera el proyecto:
    ```text
@@ -4178,6 +4188,7 @@ Interpretación semántica:
 9. **Condiciones de validación del binding**: Una declaración `bind modulo::firma to "ruta.efn";` es válida si y solo si:
    - `modulo::firma` existe como Signature pública publicada por un `.emod` accesible.
    - El archivo objetivo `.efn` existe en la ruta relativa especificada.
+   - El archivo `.efn` resuelto pertenece al `Physical Artifact Universe` de la Active Library (`.elib` activo).
    - El archivo `.efn` posee su única función pública (`public fn`).
    - Dicha `public fn` declara explícitamente `: modulo::firma`.
    - La `public fn` coincide exactamente en nombre, aridad, orden y tipos de parámetros, y tipo de resultado con la declaración `.esig`. Si difiere, se produce `SignatureMismatchError`.
@@ -4299,7 +4310,7 @@ Reglas normativas de `entry`:
        return InitResult::Ready;
    }
    ```
-6. **Resolución de ruta relativa a Project Root**: La ruta textual indicada en `entry "..."` se resuelve de forma relativa al directorio que contiene el archivo `.root` del proyecto estructurado (Project Root).
+6. **Resolución de ruta relativa a Project Root**: La ruta textual indicada en `entry "..."` se resuelve de forma relativa al directorio que contiene el archivo `.root` del proyecto estructurado (Project Root). Además, en un proyecto estructurado activo, el archivo `.efn` de entrada debe pertenecer obligatoriamente al `Physical Artifact Universe` definido por el `.elib` activo.
 7. **Ausencia de bloque envolvente**: El archivo `.main` no requiere ni admite bloques envolventes (`main application { ... }` ni `application { ... }` son inválidos). La sentencia `entry` se declara directamente a nivel de archivo.
 8. **Ausencia de lógica y otras construcciones en `.main`**: El archivo `.main` no contiene funciones (`public fn`, `private fn`), variables (`let`), sentencias de control (`return`, `when`), llamadas a funciones, ni declaraciones `bind`, `import`, `esig`, `struct`, `enum` o `publish`.
 9. **Parámetros permitidos en Application Entry (Restricción de Value Parameters en v0.1)**:
@@ -4568,46 +4579,220 @@ Evo-Script v0.1 define con precisión formal la relación entre los fallos de ev
 1. **Universalidad para aplicaciones estructuradas**: El Application Main Loop modela el ciclo de vida de cualquier aplicación estructurada (gráfica con ventanas, de terminal interactiva o tipo servicio/servidor). Las aplicaciones gráficas no requieren implementar bucles infinitos para mantener viva su interfaz.
 2. **Scripts autocontenidos**: Un script simple `.efn` ejecutado directamente no requiere `.root`, `.main` ni `entry`. Su evaluación concluye inmediatamente cuando su única `public fn` ejecuta su `return`, entregando el resultado directamente al host exterior sin Application Main Loop.
 3. **Unicidad de `.main`**: Toda aplicación estructurada posee exactamente un archivo `.main`. No se admiten archivos `.main` múltiples, anidados, incluidos ni heredados.
-4. **Librerías reutilizables (.elib)**: El modelo formal de librerías reutilizables queda reservado para futuras especificaciones (véase la Sección 12.10). Una aplicación estructurada en v0.1 se define íntegramente mediante `.root` y `.main`.
+4. **Manifiesto físico de artefactos (.elib)**: En un proyecto estructurado activo, el archivo `.main` y el archivo `.root` forman parte del `Physical Artifact Universe` registrado por el manifiesto `.elib` activo (véase la Sección 12.10).
 
 #### 12.9.9 Cierre normativo de .main en v0.1
 
 Todos los aspectos arquitectónicos y semánticos fundamentales de `.main`, Application Main Loop, Application Lifetime, Application Exit Request y la relación con EvaluationError quedan plenamente formalizados y cerrados para la especificación oficial de Evo-Script v0.1.
 
 
-### 12.10 Librerías reutilizables (.elib) - Estado reservado
+### 12.10 Manifiesto físico de artefactos (.elib) y resolución física
 
-La extensión `.elib` (Evo Library) queda expresamente **reservada** para especificaciones futuras del ecosistema Evo-Script y se encuentra **fuera del alcance operativo de Evo-Script v0.1**:
+Un archivo `.elib` (Evo Library) define el **manifiesto físico de artefactos** (`Physical Artifact Manifest`) y constituye la **unidad de resolución física** (`Physical Resolution Unit`) de un proyecto estructurado en Evo-Script v0.1.
 
-1. **Motivo del aplazamiento**: El diseño completo y riguroso de librerías reutilizables no puede delimitarse de manera aislada sin definir un conjunto coordinado de responsabilidades que incluyen:
-   - **Creación y exportación de librerías**: La forma formal en que un paquete o biblioteca declara y expone sus módulos públicos frente a otros proyectos.
-   - **Consumo inter-proyecto**: La sintaxis y semántica mediante la cual una aplicación o proyecto externo referencia, importa y consume contratos o módulos de una librería de terceros.
-   - **Declaración y resolución física de dependencias**: Localización física de librerías en el sistema de archivos (rutas de búsqueda locales, carpetas de usuario o sistema, registros remotos) y resolución del grafo transitivo de dependencias.
-   - **Versionado e inmutabilidad**: Reglas de versionado semántico, rangos de compatibilidad y fijación de versiones (`version locks`).
-   - **Instalación y distribución**: Comandos o herramientas de instalación, restauración y gestión de paquetes (`package manager`).
-2. **Fuera de alcance en Evo-Script v0.1**: En Evo-Script v0.1:
-   - **NO se define cómo crear formalmente una librería** (no existe sintaxis como `library { ... }`, `lib { ... }`, `modules { ... }` ni `publish library`).
-   - **NO se define cómo consumir una librería externa** (no existen sentencias como `import library ...`, `use library ...`, `dependency ...`, `reference ...` ni `package ...`).
-   - **NO se define la resolución física de dependencias externas** (no se definen rutas de búsqueda de librerías, registros ni resolución en repositorios).
-   - **NO se define versionado ni manifiestos** (no existen `version = "1.0.0"`, `evo.toml`, `evo.json` ni archivos de manifiesto).
-   - **NO se define gestor de paquetes ni herramientas de construcción** (no existen `install`, `restore`, `build`, `pack` ni `Evo Package Manager`).
-3. **Autosuficiencia de Evo-Script v0.1**: Evo-Script v0.1 es plenamente autosuficiente para construir proyectos y aplicaciones estructuradas completas sin requerir `.elib`:
-   ```text
-   .emod          -> publica contratos (firmas) y tipos compartidos
-   .esig          -> define contratos funcionales
-   .estc / .enum  -> define estructuras y enumeraciones compartidas
-   .efn           -> implementa funciones
-   .root          -> resuelve la composición funcional del proyecto
-   .main          -> selecciona la entrada inicial y administra el ciclo de vida
-   ```
-   Todo proyecto estructurado en v0.1 organiza sus módulos e implementaciones directamente dentro de su propio Project Root.
-4. **Ausencia de nuevos tipos o palabras clave**: No se introducen en v0.1 tipos de datos nativos como `Library`, `Package`, `Dependency`, `Version` ni `PackageReference`, ni palabras clave como `library`, `package`, `dependency`, `install` o `require`. Tampoco se introducen abstracciones genéricas, traits ni constructos de primer orden para módulos o librerías.
-5. **Diferenciación conceptual: Reservado no es utilizable**:
-   ```text
-   reserved != usable
-   reserved != partially specified
-   ```
-   La extensión `.elib` permanece reservada como identificador nominal del ecosistema, pero carece de gramática operativa en v0.1.
+#### 12.10.1 Responsabilidad oficial de .elib y separación de responsabilidades
+
+La responsabilidad normativa exclusiva de un archivo `.elib` es declarar formal y explícitamente **qué artefactos físicos pertenecen a la unidad estructurada activa**:
+
+```text
+.elib  ──►  WHAT PHYSICAL ARTIFACTS BELONG
+```
+
+Evo-Script v0.1 establece una separación estricta e inviolable entre cuatro responsabilidades arquitectónicas ortogonales:
+
+1. **`.elib` (Physical Membership)**: Declara explícitamente la totalidad de archivos físicos que componen el universo de artefactos del proyecto estructurado activo (`Physical Artifact Universe`). No define publicación semántica, no selecciona implementaciones, no arranca la aplicación ni define dependencias de paquetes.
+2. **`.emod` (Semantic Publication)**: Declara la frontera lógica de un módulo y qué firmas y tipos de datos conforman su superficie pública accesible externamente (`publish`). No contiene rutas de archivos ni realiza descubrimiento físico.
+3. **`.root` (Functional Composition)**: Selecciona qué implementación física concreta (`.efn`) satisface cada contrato de firma pública (`.esig`) requerida (`bind ... to ...`).
+4. **`.main` (Application Entry and Lifetime)**: Selecciona la operación inicial del proyecto (`entry "..."`) y administra el ciclo de vida de ejecución (`Application Main Loop`).
+
+En Evo-Script v0.1, `.elib` **no es un gestor de paquetes** (`package manager`), no define versiones ni metadatos de distribución, no gestiona repositorios remotos ni declara dependencias inter-librería.
+
+
+#### 12.10.2 Sintaxis y estructura de .elib (`artifact "relative/path";`)
+
+La gramática de un archivo `.elib` consta exclusivamente de cero o más declaraciones de membresía física de artefactos mediante la palabra clave estructural `artifact`:
+
+```text
+artifact "ruta/relativa/archivo.extension";
+```
+
+Ejemplo normativo:
+
+```text
+artifact "application.root";
+artifact "application.main";
+
+artifact "definitions/use_cases/use-cases.emod";
+artifact "definitions/use_cases/copy-file.esig";
+
+artifact "definitions/requesters/requesters.emod";
+artifact "definitions/requesters/copy-completed.esig";
+
+artifact "definitions/contracts/contracts.emod";
+artifact "definitions/contracts/read-file.esig";
+artifact "definitions/contracts/write-file.esig";
+
+artifact "definitions/domain/domain.emod";
+artifact "definitions/domain/file-view.estc";
+artifact "definitions/domain/copy-result.enum";
+
+artifact "agents/copier.efn";
+
+artifact "resolvers/origin-resolver.efn";
+artifact "resolvers/destination-resolver.efn";
+artifact "resolvers/copy-resolver.efn";
+
+artifact "collaborators/copy-buffer.efn";
+
+artifact "providers/std-file-system.efn";
+```
+
+Reglas normativas:
+
+1. **Palabra clave `artifact`**: `artifact` es una palabra clave estructural reservada exclusiva de archivos `.elib`. No puede utilizarse como identificador.
+2. **Ausencia de bloque envolvente**: El archivo `.elib` no posee ni admite bloques envolventes (`library Nombre { ... }` o `elib { ... }` son estrictamente inválidos). Las sentencias `artifact` se declaran directamente a nivel de archivo.
+3. **El nombre físico del archivo no define identidad semántica**: Nombres como `application.elib`, `project.elib` o `core.elib` son identificadores físicos del archivo en el sistema de archivos. El basename no introduce namespaces, nombres de módulo, identidades de paquete ni nombres lógicos en el lenguaje.
+4. **Prohibición de sentencias de otros artefactos**: Un archivo `.elib` no puede contener declaraciones `publish`, `bind`, `entry`, `import`, `module`, definiciones de `struct`, `enum` o funciones (`fn`), variables (`let`), expresiones ni sentencias de ejecución en runtime.
+5. **No es una sentencia ejecutable**: `artifact` se procesa exclusivamente durante el análisis físico y semántico estático; no ejecuta operaciones ni produce valores en runtime.
+
+
+#### 12.10.3 Active Library, Library Base Directory y Physical Artifact Universe
+
+1. **Librería activa (`Active Library`)**: En un proyecto estructurado, el host/tooling inicia el análisis proporcionando explícitamente la ruta al archivo `.elib` que actuará como la **Active Library**. No existe auto-descubrimiento heurístico ni búsqueda implícita por directorios padres para adivinar el archivo `.elib`.
+2. **Directorio base de la librería (`Library Base Directory`)**: Es el directorio físico del sistema de archivos que contiene al archivo `.elib` activo. Si la Active Library es `/home/user/my-app/application.elib`, su `Library Base Directory` es `/home/user/my-app/`.
+3. **Rutas de `artifact` relativas al Library Base Directory**: Toda ruta declarada en `artifact "..."` se resuelve de forma estrictamente relativa al `Library Base Directory`. Nunca se interpreta respecto del directorio de trabajo actual (`current working directory`), ni del directorio de `.root`, `.main` o `.emod`.
+4. **Prohibición de rutas no relativas y comodines**:
+   - Solo se admiten rutas relativas locales en el sistema de archivos (`relative filesystem paths`).
+   - Quedan estrictamente prohibidas rutas absolutas (`/usr/...`, `C:\...`), URLs (`http://...`, `https://...`), variables de entorno (`$HOME/...`), expansión de shell (`~`), patrones glob/comodines (`*.esig`, `**/*`) y referencias a registros de paquetes.
+5. **Prohibición de escape del Library Base Directory**: Una ruta de artefacto no puede escapar del `Library Base Directory` mediante secuencias de navegación padre (`artifact "../../fuera/archivo.esig";` es inválido). Toda ruta normalizada debe resolver estrictamente dentro del árbol del `Library Base Directory`.
+6. **Universo físico de artefactos (`Physical Artifact Universe`)**: La Active Library define el `Physical Artifact Universe` completo y cerrado del proyecto. Solamente los archivos explícitamente registrados mediante `artifact "..."` forman parte del proyecto.
+   - `exists on filesystem != belongs to Active Library`: Que un archivo exista en el disco dentro del subárbol no lo convierte en artefacto del proyecto si no está registrado en el `.elib` activo.
+7. **Ausencia de Directory Scanning**: Evo-Script no realiza escaneo de directorios (`directory scanning`) ni descubrimiento recursivo de archivos de código fuente. No se inspecciona el disco para buscar archivos `.estc`, `.enum`, `.esig` o `.efn` no registrados.
+8. **Scripts autocontenidos**: Un script autocontenido `.efn` ejecutado directamente por el host no requiere `.elib` ni distribución física previa. La complejidad estructural solo aparece cuando existe distribución estructural de artefactos.
+9. **Libertad en subdirectorios**: Evo-Script no impone una estructura rígida de carpetas ni reserva nombres de directorios como `modules/` o `src/`. El desarrollador puede organizar sus carpetas libremente (`definitions/`, `domain/`, `contracts/`, `agents/`, `providers/`, `custom/`).
+
+
+#### 12.10.4 Library Artifact Table y errores de validación de .elib
+
+1. **Tabla interna de artefactos (`Library Artifact Table`)**: Durante el análisis estático, el compilador/analizador construye en memoria una tabla a partir de las declaraciones `artifact` del `.elib` activo. Esta tabla es una estructura interna en memoria; no genera archivos de índice, manifiestos binarios ni bases de datos de caché en v0.1.
+2. **Extensiones admitidas por `artifact`**: En Evo-Script v0.1, las únicas extensiones admitidas en declaraciones `artifact` son:
+   - `.root`
+   - `.main`
+   - `.emod`
+   - `.esig`
+   - `.estc`
+   - `.enum`
+   - `.efn`
+3. **Prohibición de registro de `.elib` y `.evo`**: No se permite registrar archivos `.elib` ni `.evo` como artefactos dentro de un `.elib` (no existen librerías anidadas ni inclusión de múltiples librerías en v0.1). El archivo `.elib` activo tampoco se lista a sí mismo.
+4. **Errores de validación de manifiesto**:
+   - **`LibraryArtifactPathError`**: Se produce si la ruta declarada en un `artifact` es absoluta, contiene una URL, utiliza comodines o intenta escapar del `Library Base Directory`.
+   - **`LibraryArtifactNotFoundError`**: Se produce si el archivo físico declarado en una sentencia `artifact` no existe en el sistema de archivos.
+   - **`DuplicateLibraryArtifactError`**: Se produce si dos o más declaraciones `artifact` dentro del mismo `.elib` registran la misma ruta física normalizada.
+   Todos estos errores pertenecen a la categoría de **System / Validation Errors**; impiden la evaluación y se detectan estáticamente antes de iniciar la ejecución.
+
+
+#### 12.10.5 Frontera física de módulo (Physical Module Boundary)
+
+1. **Definición de Physical Module Boundary**: Cada archivo `.emod` registrado en la Active Library establece una frontera física de módulo anclada en el **directorio que contiene dicho `.emod`**.
+2. **Desacoplamiento entre nombres de archivo/directorio e identidad de módulo**:
+   - El nombre del directorio físico **NO** define la identidad del módulo. Un directorio `definitions/contracts/` cuyo `.emod` declare `module contracts { ... }` tiene como identidad lógica `contracts` (no `definitions/contracts` ni `definitions`).
+   - El nombre del archivo `.emod` tampoco define la identidad lógica. La identidad del módulo proviene **exclusivamente** de la cláusula declarativa `module Nombre { ... }` en el contenido del archivo.
+3. **Membresía física de artefactos modulares (`Nearest Registered Ancestor .emod`)**:
+   - Todo artefacto registrado `.esig`, `.estc` o `.enum` pertenece físicamente al módulo cuyo `.emod` registrado sea su **ancestro físico más cercano** en el árbol de rutas.
+   - *Regla de resolución*: Para un artefacto registrado, se parte de su directorio y se asciende por los directorios padres; el primer directorio que contenga un `.emod` registrado en la Active Library es el módulo propietario del artefacto.
+4. **Subdirectorios internos y módulos anidados**:
+   - Un módulo puede contener subdirectorios internos (por ejemplo `definitions/contracts/io/read-file.esig` pertenece al módulo `contracts` si `contracts.emod` es su ancestro registrado más cercano).
+   - Se admiten fronteras anidadas (`definitions/domain/domain.emod` y `definitions/domain/geography/geography.emod`), donde los artefactos bajo `geography/` pertenecen al módulo `geography` por ser su ancestro más cercano.
+5. **Errores de frontera modular (`ModuleBoundaryError`)**:
+   - Se produce si un directorio contiene dos o más archivos `.emod` registrados en la misma Active Library.
+   - Se produce si un artefacto registrado `.esig`, `.estc` o `.enum` no posee ningún ancestro `.emod` registrado en el `Physical Artifact Universe`.
+   - `ModuleBoundaryError` pertenece a la categoría `System / Validation Error`.
+6. **Independencia de implementaciones (.efn)**: Los archivos `.efn` representan implementaciones y **no requieren** pertenecer a una `Physical Module Boundary`. Pueden residir en carpetas independientes (`agents/`, `resolvers/`, `providers/`). Si un `.efn` reside físicamente bajo un directorio con un `.emod`, **nunca es publicado por dicho `.emod`** ni se convierte en símbolo público.
+7. **Exclusión de `.root` y `.main`**: `.root` y `.main` se registran en `.elib` para formar parte del universo del proyecto, pero no pertenecen a ninguna tabla de módulo ni son símbolos publicables.
+
+
+#### 12.10.6 Module Artifact Table y Public Symbol Table
+
+1. **Tabla de artefactos de módulo (`Module Artifact Table`)**: Para cada módulo registrado, el compilador construye una tabla interna que asocia los símbolos semánticos declarados dentro de los archivos `.esig`, `.estc` y `.enum` pertenecientes a su `Physical Module Boundary`.
+2. **La identidad del símbolo proviene del contenido, NO del nombre del archivo**:
+   - Un archivo que contiene `struct Worker { ... }` define el símbolo `Worker`.
+   - Un archivo que contiene `enum SearchResult { ... }` define el símbolo `SearchResult`.
+   - Un archivo que contiene `esig read_file(...) -> ReadResult;` define el símbolo `read_file`.
+   - El nombre del archivo físico (ej. `worker.estc`, `read-file.esig`) no determina por sí mismo el símbolo semántico. No existe un algoritmo de conversión de mayúsculas/minúsculas ni transformación automática `kebab-case` $\leftrightarrow$ `camelCase`/`snake_case`. La convención `kebab-case` en nombres de archivo es una convención humana de estilo, no una regla de resolución semántica.
+3. **Colisión de símbolos en el módulo (`DuplicateModuleSymbolError`)**: Si dos o más artefactos registrados dentro de la misma `Physical Module Boundary` declaran el mismo símbolo semántico (por ejemplo, dos archivos `.estc` que declaran `struct Worker`), la validación falla con `DuplicateModuleSymbolError` (System / Validation Error).
+4. **Unicidad de identidades de módulo (`DuplicateModuleError`)**: Dos archivos `.emod` registrados en la Active Library no pueden declarar la misma identidad lógica (`module Nombre`). Una colisión de nombres de módulo produce `DuplicateModuleError` (System / Validation Error).
+5. **Tabla de símbolos públicos (`Public Symbol Table`)**:
+   - A partir del archivo `.emod`, el compilador procesa las sentencias `publish Simbolo;` para construir la `Public Symbol Table` del módulo.
+   - `publish` no descubre archivos en disco ni recibe rutas; valida y expone un símbolo ya presente en la `Module Artifact Table`.
+   - Cada cláusula `publish Simbolo;` debe corresponder exactamente a un símbolo existente en la `Module Artifact Table` de ese módulo. Si no existe, se produce `ModuleSymbolNotFoundError`.
+   - Publicar el mismo símbolo múltiples veces en el mismo `.emod` es inválido y se rechaza en validación estática.
+   - Solo pueden publicarse `.esig`, `.estc` y `.enum`. Queda estrictamente prohibido publicar `.efn`, `.root`, `.main`, `.elib` o `.evo`.
+6. **Manejo de símbolos privados / no publicados**: Un artefacto modular presente en la `Module Artifact Table` que no haya sido publicado mediante `publish` permanece privado al módulo. Si un consumidor externo intenta importarlo (`import modulo::no_publicado;`), la resolución falla con **`ModuleSymbolNotFoundError`**, sin exponer externamente si el símbolo existe de forma privada o no.
+
+
+#### 12.10.7 Flujo determinista de resolución física y modular
+
+Evo-Script v0.1 define un flujo de resolución determinista y unívoco para importaciones de dependencias:
+
+```text
+import modulo::simbolo;
+    ↓
+Active .elib
+    ↓
+Localizar .emod cuya Module Identity sea 'modulo' (falla con ModuleNotFoundError si no existe)
+    ↓
+Consultar la Public Symbol Table del módulo (falla con ModuleSymbolNotFoundError si 'simbolo' no está publicado)
+    ↓
+Identificar en la Module Artifact Table el artefacto registrado (.esig, .estc o .enum)
+    ↓
+Cargar la definición semántica del artefacto
+    ↓
+Registrar el símbolo importado en el espacio semántico local correspondiente:
+    - Signature ──► Signature Space
+    - Struct / Enum ──► Type Space
+```
+
+Principios de resolución:
+
+1. **Resolución exacta sin heurísticas**: Cada referencia calificada `modulo::simbolo` resuelve a exactamente un artefacto físico registrado y publicado, o el programa se rechaza con un error de validación del sistema. No existen reglas de búsqueda heurística, prioridades por orden de declaración, ni alternativas de respaldo (*fallback paths*).
+2. **Invarianza semántica frente a reubicación física**: Si un artefacto físico se traslada a otro subdirectorio dentro de la misma frontera modular (por ejemplo, de `definitions/contracts/read-file.esig` a `definitions/contracts/io/read-file.esig`), y se actualiza su registro en el `.elib` activo, la identidad lógica formal (`contracts::read_file`) permanece inalterada y los consumidores no requieren modificación.
+3. **Ausencia de magia de reubicación**: Evo-Script no busca automáticamente archivos movidos. Si el `.elib` activo conserva la ruta antigua, se produce `LibraryArtifactNotFoundError`.
+4. **Mismo nombre de símbolo en módulos distintos**: Es plenamente válido que dos módulos independientes publiquen símbolos homónimos (ej. `use_cases::search` y `contracts::search`). No existe conflicto modular global porque cada uno pertenece a una `Module Identity` formalmente diferenciada.
+5. **Distinción entre errores de colisión**:
+   - `DuplicateModuleSymbolError`: Conflicto de definición física donde dos archivos del mismo módulo definen el mismo símbolo.
+   - `TypeNameCollisionError`: Conflicto en el consumidor local cuando dos importaciones o declaraciones locales intentan ocupar el mismo nombre en su `Type Space`.
+
+
+#### 12.10.8 Orden de validación del proyecto estructurado
+
+La validación de un proyecto estructurado bajo una Active Library sigue una secuencia estricta previa a cualquier ejecución en runtime:
+
+```text
+1. Proporcionar la Active Library (.elib)
+      ↓
+2. Validar sintaxis y rutas de artifact en .elib ──► (falla con LibraryArtifactPathError,
+                                                    LibraryArtifactNotFoundError, DuplicateLibraryArtifactError)
+      ↓
+3. Construir el Physical Artifact Universe y la Library Artifact Table
+      ↓
+4. Identificar las Physical Module Boundaries (.emod) ──► (falla con ModuleBoundaryError, DuplicateModuleError)
+      ↓
+5. Construir las Module Artifact Tables (.esig, .estc, .enum) ──► (falla con DuplicateModuleSymbolError)
+      ↓
+6. Construir las Public Symbol Tables a partir de publish ──► (falla con ModuleSymbolNotFoundError)
+      ↓
+7. Resolver importaciones, Signature Type Closures y Type Dependency Closures ──► (falla con ModuleNotFoundError,
+                                                                                  TypeNameCollisionError, RecursiveTypeCycleError)
+      ↓
+8. Validar la composición funcional en .root ──► (falla si el .efn objetivo no pertenece
+                                                 al Physical Artifact Universe o hay discordancia de firma)
+      ↓
+9. Validar la entrada de aplicación en .main ──► (falla si el .efn de entry no pertenece al Physical Artifact Universe)
+      ↓
+10. Iniciar el Application Main Loop y evaluar la entrada inicial
+```
+
+Si se produce cualquier error de validación en cualquiera de los pasos, el proyecto estructurado es **rechazado íntegramente** y el `Application Main Loop` nunca se inicia.
 
 
 ### 12.11 Artefacto distribuible (.evo) - Estado reservado
@@ -4620,8 +4805,8 @@ La extensión `.evo` (Evo Package / artefacto distribuible) queda expresamente *
    - **NO se define el sistema de empaquetado** (no se definen procesos de empaquetado, manifiestos ni herramientas de construcción/compilación de paquetes).
    - **NO se define instalación ni distribución** de archivos `.evo` (no existen registros de paquetes, servidores de publicación ni clientes de distribución).
 3. **No es código fuente**: `.evo` no es una extensión para archivos de código fuente (las fuentes utilizan estrictamente `.efn`, `.esig`, `.estc`, `.enum`, `.emod`, `.root` y `.main`).
-4. **Relación futura desacoplada con `.elib`**: Una especificación futura podrá vincular librerías de fuentes (`.elib`) con artefactos empaquetados (`.evo`), pero dicha correspondencia no se prejuzga ni se cierra de forma prematura en v0.1 (no se asume que todo `.evo` es una librería ni que todo `.evo` es una aplicación).
-5. **Innecesario para scripts autocontenidos y aplicaciones v0.1**: Los scripts `.efn` y los proyectos estructurados con `.root` y `.main` se ejecutan directamente en v0.1 sin requerir contenedor ni empaquetado `.evo`.
+4. **Relación futura desacoplada con `.elib`**: Una especificación futura podrá vincular manifiestos de fuentes (`.elib`) con artefactos empaquetados (`.evo`), pero dicha correspondencia no se prejuzga ni se cierra de forma prematura en v0.1 (no se asume que todo `.evo` es una librería ni que todo `.evo` es una aplicación).
+5. **Innecesario para scripts autocontenidos y aplicaciones v0.1**: Los scripts `.efn` y los proyectos estructurados con `.elib`, `.root` y `.main` se ejecutan directamente en v0.1 sin requerir contenedor ni empaquetado `.evo`.
 
 
 ### 12.12 Frontera con el entorno de ejecución (Host / Runtime)
@@ -4673,12 +4858,13 @@ Características:
 
 #### 12.13.2 Proyecto canónico estructurado con Functional Composition Root (`project/`)
 
-A continuación se presenta un ejemplo canónico completo de un proyecto estructurado con tipos compartidos, contrato público, módulo, múltiples implementaciones físicas, consumidor inyectado, consumidor directo y el Functional Composition Root (`application.root`):
+A continuación se presenta un ejemplo canónico completo de un proyecto estructurado con manifiesto físico de artefactos (`application.elib`), tipos compartidos, contrato público, módulo, múltiples implementaciones físicas, consumidor inyectado, consumidor directo y el Functional Composition Root (`application.root`):
 
 Estructura física de archivos:
 
 ```text
 project/
+├── application.elib
 ├── application.root
 │
 ├── values/
@@ -4698,6 +4884,20 @@ project/
 ```
 
 Contenido de los artefactos:
+
+- **`application.elib`** (Manifiesto físico de artefactos / Active Library):
+  ```text
+  artifact "application.root";
+  artifact "values/values.emod";
+  artifact "values/search.esig";
+  artifact "values/SearchResult.enum";
+  artifact "values/Worker.estc";
+  artifact "providers/search_database.efn";
+  artifact "providers/search_memory.efn";
+  artifact "providers/search_remote.efn";
+  artifact "functions/process.efn";
+  artifact "functions/consumer.efn";
+  ```
 
 - **`Worker.estc`** (Struct compartido):
   ```text
@@ -4796,7 +4996,8 @@ Contenido de los artefactos:
   ```
 
 En este modelo:
-- `values.emod` publica exclusivamente `Worker`, `SearchResult` y `search`.
+- `application.elib` delimita el universo físico cerrado de artefactos activos.
+- `values.emod` establece la frontera física y publica exclusivamente `Worker`, `SearchResult` y `search`.
 - Coexisten tres implementaciones físicas distintas que satisfacen `: values::search` (`search_database.efn`, `search_memory.efn`, `search_remote.efn`).
 - `application.root` compone el proyecto seleccionando una única implementación concreta (`bind values::search to "providers/search_database.efn";`).
 - `functions/process.efn` requiere `values::search` mediante un Signature Dependency Parameter (`values::search search`) sin conocer la implementación concreta.
@@ -4813,6 +5014,7 @@ Estructura física de archivos:
 
 ```text
 laundry/
+├── application.elib
 ├── application.root
 ├── application.main
 │
@@ -4825,6 +5027,17 @@ laundry/
 ```
 
 Contenido y responsabilidades de cada artefacto:
+
+- **`application.elib`** (Manifiesto físico de artefactos / Active Library):
+  ```text
+  artifact "application.root";
+  artifact "application.main";
+  artifact "laundry.emod";
+  artifact "clothes.estc";
+  artifact "washes_clothes_result.enum";
+  artifact "washes_clothes.esig";
+  artifact "washer.efn";
+  ```
 
 - **`clothes.estc`** (Struct compartido):
   ```text
@@ -4888,35 +5101,143 @@ Contenido y responsabilidades de cada artefacto:
   entry "washer.efn";
   ```
 
-#### 12.13.4 Diagrama de responsabilidades semánticas de proyecto
+#### 12.13.4 Diagrama de responsabilidades de proyecto estructurado
 
 ```text
-                      structured project
-                              │
-                            .root
-                              │
-                              ▼
-                     application (.main)
-                [.elib reservado a futuro]
-                              │
-                              ▼
-                            .emod
-                              │
-                            .esig
-                            /   \
-                        .estc   .enum
-                            \   /
-                            .efn
+                      Active .elib
+                           │
+                [Physical Artifact Universe]
+                           │
+                ┌──────────┴──────────┐
+                ▼                     ▼
+              .main                 .root
+        (Application Entry)   (Composition Root)
+                │                     │
+                └──────────┬──────────┘
+                           ▼
+                         .emod
+                   (Module Boundary)
+                           │
+                         .esig
+                   (Public Signature)
+                         /   \
+                     .estc   .enum
+                 (Shared User Types)
+                         \   /
+                         .efn
+                    (Implementation)
 ```
 
-#### 12.13.5 Organización arquitectónica por responsabilidades
+#### 12.13.5 Arquitectura modular desacoplada completa (`my-app/`)
 
-Los proyectos pueden organizar sus artefactos por responsabilidades semánticas (por ejemplo, `use_cases/`, `agents/`, `domain/`):
-- `use_cases/`: Aloja firmas `.esig` que modelan las acciones requeridas.
-- `agents/`: Aloja implementaciones `.efn` que satisfacen las firmas.
-- `domain/`: Aloja definiciones de datos y alternativas `.estc` y `.enum`.
+Evo-Script no impone una jerarquía rígida de carpetas (no existen carpetas reservadas por el lenguaje como `modules/` o `src/`). A continuación se presenta un ejemplo canónico de una aplicación con arquitectura limpia desacoplada:
 
-Estos nombres de carpetas representan patrones organizacionales sugeridos y no constituyen palabras reservadas del lenguaje.
+Estructura física de archivos:
+
+```text
+my-app/
+├── application.elib
+├── application.root
+├── application.main
+│
+├── definitions/
+│   ├── use_cases/
+│   │   ├── use-cases.emod
+│   │   └── copy-file.esig
+│   │
+│   ├── requesters/
+│   │   ├── requesters.emod
+│   │   └── copy-completed.esig
+│   │
+│   ├── contracts/
+│   │   ├── contracts.emod
+│   │   ├── read-file.esig
+│   │   └── write-file.esig
+│   │
+│   └── domain/
+│       ├── domain.emod
+│       ├── file-view.estc
+│       └── copy-result.enum
+│
+├── agents/
+│   └── copier.efn
+│
+├── resolvers/
+│   ├── origin-resolver.efn
+│   ├── destination-resolver.efn
+│   └── copy-resolver.efn
+│
+├── collaborators/
+│   └── copy-buffer.efn
+│
+└── providers/
+    └── std-file-system.efn
+```
+
+Manifiesto físico (`application.elib`):
+
+```text
+artifact "application.root";
+artifact "application.main";
+
+artifact "definitions/use_cases/use-cases.emod";
+artifact "definitions/use_cases/copy-file.esig";
+
+artifact "definitions/requesters/requesters.emod";
+artifact "definitions/requesters/copy-completed.esig";
+
+artifact "definitions/contracts/contracts.emod";
+artifact "definitions/contracts/read-file.esig";
+artifact "definitions/contracts/write-file.esig";
+
+artifact "definitions/domain/domain.emod";
+artifact "definitions/domain/file-view.estc";
+artifact "definitions/domain/copy-result.enum";
+
+artifact "agents/copier.efn";
+
+artifact "resolvers/origin-resolver.efn";
+artifact "resolvers/destination-resolver.efn";
+artifact "resolvers/copy-resolver.efn";
+
+artifact "collaborators/copy-buffer.efn";
+
+artifact "providers/std-file-system.efn";
+```
+
+Módulos y superficies públicas (`.emod`):
+
+- **`definitions/use_cases/use-cases.emod`**:
+  ```text
+  module use_cases {
+      publish copy_file;
+  }
+  ```
+- **`definitions/requesters/requesters.emod`**:
+  ```text
+  module requesters {
+      publish copy_completed;
+  }
+  ```
+- **`definitions/contracts/contracts.emod`**:
+  ```text
+  module contracts {
+      publish read_file;
+      publish write_file;
+  }
+  ```
+- **`definitions/domain/domain.emod`**:
+  ```text
+  module domain {
+      publish FileView;
+      publish CopyResult;
+  }
+  ```
+
+Implementaciones y desacoplamiento:
+- Los directorios `agents/`, `resolvers/`, `collaborators/` y `providers/` alojan implementaciones `.efn`. No requieren archivos `.emod` porque no definen contratos públicos compartidos.
+- Nombres de carpetas como `definitions`, `use_cases`, `requesters`, `contracts`, `domain`, `agents`, `resolvers`, `collaborators` y `providers` son convenciones organizacionales del usuario y **no son palabras clave** ni conceptos normativos impuestos por Evo-Script.
+- Cada consumidor y componente interactúa exclusivamente a través de identidades formales (`contracts::read_file`, `domain::FileView`, `use_cases::copy_file`), permitiendo una composición determinista mediante `application.root` y un inicio de aplicación mediante `application.main`.
 
 
 ## 13. Elementos léxicos y convenciones de nombres
@@ -4966,10 +5287,11 @@ Evo-Script v0.1 define exactamente una única forma oficial de comentario:
 
 1. **Principio de reserva efectiva**:
    > Una palabra es una *keyword* reservada en Evo-Script v0.1 única y exclusivamente si forma parte activa de la gramática y construcciones semánticas definidas en esta versión.
-   - No se reservan palabras de forma preventiva para características hipotéticas o futuras provenientes de otros lenguajes (palabras como `class`, `interface`, `trait`, `async`, `await`, `package`, `library`, `dependency`, `version`, `install` o `require` **NO** son keywords en v0.1).
-   - Las extensiones de archivo reservadas (`.elib`, `.evo`) no constituyen palabras clave del lenguaje (las palabras `library` o `package` no son keywords en v0.1).
+   - No se reservan palabras de forma preventiva para características hipotéticas o futuras provenientes de otros lenguajes (palabras como `class`, `interface`, `trait`, `async`, `await`, `package`, `library`, `dependency`, `version`, `install`, `include`, `from` o `require` **NO** son keywords en v0.1).
+   - La extensión de archivo reservada (`.evo`) no constituye palabra clave del lenguaje (las palabras `library` o `package` no son keywords en v0.1).
 2. **Catálogo de palabras estructurales reservadas (Structural Keywords)**:
    Las siguientes palabras constituyen las palabras reservadas estructurales oficiales de Evo-Script v0.1:
+   - `artifact`: Declaración de membresía física de artefactos en manifiestos de librería (`.elib`).
    - `let`: Declaración de bindings locales inmutables.
    - `struct`: Definición de tipos de estructura de datos.
    - `enum`: Definición de tipos de enumeración y variantes.
