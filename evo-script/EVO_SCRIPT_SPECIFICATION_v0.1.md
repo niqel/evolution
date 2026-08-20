@@ -5567,3 +5567,422 @@ Con las formalizaciones establecidas en este capítulo y en las secciones numér
    - Convenciones de nombres semánticos (`PascalCase`, `snake_case`) y físicos (`kebab-case`).
 2. **Delimitación de alcance**:
    - El cierre formal del bloque léxico no constituye la congelación total de la especificación general de Evo-Script v0.1, continuando el desarrollo de los bloques semánticos y modulares restantes conforme a la metodología establecida.
+
+
+## 14. Ejemplos canónicos oficiales de Evo-Script v0.1 (Canonical v0.1 Examples)
+
+Esta sección consolida el ejemplo oficial de referencia canónica para proyectos estructurados en Evo-Script v0.1, denominado **Canonical Copy Application (`copy-app`)**, junto con sus recorridos de resolución, llamadas semánticas, modelos de desacoplamiento y microejemplos complementarios.
+
+El propósito de estos ejemplos es servir como prueba integral de coherencia formal del lenguaje, demostrando el funcionamiento armónico y conjunto de todos los artefactos, extensiones y reglas cerradas en la especificación.
+
+
+### 14.1 Canonical Copy Application (`copy-app`)
+
+La aplicación canónica de copia modela la orquestación desacoplada de la lectura y escritura de un archivo en el sistema de archivos, organizada mediante arquitectura limpia funcional.
+
+Principios normativos demostrados:
+- Manifiesto físico explícito de artefactos (`application.elib`).
+- Functional Composition Root (`application.root`).
+- Entrada de aplicación de ciclo de vida controlado (`application.main`).
+- Módulos lógicos (`.emod`) con publicación explícita de contratos y tipos.
+- Tipos de dominio compartidos inmutables (`.estc` y `.enum`).
+- Firmas públicas de caso de uso y contratos de infraestructura (`.esig`).
+- Agente orquestador desacoplado (`.efn`).
+- Proveedores técnicos que satisfacen firmas de contrato (`.efn`).
+- Ausencia total de llamadas directas entre implementaciones de archivos separados.
+- Ausencia de herencia implícita de Scope y ausencia de inyección ambiental.
+
+
+### 14.2 Árbol físico del proyecto canónico
+
+A continuación se presenta la estructura física oficial del proyecto:
+
+```text
+copy-app/
+├── application.elib
+├── application.root
+├── application.main
+├── main.efn
+│
+├── definitions/
+│   ├── use_cases/
+│   │   ├── use-cases.emod
+│   │   └── copy-file.esig
+│   │
+│   ├── contracts/
+│   │   ├── contracts.emod
+│   │   ├── read-file.esig
+│   │   └── write-file.esig
+│   │
+│   └── domain/
+│       ├── domain.emod
+│       ├── file-view.estc
+│       └── copy-result.enum
+│
+├── agents/
+│   └── copier.efn
+│
+└── providers/
+    ├── read-file-std.efn
+    └── write-file-std.efn
+```
+
+**Notas estructurales sobre la organización física**:
+1. **Regla de exactamente una función pública por archivo `.efn`**:
+   Para dar cumplimiento estricto a la regla que exige que cada archivo `.efn` contenga exactamente una función pública principal, las capacidades técnicas de lectura y escritura de infraestructura de archivos estándar se dividen físicamente en `providers/read-file-std.efn` y `providers/write-file-std.efn`.
+2. **Entrada de aplicación (`main.efn`)**:
+   La regla normativa de `application.main` estipula que la función de entrada no debe recibir Value Parameters (`zero Value Parameters`). Dado que el caso de uso `copy_file` recibe las rutas de origen y destino (`string source_path, string destination_path`), la aplicación incorpora `main.efn` como función de entrada libre de parámetros que orquesta e invoca la firma `use_cases::copy_file`.
+3. **Nombres de directorios como arquitectura de usuario**:
+   Los nombres de carpetas (`definitions`, `use_cases`, `contracts`, `domain`, `agents`, `providers`) son elecciones organizacionales del desarrollador de la aplicación y **no son palabras clave ni conceptos normativos impuestos por Evo-Script**.
+
+
+### 14.3 Manifiesto físico de artefactos (`application.elib`)
+
+El archivo `application.elib` declara exhaustiva y unívocamente el universo de artefactos físicos del proyecto (`Physical Artifact Universe`):
+
+```text
+artifact "application.root";
+artifact "application.main";
+artifact "main.efn";
+
+artifact "definitions/use_cases/use-cases.emod";
+artifact "definitions/use_cases/copy-file.esig";
+
+artifact "definitions/contracts/contracts.emod";
+artifact "definitions/contracts/read-file.esig";
+artifact "definitions/contracts/write-file.esig";
+
+artifact "definitions/domain/domain.emod";
+artifact "definitions/domain/file-view.estc";
+artifact "definitions/domain/copy-result.enum";
+
+artifact "agents/copier.efn";
+
+artifact "providers/read-file-std.efn";
+artifact "providers/write-file-std.efn";
+```
+
+
+### 14.4 Módulos lógicos (`.emod`)
+
+Cada archivo `.emod` declara la identidad lógica formal de su módulo y su catálogo de publicación:
+
+- **`definitions/use_cases/use-cases.emod`**:
+  ```text
+  module use_cases {
+      publish copy_file;
+  }
+  ```
+
+- **`definitions/contracts/contracts.emod`**:
+  ```text
+  module contracts {
+      publish read_file;
+      publish write_file;
+  }
+  ```
+
+- **`definitions/domain/domain.emod`**:
+  ```text
+  module domain {
+      publish FileView;
+      publish CopyResult;
+  }
+  ```
+
+
+### 14.5 Tipos compartidos de dominio (`.estc` y `.enum`)
+
+- **`definitions/domain/file-view.estc`** (Estructura inmutable de archivo):
+  ```text
+  struct FileView {
+      string path;
+      string content;
+  }
+  ```
+
+- **`definitions/domain/copy-result.enum`** (Resultado de la operación de copia):
+  ```text
+  import domain::FileView;
+
+  enum CopyResult {
+      Success(FileView)
+      Failed(string)
+  }
+  ```
+
+
+### 14.6 Firmas públicas (`.esig`)
+
+- **`definitions/use_cases/copy-file.esig`** (Firma del caso de uso de copia):
+  ```text
+  import domain::CopyResult;
+
+  esig copy_file(string source_path, string destination_path) -> CopyResult;
+  ```
+
+- **`definitions/contracts/read-file.esig`** (Firma del contrato de lectura):
+  ```text
+  import domain::FileView;
+
+  esig read_file(string path) -> FileView;
+  ```
+
+- **`definitions/contracts/write-file.esig`** (Firma del contrato de escritura):
+  ```text
+  import domain::FileView;
+  import domain::CopyResult;
+
+  esig write_file(string path, string content) -> CopyResult;
+  ```
+
+
+### 14.7 Orquestador / Agente (`agents/copier.efn`)
+
+El agente `copier.efn` orquesta el flujo del caso de uso consumiendo exclusivamente contratos de firma (`contracts::read_file` y `contracts::write_file`) y satisfaciendo la firma del caso de uso (`use_cases::copy_file`):
+
+```text
+import domain::FileView;
+import domain::CopyResult;
+import use_cases::copy_file;
+import contracts::read_file;
+import contracts::write_file;
+
+public fn copy_file(string source_path, string destination_path) -> CopyResult
+    : use_cases::copy_file
+{
+    let FileView source_file = read_file(source_path);
+    let string file_content = source_file.content;
+    let CopyResult result = write_file(destination_path, file_content);
+
+    return result;
+}
+```
+
+
+### 14.8 Resolvers y arquitectura de adaptación
+
+En arquitecturas donde se requiere una capa intermedia de resolución (por ejemplo, para validación de rutas, políticas de autorización o despacho dinámico), los componentes resolvers se implementan como archivos `.efn` que satisfacen firmas de contrato.
+
+En `copy-app`, la composición funcional directa en `application.root` vincula `contracts::read_file` y `contracts::write_file` directamente a los proveedores de infraestructura (`providers/read-file-std.efn` y `providers/write-file-std.efn`), demostrando que Evo-Script no requiere adaptadores redundantes obligatorios cuando la vinculación directa es suficiente.
+
+
+### 14.9 Proveedores concretos (`providers/`)
+
+- **`providers/read-file-std.efn`** (Proveedor estándar de lectura):
+  ```text
+  import domain::FileView;
+  import contracts::read_file;
+
+  public fn read_file(string path) -> FileView
+      : contracts::read_file
+  {
+      let FileView file = FileView {
+          path: path,
+          content: "datos leidos desde archivo"
+      };
+
+      return file;
+  }
+  ```
+
+- **`providers/write-file-std.efn`** (Proveedor estándar de escritura):
+  ```text
+  import domain::FileView;
+  import domain::CopyResult;
+  import contracts::write_file;
+
+  public fn write_file(string path, string content) -> CopyResult
+      : contracts::write_file
+  {
+      let FileView written_file = FileView {
+          path: path,
+          content: content
+      };
+
+      return CopyResult::Success(written_file);
+  }
+  ```
+
+
+### 14.10 Functional Composition Root (`application.root`)
+
+El archivo `application.root` compone la aplicación vinculando de forma unívoca cada firma requerida a su implementación concreta en el proyecto:
+
+```text
+bind use_cases::copy_file to "agents/copier.efn";
+bind contracts::read_file to "providers/read-file-std.efn";
+bind contracts::write_file to "providers/write-file-std.efn";
+```
+
+
+### 14.11 Entrada de aplicación (`application.main` y `main.efn`)
+
+- **`application.main`**:
+  ```text
+  entry "main.efn";
+  ```
+
+- **`main.efn`** (Punto de entrada de la aplicación):
+  ```text
+  import domain::CopyResult;
+  import use_cases::copy_file;
+
+  public fn main() -> CopyResult {
+      let string source = "/documents/source.txt";
+      let string destination = "/documents/copy.txt";
+      let CopyResult result = copy_file(source, destination);
+
+      return result;
+  }
+  ```
+
+
+### 14.12 Recorrido de resolución física (Physical Resolution Walkthrough)
+
+La secuencia determinista de análisis y resolución estática ejecutada por el host/compilador para `copy-app` es la siguiente:
+
+1. **Carga de la Active Library**: El host selecciona `copy-app/application.elib` como la librería activa (`Active Library`). Su directorio base es `copy-app/` (`Library Base Directory`).
+2. **Construcción del Physical Artifact Universe**: Se valida sintáctica y físicamente cada sentencia `artifact "..."`, registrando los 12 archivos en la `Library Artifact Table`.
+3. **Determinación de Fronteras Modulares (`Physical Module Boundaries`)**:
+   - `definitions/use_cases/use-cases.emod` ancla la frontera modular del directorio `definitions/use_cases/`.
+   - `definitions/contracts/contracts.emod` ancla la frontera modular de `definitions/contracts/`.
+   - `definitions/domain/domain.emod` ancla la frontera modular de `definitions/domain/`.
+4. **Construcción de Module Artifact Tables y Public Symbol Tables**:
+   - `copy-file.esig` se asocia al módulo `use_cases`, registrando `copy_file` como símbolo público.
+   - `read-file.esig` y `write-file.esig` se asocian al módulo `contracts`, registrando `read_file` y `write_file` como símbolos públicos.
+   - `file-view.estc` y `copy-result.enum` se asocian al módulo `domain`, registrando `FileView` y `CopyResult` como símbolos públicos.
+5. **Validación del Grafo de Tipos y Cierres**: Se verifica que `domain::CopyResult` y `domain::FileView` no formen ciclos estructurales recursivos y cumplan `Public Type Closure`.
+6. **Resolución de Bindings de `.root`**: Se validan los tres bindings de `application.root`. Cada target `.efn` existe en el universo registrado, tiene exactamente una función pública y satisface (`:`) la firma vinculada.
+7. **Validación de la Entrada (`.main`)**: Se comprueba que `main.efn` pertenezca al `Physical Artifact Universe` y su función pública no requiera Value Parameters.
+8. **Inicio del Application Main Loop**: Al completarse la validación estática sin errores, el host ejecuta la entrada e inicia el ciclo de vida de la aplicación.
+
+
+### 14.13 Recorrido de llamadas semánticas (Semantic Call Walkthrough)
+
+El flujo de invocaciones durante la ejecución de `copy-app` opera de la siguiente manera:
+
+```text
+Host / Runtime
+    ↓ (inicia Application Main Loop)
+main.efn (public fn main)
+    ↓ (invoca firma use_cases::copy_file)
+application.root (resuelve bind use_cases::copy_file -> agents/copier.efn)
+    ↓ (ejecuta)
+agents/copier.efn (public fn copy_file)
+    ├─► invoca firma contracts::read_file
+    │       ↓ (resuelve bind -> providers/read-file-std.efn)
+    │   providers/read-file-std.efn (produce FileView)
+    │
+    └─► invoca firma contracts::write_file
+            ↓ (resuelve bind -> providers/write-file-std.efn)
+        providers/write-file-std.efn (produce CopyResult::Success)
+    ↓ (retorna CopyResult::Success a copier.efn)
+copier.efn retorna CopyResult::Success a main.efn
+    ↓
+main.efn retorna CopyResult::Success
+    ↓
+Application Main Loop recibe el resultado semántico y gestiona el ciclo de vida
+```
+
+
+### 14.14 Recorrido conceptual de Scope y Providers (Scope Relationship Walkthrough)
+
+> [!NOTE]
+> Este apartado ilustra el flujo conceptual de interacción entre Providers y Scopes en el ecosistema Evo. No constituye sintaxis normativa de adquisición en v0.1.
+
+```text
+Active .elib
+    ↓ (hace disponible físicamente al Provider en el proyecto)
+Provider físico disponible (ej. providers/read-file-std.efn)
+    ↓ (capacidad provide_scope suministrada por Evo-Shell)
+Scope provisto (vista contextual prestada: Scope<'scope>)
+    ↓ (instrucción 'use' en composición o pipeline)
+Active Scope (contexto activo de la composición)
+    ↓
+Capacidades operativas / Datos producidos
+    ↓
+Transformaciones de consulta (EvoQ: filter, select, etc.)
+```
+
+
+### 14.15 Microejemplos canónicos adicionales
+
+#### 14.15.1 Signature Dependency Parameters vs Value Parameters
+
+Este microejemplo ilustra la distinción formal entre un parámetro de valor ordinario y un parámetro de inyección de firma:
+
+```text
+import values::search;
+import values::SearchResult;
+
+// 'id' es un Value Parameter (int).
+// 'search' es un Signature Dependency Parameter (values::search).
+public fn process(int id, values::search search) -> SearchResult {
+    let SearchResult result = search(id);
+
+    return result;
+}
+```
+
+- `int id`: Parámetro de valor ordinario transportado por el evaluador.
+- `values::search search`: Dependencia inyectada mediante contrato de firma que no constituye un tipo función de primer orden ni un puntero genérico.
+
+#### 14.15.2 Importación con alias local (`as`)
+
+```text
+import hr::Worker as HrWorker;
+import sales::Worker as SalesWorker;
+
+public fn compare_workers(HrWorker a, SalesWorker b) -> bool {
+    let bool same_id = (a.id == b.id);
+
+    return same_id;
+}
+```
+
+#### 14.15.3 Pipeline funcional con `|>` y marcador contextual `this`
+
+```text
+import utils::format_text;
+import utils::append_suffix;
+
+public fn build_label(string name) -> string {
+    let string label = name
+        |> format_text(this)
+        |> append_suffix(this, "_processed");
+
+    return label;
+}
+```
+
+
+### 14.16 Tabla de características y reglas demostradas (Rules Demonstrated)
+
+A continuación se resume la correspondencia entre los componentes del ejemplo canónico y las características formales de Evo-Script v0.1:
+
+| Característica / Regla | Artefacto / Componente del ejemplo | Estado normativo |
+| :--- | :--- | :--- |
+| **`.elib` (Physical Artifact Manifest)** | `copy-app/application.elib` | Demostrado formalmente |
+| **`.root` (Functional Composition Root)** | `copy-app/application.root` | Demostrado formalmente |
+| **`.main` (Application Entry)** | `copy-app/application.main` | Demostrado formalmente |
+| **`.emod` (Module Surface)** | `use-cases.emod`, `contracts.emod`, `domain.emod` | Demostrado formalmente |
+| **`.esig` (Public Function Signature)** | `copy-file.esig`, `read-file.esig`, `write-file.esig` | Demostrado formalmente |
+| **`.estc` (Shared Struct Type)** | `file-view.estc` | Demostrado formalmente |
+| **`.enum` (Shared Enum Type)** | `copy-result.enum` | Demostrado formalmente |
+| **`.efn` (Function Implementation)** | `main.efn`, `copier.efn`, `read-file-std.efn`, `write-file-std.efn` | Demostrado formalmente |
+| **Declaración `artifact`** | En `application.elib` para cada archivo físico | Demostrado formalmente |
+| **Declaración `module` e identidades lógicas** | `module use_cases`, `module contracts`, `module domain` | Demostrado formalmente |
+| **Declaración `publish`** | Publicación exclusiva de `.esig`, `.estc`, `.enum` | Demostrado formalmente |
+| **Declaración `import` (Tipos y Firmas)** | `import module::Symbol;` en artefactos consumidores | Demostrado formalmente |
+| **Satisfacción contractual (`:`)** | `: use_cases::copy_file`, `: contracts::read_file`, etc. | Demostrado formalmente |
+| **Vinculación en `.root` (`bind ... to ...`)** | `bind module::signature to "path.efn";` | Demostrado formalmente |
+| **Entrada sin parámetros de valor** | `main.efn` con `public fn main() -> CopyResult` | Demostrado formalmente |
+| **Construcción de Struct inmutable** | `FileView { path: ..., content: ... }` | Demostrado formalmente |
+| **Acceso a campos (Field Access)** | `source_file.content` en `copier.efn` | Demostrado formalmente |
+| **Variantes calificadas de Enum** | `CopyResult::Success(...)` | Demostrado formalmente |
+| **Llamadas a firmas entre archivos** | `read_file(source_path)` vía `import contracts::read_file;` | Demostrado formalmente |
+| **Signature Dependency Parameters** | `process(int id, values::search search)` en microejemplo | Demostrado formalmente |
+| **Import alias (`as`)** | `import hr::Worker as HrWorker;` en microejemplo | Demostrado formalmente |
+| **Pipeline funcional (`|>`, `this`)** | `name \|> format_text(this)` en microejemplo | Demostrado formalmente |
+| **Relación Provider -> Scope** | Modelo Provider $\to$ Scope $\to$ use $\to$ Active Scope | Recorrido conceptual (sin sintaxis de adquisición en v0.1) |
