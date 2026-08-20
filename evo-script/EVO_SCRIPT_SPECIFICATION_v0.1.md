@@ -216,129 +216,122 @@ Asimismo, existe una estricta separación entre el lenguaje y el parser:
 
 El **Scope** es una pieza fundamental de Evo-Script y del ecosistema Evo para modelar la interacción con el entorno operativo, provisto semánticamente por **Evo-Shell**.
 
-Un Scope representa un **contexto operativo semántico** (`semantic operational context`) que identifica un entorno de ejecución, determina las capacidades operativas disponibles para las operaciones de Evo-Script y mantiene una ubicación interna cuando el contexto soporta navegación.
-
-Un Scope **NO** es:
-- Un Provider o componente técnico de infraestructura.
-- Una colección de datos en memoria o estructura de datos.
-- Un conjunto de resultados materializado.
-- Una ruta de archivo o path técnico del sistema operativo.
-- Una conexión técnica, socket o descriptor de archivo.
-- Un objeto de programación orientada a objetos (clase, instancia o servicio).
-- Un módulo (`.emod`) o manifiesto de librería (`.elib`).
-- Una consulta o expresión de consulta EvoQ.
-- Estado global o implícito del lenguaje Evo-Script.
-
-El Scope actúa como una frontera semántica entre Evo-Script y el sistema exterior, permitiendo al lenguaje operar dentro de un entorno sin conocer ni acoplarse a la tecnología concreta subyacente.
-
-
-### 6.2 Contexto y capacidades semánticas (Evo-Shell)
-
-El contexto identifica el entorno semántico en el cual se ejecutan las operaciones. Evo-Shell es el dueño y proveedor de la semántica de Scope y de sus capacidades asociadas.
-
-1. **Dominios contextuales típicos** (ejemplos ilustrativos no normativos):
-   - **Filesystem**: capacidades como `enumerate`, `enter`, `create`, `copy`, `move`, `delete`.
-   - **Terminal**: capacidades como `print`, `read`, `clear`.
-   - **Database**: capacidades como `enter`, `query`, `insert`, `update`, `delete`.
-   - **UI**: capacidades como `display`, `notify`, `dialog`.
-2. **Roles de un Scope en una composición**:
-   - Fuente de datos (genera flujos de información a partir del entorno).
-   - Destino de datos (recibe y procesa flujos de información).
-   - Entorno de interacción (I/O interactivo con el usuario o sistema).
-   - Combinación de estos roles dentro de un mismo pipeline o composición.
-3. **Independencia de tecnología concreta**:
-   Las capacidades disponibles dependen exclusivamente del contrato semántico provisto por Evo-Shell para ese contexto, no de detalles técnicos de la plataforma (como APIs de POSIX, Win32, SQL Server o secuencias ANSI).
+1. **Contexto operativo semántico**: Un Scope representa un **contexto operativo semántico** (`semantic operational context`) que identifica un entorno de ejecución, determina las capacidades operativas disponibles para las operaciones de Evo-Script y mantiene una ubicación interna cuando el contexto soporta navegación.
+2. **Naturaleza de dato prestado (`Borrowed Data`)**: Técnicamente, un Scope es una estructura de datos contextual prestada (`borrowed semantic context data`), alineada con la representación arquitectónica interna:
+   ```text
+   Scope {
+       scope_type,
+       server,
+       user,
+       source,
+       item
+   }
+   ```
+   Scope describe y transporta información contextual (`scope_type`, `server`, `user`, `source`, `item`), pero **no posee necesariamente dichos datos**. La propiedad y el tiempo de vida técnico pertenecen a la implementación/Provider que suministra dicha información. La semántica de préstamo (*borrowing*) es un detalle interno de arquitectura y no introduce sintaxis visible de lifetimes (`'scope`), referencias (`&`) ni genéricos (`Scope<T>`) en Evo-Script.
+3. **Frontera semántica**: Un Scope no es la implementación del Provider en sí misma, ni una colección materializada de datos, ni una ruta técnica del sistema operativo, ni un socket, ni un objeto de programación orientada a objetos, ni un módulo (`.emod`), ni un archivo `.elib`, ni una consulta EvoQ, ni estado global del lenguaje. El Scope actúa como la vista semántica prestada del contexto proporcionado por un Provider.
 
 
-### 6.3 Ubicación y Scopes sin navegación
+### 6.2 Relación Provider -> Scope y provisión de contexto
 
-1. **Ubicación (`Location`)**: En aquellos contextos que admiten una noción espacial, jerárquica o estructurada (como un sistema de archivos o un catálogo de base de datos), el Scope mantiene el registro de la posición actual accesible.
-2. **Scopes sin navegación**: Existen contextos donde una noción de ubicación navegable no es aplicable ni necesaria (como una terminal de texto o un servicio de notificaciones UI). En tales contextos, el Scope opera plenamente sin estado de ubicación.
-3. **Navegabilidad no universal**: La capacidad de navegar no es universal a todos los Scopes; solo está disponible en aquellos contextos cuya semántica la soporte explícitamente.
-
-
-### 6.4 Separación formal entre Scope y EvoQ (`Scope != EvoQ`)
-
-Evo-Script distingue formalmente entre el contexto operativo (**Scope**) y las transformaciones de consulta sobre flujos de datos (**EvoQ**):
+Existe una dependencia necesaria entre un Scope utilizable y el Provider que lo suministra:
 
 ```text
-Scope != EvoQ
-Scope != 'from' / query source syntax
+Provider (implementación técnica concreta)
+    ↓
+provides (provide_scope)
+    ↓
+Scope (vista contextual prestada)
 ```
 
-1. **Uso de Scope sin consultas EvoQ**: Un Scope puede activarse y utilizarse para ejecutar operaciones de contexto sin requerir ninguna consulta o transformación EvoQ (por ejemplo, `print`, `clear` en terminal, o `create`, `copy` en filesystem).
-2. **Modelo de coordinación funcional**:
-   - **Evo-Shell** establece el entorno operativo y provee el Scope y sus capacidades contextuales.
-   - Una operación inicial ejecutada en dicho Scope produce un flujo semántico de datos.
-   - **EvoQ** opera sobre los datos producidos mediante operadores de transformación (`filter`, `select`, `take`, `iter`, etc.).
-   - Un Scope posterior puede recibir y consumir los datos transformados.
+1. **El Provider como origen del Scope**: Un Scope no puede existir de forma autónoma sin el Provider que lo proporciona. Si no hay Provider disponible, no existe Scope suministrable (`No Provider -> no Scope available`).
+2. **Distinción estructural**:
+   - **Provider**: Es el componente de comportamiento e implementación técnica concreta que interactúa con el entorno exterior (filesystem, base de datos, terminal, etc.).
+   - **Scope**: Es la vista semántica prestada del contexto provisto por dicho Provider.
+3. **Independencia tecnológica**: Evo-Script interactúa con el Scope sin conocer las tecnologías de bajo nivel del Provider (como APIs POSIX, Win32, SQL Server o secuencias ANSI).
+
+
+### 6.3 Separación entre Provisión y Activación (`provide Scope != activate Scope`)
+
+Evo-Script y Evo-Shell distinguen formalmente entre dos operaciones fundamentales:
+
+```text
+provide Scope  !=  activate Scope
+```
+
+1. **Provisión (`provide_scope`)**: Obtiene o expone una vista prestada de Scope a partir de un Provider. Obtener o recibir un Scope **NO lo activa automáticamente**.
+2. **Activación (`activate_scope` / `use`)**: Establece un Scope previamente provisto como el `Active Scope` para el contexto de ejecución.
+3. **Flujo operativo**:
    ```text
-   Scope (Evo-Shell)
+   Provider
        ↓
-   operación fuente
+   provides Scope (provide_scope)
        ↓
-   datos producidos
+   Scope provisto para la operación
        ↓
-   transformaciones (EvoQ)
+   use (activate_scope)
        ↓
-   operación destino (Scope)
+   Active Scope
    ```
-3. **Ortogonalidad**: Scope no depende de EvoQ para existir, ni EvoQ define o administra el ciclo de vida de los Scopes.
 
 
-### 6.5 Prompt Scope (Sesión interactiva del host)
+### 6.4 Concepto único: Active Scope
 
-En un entorno de terminal interactiva provisto por Evo-Shell, existe el concepto de **`Prompt Scope`**:
+Evo-Script v0.1 define exactamente un único concepto formal para el Scope en uso:
 
-1. **Definición**: El `Prompt Scope` es el Scope semántico persistente que pertenece al estado de sesión de la terminal interactiva (`interactive host/session state`).
-2. **Ciclo de vida del Prompt Scope**:
-   - **Inicio**: Se establece al arrancar la sesión interactiva o mediante una instrucción interactiva explícita (como `use <scope>`).
-   - **Persistencia**: Persiste a través de múltiples comandos interactivos sucesivos ($N \to N+1$).
-   - **Finalización**: Termina cuando el usuario activa explícitamente otro Scope en la sesión o cuando finaliza la sesión interactiva del terminal.
-3. **No es estado global del lenguaje**: El Prompt Scope pertenece exclusivamente a la sesión del host interactivo. No existe una variable global en Evo-Script (como `current_scope`), ni identificadores implícitos en el lenguaje para acceder a él.
-4. **Uso como contexto inicial en comandos interactivos**: Un comando ingresado en la terminal interactiva puede utilizar el `Prompt Scope` actual como su contexto inicial de ejecución para permitir un flujo de trabajo ágil:
+> **`Active Scope`**: Es el Scope semántico actualmente activo para el contexto de ejecución que está siendo evaluado.
+
+No existe un segundo tipo semántico de Scope ni entidades formales separadas para la terminal (no existen términos como `Prompt Scope`, `Session Scope`, `Host Scope` ni `current_scope`).
+
+
+### 6.5 Comportamiento de Active Scope en la Terminal Interactiva
+
+En un entorno de terminal interactiva provisto por Evo-Shell:
+
+1. **Garantía de Active Scope válido**: La terminal interactiva de Evo opera siempre con exactamente un `Active Scope` válido disponible (`interactive terminal always operates with one valid Active Scope`). La terminal interactiva no inicia normalmente en un estado sin Scope activo.
+2. **Persistencia conceptual entre comandos**: Al ejecutar comandos interactivos sucesivos ($N \to N+1$), el `Active Scope` permanece conceptualmente seleccionado para el siguiente comando:
    ```text
-   // Ejemplo conceptual de sesión interactiva de terminal (no gramática de lenguaje):
-   evo> use documents
-   documents> enter("reports")
-   documents/reports> iter |> filter ...
+   // Ejemplo conceptual de sesión interactiva en terminal:
+   use documents;
+   enter("reports");
+   iter |> filter ...;
    ```
-   *(Nota: La representación del prompt y su texto forman parte del diseño de interfaz de Evo-Shell y no constituyen reglas gramaticales del lenguaje Evo-Script).*
+3. **Sustitución explícita**: El usuario puede cambiar el `Active Scope` en cualquier momento ejecutando `use otro_scope`.
+4. **Independencia de la estrategia técnica de retención**: La especificación no fija si el host interactivo conserva la misma instancia física prestada de `Scope` o si preserva el estado contextual para re-solicitar un borrow al Provider en cada comando. Dicha decisión queda abierta como detalle interno del runtime/host (en `evo-shell`, `evo-cli` u otro entorno).
 
 
-### 6.6 Active Scope (Composición local en Evo-Script)
+### 6.6 Comportamiento de Active Scope en ejecución de `.efn`
 
-Dentro de una composición o pipeline en Evo-Script, existe el concepto de **`Active Scope`**:
+La ejecución de funciones y scripts `.efn` sigue reglas estrictas de determinismo y aislamiento:
 
-1. **Definición**: El `Active Scope` es el Scope semántico actualmente activo de forma local dentro de una composición o pipeline de Evo-Script (`composition-local context`).
-2. **Ciclo de vida del Active Scope**:
-   - **Inicio**: Se activa localmente mediante la instrucción `use <scope>` al inicio o dentro de una composición (o se hereda como contexto inicial en un comando interactivo de terminal).
-   - **Vigencia**: Permanece activo **exclusivamente durante la evaluación de la composición actual**.
-   - **Finalización**: Se descarta automáticamente tan pronto como la composición concluye su evaluación.
-3. **Aislamiento y ausencia de estado ambiental global**:
-   - El `Active Scope` **NO** es estado global de la aplicación, ni de la función, ni del hilo de ejecución (*thread-local*).
-   - No existe persistencia automática de `Active Scope` entre pipelines o composiciones independientes:
-     ```text
-     // Composición 1:
-     use files |> operation_a;
-
-     // Composición 2:
-     operation_b; // NO hereda 'files' como Active Scope; no existe persistencia entre pipelines
-     ```
-
-
-### 6.7 Activación y cambio de Scope mediante `use`
-
-La palabra clave estructural `use` es la instrucción semántica que activa o reemplaza el Scope activo:
-
-1. **En composiciones de Evo-Script**: `use <scope>` establece o reemplaza el `Active Scope` para el resto de la composición actual:
+1. **Inicio sin Active Scope**: Toda ejecución de un `.efn` comienza **SIN Active Scope** (`Active Scope = absent`). Una función `.efn` no asume ningún Scope activo por defecto.
+2. **Prohibición de herencia del Active Scope de la terminal**: Un `.efn` **NUNCA hereda implícitamente el `Active Scope` de la terminal interactiva** que lo invocó.
+3. **Aislamiento total de contextos**:
+   - El contexto de ejecución de la terminal interactiva tiene su propio `Active Scope`.
+   - El contexto de ejecución del `.efn` inicia sin `Active Scope`.
+   - La ejecución del `.efn` no consume, no altera y no reemplaza el `Active Scope` de la terminal exterior.
+4. **Activación local dentro de `.efn`**:
    ```text
-   use files
-   |> enter("reports")
-   |> iter
+   .efn inicia (sin Active Scope)
+       ↓
+   Provider proporciona Scope
+       ↓
+   use activa el Scope localmente
+       ↓
+   evaluación de la composición
+       ↓
+   conclusión de la composición (Active Scope local finaliza)
    ```
-2. **En la terminal interactiva**: Un comando `use <scope>` ejecutado directamente en el prompt establece el `Prompt Scope` persistente de la sesión interactiva.
-3. **Sustitución de Active Scope dentro de una composición**: Dentro de un mismo pipeline, una cláusula posterior `|> use nuevo_scope` sustituye el `Active Scope` anterior por el nuevo contexto para las operaciones subsiguientes:
+5. **Finalización sin restauración mágica**: Al concluir la composición o la función `.efn`, el `Active Scope` local cesa de estar activo por simple terminación de su ámbito. No existe mecanismo de "guardar y restaurar" (*save/restore*) del Scope de la terminal, porque ambos contextos estuvieron completamente aislados desde el inicio. No existen palabras clave como `deactivate`, `unuse`, `restore_scope` ni `close_scope`.
+6. **Ausencia de estado ambiental oculto**: No existen parámetros implícitos, inyección oculta de Scope ni variables globales ambientales en `.efn`.
+7. **Operaciones que requieren Scope**: En `.efn`, la ausencia de Scope activo es un estado normal previo a su activación explícita. Aquellas operaciones que requieran un contexto semántico no pueden ejecutarse válidamente hasta que un Scope haya sido activado.
+
+
+### 6.7 Activación y sustitución de Scope mediante `use`
+
+La palabra clave estructural `use` es la instrucción que activa o sustituye el `Active Scope`:
+
+1. **Semántica de `use`**: Activa un Scope provisto por un Provider correspondiente para el contexto de la composición actual (o en la terminal interactiva).
+2. **Sustitución en pipelines**: Dentro de una misma composición, una cláusula posterior `|> use nuevo_scope` sustituye el `Active Scope` previo por el nuevo contexto para las operaciones subsiguientes:
    ```text
    use files
    |> filter ...
@@ -346,16 +339,16 @@ La palabra clave estructural `use` es la instrucción semántica que activa o re
    |> use terminal
    |> print
    ```
-4. **Lo que `use` NO es**:
-   - `use` **no crea** un Scope ni abre recursos técnicos (no conecta bases de datos, no monta discos ni crea sockets).
-   - `use` **no es `import`**: `import` resuelve dependencias estáticas de símbolos antes de la evaluación; `use` activa un contexto semántico en runtime durante una composición.
-   - `use` **no es inyección de dependencias (DI)** ni selección de Providers: no administra contenedores IoC ni ciclos de vida de servicios.
-   - No existe la sintaxis `use module` en Evo-Script v0.1.
+3. **Lo que `use` NO hace**:
+   - `use` **no crea un Provider** ni crea un Scope de la nada.
+   - `use` **no abre bases de datos, no monta discos ni crea sockets**.
+   - `use` **no es `import`** (que resuelve símbolos estáticos antes de la evaluación).
+   - `use` **no es inyección de dependencias (DI)** ni selección de implementaciones (`.root`).
 
 
 ### 6.8 Navegación interna mediante `enter`
 
-La operación `enter(target)` modifica la ubicación actual dentro del Scope activo, siempre que el contexto semántico soporte navegación:
+La operación `enter(target)` modifica la ubicación actual dentro del `Active Scope`, siempre que el contexto semántico soporte navegación:
 
 ```text
 use documents
@@ -363,88 +356,86 @@ use documents
 ```
 
 Distinción fundamental entre `use` y `enter`:
-- **`use`**: Cambia el Scope activo (por ejemplo, transiciona de filesystem a terminal o a database).
-- **`enter`**: Modifica la posición relativa dentro del mismo Scope activo sin cambiar el contexto ni sus capacidades.
+- **`use`**: Activa o sustituye el `Active Scope` (por ejemplo, transiciona de filesystem a terminal o a database).
+- **`enter`**: Modifica la posición relativa dentro del `Active Scope` existente sin cambiar el contexto ni sus capacidades.
+- **Navegabilidad no universal**: `enter` no es una operación universal; solo está disponible en aquellos Scopes cuya semántica admite navegación jerárquica o espacial (como filesystem o database), y no en contextos sin ubicación (como terminal o UI).
 
 
-### 6.9 Aislamiento e independencia de `.efn` frente al Prompt Scope
+### 6.9 Separación formal entre Scope y EvoQ (`Scope != EvoQ`)
 
-Evo-Script garantiza el principio de determinismo e independencia léxica en la ejecución de scripts y funciones `.efn`:
-
-1. **Prohibición de herencia implícita de Prompt Scope**: La ejecución de un archivo `.efn` **NUNCA hereda implícitamente el Prompt Scope** de la terminal interactiva desde la cual fue invocado.
-2. **Determinismo de `.efn`**: La semántica y suposiciones de contexto de una función `.efn` dependen única y exclusivamente de sus entradas, dependencias y declaraciones explícitas (`same .efn + same explicit inputs = same assumptions`), sin verse alteradas porque el usuario tenga seleccionado un `Prompt Scope` de filesystem, database o terminal en su shell.
-3. **Ausencia de inyección mágica**: No existen parámetros implícitos, inyección oculta de contexto ni variables ambientales automáticas de Scope dentro de `.efn`.
-4. **No contaminación del Prompt Scope**: Si una función `.efn` activa internamente un `Active Scope` durante su ejecución, dicho contexto local queda confinado a sus pipelines y **nunca altera ni contamina el `Prompt Scope` de la sesión interactiva que la invocó**. Al retornar la función, el `Prompt Scope` del host permanece inalterado.
-
-Ejemplo conceptual de aislamiento entre sesión interactiva y función `.efn`:
+Evo-Script distingue formalmente entre el contexto operativo (**Scope**) y las operaciones de consulta sobre flujos de datos (**EvoQ**):
 
 ```text
-// Estado de sesión en terminal interactiva (Prompt Scope = documents):
-documents> ejecutar_reporte()
-
-// Dentro del archivo .efn (ejecución aislada):
-public fn generar_reporte() -> int {
-    // La función no hereda 'documents'; si requiere un contexto, lo activa explícitamente:
-    use database_scope
-    |> ...
-
-    return 100;
-}
-
-// Al retornar la función, el Prompt Scope de la terminal permanece inalterado:
-documents>
+Scope != EvoQ
+Scope != 'from' / query source syntax
 ```
 
+1. **Uso de Scope sin consultas EvoQ**: Un Scope puede activarse para ejecutar operaciones directas (como `print` en terminal o `copy` en filesystem) sin requerir ninguna consulta EvoQ.
+2. **Flujo de datos y transformaciones**:
+   ```text
+   Provider
+       ↓
+   provides Scope
+       ↓
+   use (Active Scope)
+       ↓
+   operación fuente produce datos
+       ↓
+   EvoQ transforma datos (filter, select, take, iter)
+       ↓
+   operación destino consume datos
+   ```
+3. **Ortogonalidad con los datos del pipeline**: Sustituir el `Active Scope` dentro de un pipeline mediante `|> use otro_scope` **no destruye ni descarta los datos** en tránsito. EvoQ opera sobre el flujo de datos producido, pero EvoQ no proporciona ni posee el Scope.
 
-### 6.10 Flujo de datos y ortogonalidad con el Active Scope
 
-1. **Ortogonalidad**: El `Active Scope` (contexto/capacidades) y el flujo de datos que atraviesa el pipeline (`Value` / datos en tránsito) son dimensiones ortogonales.
-2. **Preservación de datos ante transiciones de Scope**: Reemplazar el `Active Scope` dentro de un pipeline mediante `|> use otro_scope` **no destruye ni descarta los datos** que ya se encuentran fluyendo por la composición. Los datos producidos en el contexto original continúan disponibles para ser procesados o consumidos por las capacidades del nuevo contexto.
+### 6.10 Relación con .elib y resolución física de Providers
+
+En proyectos estructurados:
+
+1. **Membresía física del Provider en `.elib`**: Todo Provider utilizado para suministrar un Scope dentro de una aplicación estructurada debe pertenecer físicamente al `Physical Artifact Universe` declarado por el archivo `.elib` activo.
+2. **`.elib` NO almacena Scope**:
+   - `.elib` **hace disponibles físicamente** los artefactos del Provider.
+   - `.elib` **NO almacena el Scope ni el Active Scope**.
+   - `.elib` **NO posee estado en tiempo de ejecución**.
+   - `.elib` **NO retiene valores de Scope prestados**.
+3. **Membresía != Activación**: Que un Provider esté registrado en `.elib` permite su resolución en el universo físico del proyecto, pero no implica activación de Scope; la activación requiere la instrucción explícita `use`.
 
 
-### 6.11 Independencia tecnológica y relación con Providers
-
-Evo-Script y Evo-Shell mantienen un desacoplamiento tecnológico total frente a las implementaciones concretas:
+### 6.11 Resumen canónico de ciclo de vida y comportamiento de Scope
 
 ```text
-Provider (implementación técnica concreta)
+Active .elib
+    ↓ (hace disponible físicamente al Provider)
+Provider disponible
+    ↓ (provide_scope)
+Scope provisto (borrowed context)
+    ↓ (use / activate_scope)
+Active Scope
     ↓
-Contrato semántico (Evo-Shell / EvoQ)
+Capacidades operativas / Datos producidos
     ↓
-Scope / Capacidades
-    ↓
-Evo-Script (composición con use y pipelines)
+Transformaciones EvoQ (filter, select, etc.)
 ```
 
-- Un Scope de filesystem no expone estructuras de datos de kernel, descriptores de archivo ni llamadas POSIX/Win32.
-- Un Scope de base de datos no expone sockets TCP, cursores JDBC ni sentencias SQL dependientes de motor.
-- Un Scope de terminal no expone handles de stdout/stderr ni secuencias de escape ANSI.
-Los Providers implementan los contratos técnicos necesarios, mientras que el código Evo-Script interactúa exclusivamente con la abstracción semántica.
-
-
-### 6.12 Resumen comparativo de ciclos de vida de Scope
-
-| Dimensión | Prompt Scope | Active Scope |
+| Dimensión | Terminal interactiva | Ejecución de archivo `.efn` |
 | :--- | :--- | :--- |
-| **Ámbito de pertenencia** | Sesión interactiva de Evo-Shell (Host state) | Composición o pipeline local de Evo-Script |
-| **Inicio del ciclo de vida** | Inicio de sesión interactiva o instrucción `use` en el prompt | Sentencia `use` en una composición (o heredado al inicio de un comando interactivo) |
-| **Persistencia** | Persiste a través de múltiples comandos interactivos ($N \to N+1$) | Confinado estrictamente a la composición actual; no persiste entre pipelines |
-| **Finalización** | Reemplazo por otro `use` interactivo o cierre de sesión del terminal | Conclusión de la evaluación de la composición o reemplazo por otro `use` |
-| **Impacto sobre `.efn`** | No es heredado ni inyectado implícitamente a archivos `.efn` | No escapa ni altera el Prompt Scope de la sesión al concluir `.efn` |
-| **Representación en el lenguaje** | No es variable ni palabra clave de Evo-Script | Activado mediante la keyword `use` |
+| **Estado inicial de Active Scope** | Siempre posee exactamente un `Active Scope` válido | Inicia **sin Active Scope** (`Active Scope = absent`) |
+| **Herencia de contexto** | Mantiene conceptualmente el contexto seleccionado entre comandos | **No hereda** el Active Scope de la terminal interactiva |
+| **Activación de Scope** | Mediante `use <scope>` en el prompt | Mediante `use <scope>` explícito dentro de sus composiciones |
+| **Ámbito y vigencia** | Persiste conceptualmente entre comandos interactivos | Confinado estrictamente a la composición local en evaluación |
+| **Finalización** | Por sustitución (`use`) o cierre de sesión del terminal | Al concluir la composición; se descarta sin alterar la terminal |
+| **Interacción con el entorno** | Opera sobre el Scope provisto por el Provider correspondiente | Requiere que el Provider esté disponible físicamente en el proyecto |
 
 
-### 6.13 Invalidación externa de Scope (External Scope Invalidation - Candidato v0.2)
+### 6.12 Invalidación externa y retención de contexto (Candidatos futuros / v0.2)
 
-Evo-Script v0.1 reconoce formalmente el problema de la **invalidación externa de contexto** (`External Scope Invalidation`), difiriendo su resolución integral para versiones futuras:
-
-1. **Naturaleza del problema**: Un Scope puede haber sido adquirido sobre un recurso externo que posteriormente sea modificado, eliminado, movido o bloqueado por un agente externo al proceso.
-2. **Fuera del alcance de v0.1**: En Evo-Script v0.1:
-   - **NO** se definen mecanismos automáticos de revalidación, refresco o reconexión (`refresh`, `rebind`, `reconnect`).
-   - **NO** se definen observadores activos de cambios (*watchers* de filesystem o database).
-   - **NO** se definen identificadores persistentes de recursos (*stable inode-like IDs*, *resource GUIDs*, *Scope IDs*).
-   - **NO** se introducen errores del sistema especiales para contextos obsoletos (no existen `StaleScopeError` ni `ScopeInvalidatedError` en v0.1).
-   - **NO** se introduce concurrencia, hilos ni modelos asíncronos (`async`, `await`, `threads`, `locks`).
+1. **Invalidación externa de Scope (`External Scope Invalidation`)**:
+   - Un Provider proporciona una vista de Scope prestada (`borrowed Scope`).
+   - Posteriormente, el recurso o servidor externo subyacente puede ser modificado, movido o desconectado por un agente externo.
+   - Una provisión futura de Scope describirá el nuevo estado del recurso.
+   - Evo-Script v0.1 no define observadores activos (*watchers*), reconexión automática (`reconnect`, `refresh`) ni errores de sistema especiales (no existen `StaleScopeError` ni `ScopeInvalidatedError` en v0.1).
+2. **Retención / Readquisición de Scope a largo plazo (`Long-lived Scope Retention/Reacquisition`)**:
+   - La estrategia técnica mediante la cual un host interactivo preserva o readquiere un borrow válido de Scope a lo largo de una sesión queda diferida como detalle de implementación para versiones futuras del runtime/host (sin determinar si reside en `evo-shell`, `evo-cli` o `evo-runtime`).
 
 
 ## 7. Sistema de tipos
