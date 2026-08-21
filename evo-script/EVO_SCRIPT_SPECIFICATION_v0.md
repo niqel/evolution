@@ -1067,7 +1067,7 @@ El tipo `string` es un tipo de primer nivel en el lenguaje; no expone punteros, 
 
 ### 5.7 Tipo `dynamic`
 
-`dynamic` es un tipo numérico propio que no equivale a ninguno de los tipos enteros o de punto flotante de tamaño fijo:
+`dynamic` es un único tipo numérico semántico propio que no equivale a ninguno de los tipos enteros o de punto flotante de tamaño fijo:
 
 ```text
 dynamic != int8
@@ -1086,10 +1086,25 @@ dynamic != float32
 dynamic != float64
 ```
 
-#### 5.7.1 Naturaleza numérica
-El tipo `dynamic` permite representar valores numéricos cuya magnitud entera no está limitada por los rangos finitos de los tipos enteros fijos del lenguaje. Para valores enteros, `dynamic` opera con precisión entera arbitraria.
+El tipo `dynamic` es exclusivamente numérico. No representa un tipo genérico, un objeto arbitrario, un contenedor heterogéneo ni habilita despacho dinámico o reflexión.
+
+#### 5.7.1 Dominio numérico de `dynamic`
+
+Dentro del tipo `dynamic`, un Value puede representar dos clases de valores numéricos:
+
+```text
+dynamic
+    ├── integral value
+    └── floating value
+```
+
+No existen dos tipos visibles independientes; existe un único tipo en el lenguaje denominado `dynamic`. Los términos *integral value* y *floating value* describen la naturaleza concreta del Value contenido dentro de este tipo:
+
+1. **Valores enteros (`integral value`)**: representan números enteros con precisión arbitraria. Su magnitud no está limitada por los rangos finitos de los tipos enteros de tamaño fijo (`int8` a `int128`, `uint8` a `uint128`).
+2. **Valores de punto flotante (`floating value`)**: representan números reales cuya semántica numérica corresponde al formato IEEE 754 *binary64*. La coincidencia en el modelo numérico no convierte a `dynamic` en un alias de `float64`; se mantiene estrictamente que `dynamic != float64` y `Compatible(dynamic, float64) = false`.
 
 #### 5.7.2 Independencia de evaluación de expresiones
+
 En Evo-Script v0, el tipo esperado en el destino de una asignación o binding no altera de forma retroactiva el tipo ni la semántica de evaluación de los operandos de una expresión.
 
 Por ejemplo, dados:
@@ -1103,14 +1118,18 @@ let dynamic result = a + b;
 ```
 el hecho de que la variable destino `result` sea de tipo `dynamic` **no** convierte los operandos `a` y `b` a `dynamic`, **no** altera la semántica de la suma y **no** evita un eventual desbordamiento propio del tipo `int8`. La asignación requiere que el resultado producido sea directamente compatible con `dynamic`.
 
-#### 5.7.3 Operaciones directas
+#### 5.7.3 Operaciones directas y tipado de literales
+
 El tipo `dynamic` puede utilizarse directamente en declaraciones y expresiones cuyos operandos sean de tipo `dynamic`:
 ```text
 let dynamic a = ...;
 let dynamic b = ...;
 let dynamic result = a + b;
 ```
-Las reglas operativas detalladas de las operaciones sobre `dynamic` se definen en el Capítulo 10. La conversión explícita entre `dynamic` y otros tipos numéricos, cuando esté permitida, se define en el Capítulo 11.
+
+Asimismo, de conformidad con las reglas de tipado contextual definidas en el Capítulo 6, un literal numérico en un contexto que requiera `dynamic` producirá directamente un Value de tipo `dynamic` (sea entero o de punto flotante), sin mediar conversiones implícitas desde `int` o `float`.
+
+Las reglas operativas detalladas de las operaciones y combinaciones sobre `dynamic` se definen en el Capítulo 10. Las operaciones de conversión explícita entre `dynamic` y otros tipos numéricos se definen en el Capítulo 11.
 
 
 ### 5.8 Tipos definidos por el programa
