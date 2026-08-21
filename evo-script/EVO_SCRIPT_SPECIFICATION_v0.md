@@ -4695,3 +4695,522 @@ public fn describe_worker(
 ```
 - El archivo contiene exactamente una función pública (`describe_worker`) y dos funciones privadas auxiliares (`status_code`, `worker_name`).
 - Todas las funciones se analizan estáticamente y quedan formalmente disponibles para ser invocadas conforme a las reglas del Capítulo 14.
+
+---
+
+## 14. Function Calls
+
+En Evo-Script v0, una expresión de llamada a función (`FunctionCallExpression`) permite invocar una función declarada dentro del mismo archivo de script `.efn`, evaluando sus argumentos posicionales y produciendo directamente el valor de retorno devuelto por el cuerpo de la función.
+
+Se preserva la distinción fundamental:
+- Una `FunctionDeclaration` es una declaración ejecutable de nivel superior (`TopLevelDeclaration`), no un valor.
+- Una `FunctionCallExpression` es una expresión de primera clase (`Expression`) que posee estáticamente un tipo semántico (`SemanticType`) y evalúa a un valor inmutable (`Value`).
+
+
+### 14.1 Modelo de FunctionCallExpression
+
+Una expresión de llamada evalúa una función resuelta estáticamente y produce directamente su valor de retorno:
+
+```text
+FunctionCallExpression
+    ↓ análisis semántico estático
+SemanticType
+    ↓ evaluación correcta
+Value
+```
+
+Reglas normativas:
+1. **Naturaleza de Expression**: `FunctionCallExpression` es una expresión que puede utilizarse en cualquier posición gramatical donde se admita una `Expression` (inicializadores de bindings `let`, sentencia `return`, argumentos de otras llamadas, operandos de expresiones compuestas, etc.).
+2. **Determinación estática del tipo**: toda `FunctionCallExpression` semánticamente válida posee exactamente el tipo semántico correspondiente al tipo de retorno (`ReturnType`) de la función invocada:
+   ```text
+   TypeOf(FunctionCallExpression) -> SemanticType
+   ```
+3. **Producción directa de valor**: cuando la evaluación concluye exitosamente, la llamada produce directamente el `Value` retornado por la función, sin envoltorios (*wrappers*) intermedios ni tipos de resultado especiales:
+   ```text
+   Evaluate(FunctionCallExpression) -> Value
+   TypeOf(Value) == TypeOf(FunctionCallExpression)
+   ```
+
+
+### 14.2 Sintaxis de llamada
+
+La sintaxis formal de una expresión de llamada a función se define como:
+
+```text
+FunctionCallExpression
+    ::= FunctionName
+        "("
+        ArgumentList?
+        ")"
+
+ArgumentList
+    ::= Expression
+        ("," Expression)*
+```
+
+Reglas normativas:
+1. **Llamadas sin argumentos**: la lista de argumentos es opcional (`ArgumentList?`). Si la función invocada no declara parámetros, la llamada se expresa como `FunctionName()` (por ejemplo, `constant()`).
+2. **Separación por comas**: los argumentos dentro de `ArgumentList` se separan obligatoriamente por comas (`,`).
+3. **Prohibición de trailing comma**: no se admite coma posterior al último argumento de la lista (por ejemplo, `calculate(10, 20,)` es sintácticamente inválido).
+4. **Correspondencia exclusivamente posicional**: la asociación entre argumentos y parámetros es estrictamente posicional:
+   ```text
+   Parameter[0] <-> Argument[0]
+   Parameter[1] <-> Argument[1]
+   ...
+   Parameter[n] <-> Argument[n]
+   ```
+   El lenguaje no admite argumentos nombrados (*named arguments*), etiquetas de argumento (*argument labels*), argumentos con valores por defecto ni listas variádicas. Escribir `calculate(value: 10)` o `calculate(price = 10)` es sintácticamente inválido.
+
+
+### 14.3 Resolución del FunctionName
+
+La resolución del identificador de función (`FunctionName`) determina de forma determinista y unívoca la declaración correspondiente dentro del archivo `.efn`:
+
+```text
+ResolveFunction(FunctionName) -> exactly one FunctionDeclaration
+```
+
+Reglas normativas:
+1. **Resolución unívoca**: dado que el lenguaje exige nombres únicos de función en todo el archivo (Capítulo 13.4), cada `FunctionName` en una llamada resuelve a exactamente una `FunctionDeclaration` (`public fn`, `private fn` o `fn`).
+2. **Función inexistente**: si el `FunctionName` no corresponde a ninguna función declarada en el archivo, la expresión es semánticamente inválida en tiempo de análisis. No existe resolución dinámica en tiempo de ejecución.
+3. **Ausencia de sobrecarga (*No Overload Resolution*)**: no existe resolución por tipo o cantidad de argumentos, dado que las sobrecargas están estrictamente prohibidas en el lenguaje.
+4. **Referencias adelantadas permitidas (*Forward Function References*)**: una función puede invocar a otra función declarada físicamente más adelante en el mismo archivo `.efn`. La resolución de llamadas se realiza tras recopilar la totalidad de las declaraciones de nivel superior del archivo.
+5. **Diferenciación con intrinsics**: llamadas a intrinsics como `to_int64(value)` o `parse_int32(text)` no constituyen `FunctionCallExpression` de funciones definidas por el usuario; corresponden formalmente a `ConversionExpression` y `ParsingExpression` (Capítulo 11). La regla de no-colisión de identificadores garantiza la ausencia de ambigüedad.
+6. **Ausencia de métodos y llamadas calificadas**: no se admiten llamadas a métodos ni identificadores calificados (por ejemplo, `object.method(...)`, `worker.calculate(...)` o `Type::function(...)` son inválidos). El operador `.` denota exclusivamente acceso a campos de estructuras y `::` califica variantes de enumeraciones.
+
+
+### 14.4 Aridad y correspondencia posicional
+
+La aridad de la llamada debe coincidir de forma exacta y estricta con la aridad de la función invocada:
+
+```text
+ArgumentCount(FunctionCallExpression) == ParameterCount(FunctionDeclaration)
+```
+
+Dada la declaración:
+```text
+fn sum(int left, int right) -> int
+{
+    return left + right;
+}
+```
+- `sum(10, 20)` es válido (`ArgumentCount == 2`).
+- `sum()` es semánticamente inválido (`ArgumentCount == 0 != 2`).
+- `sum(10)` es semánticamente inválido (`ArgumentCount == 1 != 2`).
+- `sum(10, 20, 30)` es semánticamente inválido (`ArgumentCount == 3 != 2`).
+
+
+### 14.5 Tipado de argumentos y ExpectedType
+
+Cada parámetro formal de la función invocada proporciona un tipo esperado (`ExpectedType`) a la expresión argumento correspondiente según su posición:
+
+```text
+ParameterType[i]
+    ↓
+ExpectedType(ParameterType[i])
+    ↓
+ArgumentExpression[i]
+```
+
+Dada la función:
+```text
+fn calculate(
+    int64 amount,
+    float64 tax
+) -> float64
+{
+    return to_float64(amount) * tax;
+}
+```
+En la llamada `calculate(10, 1.5)`:
+- El parámetro `amount` (`int64`) proporciona `ExpectedType(int64)` al argumento `10`, tipándolo directamente como `int64`.
+- El parámetro `tax` (`float64`) proporciona `ExpectedType(float64)` al argumento `1.5`, tipándolo directamente como `float64`.
+- Los literales adoptan directamente el tipo del parámetro sin requerir conversiones implícitas posteriores.
+
+Reglas normativas:
+1. **Tipado independiente entre argumentos**: cada argumento se tipa de manera aislada e independiente respecto de los demás argumentos de la llamada. No existe contextualización cruzada entre argumentos hermanos (*no sibling argument contextualization*).
+2. **Incompatibilidad con expresiones ya tipadas**: si un argumento posee un tipo ya cerrado e incompatible con el tipo del parámetro correspondiente, el análisis semántico rechaza la llamada. El `ExpectedType` no realiza conversiones automáticas sobre expresiones ya tipadas:
+   ```text
+   fn consume(int64 value) -> int64 { return value; }
+
+   let int32 value = 10;
+   let int64 result = consume(value); // Inválido: int32 incompatible con int64
+   ```
+   La adaptación requiere una conversión explícita:
+   ```text
+   let int64 result = consume(to_int64(value)); // Válido
+   ```
+3. **Compatibilidad con alias canónicos**: la validación de tipos respeta las identidades canónicas `int == int32` y `float == float64` (Capítulo 5).
+4. **Parámetros de tipo dynamic**: si un parámetro es de tipo `dynamic`, proporciona `ExpectedType(dynamic)` a su argumento:
+   - `consume(10)` contextualiza el literal como `DynamicValue IntegralClass(10)`.
+   - `consume(10.0)` contextualiza el literal como `DynamicValue FloatingClass(10.0)`.
+   - En ambos casos, `SemanticType = dynamic`.
+5. **Propagación a expresiones compuestas en argumentos**: el `ParameterType` se propaga a cualquier expresión argumento que admita contextualización, incluyendo expresiones `when`:
+   ```text
+   fn consume(int64 value) -> int64 { return value; }
+
+   consume(
+       when status {
+           Status::Active => 1,
+           Status::Disabled => 0
+       }
+   )
+   ```
+   `ExpectedType(int64)` se propaga a través del `when` hacia los literales `1` y `0` de sus ramas.
+
+
+### 14.6 Tipo resultante de la llamada
+
+El tipo semántico estático de una `FunctionCallExpression` coincide exactamente con el tipo de retorno declarado (`ReturnType`) en la `FunctionDeclaration` resuelta:
+
+```text
+ResolveFunction(FunctionName) -> FunctionDeclaration F
+ReturnType(F) -> T
+
+TypeOf(FunctionCallExpression) = T
+```
+
+Reglas normativas:
+1. **Inalterabilidad por ExpectedType exterior**: el `ExpectedType` del contexto exterior donde se ubica la llamada valida la compatibilidad del resultado, pero **no** modifica el tipo de retorno de la llamada:
+   ```text
+   fn make_value() -> int32 { return 10; }
+
+   // Inválido: TypeOf(make_value()) es int32 e incompatible con int64
+   let int64 value = make_value();
+   ```
+   Para adaptar el resultado a un tipo distinto debe aplicarse una conversión explícita:
+   ```text
+   let int64 value = to_int64(make_value()); // Válido
+   ```
+2. **Frontera de propagación hacia los argumentos**: el `ExpectedType` exterior valida la `FunctionCallExpression`, pero **no** atraviesa la llamada para tipificar los argumentos internos. Los argumentos reciben su `ExpectedType` exclusivamente desde los parámetros de la función invocada:
+   ```text
+   ExpectedType exterior
+       ↓
+   FunctionCallExpression : ReturnType
+       X (no atraviesa la llamada)
+       |
+   ParameterType[0]
+       ↓
+   Argument[0]
+   ```
+
+
+### 14.7 Análisis semántico
+
+El análisis semántico de una `FunctionCallExpression` se realiza conforme al siguiente procedimiento determinista:
+
+1. **Lectura del FunctionName**: se obtiene el identificador de la función invocada.
+2. **Resolución de la declaración**: se ejecuta `ResolveFunction(FunctionName)` para localizar la `FunctionDeclaration F` en el archivo `.efn`. Si no existe exactamente una declaración, la expresión es semánticamente inválida.
+3. **Validación de aridad**: se obtiene `ParameterList(F)` y se verifica que `ArgumentCount == ParameterCount`.
+4. **Análisis estático de cada argumento**: para cada argumento $i$ desde $0$ hasta $n-1$:
+   - Se obtiene `ParameterType[i]`.
+   - Se suministra `ExpectedType(ParameterType[i])` a `ArgumentExpression[i]`.
+   - Se analiza estáticamente `ArgumentExpression[i]`.
+   - Se determina `TypeOf(ArgumentExpression[i])`.
+   - Se verifica que `Compatible(TypeOf(ArgumentExpression[i]), ParameterType[i]) == true`.
+5. **Asignación del tipo resultante**: se obtiene `ReturnType(F)` y se establece `TypeOf(FunctionCallExpression) = ReturnType(F)`.
+
+Reglas normativas:
+1. **Análisis exhaustivo de todos los argumentos**: la totalidad de los argumentos se analizan estáticamente durante la compilación/análisis, sin omitir ninguno.
+2. **Ausencia de comprobación dinámica de tipos**: en tiempo de ejecución no se redescubren tipos; la validez de los tipos queda garantizada estáticamente por el análisis semántico.
+
+
+### 14.8 Evaluación de argumentos
+
+Para una `FunctionCallExpression` semánticamente válida, la evaluación de los argumentos en tiempo de ejecución sigue un orden estricto de izquierda a derecha:
+
+```text
+Evaluate(Argument[0]) -> ArgumentValue[0]
+Evaluate(Argument[1]) -> ArgumentValue[1]
+...
+Evaluate(Argument[n-1]) -> ArgumentValue[n-1]
+```
+
+Reglas normativas:
+1. **Evaluación de izquierda a derecha**: los argumentos se evalúan secuencialmente comenzando por el primer argumento (`Argument[0]`) y avanzando en orden posicional estricto.
+2. **Evaluación única por argumento**: cada argumento se evalúa exactamente una sola vez.
+3. **Interrupción inmediata ante fallo**: si la evaluación de un argumento falla por una condición de ejecución:
+   - La `FunctionCallExpression` falla de forma inmediata.
+   - Los argumentos posteriores en la lista **no** son evaluados.
+   - El cuerpo de la función (`FunctionBody`) **no** inicia su evaluación.
+4. **Llamadas sin argumentos**: si la función no posee parámetros (`constant()`), no se ejecuta fase de evaluación de argumentos y se procede directamente a evaluar el cuerpo de la función.
+
+
+### 14.9 Evaluación de la función invocada
+
+Una vez que todos los argumentos se han evaluado exitosamente y se han obtenido los valores inmutables `ArgumentValue[0..n-1]`:
+
+1. **Enlace posicional de parámetros**: se asocian los valores a los parámetros correspondientes en el ámbito de la invocación:
+   ```text
+   ParameterName[0] -> ArgumentValue[0]
+   ParameterName[1] -> ArgumentValue[1]
+   ...
+   ParameterName[n-1] -> ArgumentValue[n-1]
+   ```
+2. **Evaluación del cuerpo de la función**: se evalúa el `FunctionBody` conforme a las reglas del Capítulo 13:
+   - Los parámetros actúan como bindings inmutables visibles.
+   - Se evalúan secuencialmente las declaraciones `LetBindingDeclaration*`.
+   - Se evalúa la sentencia final `ReturnStatement`.
+3. **Resultado de la llamada**: si el `ReturnStatement` produce exitosamente un valor `ReturnValue`, dicho valor es el resultado final de la llamada:
+   ```text
+   Evaluate(FunctionCallExpression) = ReturnValue
+   ```
+4. **Fallo en el cuerpo de la función**: si durante la evaluación del cuerpo de la función falla el inicializador de un `let` o la expresión del `return`, la `FunctionCallExpression` falla y no produce ningún valor.
+
+
+### 14.10 Scope de cada invocación
+
+Cada invocación a una función crea un entorno de ejecución aislado e independiente para sus bindings locales:
+
+```text
+Invocation A: calculate(10)
+{
+    value -> 10
+    result -> 11
+}
+
+Invocation B: calculate(20)
+{
+    value -> 20
+    result -> 21
+}
+```
+
+Reglas normativas:
+1. **Aislamiento absoluto**: las invocaciones no comparten bindings de parámetros ni bindings locales `let`. Cada llamada opera sobre su propio conjunto de asociaciones inmutables.
+2. **Ausencia de estado persistente**: las funciones no poseen estado interno persistente entre llamadas sucesivas.
+3. **Semántica de valores inmutables**: la interacción con los parámetros se define exclusivamente como la asociación inmutable `ParameterName -> Value`. La semántica observable del lenguaje opera puramente sobre valores inmutables.
+4. **Evaluación independiente por ocurrencia**: cada aparición sintáctica de una llamada se evalúa de manera autónoma (por ejemplo, en `double(x) + double(x)`, cada llamada se evalúa de forma completa e independiente).
+
+
+### 14.11 Visibilidad y llamadas entre funciones
+
+Dentro de un mismo archivo `.efn`, cualquier función puede invocar a cualquier otra función declarada en el archivo, con independencia de sus especificadores de visibilidad:
+
+- Una función `public` puede invocar funciones con visibilidad `private` o `fn`.
+- Una función `private` puede invocar otras funciones privadas.
+- Una función `private` puede invocar la función `public` del archivo (siempre que la llamada no introduzca un ciclo en el grafo de llamadas).
+
+Regla normativa:
+> La visibilidad (`public` frente a `private`) rige exclusivamente qué operación queda expuesta como la interfaz externa del archivo `.efn`. No restringe la invocación interna entre funciones pertenecientes al mismo programa.
+
+
+### 14.12 Function Call Graph y ausencia de recursión
+
+Evo-Script v0 prohíbe de forma absoluta la recursión directa e indirecta.
+
+#### 14.12.1 Definición del Function Call Graph
+El grafo de llamadas a funciones (`FunctionCallGraph`) es un grafo dirigido definido sobre el conjunto de funciones declaradas en el archivo:
+```text
+FunctionCallGraph = DirectedGraph(FunctionDeclarations, CallEdges)
+```
+Existe una arista dirigida $A \to B$ si el cuerpo de la función $A$ contiene al menos una `FunctionCallExpression` que resuelve a la función $B$.
+
+#### 14.12.2 Requisito de Aciclicidad (DAG)
+El `FunctionCallGraph` debe ser estrictamente un **Grafo Acíclico Dirigido** (*Directed Acyclic Graph* o DAG):
+
+```text
+Acyclic(FunctionCallGraph) == true
+```
+
+#### 14.12.3 Recursión directa prohibida
+Una función no puede invocarse a sí misma:
+```text
+// Inválido: recursión directa (repeat -> repeat)
+fn repeat(int value) -> int
+{
+    return repeat(value);
+}
+```
+
+#### 14.12.4 Recursión indirecta prohibida
+No se permiten ciclos de llamadas de ninguna longitud entre dos o más funciones:
+```text
+// Inválido: ciclo indirecto (first -> second -> first)
+fn first(int value) -> int
+{
+    return second(value);
+}
+
+fn second(int value) -> int
+{
+    return first(value);
+}
+```
+Ciclos de longitud extendida ($A \to B \to C \to A$) son igualmente rechazados.
+
+#### 14.12.5 Reglas normativas sobre el grafo de llamadas
+1. **Llamadas adelantadas válidas**: las llamadas hacia funciones declaradas físicamente más adelante son válidas siempre que no formen ciclos ($A \to B$ donde $B$ no llama a $A$ es un DAG válido).
+2. **Inclusión de llamadas dentro de expresiones `when`**: toda llamada presente en las ramas de un `when` genera una arista en el grafo de llamadas, independientemente del camino que se tome en tiempo de ejecución.
+3. **Inclusión de llamadas anidadas**: expresiones con llamadas anidadas (por ejemplo, `consume(produce())` dentro de `execute`) generan aristas hacia todas las funciones invocadas (`execute -> consume` y `execute -> produce`).
+4. **Exclusión de intrinsics**: los intrinsics del lenguaje (`to_*`, `parse_*`) no son funciones declaradas por el usuario y no añaden aristas al `FunctionCallGraph`.
+5. **Detección estática obligatoria**: la detección de ciclos se realiza en tiempo de compilación/análisis semántico. Si el `FunctionCallGraph` contiene algún ciclo, el archivo `.efn` es semánticamente inválido.
+
+
+### 14.13 Composición de FunctionCallExpression
+
+`FunctionCallExpression` forma parte de las expresiones primarias (`PrimaryExpression`) del lenguaje:
+
+```text
+PrimaryExpression
+    ::= LiteralExpression
+     |  BindingReferenceExpression
+     |  StructConstructionExpression
+     |  SimpleVariantExpression
+     |  AssociatedValueVariantExpression
+     |  StructuredVariantExpression
+     |  ConversionExpression
+     |  ParsingExpression
+     |  WhenExpression
+     |  FunctionCallExpression
+     |  ParenthesizedExpression
+```
+
+#### 14.13.1 Usos válidos en expresiones compuestas
+- **Inicializadores de bindings**:
+  ```text
+  let int result = double(10);
+  ```
+- **Sentencia de retorno**:
+  ```text
+  return double(value);
+  ```
+- **Operandos de operadores**:
+  ```text
+  let int total = double(10) + double(20);
+  ```
+
+#### 14.13.2 Acceso a campos sobre el retorno de estructuras
+Si una función retorna un tipo estructura (`StructType`), puede aplicarse acceso a campos (`.`) directamente sobre el resultado de la llamada:
+```text
+fn create_worker(int64 id, string name) -> Worker
+{
+    return Worker { id: id, name: name };
+}
+
+// Válido: create_worker(...) produce Worker, .name accede al campo string
+let string name = create_worker(10, "Ana").name;
+```
+
+#### 14.13.3 Llamadas anidadas
+Una llamada a función puede actuar como argumento de otra llamada, siempre que el tipo de retorno de la función interna sea compatible con el tipo de parámetro de la función externa:
+```text
+fn produce() -> int64
+{
+    return 10;
+}
+
+fn consume(int64 value) -> string
+{
+    return to_string(value);
+}
+
+public fn execute() -> string
+{
+    return consume(produce());
+}
+```
+
+En llamadas anidadas como `outer(first(), second())`, el orden de evaluación es determinista y no intercalado:
+1. Se evalúa completamente la llamada `first()` hasta producir su valor.
+2. Se evalúa completamente la llamada `second()` hasta producir su valor.
+3. Se enlazan los valores a los parámetros de `outer`.
+4. Se evalúa el cuerpo de `outer`.
+
+
+### 14.14 Ejemplos canónicos
+
+#### 14.14.1 Llamada sin argumentos
+```text
+fn constant() -> int
+{
+    return 10;
+}
+
+public fn calculate() -> int
+{
+    return constant();
+}
+```
+- `ResolveFunction(constant)` localiza la función privada.
+- Aridad: $0$ argumentos y $0$ parámetros.
+- `TypeOf(constant()) = int`, compatible con `ReturnType(calculate) = int`.
+
+#### 14.14.2 ExpectedType suministrado por el parámetro
+```text
+fn identity(int64 value) -> int64
+{
+    return value;
+}
+
+public fn calculate() -> int64
+{
+    return identity(10);
+}
+```
+- El parámetro `value` (`int64`) proporciona `ExpectedType(int64)` al literal `10`.
+- El literal se analiza directamente como `int64`.
+- `TypeOf(identity(10)) = int64`.
+
+#### 14.14.3 Llamada con conversión explícita
+```text
+fn consume(int64 value) -> int64
+{
+    return value;
+}
+
+public fn calculate(int32 value) -> int64
+{
+    return consume(to_int64(value));
+}
+```
+- Pasar `consume(value)` directamente es semánticamente inválido porque `int32` es incompatible con `int64`.
+- La conversión explícita `to_int64(value)` produce `int64`, satisfaciendo el tipo esperado por `consume`.
+
+#### 14.14.4 Ejemplo integrado completo
+```text
+struct Worker
+{
+    int64 id;
+    string name;
+}
+
+fn create_worker(
+    int64 id,
+    string name
+) -> Worker
+{
+    return Worker {
+        id: id,
+        name: name
+    };
+}
+
+fn worker_name(Worker worker) -> string
+{
+    return worker.name;
+}
+
+public fn describe_worker(
+    int64 id,
+    string name
+) -> string
+{
+    let Worker worker = create_worker(id, name);
+
+    return worker_name(worker);
+}
+```
+
+Explicación del análisis y ejecución:
+1. `create_worker(id, name)` resuelve unívocamente a `create_worker(int64, string) -> Worker`.
+2. Aridad: 2 argumentos corresponden exactamente a 2 parámetros.
+3. Compatibilidad: `id` (`int64`) y `name` (`string`) coinciden con los tipos de los parámetros.
+4. `TypeOf(create_worker(id, name)) = Worker`, por lo que la declaración `let Worker worker = ...` es válida.
+5. `worker_name(worker)` resuelve a `worker_name(Worker) -> string`.
+6. `TypeOf(worker_name(worker)) = string`, compatible con `ReturnType(describe_worker) = string`.
+7. Grafo de llamadas (`FunctionCallGraph`):
+   - `describe_worker -> create_worker`
+   - `describe_worker -> worker_name`
+   - No existen llamadas desde `create_worker` ni `worker_name`.
+   - El grafo es acíclico (DAG válido).
