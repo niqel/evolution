@@ -5458,10 +5458,11 @@ TypeOf(PipelineExpression) = Tn
 ```
 
 Reglas normativas:
-1. **Mutabilidad del tipo a lo largo del flujo**: no se requiere que todas las etapas mantengan el mismo `SemanticType`. Una etapa puede recibir un tipo y producir otro completamente distinto:
+1. **Cambio de tipo entre etapas**: no se requiere que todas las etapas mantengan el mismo `SemanticType`. Cada etapa recibe un `Value` inmutable de entrada y produce un nuevo `Value` de salida, cuyo `SemanticType` puede ser distinto al del valor recibido:
    ```text
-   int32 ──|> to_int64 ──> int64 ──|> double ──> int64 ──|> to_string ──> string
+   Value(int32) ──|> to_int64 ──> Value(int64) ──|> double ──> Value(int64) ──|> to_string ──> Value(string)
    ```
+   Los valores permanecen estrictamente inmutables; el flujo describe la producción sucesiva de nuevos valores tipados a lo largo de las etapas.
 2. **Ausencia de conversiones implícitas entre etapas**: cada etapa debe ser estrictamente compatible con el tipo de salida de la etapa anterior. Si los tipos no coinciden, se requiere una conversión explícita:
    ```text
    let int32 source = 10;
@@ -5501,24 +5502,32 @@ El `ExpectedType` proveniente del contexto exterior (por ejemplo, `let string te
 El análisis semántico de una `PipelineExpression` se efectúa según el siguiente algoritmo determinista:
 
 1. Se reconoce la expresión inicial `PipelineInputExpression` y la secuencia ordenada de etapas `PipelineStage[1..n]`.
-2. Se analiza estáticamente `PipelineInputExpression` y se determina su tipo inicial $T_0$.
-3. Para cada etapa $i$ desde $1$ hasta $n$:
-   - Se crea un contexto local `PipelineThisContext(i)` con `TypeOf(this) = T_{i-1}`.
+2. Se reconocen estructuralmente todas las etapas y se resuelven sus targets sin aplicar todavía *default typing* a expresiones que continúen siendo contextualizables.
+3. Para cada etapa, se identifican los constraints de `ExpectedType` aplicables a su entrada de pipeline mediante `implicit this` o `ThisExpression` explícitas.
+4. Se propagan dichos constraints de `ExpectedType` hacia la expresión que produce la entrada de la etapa correspondiente cuando esta todavía admita tipado contextual:
+   - Para un target unario con parámetro de tipo $T$, se suministra `ExpectedType(T)` al `this` implícito.
+   - Para una etapa explícita con `ThisExpression`, los constraints de `ExpectedType` que reciba `this` se propagan a la expresión de entrada de la etapa.
+5. Si múltiples constraints de `ExpectedType` sobre la misma entrada de pipeline resultan mutuamente incompatibles, la `PipelineExpression` es semánticamente inválida.
+6. Se aplican los constraints de `ExpectedType` compatibles encontrados.
+7. Se aplica *default typing* únicamente a aquellas expresiones contextualizables que hayan quedado sin un `ExpectedType` aplicable.
+8. Se determina formalmente el tipo inicial $T_0 = \text{TypeOf}(\text{PipelineInputExpression})$.
+9. Para cada etapa $i$ secuencialmente de izquierda a derecha ($1 \le i \le n$):
+   - Se establece `TypeOf(this)` en `PipelineThisContext(i)` como $T_{i-1}$.
    - Si la etapa es `UnaryPipelineTarget`:
-     - Se resuelve el target; si es función de usuario, se exige `ParameterCount == 1`.
-     - Si es un intrinsic (`to_*`, `parse_*`), se aplican sus reglas semánticas estáticas.
-     - Se valida que `T_{i-1}` sea compatible con el tipo requerido por el target.
-     - Se determina el tipo de salida $T_i$.
+     - Si es un `FunctionName` de usuario, se exige que `ResolveFunction(target)` resuelva a una `FunctionDeclaration` con `ParameterCount == 1` y se verifica `Compatible(T_{i-1}, ParameterType) == true`.
+     - Si es un intrinsic (`to_*`, `parse_*`), se validan sus reglas semánticas y la compatibilidad con $T_{i-1}$.
+     - Se establece el tipo de salida $T_i$.
    - Si la etapa es `PipelineStageExpression`:
-     - Se verifica que contenga al menos una referencia a `this` asociada a `PipelineThisContext(i)`.
-     - Se analiza estáticamente la expresión completa del stage.
-     - Se recolectan los constraints de `ExpectedType` sobre `this`. Si existen constraints incompatibles entre múltiples usos de `this`, se rechaza el programa.
-     - Se determina el tipo de salida $T_i$.
-4. Se establece el tipo final `TypeOf(PipelineExpression) = T_n`.
+     - Se valida que exista al menos una `ThisExpression` ligada a `PipelineThisContext(i)`.
+     - Se analiza la expresión completa del stage bajo su contexto.
+     - Se establece el tipo de salida $T_i$.
+10. No se realizan conversiones implícitas sobre expresiones que ya posean un `SemanticType` determinado y cerrado.
+11. Se establece el tipo final `TypeOf(PipelineExpression) = T_n`.
 
 Reglas normativas:
-1. **Análisis estático exhaustivo de todas las etapas**: todas las etapas se analizan estáticamente en su totalidad.
-2. **Ausencia de resolución dinámica de tipos**: la compatibilidad entre etapas se comprueba enteramente en tiempo de análisis.
+1. **Prioridad de ExpectedType sobre default typing**: los constraints de `ExpectedType` aplicables a una expresión contextualizable se resuelven siempre antes de aplicar *default typing*, garantizando que construcciones como `10 |> identity` (donde `identity(int64) -> int64`) tipen directamente el literal como `int64`.
+2. **Análisis estático exhaustivo de todas las etapas**: todas las etapas se analizan estáticamente en su totalidad.
+3. **Ausencia de resolución dinámica de tipos**: la compatibilidad entre etapas se comprueba enteramente en tiempo de análisis estático sin redescubrimiento dinámico en tiempo de ejecución.
 
 
 ### 15.9 Evaluación
