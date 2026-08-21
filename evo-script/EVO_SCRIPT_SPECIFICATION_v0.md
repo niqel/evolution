@@ -2619,27 +2619,64 @@ De acuerdo con las reglas de los Capítulos 5 y 6:
 
 ### 9.5 Evaluación del inicializador y creación del Binding
 
-La ejecución de una `LetBindingDeclaration` sigue un orden semántico estricto y determinista:
+El procesamiento de una `LetBindingDeclaration` se divide formalmente en dos fases secuenciales y diferenciadas:
+1. **Análisis semántico estático**: comprueba la validez de los tipos, la resolución de símbolos y la compatibilidad estricta antes de cualquier evaluación.
+2. **Evaluación**: ejecuta la expresión inicializadora de una declaración previamente validada para producir el `Value` y establecer el binding.
 
-1. Se resuelve el `TypeReference` en el `Type Space`.
-2. Se establece el `DeclaredType` del binding.
-3. Se proporciona `ExpectedType(DeclaredType)` a la `Expression` inicializadora.
-4. Se evalúa la `Expression` exactamente una vez.
-5. Se obtiene el `Value` resultante de la evaluación.
-6. Se valida la compatibilidad exacta entre el tipo del `Value` y `DeclaredType`.
-7. Se crea la asociación inmutable `BindingName -> Value`.
-8. El identificador `BindingName` entra formalmente en visibilidad.
+#### 9.5.1 Fase de análisis semántico estático
+Durante el análisis semántico de `let Type name = Expression;`, se ejecutan de forma determinista los siguientes pasos:
+1. **Resolución del tipo**: se resuelve el `TypeReference` en el `Type Space` del archivo `.efn` y se determina el `DeclaredType` del binding.
+2. **Propagación de ExpectedType**: se proporciona `ExpectedType(DeclaredType)` a la `Expression` inicializadora.
+3. **Análisis de la expresión**: se analiza semánticamente la `Expression` en el entorno actual de bindings visibles y se determina su tipo resultante estático (`TypeOf(Expression)`).
+4. **Validación estática de compatibilidad**: se comprueba la compatibilidad exacta entre tipos:
+   ```text
+   Compatible(TypeOf(Expression), DeclaredType) == true
+   ```
+   Si los tipos son incompatibles (por ejemplo, si `DeclaredType` es `int64` y `TypeOf(Expression)` es `int32`), la declaración es semánticamente inválida y es rechazada estáticamente; la expresión no llega a la fase de evaluación.
+5. **Validación de reglas estáticas adicionales**: se comprueba que el `BindingName` cumpla con `SnakeCaseIdentifier`, que no exista autorreferencia al nuevo binding, que no se produzca *shadowing* sobre bindings visibles y que los literales satisfagan las reglas de representabilidad (Capítulo 6).
+6. **Visibilidad léxica**: tras superar todas las validaciones estáticas, el `BindingName` queda registrado como visible para las sentencias y expresiones posteriores dentro del mismo ámbito léxico.
 
 ```text
+Análisis semántico:
+TypeReference
+    ↓ resolución
+DeclaredType
+    ↓ ExpectedType(DeclaredType)
 Expression
+    ↓ determinación de tipo estático
+TypeOf(Expression)
+    ↓ validación estática: Compatible(TypeOf(Expression), DeclaredType) == true
+LetBindingDeclaration semánticamente válida
+```
+
+#### 9.5.2 Prohibición de autorreferencia en el análisis semántico
+Durante el análisis semántico de la `Expression` inicializadora, el nuevo `BindingName` que se está declarando aún no forma parte del conjunto de bindings visibles en el entorno:
+```text
+let int value = value + 1; // Inválido: fallo de resolución estática de `value`
+```
+Al analizar `value + 1`, el intento de resolver `value` (`ResolveBinding("value")`) falla porque el identificador no existe en el entorno visible. El nuevo binding entra en visibilidad únicamente después de completar exitosamente la totalidad de la declaración. Por consiguiente, Evo-Script v0 no admite autorreferencias, bindings perezosos (*lazy let*) ni bindings recursivos (*recursive let*).
+
+#### 9.5.3 Fase de evaluación y establecimiento del binding
+Únicamente una `LetBindingDeclaration` que haya sido declarada semánticamente válida en la fase estática puede ser ejecutada por el evaluador. Durante la evaluación:
+1. **Evaluación de la expresión**: se evalúa la `Expression` inicializadora exactamente una sola vez.
+2. **Obtención del Value**: la evaluación correcta produce el `Value` inmutable resultante. Si la evaluación de la expresión falla debido a un error de ejecución, el binding no llega a establecerse.
+3. **Establecimiento del binding**: se crea la asociación semántica inmutable:
+   ```text
+   BindingName -> Value
+   ```
+4. **Disponibilidad dinámica**: el `Value` asociado queda inmediatamente disponible para las evaluaciones de cualquier `BindingReferenceExpression` posterior dentro de su región de visibilidad.
+
+```text
+Evaluación:
+Expression válida
     ↓ evaluación (exactamente una vez)
-Value
-    ↓ validación de compatibilidad exacta
+Value producido
+    ↓ establecimiento del binding
 BindingName -> Value
 ```
 
-#### 9.5.1 Evaluación única
-La `Expression` inicializadora se evalúa exactamente una sola vez en el momento de procesar la declaración. Los usos posteriores del `BindingName` obtienen directamente el `Value` ya producido sin reevaluar la expresión original:
+#### 9.5.4 Evaluación única
+La `Expression` inicializadora se evalúa exactamente una sola vez durante la ejecución de la declaración. Los usos posteriores del `BindingName` obtienen directamente el `Value` inmutable ya asociado sin volver a ejecutar la expresión original:
 ```text
 let int value = calculate();
 
@@ -2648,13 +2685,10 @@ let int value = calculate();
 value + value
 ```
 
-#### 9.5.2 Inexistencia del binding durante su propio inicializador
-Un `BindingName` no es visible ni existe dentro de su propia `Expression` inicializadora:
-```text
-let int value = value + 1; // Inválido: `value` no está visible en el lado derecho
-```
-El binding entra en visibilidad únicamente después de concluir exitosamente la totalidad de la sentencia delimitada por el punto y coma (`;`). Por tanto, las autorreferencias y los bindings recursivos (`recursive let`) son semánticamente inválidos.
-
+#### 9.5.5 Distinción entre visibilidad léxica y establecimiento dinámico
+Evo-Script v0 distingue formalmente entre:
+- **Visibilidad léxica**: propiedad determinada estáticamente durante el análisis semántico, que define en qué regiones del código el `BindingName` es un identificador resoluble.
+- **Establecimiento dinámico del binding**: evento que ocurre durante la evaluación, mediante el cual el `BindingName` queda efectivamente ligado al `Value` producido tras evaluar con éxito su inicializador.
 
 ### 9.6 Binding Reference Expression
 
