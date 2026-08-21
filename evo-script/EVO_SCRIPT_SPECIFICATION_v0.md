@@ -2690,7 +2690,6 @@ Evo-Script v0 distingue formalmente entre:
 - **Visibilidad léxica**: propiedad determinada estáticamente durante el análisis semántico, que define en qué regiones del código el `BindingName` es un identificador resoluble.
 - **Establecimiento dinámico del binding**: evento que ocurre durante la evaluación, mediante el cual el `BindingName` queda efectivamente ligado al `Value` producido tras evaluar con éxito su inicializador.
 
-
 ### 9.6 Binding Reference Expression
 
 Una vez declarado y visible, un binding se referencia en expresiones mediante su identificador:
@@ -2909,28 +2908,63 @@ se agrupa e interpreta formalmente como `(worker.age) + 10`. El operador `.` pro
 
 ### 10.3 ExpectedType en expresiones numéricas compuestas
 
-Cuando una expresión compuesta se evalúa en una posición sintáctica que exige un tipo específico, el `ExpectedType` recibido contextualiza la operación completa y se propaga hacia los operandos y literales susceptibles de tipado contextual.
+Cuando una expresión compuesta se analiza semánticamente, la determinación del tipo de los operandos se rige por un esquema determinista de propagación de `ExpectedType`:
 
-#### 10.3.1 Propagación a literales contextuales
-En una declaración como:
+```text
+1. ExpectedType exterior (si existe y aplica al dominio)
+    ↓
+2. Contextualización entre operandos hermanos (si uno posee tipo cerrado y el otro es contextualizable)
+    ↓
+3. Tipado por defecto de literales (Capítulo 6)
+```
+
+#### 10.3.1 Propagación de ExpectedType exterior
+En una declaración donde el contexto exterior exige un tipo específico:
 ```text
 let int64 result = 10 + 20;
 ```
 el `DeclaredType` `int64` proporciona `ExpectedType(int64)` a la expresión aditiva. Durante el análisis semántico, dicho `ExpectedType` se propaga a los literales `10` y `20`, tipándolos directamente como `int64`. La operación se valida como `int64 + int64 -> int64` sin requerir conversiones intermedias implícitas (`int -> int64`).
 
-#### 10.3.2 Inmutabilidad del tipo en expresiones previamente tipadas
-El `ExpectedType` no altera retroactivamente ni convierte el tipo semántico de expresiones que ya poseen un tipo cerrado:
-```text
-let int32 first = 10;
-let int64 result = first + 20; // Semánticamente inválido
-```
-Dado que `first` posee estáticamente `TypeOf(first) = int32`, el `ExpectedType(int64)` no convierte `first` en `int64`. Al exigir la suma operandos de tipos compatibles y al ser `Compatible(int32, int64) == false`, la expresión es semánticamente inválida y requiere una conversión explícita.
+#### 10.3.2 Contextualización entre operandos hermanos
+Cuando no existe un `ExpectedType` exterior aplicable a los operandos (por ejemplo, en expresiones de comparación que producen `bool`, o en operaciones aritméticas intermedias), si uno de los operandos ya posee un `SemanticType` determinado $T$ y el operando hermano todavía admite tipado contextual, el tipo $T$ proporciona `ExpectedType(T)` al operando contextualizable:
 
-#### 10.3.3 Expresiones sin ExpectedType externo
-En ausencia de un `ExpectedType` provisto por el contexto exterior:
+```text
+known typed operand
+    ↓
+SemanticType T
+    ↓
+ExpectedType(T)
+    ↓
+contextually typable sibling operand
+```
+
+Reglas normativas:
+1. **Bidireccionalidad**: la contextualización opera de forma simétrica de izquierda a derecha (`left -> right`) y de derecha a izquierda (`right -> left`):
+   - `age >= 18` (con `age: int64`): `age` proporciona `ExpectedType(int64)` al literal `18`, validándose como `int64 >= int64 -> bool`.
+   - `18 <= age` (con `age: int64`): `age` proporciona `ExpectedType(int64)` al literal `18`, validándose como `int64 <= int64 -> bool`.
+   - `value == 10` y `10 == value` (con `value: int64`): el literal `10` se tipa directamente como `int64` en ambas expresiones (`int64 == int64 -> bool`).
+   - `value + 20` y `20 + value` (con `value: int64`): el literal `20` recibe `ExpectedType(int64)` y produce `int64 + int64 -> int64`.
+   - `count > 0` (con `count: uint32`): el literal `0` recibe `ExpectedType(uint32)` y produce `uint32 > uint32 -> bool`.
+2. **Respeto a las reglas de cada forma de literal**: la contextualización entre operandos no altera las reglas fundamentales del Capítulo 6:
+   - `amount == 10.0` (con `amount: float64`): es válido porque `DecimalLiteral("10.0")` bajo `ExpectedType(float64)` produce `Value(float64, 10.0)`.
+   - `amount == 10` (con `amount: float64`): es semánticamente inválido porque `IntegerLiteral("10")` no admite contextualización directa hacia tipos de punto flotante.
+3. **Caso de operandos de tipo `dynamic`**:
+   - `value == 10` (con `value: dynamic`): `value` proporciona `ExpectedType(dynamic)` al literal `10`, el cual produce `Value(dynamic, integral 10)`. La expresión es estáticamente válida (`dynamic == dynamic -> bool`).
+   - Si durante la evaluación `value` contiene un valor de clase `FloatingClass(10.0)`, la comparación `FloatingClass(10.0) == IntegralClass(10)` produce `false` de conformidad con las reglas de la sección 10.7; no se realiza promoción automática entre clases internas.
+
+#### 10.3.3 Inmutabilidad del tipo en expresiones previamente tipadas
+El `ExpectedType` (provenga del contexto exterior o de un operando hermano) no altera retroactivamente ni convierte el tipo semántico de expresiones que ya poseen un tipo cerrado:
+```text
+let int32 a = 10;
+let int64 b = 20;
+let int64 result = a + b; // Semánticamente inválido
+```
+Dado que `TypeOf(a) = int32` y `TypeOf(b) = int64`, ambos operandos están previamente tipados y no admiten tipado contextual. Al ser `Compatible(int32, int64) == false`, la operación es semánticamente inválida y requiere una conversión explícita. El tipado contextual no constituye una conversión implícita (*contextual typing != implicit conversion*).
+
+#### 10.3.4 Expresiones sin ExpectedType ni operandos tipados
+En ausencia de un `ExpectedType` exterior y cuando ninguno de los operandos posea un tipo previamente determinado:
 - `10 + 20` se analiza bajo los tipos por defecto de sus literales (`int + int`), produciendo `int` (canónicamente `int32`).
 - `10.0 + 20.0` se analiza bajo los tipos por defecto (`float + float`), produciendo `float` (canónicamente `float64`).
-
 
 ### 10.4 Operadores aritméticos
 
