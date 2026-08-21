@@ -6273,3 +6273,1019 @@ public fn convert_value(int64 value) -> int8
 }
 ```
 *Explicación*: la función es semánticamente válida. Si en tiempo de ejecución se invoca con el valor `int64(200)`, la evaluación produce `EvaluationFailure` debido a que 200 no es exactamente representable en `int8`.
+
+---
+
+## 17. Gramática consolidada de Evo-Script v0
+
+Este capítulo consolida en una única especificación formal todas las producciones sintácticas del lenguaje definidas a lo largo de los Capítulos 2 al 15. Su propósito es definir unívocamente la gramática formal que permite transformar un flujo de tokens (`TokenStream`) en un árbol de sintaxis abstracta (`AST`) de forma determinista y sin ambigüedades.
+
+
+### 17.1 Propósito y frontera de la gramática
+
+El parser de Evo-Script v0 opera exclusivamente sobre la frontera:
+
+```text
+TokenStream
+    ↓
+  Parser
+    ↓
+   AST
+```
+
+La gramática formal responde a una única pregunta:
+> *"¿Qué estructura sintáctica abstracta representa esta secuencia ordenada de tokens?"*
+
+La validez sintáctica de un programa es independiente de su validez semántica:
+```text
+Syntactically Valid != Semantically Valid
+```
+
+El parser **no** tiene la responsabilidad ni la autoridad de resolver o validar:
+- La existencia de tipos, funciones, bindings, variantes o campos.
+- La compatibilidad de tipos en asignaciones, expresiones o llamadas.
+- La aridad exacta de las funciones invocadas.
+- La exhaustividad y unicidad de variantes en expresiones `when`.
+- La existencia de un contexto activo de pipeline para `this`.
+- La aciclicidad del grafo de llamadas (`FunctionCallGraph`) o del grafo de dependencias de tipos (`Type Dependency Graph`).
+- La regla de unicidad de la función pública (`Count(PublicFunctionDeclaration) == 1`).
+
+Estas validaciones pertenecen estrictamente a la fase de análisis semántico estático (`SemanticAnalyzer`).
+
+
+### 17.2 Notación gramatical
+
+La gramática se especifica mediante una variante estándar de la Forma de Backus-Naur Extendida (EBNF):
+
+| Notación | Significado |
+|---|---|
+| `::=` | Definición de una producción gramatical |
+| `\|` | Alternativa disjunta |
+| `?` | Ocurrencia opcional (cero o una vez) |
+| `*` | Cero o más repeticiones |
+| `+` | Una o más repeticiones |
+| `( ... )` | Agrupación sintáctica |
+| `"..."` | Lexema o token literal |
+
+Los símbolos no terminales léxicos como `Identifier`, `SnakeCaseIdentifier`, `PascalCaseIdentifier`, `StringLiteral`, `IntegerLiteral`, `DecimalLiteral` y `ScientificLiteral` se interpretan conforme a las definiciones léxicas cerradas en los Capítulos 3, 4 y 6.
+
+
+### 17.3 SourceFile y declaraciones de nivel superior
+
+Un archivo de código fuente `.efn` consiste en una secuencia de cero o más declaraciones de nivel superior que concluyen con el final de archivo (`EndOfFile`):
+
+```text
+SourceFile
+    ::= TopLevelDeclaration*
+        EndOfFile
+
+TopLevelDeclaration
+    ::= StructDeclaration
+     |  EnumDeclaration
+     |  FunctionDeclaration
+```
+
+Reglas normativas:
+1. **Orden arbitrario**: las declaraciones de nivel superior pueden aparecer en cualquier orden relativo dentro del archivo.
+2. **Exclusividad de declaraciones**: las sentencias ejecutables (`let`, `return`) y las expresiones no pueden ubicarse directamente en el nivel superior del archivo.
+3. **Restricciones semánticas de nivel superior**: la restricción de que un archivo debe contener exactamente una función pública es validada por el analizador semántico y no forma parte de la gramática.
+
+
+### 17.4 TypeReference y nombres sintácticos
+
+La referencia a tipos en declaraciones de bindings, parámetros, campos y retornos se formaliza como:
+
+```text
+TypeReference
+    ::= NativeTypeName
+     |  Identifier
+
+NativeTypeName
+    ::= "int"
+     |  "float"
+     |  "bool"
+     |  "string"
+     |  "dynamic"
+     |  "int8"
+     |  "int16"
+     |  "int32"
+     |  "int64"
+     |  "int128"
+     |  "uint8"
+     |  "uint16"
+     |  "uint32"
+     |  "uint64"
+     |  "uint128"
+     |  "float32"
+     |  "float64"
+```
+
+Convenciones sintácticas nominales:
+```text
+StructName  ::= PascalCaseIdentifier
+EnumName    ::= PascalCaseIdentifier
+VariantName ::= PascalCaseIdentifier
+
+FunctionName  ::= SnakeCaseIdentifier
+ParameterName ::= SnakeCaseIdentifier
+BindingName   ::= SnakeCaseIdentifier
+FieldName     ::= SnakeCaseIdentifier
+```
+
+Cualquier identificador no reservado que aparezca en posición de `TypeReference` es sintácticamente válido. La resolución de dicho identificador a un tipo nominal (`StructType` o `EnumType`) o el rechazo por tipo desconocido es responsabilidad del analizador semántico.
+
+
+### 17.5 Struct declarations y construction expressions
+
+#### 17.5.1 Declaración de estructuras
+```text
+StructDeclaration
+    ::= "struct"
+        StructName
+        "{"
+        StructField*
+        "}"
+
+StructField
+    ::= TypeReference
+        FieldName
+        ";"
+```
+Una estructura sin campos (`struct Marker {}`) es sintácticamente válida.
+
+#### 17.5.2 Expresión de construcción de estructura
+```text
+StructConstructionExpression
+    ::= Identifier
+        "{"
+        FieldInitializerList?
+        "}"
+
+FieldInitializerList
+    ::= FieldInitializer
+        ("," FieldInitializer)*
+
+FieldInitializer
+    ::= FieldName
+        ":"
+        Expression
+```
+Reglas normativas:
+- Se permite la construcción de estructuras vacías (`Marker {}`).
+- No se permiten comas finales (*trailing commas*) en `FieldInitializerList`.
+- El parser no comprueba si el `Identifier` inicial corresponde a una estructura declarada ni valida la existencia o tipo de los campos inicializados.
+
+
+### 17.6 Enum declarations y variant expressions
+
+#### 17.6.1 Declaración de enumeraciones
+```text
+EnumDeclaration
+    ::= "enum"
+        EnumName
+        "{"
+        EnumVariantList
+        "}"
+
+EnumVariantList
+    ::= EnumVariant
+        ("," EnumVariant)*
+
+EnumVariant
+    ::= SimpleVariant
+     |  AssociatedValueVariant
+     |  StructuredVariant
+
+SimpleVariant
+    ::= VariantName
+
+AssociatedValueVariant
+    ::= VariantName
+        "("
+        TypeReference
+        ")"
+
+StructuredVariant
+    ::= VariantName
+        "{"
+        EnumVariantField+
+        "}"
+
+EnumVariantField
+    ::= TypeReference
+        FieldName
+        ";"
+```
+Reglas normativas:
+- Una enumeración sin variantes es un `SyntaxError` (debe contener al menos una variante).
+- Una variante estructurada debe contener al menos un campo.
+- No se permiten comas finales en `EnumVariantList`.
+
+#### 17.6.2 Referencia y expresiones de variantes
+```text
+EnumVariantReference
+    ::= Identifier
+        "::"
+        VariantName
+
+SimpleVariantExpression
+    ::= EnumVariantReference
+
+AssociatedValueVariantExpression
+    ::= EnumVariantReference
+        "("
+        Expression
+        ")"
+
+StructuredVariantExpression
+    ::= EnumVariantReference
+        "{"
+        EnumFieldInitializerList
+        "}"
+
+EnumFieldInitializerList
+    ::= EnumFieldInitializer
+        ("," EnumFieldInitializer)*
+
+EnumFieldInitializer
+    ::= FieldName
+        ":"
+        Expression
+```
+El parser distingue la forma sintáctica utilizada (`Simple`, `AssociatedValue` o `Structured`) a partir de los delimitadores posteriores (`(`, `{` o ningún delimitador). La coherencia entre la forma utilizada y la declaración de la variante se valida en análisis semántico.
+
+
+### 17.7 Bindings, funciones y cuerpos
+
+#### 17.7.1 Declaración de bindings inmutables
+```text
+LetBindingDeclaration
+    ::= "let"
+        TypeReference
+        BindingName
+        "="
+        Expression
+        ";"
+```
+
+#### 17.7.2 Declaración de funciones
+```text
+FunctionDeclaration
+    ::= FunctionVisibility?
+        "fn"
+        FunctionName
+        "("
+        ParameterList?
+        ")"
+        "->"
+        TypeReference
+        FunctionBody
+
+FunctionVisibility
+    ::= "public"
+     |  "private"
+
+ParameterList
+    ::= Parameter
+        ("," Parameter)*
+
+Parameter
+    ::= TypeReference
+        ParameterName
+```
+
+#### 17.7.3 Cuerpo de función
+```text
+FunctionBody
+    ::= "{"
+        LetBindingDeclaration*
+        ReturnStatement
+        "}"
+
+ReturnStatement
+    ::= "return"
+        Expression
+        ";"
+```
+Reglas normativas:
+- El cuerpo de toda función consta de cero o más declaraciones `let` y concluye obligatoriamente con exactamente un `ReturnStatement`.
+- No se permiten retornos anticipados (*early returns*) ni sentencias de expresión independientes.
+
+
+### 17.8 WhenExpression y patterns
+
+```text
+WhenExpression
+    ::= "when"
+        Expression
+        "{"
+        WhenArmList
+        "}"
+
+WhenArmList
+    ::= WhenArm
+        ("," WhenArm)*
+
+WhenArm
+    ::= EnumPattern
+        "=>"
+        Expression
+
+EnumPattern
+    ::= SimpleVariantPattern
+     |  AssociatedValueVariantPattern
+     |  StructuredVariantPattern
+
+SimpleVariantPattern
+    ::= EnumVariantReference
+
+AssociatedValueVariantPattern
+    ::= EnumVariantReference
+        "("
+        TypeReference
+        BindingName
+        ")"
+
+StructuredVariantPattern
+    ::= EnumVariantReference
+        "{"
+        StructuredPatternFieldList
+        "}"
+
+StructuredPatternFieldList
+    ::= StructuredPatternField
+        ("," StructuredPatternField)*
+
+StructuredPatternField
+    ::= FieldName
+        ":"
+        TypeReference
+        BindingName
+```
+Reglas normativas:
+- No se permiten comas finales en `WhenArmList` ni en `StructuredPatternFieldList`.
+- La gramática no contempla comodines (*wildcards*), cláusulas por defecto (`default`, `otherwise`) ni patrones anidados.
+
+
+### 17.9 Calls, conversiones y parsing
+
+#### 17.9.1 Llamadas a funciones
+```text
+FunctionCallExpression
+    ::= FunctionName
+        "("
+        ArgumentList?
+        ")"
+
+ArgumentList
+    ::= Expression
+        ("," Expression)*
+```
+
+#### 17.9.2 Expresiones de conversión explícita
+```text
+ConversionExpression
+    ::= ConversionIntrinsicName
+        "("
+        Expression
+        ")"
+```
+El conjunto cerrado de nombres de intrinsics de conversión está constituido exactamente por:
+- `to_int8`, `to_int16`, `to_int32`, `to_int64`, `to_int128`
+- `to_uint8`, `to_uint16`, `to_uint32`, `to_uint64`, `to_uint128`
+- `to_float32`, `to_float64`
+- `to_dynamic`, `to_string`
+
+#### 17.9.3 Expresiones de parsing numérico
+```text
+ParsingExpression
+    ::= ParsingIntrinsicName
+        "("
+        Expression
+        ")"
+```
+El conjunto cerrado de nombres de intrinsics de parsing está constituido exactamente por:
+- `parse_int8`, `parse_int16`, `parse_int32`, `parse_int64`, `parse_int128`
+- `parse_uint8`, `parse_uint16`, `parse_uint32`, `parse_uint64`, `parse_uint128`
+- `parse_float32`, `parse_float64`
+
+#### 17.9.4 Distinción sintáctica de intrinsics
+Los nombres de intrinsics coinciden léxicamente con la categoría `Identifier`. La gramática los desambigua determinísticamente como `ConversionExpression` o `ParsingExpression` a partir de su lexema reservado. Las funciones de usuario no pueden colisionar con estos nombres.
+
+
+### 17.10 Gramática consolidada de Expression
+
+La raíz unificada del árbol de expresiones es `Expression`, que coincide con la expresión de menor precedencia (`PipelineExpression`):
+
+```text
+Expression
+    ::= PipelineExpression
+
+PipelineExpression
+    ::= LogicalOrExpression
+        ("|>" PipelineStageBody)*
+
+LogicalOrExpression
+    ::= LogicalAndExpression
+        ("||" LogicalAndExpression)*
+
+LogicalAndExpression
+    ::= ComparisonExpression
+        ("&&" ComparisonExpression)*
+
+ComparisonExpression
+    ::= AdditiveExpression
+        (ComparisonOperator AdditiveExpression)?
+
+ComparisonOperator
+    ::= "=="
+     |  "!="
+     |  "<"
+     |  "<="
+     |  ">"
+     |  ">="
+
+AdditiveExpression
+    ::= MultiplicativeExpression
+        (("+" | "-") MultiplicativeExpression)*
+
+MultiplicativeExpression
+    ::= UnaryExpression
+        (("*" | "/" | "%") UnaryExpression)*
+
+UnaryExpression
+    ::= "!" UnaryExpression
+     |  "-" UnaryExpression
+     |  PostfixExpression
+
+PostfixExpression
+    ::= PrimaryExpression
+        ("." FieldName)*
+
+PrimaryExpression
+    ::= LiteralExpression
+     |  BindingReferenceExpression
+     |  StructConstructionExpression
+     |  SimpleVariantExpression
+     |  AssociatedValueVariantExpression
+     |  StructuredVariantExpression
+     |  FunctionCallExpression
+     |  ConversionExpression
+     |  ParsingExpression
+     |  WhenExpression
+     |  ThisExpression
+     |  ParenthesizedExpression
+
+ParenthesizedExpression
+    ::= "("
+        Expression
+        ")"
+
+ThisExpression
+    ::= "this"
+
+BindingReferenceExpression
+    ::= Identifier
+
+LiteralExpression
+    ::= BooleanLiteral
+     |  StringLiteral
+     |  NumericLiteral
+
+BooleanLiteral
+    ::= "true"
+     |  "false"
+
+NumericLiteral
+    ::= IntegerLiteral
+     |  DecimalLiteral
+     |  ScientificLiteral
+```
+
+
+### 17.11 Pipelines y ThisExpression
+
+```text
+PipelineStageBody
+    ::= UnaryPipelineTarget
+     |  PipelineStageExpression
+
+UnaryPipelineTarget
+    ::= Identifier
+
+PipelineStageExpression
+    ::= LogicalOrExpression
+```
+
+Reglas normativas:
+1. **Desambiguación de bare Identifier**: dentro de un `PipelineStageBody`, un identificador solitario se parsea exclusivamente como `UnaryPipelineTarget`, nunca como `BindingReferenceExpression`.
+2. **Delimitación de etapas**: `PipelineStageExpression` se define sobre `LogicalOrExpression` para garantizar que el operador `|>` del mismo nivel delimite estrictamente el fin de la etapa actual sin ambigüedad.
+3. **Pipelines anidados**: un pipeline anidado dentro de una etapa se expresa mediante `ParenthesizedExpression` (por ejemplo, `outer |> (this |> inner)`) o como argumento en una `FunctionCallExpression` (por ejemplo, `outer |> combine(this, inner |> transform)`).
+4. **Keyword `this`**: `this` es una palabra clave estructural que produce siempre `ThisExpression`.
+
+
+### 17.12 Precedencia y asociatividad final
+
+La jerarquía completa de operadores y combinadores sintácticos de Evo-Script v0, de mayor a menor precedencia, queda formalizada en la siguiente tabla:
+
+| Nivel | Categoría | Operadores / Forma sintáctica | Asociatividad |
+|---|---|---|---|
+| 1 | Acceso a campos | `.` | Izquierda |
+| 2 | Unarios | `!`, `-` | Prefijo / Derecha |
+| 3 | Multiplicativos | `*`, `/`, `%` | Izquierda |
+| 4 | Aditivos | `+`, `-` | Izquierda |
+| 5 | Comparaciones | `==`, `!=`, `<`, `<=`, `>`, `>=` | No asociativo |
+| 6 | Lógico AND | `&&` | Izquierda |
+| 7 | Lógico OR | `||` | Izquierda |
+| 8 | Canalización (Pipeline) | `|>` | Izquierda |
+
+Reglas normativas:
+- El operador `|>` posee la menor precedencia de todo el lenguaje. Expresiones como `a + b |> f` se agrupan como `(a + b) |> f`.
+- Las comparaciones encadenadas (`a < b < c`) constituyen un `SyntaxError`.
+
+
+### 17.13 Reglas de desambiguación sintáctica
+
+Para construcciones que inician con un `Identifier`, el parser aplica las siguientes reglas deterministas:
+
+1. **`Identifier` seguido de `(`**:
+   - Si coincide con un `ConversionIntrinsicName`, se parsea como `ConversionExpression`.
+   - Si coincide con un `ParsingIntrinsicName`, se parsea como `ParsingExpression`.
+   - En cualquier otro caso, se parsea como `FunctionCallExpression`.
+2. **`Identifier` seguido de `{`**:
+   - Se parsea como `StructConstructionExpression`.
+3. **`Identifier` seguido de `::` y `VariantName`**:
+   - Si le sigue `(`, se parsea como `AssociatedValueVariantExpression`.
+   - Si le sigue `{`, se parsea como `StructuredVariantExpression`.
+   - Si le sigue cualquier otro delimitador válido, se parsea como `SimpleVariantExpression`.
+4. **`Identifier` solitario**:
+   - Inmediatamente tras `|>` en un pipeline, se parsea como `UnaryPipelineTarget`.
+   - En cualquier otra posición primaria, se parsea como `BindingReferenceExpression`.
+5. **Delimitación del escrutinio en `when`**:
+   - La expresión escrutada (`scrutinee`) en `when Expression { ... }` se parsea conforme a la gramática completa de `Expression`, respetando llaves anidadas (por ejemplo, en llamadas con inicializadores `Worker { ... }`). La llave de apertura de `WhenArmList` se reconoce únicamente al finalizar el análisis sintáctico de `Expression`.
+
+
+### 17.14 Gramática completa consolidada
+
+A continuación se presenta el bloque normativo consolidado de la gramática formal de Evo-Script v0:
+
+```text
+SourceFile
+    ::= TopLevelDeclaration*
+        EndOfFile
+
+TopLevelDeclaration
+    ::= StructDeclaration
+     |  EnumDeclaration
+     |  FunctionDeclaration
+
+
+TypeReference
+    ::= NativeTypeName
+     |  Identifier
+
+NativeTypeName
+    ::= "int"
+     |  "float"
+     |  "bool"
+     |  "string"
+     |  "dynamic"
+     |  "int8"
+     |  "int16"
+     |  "int32"
+     |  "int64"
+     |  "int128"
+     |  "uint8"
+     |  "uint16"
+     |  "uint32"
+     |  "uint64"
+     |  "uint128"
+     |  "float32"
+     |  "float64"
+
+
+StructDeclaration
+    ::= "struct"
+        StructName
+        "{"
+        StructField*
+        "}"
+
+StructName
+    ::= PascalCaseIdentifier
+
+StructField
+    ::= TypeReference
+        FieldName
+        ";"
+
+
+EnumDeclaration
+    ::= "enum"
+        EnumName
+        "{"
+        EnumVariantList
+        "}"
+
+EnumName
+    ::= PascalCaseIdentifier
+
+EnumVariantList
+    ::= EnumVariant
+        ("," EnumVariant)*
+
+EnumVariant
+    ::= SimpleVariant
+     |  AssociatedValueVariant
+     |  StructuredVariant
+
+SimpleVariant
+    ::= VariantName
+
+AssociatedValueVariant
+    ::= VariantName
+        "("
+        TypeReference
+        ")"
+
+StructuredVariant
+    ::= VariantName
+        "{"
+        EnumVariantField+
+        "}"
+
+EnumVariantField
+    ::= TypeReference
+        FieldName
+        ";"
+
+VariantName
+    ::= PascalCaseIdentifier
+
+
+FunctionDeclaration
+    ::= FunctionVisibility?
+        "fn"
+        FunctionName
+        "("
+        ParameterList?
+        ")"
+        "->"
+        TypeReference
+        FunctionBody
+
+FunctionVisibility
+    ::= "public"
+     |  "private"
+
+FunctionName
+    ::= SnakeCaseIdentifier
+
+ParameterList
+    ::= Parameter
+        ("," Parameter)*
+
+Parameter
+    ::= TypeReference
+        ParameterName
+
+ParameterName
+    ::= SnakeCaseIdentifier
+
+FunctionBody
+    ::= "{"
+        LetBindingDeclaration*
+        ReturnStatement
+        "}"
+
+LetBindingDeclaration
+    ::= "let"
+        TypeReference
+        BindingName
+        "="
+        Expression
+        ";"
+
+BindingName
+    ::= SnakeCaseIdentifier
+
+ReturnStatement
+    ::= "return"
+        Expression
+        ";"
+
+
+Expression
+    ::= PipelineExpression
+
+PipelineExpression
+    ::= LogicalOrExpression
+        ("|>" PipelineStageBody)*
+
+PipelineStageBody
+    ::= UnaryPipelineTarget
+     |  PipelineStageExpression
+
+UnaryPipelineTarget
+    ::= Identifier
+
+PipelineStageExpression
+    ::= LogicalOrExpression
+
+
+LogicalOrExpression
+    ::= LogicalAndExpression
+        ("||" LogicalAndExpression)*
+
+LogicalAndExpression
+    ::= ComparisonExpression
+        ("&&" ComparisonExpression)*
+
+ComparisonExpression
+    ::= AdditiveExpression
+        (ComparisonOperator AdditiveExpression)?
+
+ComparisonOperator
+    ::= "=="
+     |  "!="
+     |  "<"
+     |  "<="
+     |  ">"
+     |  ">="
+
+AdditiveExpression
+    ::= MultiplicativeExpression
+        (("+" | "-") MultiplicativeExpression)*
+
+MultiplicativeExpression
+    ::= UnaryExpression
+        (("*" | "/" | "%") UnaryExpression)*
+
+UnaryExpression
+    ::= "!" UnaryExpression
+     |  "-" UnaryExpression
+     |  PostfixExpression
+
+PostfixExpression
+    ::= PrimaryExpression
+        ("." FieldName)*
+
+
+PrimaryExpression
+    ::= LiteralExpression
+     |  BindingReferenceExpression
+     |  StructConstructionExpression
+     |  SimpleVariantExpression
+     |  AssociatedValueVariantExpression
+     |  StructuredVariantExpression
+     |  FunctionCallExpression
+     |  ConversionExpression
+     |  ParsingExpression
+     |  WhenExpression
+     |  ThisExpression
+     |  ParenthesizedExpression
+
+
+ParenthesizedExpression
+    ::= "("
+        Expression
+        ")"
+
+ThisExpression
+    ::= "this"
+
+BindingReferenceExpression
+    ::= Identifier
+
+
+StructConstructionExpression
+    ::= Identifier
+        "{"
+        FieldInitializerList?
+        "}"
+
+FieldInitializerList
+    ::= FieldInitializer
+        ("," FieldInitializer)*
+
+FieldInitializer
+    ::= FieldName
+        ":"
+        Expression
+
+
+EnumVariantReference
+    ::= Identifier
+        "::"
+        VariantName
+
+SimpleVariantExpression
+    ::= EnumVariantReference
+
+AssociatedValueVariantExpression
+    ::= EnumVariantReference
+        "("
+        Expression
+        ")"
+
+StructuredVariantExpression
+    ::= EnumVariantReference
+        "{"
+        EnumFieldInitializerList
+        "}"
+
+EnumFieldInitializerList
+    ::= EnumFieldInitializer
+        ("," EnumFieldInitializer)*
+
+EnumFieldInitializer
+    ::= FieldName
+        ":"
+        Expression
+
+
+FunctionCallExpression
+    ::= FunctionName
+        "("
+        ArgumentList?
+        ")"
+
+ArgumentList
+    ::= Expression
+        ("," Expression)*
+
+
+ConversionExpression
+    ::= ConversionIntrinsicName
+        "("
+        Expression
+        ")"
+
+
+ParsingExpression
+    ::= ParsingIntrinsicName
+        "("
+        Expression
+        ")"
+
+
+WhenExpression
+    ::= "when"
+        Expression
+        "{"
+        WhenArmList
+        "}"
+
+WhenArmList
+    ::= WhenArm
+        ("," WhenArm)*
+
+WhenArm
+    ::= EnumPattern
+        "=>"
+        Expression
+
+
+EnumPattern
+    ::= SimpleVariantPattern
+     |  AssociatedValueVariantPattern
+     |  StructuredVariantPattern
+
+SimpleVariantPattern
+    ::= EnumVariantReference
+
+AssociatedValueVariantPattern
+    ::= EnumVariantReference
+        "("
+        TypeReference
+        BindingName
+        ")"
+
+StructuredVariantPattern
+    ::= EnumVariantReference
+        "{"
+        StructuredPatternFieldList
+        "}"
+
+StructuredPatternFieldList
+    ::= StructuredPatternField
+        ("," StructuredPatternField)*
+
+StructuredPatternField
+    ::= FieldName
+        ":"
+        TypeReference
+        BindingName
+
+
+FieldName
+    ::= SnakeCaseIdentifier
+
+
+LiteralExpression
+    ::= BooleanLiteral
+     |  StringLiteral
+     |  NumericLiteral
+
+BooleanLiteral
+    ::= "true"
+     |  "false"
+
+NumericLiteral
+    ::= IntegerLiteral
+     |  DecimalLiteral
+     |  ScientificLiteral
+```
+
+
+### 17.15 Frontera entre parser y semantic analyzer
+
+La siguiente tabla resume casos donde una construcción es aceptada por el parser y posteriormente validada o rechazada por el analizador semántico:
+
+| Construcción en código fuente | Resultado del Parser | Resultado del SemanticAnalyzer |
+|---|---|---|
+| `unknown_function(10)` | `FunctionCallExpression` válida | `SemanticError` (función no declarada) |
+| `sum(10)` (donde `sum` requiere 2 parámetros) | `FunctionCallExpression` válida | `SemanticError` (aridad incorrecta) |
+| `Unknown { value: 10 }` | `StructConstructionExpression` válida | `SemanticError` (tipo no resuelto) |
+| `Worker { unknown: 10 }` | `StructConstructionExpression` válida | `SemanticError` (campo desconocido) |
+| `Result::Ok(10)` (si `Ok` es variante simple) | `AssociatedValueVariantExpression` válida | `SemanticError` (discrepancia de forma de variante) |
+| `when r { Result::Ok => 1 }` (falta variante) | `WhenExpression` válida | `SemanticError` (when no exhaustivo) |
+| `return this;` (fuera de pipeline) | `ReturnStatement(ThisExpression)` válido | `SemanticError` (this sin PipelineThisContext) |
+| `value \|> helper` (donde `helper` requiere 2 params) | `UnaryPipelineTarget(helper)` válido | `SemanticError` (target unario inválido) |
+| Archivo con 2 funciones `public fn` | `SourceFile` con 2 funciones válido | `SemanticError` (múltiples funciones públicas) |
+
+
+### 17.16 Casos canónicos de parsing
+
+#### 17.16.1 Precedencia multiplicativa y aditiva
+- **Expresión**: `a + b * c`
+- **Árbol sintáctico producido**: `a + (b * c)`
+
+#### 17.16.2 Precedencia mínima de pipelines
+- **Expresión**: `a + b * c |> normalize |> to_string`
+- **Árbol sintáctico producido**: `((a + (b * c)) |> normalize) |> to_string`
+
+#### 17.16.3 Acceso anidado a campos
+- **Expresión**: `worker.address.country.name`
+- **Árbol sintáctico producido**: `(((worker.address).country).name)`
+
+#### 17.16.4 Comparaciones no asociativas
+- **Expresión**: `a < b < c`
+- **Resultado del parser**: `SyntaxError`
+
+#### 17.16.5 Etapas explícitas de pipeline
+- **Expresión**: `value |> add(this, 10) |> to_string`
+- **Árbol sintáctico producido**:
+  ```text
+  PipelineExpression
+      source: value
+      stage 1: FunctionCallExpression(add, [ThisExpression, 10])
+      stage 2: UnaryPipelineTarget(to_string)
+  ```
+
+#### 17.16.6 Pipeline anidado entre paréntesis
+- **Expresión**: `outer |> (this |> normalize)`
+- **Árbol sintáctico producido**: etapa exterior con `ParenthesizedExpression` que contiene un `PipelineExpression` anidado.
+
+#### 17.16.7 Pipeline anidado como argumento de función
+- **Expresión**: `outer |> combine(this, inner |> transform)`
+- **Árbol sintáctico producido**: llamada a función con `Argument[0] = ThisExpression` y `Argument[1] = PipelineExpression(inner |> transform)`.
+
+#### 17.16.8 Expresión when como etapa de pipeline
+- **Expresión**:
+  ```text
+  result
+      |> when this {
+          Result::Ok(int value) => value,
+          Result::Failed => 0
+      }
+  ```
+- **Árbol sintáctico producido**: `PipelineExpression` cuya etapa es un `WhenExpression` completo.
+
+#### 17.16.9 Expresión when seguida de pipeline
+- **Expresión**:
+  ```text
+  when result {
+      Result::Ok(int value) => value,
+      Result::Failed => 0
+  }
+  |> normalize
+  ```
+- **Árbol sintáctico producido**: `(when result { ... }) |> normalize` debido a la menor precedencia de `|>`.
+
+#### 17.16.10 Desambiguación de llamadas a funciones e intrinsics
+- `to_int64(value)` $\to$ `ConversionExpression`
+- `parse_int64(text)` $\to$ `ParsingExpression`
+- `calculate(value)` $\to$ `FunctionCallExpression`
+
+#### 17.16.11 Formas sintácticas de variantes de enumeraciones
+- `Result::Ok` $\to$ `SimpleVariantExpression`
+- `Result::Ok(value)` $\to$ `AssociatedValueVariantExpression`
+- `Result::Ok { value: value }` $\to$ `StructuredVariantExpression`
+
+
+### 17.17 Criterio de cierre de la gramática
+
+La gramática formal consolidada en este Capítulo 17 se considera cerrada y normativa bajo el siguiente criterio:
+
+> A partir de un flujo de tokens conforme a las reglas léxicas de los Capítulos 3 y 4, cualquier implementador independiente puede construir de forma determinista y unívoca el árbol de sintaxis abstracta (`AST`) de cualquier programa válido de Evo-Script v0 sin requerir decisiones adicionales de diseño sobre delimitación de expresiones, precedencias, asociatividades o estructura de bloques.
