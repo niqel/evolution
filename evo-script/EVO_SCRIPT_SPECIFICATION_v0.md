@@ -6002,10 +6002,13 @@ Reglas normativas:
    Evaluate(Expression, EvaluationContext) -> Value | EvaluationFailure
    ```
 3. **Ausencia de estados nulos o parciales**: la evaluación exitosa produce siempre exactamente un `Value` completo y tipado. No existen valores nulos (`null`), indefinidos (`undefined`) ni estructuras parcialmente construidas.
-4. **Preservación del tipo**:
+4. **Preservación del tipo en evaluación exitosa**: si la evaluación de una expresión produce exitosamente un valor `Value V`:
    ```text
-   TypeOf(Evaluate(Expression, Context)) == TypeOf(Expression)
+   Evaluate(Expression, EvaluationContext) -> Value V
+       =>
+   TypeOf(V) == TypeOf(Expression)
    ```
+   Si la evaluación produce `EvaluationFailure`, no se produce ningún `Value` y la función `TypeOf` no es aplicable (no existe `TypeOf(EvaluationFailure)` dentro del modelo de Evo-Script).
 
 
 ### 16.8 Orden determinista de evaluación
@@ -6170,7 +6173,7 @@ Quedan fuera del alcance normativo de la especificación (libres a la implementa
 - La cantidad de errores estáticos reportados en una sola pasada de compilación/análisis.
 
 
-### 16.19 Tabla normativa de clasificación
+#### 16.18.3 Tabla normativa de clasificación
 
 A continuación se resume la clasificación formal de las situaciones de error y fallo en Evo-Script v0:
 
@@ -6202,9 +6205,9 @@ A continuación se resume la clasificación formal de las situaciones de error y
 | Operación potencialmente fallida en camino no evaluado | `No EvaluationFailure` | Evaluator |
 
 
-### 16.20 Ejemplos canónicos
+#### 16.18.4 Ejemplos canónicos
 
-#### 16.20.1 SemanticError vs EvaluationFailure
+##### SemanticError vs EvaluationFailure
 - **Ejemplo de SemanticError**:
   ```text
   let int32 value = 10;
@@ -6226,7 +6229,7 @@ A continuación se resume la clasificación formal de las situaciones de error y
   ```
   *Explicación*: el análisis semántico valida la función y la llamada (`int / int` es válido), pero la evaluación en tiempo de ejecución falla con `EvaluationFailure` al dividir por cero.
 
-#### 16.20.2 Fallo de parsing en tiempo de evaluación
+##### Fallo de parsing en tiempo de evaluación
 ```text
 public fn calculate() -> int32
 {
@@ -6235,7 +6238,7 @@ public fn calculate() -> int32
 ```
 *Explicación*: la expresión es semánticamente válida (`string -> int32`), pero produce `EvaluationFailure` al evaluar la cadena textual no numérica `"hello"`.
 
-#### 16.20.3 Evaluación en cortocircuito
+##### Evaluación en cortocircuito
 ```text
 public fn calculate() -> bool
 {
@@ -6244,7 +6247,7 @@ public fn calculate() -> bool
 ```
 *Explicación*: `false && ...` evalúa el operando izquierdo como `false` y omite la evaluación del operando derecho. La función concluye exitosamente retornando `false` sin producir `EvaluationFailure`.
 
-#### 16.20.4 Rama no evaluada en expresión when
+##### Rama no evaluada en expresión when
 ```text
 enum Status
 {
@@ -6262,7 +6265,7 @@ public fn process(Status status) -> int
 ```
 *Explicación*: todas las ramas se analizan y validan estáticamente. Si la función se invoca con `Status::Active`, se evalúa únicamente la primera rama y produce `42` sin ejecutar la división por cero de la rama no seleccionada.
 
-#### 16.20.5 Fallo de conversión por valor no representable
+##### Fallo de conversión por valor no representable
 ```text
 public fn convert_value(int64 value) -> int8
 {
