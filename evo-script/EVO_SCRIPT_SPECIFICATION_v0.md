@@ -2048,3 +2048,424 @@ Reglas normativas:
 3. **Convergencia permitida**: dependencias compartidas donde múltiples tipos dependen de un mismo tipo ($A \to C$ y $B \to C$) son válidas siempre que no formen ciclos.
 4. **Independencia del orden**: la detección de ciclos opera sobre la totalidad de las declaraciones de nivel superior del archivo `.efn`. Las referencias adelantadas son válidas si y solo si el grafo global resultante es un DAG.
 5. **Integración con EnumType**: el `Type Dependency Graph` es único para todos los tipos definidos por el programa. Las dependencias originadas por variantes de `EnumType` (Capítulo 8) se integran en este mismo grafo, validando que no existan ciclos mixtos entre structs y enums.
+
+---
+
+## 8. Enums locales
+
+En Evo-Script v0, el mecanismo fundamental para modelar la disyunción nominal de alternativas mutuamente excluyentes es la construcción `enum`:
+
+```text
+enum = OR alternatives
+```
+
+Frente a la conjunción de datos representada por los structs (`struct = AND data`), un `enum` define un tipo semántico nominal (`EnumType`) compuesto por un conjunto cerrado y finito de variantes posibles. Un valor de tipo enum (`EnumValue`) representa exactamente una de las alternativas declaradas en un instante dado, nunca una combinación simultánea de ellas.
+
+
+### 8.1 Modelo de enum
+
+Un `enum` define un tipo nominal formado por la disyunción de sus variantes:
+
+```text
+enum Status
+{
+    Active,
+    Inactive,
+    Suspended
+}
+```
+
+Conceptualmente:
+
+```text
+Status = Active OR Inactive OR Suspended
+```
+
+Relación con el sistema de tipos y valores:
+- `EnumType` pertenece a `ProgramDefinedType`, el cual es un `SemanticType` (Capítulo 5).
+- `EnumValue` pertenece a `ProgramDefinedValue`, el cual es un `Value` (Capítulo 6).
+
+Se establece formalmente la distinción:
+
+```text
+EnumType != EnumValue
+```
+
+- `Status` es el `SemanticType` nominal que describe las alternativas posibles.
+- `Status::Active` es la expresión sintáctica que produce un `EnumValue` concreto cuyo tipo semántico es `Status`.
+
+Evo-Script v0 no modela los enums como máscaras de bits (`bit flags`), números enteros subyacentes ni combinaciones concurrentes de estados.
+
+
+### 8.2 Declaración de enum
+
+Una declaración `enum` introduce un nuevo `EnumType` en el Type Space del archivo `.efn`. Su gramática formal se define como:
+
+```text
+EnumDeclaration
+    ::= "enum" EnumName
+        "{"
+        EnumVariantList
+        "}"
+
+EnumName
+    ::= PascalCaseIdentifier
+
+EnumVariantList
+    ::= EnumVariant
+        ("," EnumVariant)*
+```
+
+Reglas normativas:
+1. **Nivel superior**: una `EnumDeclaration` solo puede aparecer como `TopLevelDeclaration` dentro del archivo `.efn` (Capítulo 2). No se admiten declaraciones `enum` anidadas dentro de funciones, structs u otros enums.
+2. **Visibilidad local**: todos los enums declarados en un archivo `.efn` son tipos locales del script autocontenido. No existen modificadores de visibilidad (no existen `public enum` ni `private enum`).
+3. **Coma obligatoria entre variantes**: las variantes declaradas en `EnumVariantList` deben estar separadas obligatoriamente por una coma (`,`). Los saltos de línea son espacios en blanco (`whitespace`) y no sustituyen la coma delimitadora.
+4. **Ausencia de coma final (trailing comma)**: no se permite una coma después de la última variante de la lista.
+   - `enum Status { Active, Inactive }` es válido.
+   - `enum Status { Active, Inactive, }` es inválido.
+5. **Prohibición de enums vacíos**: todo `enum` debe declarar obligatoriamente al menos una variante. Declaraciones sin variantes (`enum Empty {}`) son sintácticamente inválidas. Dado que un enum representa alternativas posibles (`enum = OR alternatives`), un enum vacío carecería de cualquier `EnumValue` representable.
+
+
+### 8.3 Variantes y unicidad nominal
+
+Cada variante dentro de un `enum` se identifica mediante un nombre de variante (`VariantName`):
+
+```text
+VariantName
+    ::= PascalCaseIdentifier
+```
+
+Reglas normativas:
+1. **Convención nominal**: todo `VariantName` debe utilizar estrictamente `PascalCaseIdentifier` (Capítulo 4).
+2. **Unicidad de variantes**: dentro de una misma `EnumDeclaration`, cada `VariantName` debe aparecer exactamente una vez. Declarar variantes con nombres duplicados dentro del mismo `enum` es semánticamente inválido:
+   ```text
+   // Ejemplo inválido
+   enum Status
+   {
+       Active,
+       Active
+   }
+   ```
+3. **Reutilización entre enums diferentes**: distintos `EnumTypes` pueden declarar variantes con el mismo nombre. Las variantes pertenecen nominalmente a su propio tipo (`UserStatus::Active` y `ServiceStatus::Active` son variantes independientes). La identidad completa de una variante está determinada por el par `EnumType + VariantName`. No existe un espacio global de variantes compartidas.
+
+
+### 8.4 Formas de variante
+
+Evo-Script v0 define exactamente tres formas sintácticas y semánticas de variante:
+
+```text
+EnumVariant
+    ::= SimpleVariant
+     |  AssociatedValueVariant
+     |  StructuredVariant
+```
+
+#### 8.4.1 SimpleVariant
+Una variante simple representa una alternativa pura sin carga ni datos adicionales asociados:
+
+```text
+SimpleVariant
+    ::= VariantName
+```
+
+Ejemplo:
+```text
+NotFound
+```
+
+#### 8.4.2 AssociatedValueVariant
+Una variante con valor asociado transporta exactamente un valor tipado anónimo:
+
+```text
+AssociatedValueVariant
+    ::= VariantName "(" TypeReference ")"
+```
+
+Ejemplos:
+```text
+Found(Worker)
+Error(string)
+Success(int64)
+```
+
+Reglas normativas:
+1. Transporta exactamente un `TypeReference`.
+2. No se permiten variantes con paréntesis vacíos (`Found()`).
+3. No se permiten múltiples tipos posicionales ni tuplas (`Found(Worker, int64)` es inválido). Si una variante requiere transportar múltiples datos, debe utilizarse una `StructuredVariant`.
+
+#### 8.4.3 StructuredVariant
+Una variante estructurada transporta un conjunto de uno o más campos nombrados y tipados:
+
+```text
+StructuredVariant
+    ::= VariantName
+        "{"
+        EnumVariantField+
+        "}"
+
+EnumVariantField
+    ::= TypeReference FieldName ";"
+```
+
+Reglas normativas:
+1. Debe declarar al menos un campo (`EnumVariantField+`).
+2. No se admiten variantes estructuradas vacías (`Empty {}` es inválido; una variante sin datos debe declararse como `SimpleVariant`).
+3. Cada campo se declara mediante `TypeReference FieldName;` y termina obligatoriamente con punto y coma.
+4. `FieldName` debe utilizar estrictamente `SnakeCaseIdentifier` y debe ser único dentro de la misma variante estructurada. Distintas variantes pueden reutilizar el mismo `FieldName`.
+
+Ejemplo:
+```text
+Failed
+{
+    int code;
+    string message;
+}
+```
+
+#### 8.4.4 Ejemplo combinado de enum
+```text
+enum SearchResult
+{
+    NotFound,
+    Found(Worker),
+    Failed {
+        int code;
+        string message;
+    }
+}
+```
+
+Conceptualmente:
+```text
+SearchResult = NotFound OR Found(Worker) OR Failed(code AND message)
+```
+
+
+### 8.5 EnumTypeReference y EnumVariantReference
+
+Para referenciar un tipo enum y sus variantes en expresiones, Evo-Script v0 define las siguientes producciones gramaticales:
+
+```text
+EnumTypeReference
+    ::= Identifier
+
+EnumVariantReference
+    ::= EnumTypeReference
+        "::"
+        VariantName
+```
+
+Reglas normativas:
+1. **Reconocimiento léxico**: una referencia como `SearchResult::NotFound` se compone léxicamente del token `Identifier("SearchResult")`, el delimitador `::` y el token `Identifier("NotFound")`. No existen tokens léxicos especiales para enums o variantes.
+2. **Resolución del tipo enum**: durante el análisis semántico, el identificador `EnumTypeReference` debe resolver unívocamente en el `Type Space` a un `SemanticType` cuya categoría sea estrictamente `EnumType`:
+   ```text
+   ResolveType(EnumTypeReference) -> EnumType
+   ```
+3. **Resolución de la variante**: `VariantName` debe corresponder a una variante válidamente declarada dentro del `EnumType` resuelto:
+   ```text
+   ResolveVariant(EnumType, VariantName) -> declared variant
+   ```
+4. **Calificación obligatoria**: las variantes deben referenciarse siempre de forma calificada mediante `EnumType::Variant`. No se permite el uso de nombres de variantes aislados (por ejemplo, escribir `NotFound` directamente como expresión es semánticamente inválido).
+
+
+### 8.6 Construcción de variante simple
+
+La instanciación de una `SimpleVariant` se realiza referenciando directamente la variante calificada:
+
+```text
+SimpleVariantExpression
+    ::= EnumVariantReference
+```
+
+Ejemplo:
+```text
+Status::Active
+```
+
+Reglas normativas:
+1. Produce un `EnumValue` cuyo tipo semántico es el `EnumType` correspondiente y cuya variante activa es la indicada.
+2. No se utilizan paréntesis en la construcción de variantes simples (`Status::Active()` es sintácticamente inválido).
+
+
+### 8.7 Construcción de variante con Value asociado
+
+La instanciación de una `AssociatedValueVariant` se realiza suministrando exactamente una expresión entre paréntesis tras la referencia calificada:
+
+```text
+AssociatedValueVariantExpression
+    ::= EnumVariantReference
+        "(" Expression ")"
+```
+
+Ejemplo:
+```text
+SearchResult::Found(worker)
+```
+
+Reglas normativas:
+1. **Cardinalidad exacta**: debe proporcionarse exactamente una expresión (`SearchResult::Found()` y `SearchResult::Found(w1, w2)` son inválidos).
+2. **ExpectedType del valor asociado**: el `TypeReference` declarado en la variante proporciona el `ExpectedType` a la expresión argumento. Por ejemplo, si se declara `Success(int64)`, en `ParseResult::Success(10)` el literal `10` recibe `ExpectedType(int64)` y produce directamente un `Value(int64, 10)`.
+3. **Compatibilidad exacta**: para expresiones no literales, el valor producido debe ser directamente compatible con el tipo declarado de la variante:
+   ```text
+   Compatible(TypeOf(Expression), PayloadType) == true
+   ```
+   No se aplican conversiones implícitas.
+
+
+### 8.8 Construcción de variante estructurada
+
+La instanciación de una `StructuredVariant` se realiza especificando los inicializadores de sus campos entre llaves:
+
+```text
+StructuredVariantExpression
+    ::= EnumVariantReference
+        "{"
+        EnumFieldInitializerList
+        "}"
+
+EnumFieldInitializerList
+    ::= EnumFieldInitializer
+        ("," EnumFieldInitializer)*
+
+EnumFieldInitializer
+    ::= FieldName ":" Expression
+```
+
+Ejemplo:
+```text
+SearchResult::Failed {
+    code: 500,
+    message: "Internal Error"
+}
+```
+
+Reglas normativas:
+1. **Coma obligatoria**: los inicializadores de campo (`EnumFieldInitializer`) deben separarse obligatoriamente por una coma (`,`).
+2. **Ausencia de trailing comma**: no se permite una coma tras el último inicializador.
+3. **Obligatoriedad de todos los campos**: cada campo declarado en la variante estructurada debe recibir un inicializador. Omitir un campo es semánticamente inválido.
+4. **Prohibición de campos desconocidos o duplicados**: no se permiten inicializadores para campos no declarados en la variante ni inicializadores duplicados para el mismo campo.
+5. **Identidad nominal de campos**: la asociación de inicializadores a campos se realiza por nombre (`FieldName -> Value`) y no por posición.
+
+
+### 8.9 ExpectedType y evaluación de cargas
+
+Cada campo o carga declarado en una variante de enum proporciona un tipo esperado (`ExpectedType`) a la expresión inicializadora correspondiente:
+
+1. **Cargas de AssociatedValueVariant**:
+   ```text
+   enum Result
+   {
+       Success(int64)
+   }
+
+   Result::Success(10); // 10 recibe ExpectedType(int64)
+   ```
+2. **Campos de StructuredVariant**:
+   ```text
+   enum Event
+   {
+       Movement {
+           int64 x;
+           int64 y;
+       }
+   }
+
+   Event::Movement {
+       x: 10,  // 10 recibe ExpectedType(int64)
+       y: 20   // 20 recibe ExpectedType(int64)
+   };
+   ```
+3. **Compatibilidad estricta**: las expresiones no literales deben producir valores directamente compatibles con el tipo esperado de la carga. No existen conversiones implícitas.
+4. **Orden de evaluación**: en `StructuredVariantExpression`, las expresiones de los inicializadores se evalúan estrictamente de izquierda a derecha en el orden textual en que aparecen en el código fuente:
+   ```text
+   field identity != expression evaluation order
+   ```
+
+
+### 8.10 Modelo e inmutabilidad de EnumValue
+
+Un `EnumValue` representa una instancia de datos estructurada conceptualmente como:
+
+```text
+EnumValue
+    ├── EnumType
+    ├── ActiveVariant
+    └── VariantPayload
+```
+
+El contenido de `VariantPayload` depende de la forma de la variante activa:
+- En una `SimpleVariant`, no existe payload (no se utiliza `null`, `none` ni ningún valor especial para denotar ausencia de carga).
+- En una `AssociatedValueVariant`, el payload está constituido por exactamente un `Value`.
+- En una `StructuredVariant`, el payload está constituido por la conjunción inmutable de los `Values` de sus campos.
+
+Reglas normativas:
+1. **Inmutabilidad inherente**: todo `EnumValue` es inmutable. No es posible reasignar campos ni modificar la variante activa de un valor existente. Para representar un estado o alternativa diferente se construye un nuevo `EnumValue`.
+2. **Ausencia de discriminantes numéricos**: las variantes no poseen ordinales enteros visibles ni representaciones numéricas públicas en el lenguaje. No existe sintaxis del tipo `Variant = 0`. La identidad de cada variante es puramente nominal.
+
+
+### 8.11 Acceso y selección de alternativas
+
+Existe una distinción formal entre valores de tipo struct y valores de tipo enum:
+
+```text
+EnumValue != StructValue
+```
+
+Por consiguiente, el operador de acceso a campos (`.`) definido en el Capítulo 7 **no** aplica directamente sobre un `EnumValue`. Expresiones como `result.message` son semánticamente inválidas sobre un enum, dado que `message` solo existe cuando la variante activa es aquella que declara dicho campo.
+
+#### 8.11.1 Selección de alternativas mediante `when`
+Para inspeccionar la variante activa de un `EnumValue` y acceder a su carga de datos, el programa debe utilizar la expresión de selección exhaustiva `when` (definida formalmente en el Capítulo 12).
+
+#### 8.11.2 Distinción formal entre `::` y `.`
+Evo-Script v0 diferencia estrictamente los roles sintácticos de `::` y `.`:
+- `::` se utiliza exclusivamente para calificar variantes dentro de un tipo enum (`SearchResult::Found`).
+- `.` se utiliza exclusivamente para proyectar campos a partir de un valor de tipo struct (`worker.name`).
+
+No se permite el uso de `.` para calificar variantes ni el uso de `::` para proyectar campos.
+
+
+### 8.12 EnumType en el Type Dependency Graph
+
+Las dependencias de contención estructural introducidas por las declaraciones `enum` se integran en el `Type Dependency Graph` único del archivo `.efn` (definido en la sección 7.10).
+
+#### 8.12.1 Generación de aristas
+1. **SimpleVariant**: no contiene otros valores y no genera aristas en el grafo.
+2. **AssociatedValueVariant**: si un `EnumType` $A$ declara una variante `Variant(B)`, donde $B$ es un `ProgramDefinedType` (`StructType` o `EnumType`), se genera la arista dirigida:
+   ```text
+   A -> B
+   ```
+   Si el tipo asociado es un `NativeType` (por ejemplo, `string` o `int32`), no se genera ninguna arista.
+3. **StructuredVariant**: si una variante estructurada de un `EnumType` $A$ declara un campo de tipo $B$, donde $B$ es un `ProgramDefinedType`, se genera la arista dirigida:
+   ```text
+   A -> B
+   ```
+
+#### 8.12.2 Condición de aciclicidad (DAG)
+El `Type Dependency Graph` conjunto (que integra todos los `StructTypes` y `EnumTypes` del archivo) debe ser estrictamente un grafo dirigido acíclico (**DAG**).
+
+Reglas normativas:
+1. **Prohibición de recursión directa**: ningún enum puede contenerse a sí mismo directamente ($Node \to Node$). La siguiente declaración es semánticamente inválida:
+   ```text
+   // Inválido: ciclo directo
+   enum Node
+   {
+       End,
+       Next(Node)
+   }
+   ```
+2. **Prohibición de recursión indirecta**: no se admiten ciclos dirigidos entre enums ($A \to B \to A$).
+3. **Prohibición de ciclos mixtos struct-enum**: no se admiten ciclos formados por dependencias combinadas entre structs y enums ($Worker \to WorkerResult \to Worker$). El siguiente ejemplo es semánticamente inválido:
+   ```text
+   // Inválido: ciclo mixto
+   struct Worker
+   {
+       WorkerResult result;
+   }
+
+   enum WorkerResult
+   {
+       Empty,
+       Found(Worker)
+   }
+   ```
+4. **Referencias adelantadas válidas**: las referencias adelantadas entre enums y structs son plenamente válidas siempre que el grafo global resultante no contenga ciclos.
