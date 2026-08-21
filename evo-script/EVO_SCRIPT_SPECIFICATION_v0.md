@@ -6806,23 +6806,30 @@ Reglas normativas:
 
 ### 17.13 Reglas de desambiguación sintáctica
 
-Para construcciones que inician con un `Identifier`, el parser aplica las siguientes reglas deterministas:
+Cuando dos o más alternativas gramaticales EBNF presentan prefijos sintácticos solapados, el parser aplica determinísticamente las siguientes reglas normativas de prioridad y desambiguación:
 
-1. **`Identifier` seguido de `(`**:
+1. **Prioridad normativa de desambiguación**: las reglas de esta sección determinan de forma unívoca la única estructura del AST resultante frente a alternativas EBNF que admitan un prefijo común.
+2. **`Identifier` seguido de `(`**:
    - Si coincide con un `ConversionIntrinsicName`, se parsea como `ConversionExpression`.
    - Si coincide con un `ParsingIntrinsicName`, se parsea como `ParsingExpression`.
    - En cualquier otro caso, se parsea como `FunctionCallExpression`.
-2. **`Identifier` seguido de `{`**:
-   - Se parsea como `StructConstructionExpression`.
-3. **`Identifier` seguido de `::` y `VariantName`**:
+3. **`Identifier` seguido de `{` frente a `WhenExpression`**:
+   - La regla de construcción de estructuras no es un lookahead global e incondicional que absorba la llave de una `WhenExpression` contenedora.
+   - En `WhenExpression ::= "when" Expression "{" WhenArmList "}"`, el parser analiza el scrutinee `Expression` respetando estrictamente las producciones y delimitadores de las expresiones que lo componen.
+   - La llave `{` que abre `WhenArmList` pertenece a la producción contenedora `WhenExpression`.
+   - Si el scrutinee es un identificador simple (por ejemplo, `when result { ... }`), el token `{` siguiente abre el `WhenArmList` (cuyo primer elemento es un `EnumPattern` que inicia con `Identifier "::"`), parseando `result` exclusivamente como `BindingReferenceExpression(result)` y **no** como `StructConstructionExpression`.
+   - Una llave `{` tras un `Identifier` se consume como `StructConstructionExpression` únicamente cuando la secuencia interna continúa sintácticamente como dicha construcción (por ejemplo, `FieldName ":"` en structs con campos como `when Worker { id: 10 } { ... }` o `}` en structs vacíos como `when Marker {} { ... }`).
+   - Esta distinción es puramente sintáctica y no requiere consultar el espacio de tipos ni validar semánticamente si el identificador es un `StructType`.
+4. **`Identifier` seguido de `::` y `VariantName`**:
    - Si le sigue `(`, se parsea como `AssociatedValueVariantExpression`.
    - Si le sigue `{`, se parsea como `StructuredVariantExpression`.
    - Si le sigue cualquier otro delimitador válido, se parsea como `SimpleVariantExpression`.
-4. **`Identifier` solitario**:
-   - Inmediatamente tras `|>` en un pipeline, se parsea como `UnaryPipelineTarget`.
-   - En cualquier otra posición primaria, se parsea como `BindingReferenceExpression`.
-5. **Delimitación del escrutinio en `when`**:
-   - La expresión escrutada (`scrutinee`) en `when Expression { ... }` se parsea conforme a la gramática completa de `Expression`, respetando llaves anidadas (por ejemplo, en llamadas con inicializadores `Worker { ... }`). La llave de apertura de `WhenArmList` se reconoce únicamente al finalizar el análisis sintáctico de `Expression`.
+5. **`Identifier` solitario tras `|>`**:
+   - Inmediatamente tras `|>` en un `PipelineStageBody`, un identificador solitario se parsea exclusivamente como `UnaryPipelineTarget`, prevaleciendo sobre la derivación alternativa `PipelineStageExpression -> LogicalOrExpression -> ... -> BindingReferenceExpression`.
+   - En cualquier otra posición primaria, un identificador solitario se parsea como `BindingReferenceExpression`.
+6. **Palabras clave estructurales**:
+   - `this` produce siempre `ThisExpression`.
+   - `when` inicia siempre `WhenExpression`.
 
 
 ### 17.14 Gramática completa consolidada
@@ -7251,7 +7258,70 @@ La siguiente tabla resume casos donde una construcción es aceptada por el parse
 - **Expresión**: `outer |> combine(this, inner |> transform)`
 - **Árbol sintáctico producido**: llamada a función con `Argument[0] = ThisExpression` y `Argument[1] = PipelineExpression(inner |> transform)`.
 
-#### 17.16.8 Expresión when como etapa de pipeline
+#### 17.16.8 Expresión when con binding como scrutinee
+- **Expresión**:
+  ```text
+  when result {
+      Result::Ok => 1,
+      Result::Failed => 0
+  }
+  ```
+- **Árbol sintáctico producido**:
+  ```text
+  WhenExpression
+      scrutinee: BindingReferenceExpression(result)
+      arms:
+          Result::Ok => 1,
+          Result::Failed => 0
+  ```
+  La secuencia `result {` **no** se interpreta como `StructConstructionExpression`; la llave `{` abre el `WhenArmList`.
+
+#### 17.16.9 Expresión when con StructConstructionExpression como scrutinee
+- **Expresión**:
+  ```text
+  when Worker {
+      id: 10
+  } {
+      Result::Ok => 1,
+      Result::Failed => 0
+  }
+  ```
+- **Árbol sintáctico producido**:
+  ```text
+  WhenExpression
+      scrutinee: StructConstructionExpression(Worker { id: 10 })
+      arms:
+          Result::Ok => 1,
+          Result::Failed => 0
+  ```
+  La primera llave `{` pertenece a `StructConstructionExpression` y la segunda llave `{` abre `WhenArmList`.
+
+#### 17.16.10 Expresión when con struct vacío como scrutinee
+- **Expresión**:
+  ```text
+  when Marker {} {
+      Result::Ok => 1,
+      Result::Failed => 0
+  }
+  ```
+- **Árbol sintáctico producido**: `WhenExpression` con `scrutinee = StructConstructionExpression(Marker {})` y la segunda llave `{` abriendo `WhenArmList`.
+
+#### 17.16.11 Expresión when con expresiones anidadas en el scrutinee
+- **Expresión**:
+  ```text
+  when create_result(
+      Worker {
+          id: 10,
+          name: "Ana"
+      }
+  ) {
+      Result::Found(Worker worker) => worker.name,
+      Result::NotFound => "none"
+  }
+  ```
+- **Árbol sintáctico producido**: todas las llaves internas pertenecen a sus construcciones anidadas y la llave tras el cierre de la llamada abre `WhenArmList`.
+
+#### 17.16.12 Expresión when como etapa de pipeline
 - **Expresión**:
   ```text
   result
@@ -7262,7 +7332,7 @@ La siguiente tabla resume casos donde una construcción es aceptada por el parse
   ```
 - **Árbol sintáctico producido**: `PipelineExpression` cuya etapa es un `WhenExpression` completo.
 
-#### 17.16.9 Expresión when seguida de pipeline
+#### 17.16.13 Expresión when seguida de pipeline
 - **Expresión**:
   ```text
   when result {
@@ -7273,12 +7343,12 @@ La siguiente tabla resume casos donde una construcción es aceptada por el parse
   ```
 - **Árbol sintáctico producido**: `(when result { ... }) |> normalize` debido a la menor precedencia de `|>`.
 
-#### 17.16.10 Desambiguación de llamadas a funciones e intrinsics
+#### 17.16.14 Desambiguación de llamadas a funciones e intrinsics
 - `to_int64(value)` $\to$ `ConversionExpression`
 - `parse_int64(text)` $\to$ `ParsingExpression`
 - `calculate(value)` $\to$ `FunctionCallExpression`
 
-#### 17.16.11 Formas sintácticas de variantes de enumeraciones
+#### 17.16.15 Formas sintácticas de variantes de enumeraciones
 - `Result::Ok` $\to$ `SimpleVariantExpression`
 - `Result::Ok(value)` $\to$ `AssociatedValueVariantExpression`
 - `Result::Ok { value: value }` $\to$ `StructuredVariantExpression`
@@ -7288,4 +7358,4 @@ La siguiente tabla resume casos donde una construcción es aceptada por el parse
 
 La gramática formal consolidada en este Capítulo 17 se considera cerrada y normativa bajo el siguiente criterio:
 
-> A partir de un flujo de tokens conforme a las reglas léxicas de los Capítulos 3 y 4, cualquier implementador independiente puede construir de forma determinista y unívoca el árbol de sintaxis abstracta (`AST`) de cualquier programa válido de Evo-Script v0 sin requerir decisiones adicionales de diseño sobre delimitación de expresiones, precedencias, asociatividades o estructura de bloques.
+> A partir de un flujo de tokens conforme a las reglas léxicas de los Capítulos 3 y 4, cualquier implementador independiente puede construir de forma determinista y unívoca el árbol de sintaxis abstracta (`AST`) de cualquier programa válido de Evo-Script v0 sin requerir decisiones adicionales de diseño sobre delimitación de expresiones, resolución de solapamientos EBNF (gobernados por la Sección 17.13), delimitación de llaves en `when` frente a construcciones de estructuras, precedencias, asociatividades o estructura de bloques.
