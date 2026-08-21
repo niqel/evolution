@@ -2851,11 +2851,22 @@ Reglas normativas:
 1. **Obligatoriedad de `import`**: Toda Signature utilizada como parámetro de dependencia debe estar explícitamente importada al inicio del archivo `.efn` mediante `import modulo::firma;`. Declarar `values::search search` no sustituye a la cláusula `import`.
 2. **Prohibición de `esig` en parámetros**: La palabra clave `esig` está reservada exclusivamente para la declaración de contratos dentro de archivos `.esig`. La sintaxis `esig values::search search` es inválida. La forma canónica es directamente `values::search search`.
 3. **No es un tipo de datos ordinario (`Value`)**: Una Signature no forma parte del sistema de valores normales del lenguaje. No puede utilizarse como tipo de un binding (`let values::search x = ...` es inválido), como tipo de retorno de una función (`-> values::search` es inválido), como campo de una estructura (`struct Service { values::search s; }` es inválido) ni como dato asociado de un enum (`enum E { V(values::search) }` es inválido).
-4. **Ausencia de funciones de primer orden**: Un parámetro de dependencia no es un valor de primer orden (`first-class function`). No puede asignarse (`let x = search;`), retornarse (`return search;`) ni pasarse como dato genérico. No introduce lambdas, clausuras ni punteros a función como datos.
+4. **Ausencia de funciones de primer orden y reenvío estricto de dependencias**: Un parámetro de dependencia no es un valor de primer orden (`first-class function`). No puede asignarse a variables (`let x = search;` es inválido), retornarse desde funciones (`return search;` es inválido) ni almacenarse en campos de estructuras o variantes de enums. Sin embargo, un `Signature Dependency Parameter` **SÍ puede ser reenviado / transportado (`forwarded`)** como argumento hacia otra invocación funcional o de firma que declare formalmente en su lista de parámetros exactamente la misma Signature (`values::search`). Este transporte de dependencias de capacidad no convierte a las firmas en valores de datos ordinarios.
 5. **Invocación de la capacidad**: Dentro del cuerpo de la función, la capacidad requerida se invoca mediante su nombre local (`search(id)`). La llamada obedece estrictamente las reglas de validación de la Signature declarada: aridad exacta, correspondencia exacta de tipos de argumentos, evaluación de argumentos de izquierda a derecha y ausencia de conversiones implícitas.
 6. **Autonomía del nombre local**: El identificador local (`search`) es exclusivo del ámbito interno de esa función. La identidad formal y contractual de la dependencia continúa siendo `values::search`. Declarar `values::search employee_search` es válido y se invoca internamente como `employee_search(id)`.
 7. **Distinción con alias de importación**: Un alias de importación (`import values::search as imported_search;`) opera a nivel de archivo para llamadas directas, mientras que el nombre local de un Signature Dependency Parameter (`values::search search`) opera exclusivamente en el ámbito léxico de esa Function Implementation.
 8. **Asistencia de tooling (Nota no normativa)**: La presencia previa de `import values::search;` permite que editores y servidores de lenguaje (LSP) conozcan la firma y asistan al desarrollador con autocompletado y validación de tipos al declarar parámetros de dependencia e invocar sus capacidades.
+9. **Reenvío estricto de dependencias (`Signature Dependency Forwarding`)**: Una función que recibe un `Signature Dependency Parameter` puede pasarlo como argumento posicional a otra función o firma que espere exactamente la misma dependencia de firma (`modulo::firma`).
+   ```text
+   import values::SearchResult;
+   import values::search;
+   import workers::lookup;
+
+   public fn process(int id, values::search search) -> SearchResult {
+       return lookup(id, search);
+   }
+   ```
+   donde `lookup` declara `values::search search` en sus parámetros. El transporte de la capacidad es estático y no involucra closures ni punteros a función como datos.
 
 
 ### 11.4 Tipo de resultado
@@ -3723,15 +3734,24 @@ Un archivo `.esig` (Evo Signature) declara formal y exclusivamente el contrato p
 esig nombre(tipo argumento1, tipo argumento2) -> Tipo;
 ```
 
+O cuando la firma requiere dependencias de capacidad funcional:
+
+```text
+esig nombre(tipo argumento, modulo::firma dependencia) -> Tipo;
+```
+
 Reglas normativas:
 
-1. **Sintaxis oficial de firma**: La declaración consiste exclusivamente en la palabra clave `esig`, el identificador de la firma, la lista de argumentos tipados posicionales, la cláusula `-> Tipo` y el punto y coma final (`;`). Puede estar precedida por cero o más cláusulas `import modulo::Tipo;` al inicio del archivo para importar los tipos compartidos requeridos por sus parámetros o resultado.
+1. **Sintaxis oficial de firma**: La declaración consiste exclusivamente en la palabra clave `esig`, el identificador de la firma, la lista de parámetros tipados posicionales, la cláusula `-> Tipo` y el punto y coma final (`;`). Puede estar precedida por cero o más cláusulas `import modulo::Tipo;` o `import modulo::firma;` al inicio del archivo para importar los tipos compartidos o firmas requeridos por sus parámetros o resultado.
 2. **Diferenciación estricta entre `esig` y `fn`**: La palabra clave `esig` declara exclusivamente contratos de firma sin cuerpo. La palabra clave `fn` (`public fn` / `private fn`) declara exclusivamente implementaciones de función dentro de `.efn`.
 3. **Ausencia de cuerpo y sentencias**: Un archivo `.esig` no posee cuerpo `{ ... }`, correspondencia, bindings locales ni sentencias `return`.
 4. **Pública por naturaleza**: Toda firma en un `.esig` es intrínsecamente pública. No admite modificadores de visibilidad (`public esig` y `private esig` son inválidos).
 5. **Contrato de acción, no interfaz de objeto**: `.esig` modela directamente la acción requerida, no una interfaz de clase u objeto. Evo-Script no define `interface`, `trait`, `class` ni despacho dinámico `dyn`.
 6. **No crea funciones como valores**: `.esig` define un contrato invocable, no un valor de primer orden de tipo función (`Function Value`). No introduce lambdas, clausuras, function pointers como valores ni tipos función manipulables como datos.
-7. **Tipos permitidos**: Una `.esig` solo puede utilizar tipos nativos o tipos compartidos (`.estc`, `.enum`) explícitamente importados mediante `import modulo::Tipo;`. No puede utilizar tipos locales de un `.efn`.
+7. **Parámetros permitidos en `.esig`**: Una `.esig` puede declarar dos clases de parámetros en su lista posicional:
+   - **Parámetros de datos (`Value Parameters`)**: Declarados como `tipo nombre` utilizando tipos nativos (`int`, `float`, `string`, etc.) o tipos compartidos (`.estc`, `.enum`) explícitamente importados mediante `import modulo::Tipo;`.
+   - **Parámetros de dependencia de firma (`Signature Dependency Parameters`)**: Declarados como `modulo::firma nombre_local`, donde `modulo::firma` es una Signature pública importada mediante `import modulo::firma;`. No se utiliza la palabra `esig` dentro de la lista de parámetros (`esig modulo::firma dep` es inválido).
+   - No puede utilizar tipos locales de un `.efn`.
 8. **Desacoplamiento total**: Una `.esig` no contiene ninguna referencia a archivos `.efn` ni a implementaciones concretas.
 
 
@@ -3791,9 +3811,9 @@ Evo-Script prohíbe el acoplamiento directo entre implementaciones y organiza la
 9. **Invarianza de la identidad de la Signature frente a alias**: Si un archivo declara `import values::search as imported_search;`, el alias `imported_search` define únicamente el nombre local disponible para llamadas dentro de ese archivo. La identidad formal de la firma continúa siendo `values::search`. Por consiguiente, la satisfacción contractual tras `:` debe referenciar siempre la identidad real (`: values::search`) y nunca el alias (`: imported_search` es inválido).
 10. **Comprobación exacta de coincidencia contractual**: La `public fn` que declara satisfacer `: modulo::firma` debe coincidir exactamente con la declaración en `.esig` en:
    - Nombre de la función.
-   - Cantidad de argumentos (aridad).
-   - Orden posicional de los argumentos.
-   - Tipos exactos de los argumentos.
+   - Cantidad de parámetros (aridad de Value Parameters y Signature Dependency Parameters).
+   - Orden posicional de los parámetros.
+   - Tipos exactos de los parámetros (tanto de datos como de dependencias de firma).
    - Tipo exacto de resultado.
    No se permiten conversiones implícitas, promociones ni widening para satisfacer una firma.
 11. **Error de discordancia contractual (`SignatureMismatchError`)**: Si una función declara satisfacer `: modulo::firma` pero su firma implementada difiere en nombre, aridad, tipos o retorno respecto de la `.esig` publicada, el programa es inválido y produce un error de validación `SignatureMismatchError` (categoría `SystemError`).
@@ -3823,7 +3843,7 @@ Evo-Script prohíbe el acoplamiento directo entre implementaciones y organiza la
 16. **Ausencia de llamadas calificadas en v0.1**: En Evo-Script v0.1, las llamadas a capacidades importadas o inyectadas se invocan exclusivamente mediante su nombre local no calificado (`search(id)`) o alias asignado (`alias(id)`). No se introduce sintaxis de llamada calificada tipo `values::search(id)` en expresiones evaluables.
 17. **Asistencia para herramientas y editores (Nota no normativa)**: La presencia explícita de `import values::search;` al inicio del archivo permite que herramientas de desarrollo, servidores de lenguaje (LSP) y entornos integrados (IDEs) conozcan de antemano el conjunto de firmas disponibles para el archivo, facilitando el autocompletado y la sugerencia de firmas válidas al declarar parámetros de dependencia o escribir `:`.
 18. **Composición de dependencias mediante `.root`**: El enlace formal entre una Signature pública requerida (`values::search`) y la Function Implementation concreta que la satisface (`: values::search`) se declara formalmente en el archivo `.root` del proyecto mediante sentencias `bind values::search to "ruta/archivo.efn";` (ver Sección 12.8).
-19. **Delimitación de capacidades no definidas**: En v0.1 no se define reenvío de dependencias (`dependency forwarding`, ej. `another(search)`), almacenamiento de dependencias en structs/enums, ni retorno de dependencias desde funciones.
+19. **Reenvío estricto de dependencias de firma (`Signature Dependency Forwarding`)**: Una Function Implementation o Signature que declara un `Signature Dependency Parameter` puede transportarlo/reenviarlo como argumento a otra función o firma que declare exactamente la misma dependencia de firma (`modulo::firma`). Este transporte composicional de capacidades no convierte a las Signatures en datos de primer orden. Permanece estrictamente prohibido almacenar dependencias en structs/enums, asignarlas a variables locales con `let` o retornarlas desde funciones.
 
 
 ### 12.7 Módulos (.emod) y selección granular de dependencias
@@ -5586,20 +5606,21 @@ Use Case (Contrato de aplicación)
   Agent (Orquestador)
     ↓
 Resolver (Adaptación y resolución)
-   / \
-  /   \
- ▼     ▼
-Contract  Requester (Puertos de salida)
- │           │
- ▼           ▼
-Provider  Responder (Implementaciones concretas)
+    ↓
+ Contract (Frontera hacia infraestructura)
+    │
+    ├── Provider (Materializa la operación)
+    │       ↓
+    └── Requester (Puerto de salida)
+            ↓
+        Responder (Implementaciones concretas)
 ```
 
 1. **Responsabilidades arquitectónicas**:
    - **Use Case**: Define formalmente la operación de aplicación (`input port`).
-   - **Agent**: Orquesta la ejecución de la operación sin acoplarse a detalles de infraestructura.
-   - **Resolver**: Conecta la intención semántica de la operación con los contratos técnicos y de salida requeridos.
-   - **Contract**: Frontera formal de salida hacia la infraestructura técnica (`infrastructure port`).
+   - **Agent**: Orquesta la ejecución de la operación y transporta las dependencias funcionales hacia el Resolver.
+   - **Resolver**: Conecta la intención semántica de la operación con los contratos técnicos requeridos, invocando el Contract y reenviando el Requester.
+   - **Contract**: Frontera formal de salida hacia la infraestructura técnica (`infrastructure port`). Recibe el Requester, materializa la operación y ejecuta la notificación de salida.
    - **Provider**: Implementación técnica concreta del Contract (filesystem, database, network, etc.).
    - **Requester**: Frontera formal de salida hacia consumidores de la aplicación (`output port`).
    - **Responder**: Implementación concreta del Requester (UI, notificaciones, logs, persistencia de eventos, etc.).
@@ -5611,8 +5632,9 @@ Provider  Responder (Implementaciones concretas)
 3. **Diferencia fundamental entre Rust y Evo-Script**:
    - En Rust, los punteros de función son valores ordinarios que pueden pasarse como argumentos de función.
    - En Evo-Script v0.1, las firmas (`Signatures`) **NO son valores (`Values`)**, no son funciones de primer orden y no pueden transportarse como datos genéricos.
-   - Evo-Script preserva el **mismo grafo de dependencias arquitectónicas**, pero elimina el transporte manual de punteros de función mediante la combinación declarativa de firmas (`.esig`), importaciones explícitas (`import`) y vinculación en el Functional Composition Root (`application.root`).
-   - `.esig` describe el contrato funcional, no una categoría arquitectónica rígida. La naturaleza de Use Case, Requester, Resolver o Contract surge de su rol y ubicación arquitectónica en el sistema.
+   - Evo-Script representa estas capacidades explícitamente mediante **`Signature Dependency Parameters`** (`requesters::copy_completed request`, `contracts::copy copy`), permitiendo el reenvío estricto de dependencias (`dependency forwarding`) entre capas funcionales.
+   - El archivo `application.root` resuelve estáticamente qué implementación física satisface cada Signature en todo el proyecto.
+   - El grafo arquitectónico completo se preserva fielmente sin introducir closures, lambdas ni transporte manual de punteros a función como datos.
 
 
 ### 14.2 Árbol físico del proyecto canónico (`copy-app`)
@@ -5666,7 +5688,7 @@ copy-app/
    - El árbol del proyecto contiene exactamente **19 archivos físicos** (incluyendo el manifiesto `application.elib`).
    - El manifiesto `application.elib` declara unívocamente exactamente **18 sentencias `artifact`** registradas.
 2. **Entrada de aplicación (`main.efn`)**:
-   La regla normativa de `application.main` estipula que la función de entrada no debe recibir Value Parameters (`zero Value Parameters`). Dado que el caso de uso `copy_file` recibe las rutas de origen y destino (`string source_path, string destination_path`), la aplicación incorpora `main.efn` como función de entrada libre de parámetros de valor que orquesta e invoca la firma `use_cases::copy_file`.
+   La regla normativa de `application.main` estipula que la función de entrada no debe recibir Value Parameters (`zero Value Parameters`), pero puede recibir **cero o más Signature Dependency Parameters**. `main.efn` recibe las dependencias `requesters::copy_completed` y `contracts::copy` (resueltas por `.root`) y las transporta hacia el caso de uso `use_cases::copy_file` junto con las rutas literales de datos.
 3. **Complejidad estructural bajo demanda**:
    Las firmas `.esig` intermedias (como `resolvers::resolve_copy`) aparecen exclusivamente cuando existe distribución entre archivos separados (`.efn` distintos). Si dos componentes residieran en el mismo archivo, no se requeriría una firma ceremonial.
 4. **Nombres de directorios como arquitectura de usuario**:
@@ -5772,8 +5794,15 @@ Cada archivo `.emod` declara la identidad lógica formal de su módulo y su cat�
 - **`definitions/use_cases/copy-file.esig`** (Firma del caso de uso / Input Port):
   ```text
   import domain::CopyResult;
+  import requesters::copy_completed;
+  import contracts::copy;
 
-  esig copy_file(string source_path, string destination_path) -> CopyResult;
+  esig copy_file(
+      string source_path,
+      string destination_path,
+      requesters::copy_completed request,
+      contracts::copy copy
+  ) -> CopyResult;
   ```
 
 - **`definitions/requesters/copy-completed.esig`** (Firma del Requester / Output Port):
@@ -5787,51 +5816,84 @@ Cada archivo `.emod` declara la identidad lógica formal de su módulo y su cat�
 - **`definitions/resolvers/resolve-copy.esig`** (Firma de resolución intermedia):
   ```text
   import domain::CopyResult;
+  import requesters::copy_completed;
+  import contracts::copy;
 
-  esig resolve_copy(string source_path, string destination_path) -> CopyResult;
+  esig resolve_copy(
+      string source_path,
+      string destination_path,
+      requesters::copy_completed request,
+      contracts::copy copy
+  ) -> CopyResult;
   ```
 
 - **`definitions/contracts/copy.esig`** (Firma del contrato técnico de infraestructura):
   ```text
   import domain::CopyResult;
+  import requesters::copy_completed;
 
-  esig copy(string source_path, string destination_path) -> CopyResult;
+  esig copy(
+      string source_path,
+      string destination_path,
+      requesters::copy_completed request
+  ) -> CopyResult;
   ```
 
 
 ### 14.7 Orquestador / Agente (`agents/copier.efn`)
 
-El agente `copier.efn` orquesta el caso de uso conectando la firma de entrada (`use_cases::copy_file`) con la firma de resolución (`resolvers::resolve_copy`). No conoce implementaciones de providers ni responders:
+El agente `copier.efn` orquesta el caso de uso satisfaciendo `use_cases::copy_file` y transportando las dependencias funcionales requeridas hacia el Resolver:
 
 ```text
 import domain::CopyResult;
 import use_cases::copy_file;
+import requesters::copy_completed;
+import contracts::copy;
 import resolvers::resolve_copy;
 
-public fn copy_file(string source_path, string destination_path) -> CopyResult
+public fn copy_file(
+    string source_path,
+    string destination_path,
+    requesters::copy_completed request,
+    contracts::copy copy
+) -> CopyResult
     : use_cases::copy_file
 {
-    return resolve_copy(source_path, destination_path);
+    let CopyResult result = resolve_copy(
+        source_path,
+        destination_path,
+        request,
+        copy
+    );
+
+    return result;
 }
 ```
 
 
 ### 14.8 Implementación del Resolver (`resolvers/copy-resolver.efn`)
 
-El resolver `copy-resolver.efn` implementa la frontera de coordinación entre la operación, el contrato de infraestructura (`contracts::copy`) y el puerto de salida (`requesters::copy_completed`). Utiliza un alias de importación (`as copy_provider`) para clarificar su rol:
+El resolver `copy-resolver.efn` implementa la frontera de adaptación invocando el contrato de infraestructura `contracts::copy` y reenviándole el Requester:
 
 ```text
 import domain::CopyResult;
 import resolvers::resolve_copy;
-import contracts::copy as copy_provider;
 import requesters::copy_completed;
+import contracts::copy;
 
-public fn resolve_copy(string source_path, string destination_path) -> CopyResult
+public fn resolve_copy(
+    string source_path,
+    string destination_path,
+    requesters::copy_completed request,
+    contracts::copy copy
+) -> CopyResult
     : resolvers::resolve_copy
 {
-    let CopyResult result = copy_provider(source_path, destination_path);
-
-    copy_completed(result);
+    let CopyResult result = copy(
+        source_path,
+        destination_path,
+        request
+    );
 
     return result;
 }
@@ -5840,29 +5902,37 @@ public fn resolve_copy(string source_path, string destination_path) -> CopyResul
 
 ### 14.9 Proveedor de infraestructura (`providers/std-copy.efn`)
 
-El proveedor satisface el contrato técnico `contracts::copy`. Representa la implementación concreta de infraestructura:
+El proveedor satisface el contrato técnico `contracts::copy`. Materializa la copia, construye `CopyResult::Success`, ejecuta el Requester y finaliza retornando el resultado:
 
 ```text
 import domain::FileView;
 import domain::CopyResult;
 import contracts::copy;
+import requesters::copy_completed;
 
-public fn copy(string source_path, string destination_path) -> CopyResult
+public fn copy(
+    string source_path,
+    string destination_path,
+    requesters::copy_completed request
+) -> CopyResult
     : contracts::copy
 {
     let FileView copied_file = FileView {
         path: destination_path,
         content: "canonical copied content"
     };
+    let CopyResult result = CopyResult::Success(copied_file);
 
-    return CopyResult::Success(copied_file);
+    request(result);
+
+    return result;
 }
 ```
 
 
 ### 14.10 Responder de aplicación (`responders/copy-completed.efn`)
 
-El responder satisface la firma de salida `requesters::copy_completed`, implementando la reacción al evento de finalización:
+El responder satisface la firma de salida `requesters::copy_completed`, implementando la reacción concreta al evento de finalización:
 
 ```text
 import domain::CopyResult;
@@ -5899,11 +5969,21 @@ bind requesters::copy_completed to "responders/copy-completed.efn";
   ```text
   import domain::CopyResult;
   import use_cases::copy_file;
+  import requesters::copy_completed;
+  import contracts::copy;
 
-  public fn main() -> CopyResult {
+  public fn main(
+      requesters::copy_completed request,
+      contracts::copy copy
+  ) -> CopyResult {
       let string source = "/documents/source.txt";
       let string destination = "/documents/copy.txt";
-      let CopyResult result = copy_file(source, destination);
+      let CopyResult result = copy_file(
+          source,
+          destination,
+          request,
+          copy
+      );
 
       return result;
   }
@@ -5930,46 +6010,46 @@ La secuencia determinista de análisis y resolución estática ejecutada por el 
    - `file-view.estc` y `copy-result.enum` se asocian al módulo `domain`, registrando `FileView` y `CopyResult` como símbolos públicos.
 5. **Validación del Grafo de Tipos y Cierres**: Se verifica que `domain::CopyResult` y `domain::FileView` sean acíclicos y cumplan `Public Type Closure`.
 6. **Resolución de Bindings de `.root`**: Se validan los 4 bindings de `application.root`. Cada target `.efn` existe en el universo registrado, tiene exactamente una función pública y satisface (`:`) la firma vinculada.
-7. **Validación de la Entrada (`.main`)**: Se comprueba que `main.efn` pertenezca al `Physical Artifact Universe` y su función pública no requiera Value Parameters.
+7. **Validación de la Entrada (`.main`)**: Se comprueba que `main.efn` pertenezca al `Physical Artifact Universe` y su función pública declare cero Value Parameters y dependencias de firma válidas satisfechas por `.root`.
 8. **Inicio del Application Main Loop**: Al completarse la validación estática sin errores, el host ejecuta la entrada e inicia el ciclo de vida de la aplicación.
 
 
 ### 14.14 Recorrido de llamadas semánticas (Semantic Call Walkthrough)
 
-El flujo de invocaciones durante la evaluación de `copy-app` opera deterministamente según los bindings pre-resueltos en `.root`:
+Evo-Script distingue formalmente entre la resolución composicional estática previa a la evaluación y el flujo de llamadas durante la ejecución:
+
+#### 14.14.1 Pre-evaluación composicional (Estática)
+1. El compilador/runtime procesa `application.root` y verifica que cada `bind` (`use_cases::copy_file`, `resolvers::resolve_copy`, `contracts::copy`, `requesters::copy_completed`) resuelva unívocamente a una Function Implementation `.efn` válida registrada en `application.elib`.
+2. Se resuelve el grafo estático de dependencias inyectables para `main.efn` y sus llamadas descendentes. `application.root` **no actúa como nodo ejecutable ni service locator en tiempo de ejecución**.
+
+#### 14.14.2 Evaluación en tiempo de ejecución (Runtime)
+El flujo directo de invocación funcional opera de la siguiente manera:
 
 ```text
-Host / Runtime
-    ↓ (inicia Application Main Loop)
+Host / Runtime (inicia Application Main Loop con dependencias inyectadas estáticamente)
+    ↓
 main.efn (public fn main)
-    ↓ (invoca firma use_cases::copy_file)
-application.root (resuelve bind use_cases::copy_file -> agents/copier.efn)
-    ↓ (ejecuta)
+    ↓ invoca copy_file(source, destination, request, copy)
 agents/copier.efn (public fn copy_file)
-    ↓ (invoca firma resolvers::resolve_copy)
-application.root (resuelve bind resolvers::resolve_copy -> resolvers/copy-resolver.efn)
-    ↓ (ejecuta)
+    ↓ invoca resolve_copy(source, destination, request, copy)
 resolvers/copy-resolver.efn (public fn resolve_copy)
+    ↓ invoca copy(source, destination, request)
+providers/std-copy.efn (public fn copy)
+    ├─► materializa la copia y construye CopyResult::Success
     │
-    ├── invoca firma contracts::copy (alias: copy_provider)
-    │       ↓ (resuelve bind contracts::copy -> providers/std-copy.efn)
-    │   providers/std-copy.efn (produce CopyResult::Success)
-    │       ↓
-    │   recibe CopyResult
-    │
-    └── invoca firma requesters::copy_completed
-            ↓ (resuelve bind requesters::copy_completed -> responders/copy-completed.efn)
-        responders/copy-completed.efn (notifica resultado)
+    └─► invoca request(result)
             ↓
-        retorna CopyResult
+        responders/copy-completed.efn (public fn copy_completed)
+            ↓ notifica evento y retorna
+    providers/std-copy.efn recibe retorno y finaliza
+    ↓ retorna CopyResult::Success
+resolvers/copy-resolver.efn recibe CopyResult::Success y finaliza
+    ↓ retorna CopyResult::Success
+agents/copier.efn recibe CopyResult::Success y finaliza
+    ↓ retorna CopyResult::Success
+main.efn retorna CopyResult::Success
     ↓
-resolvers/copy-resolver.efn retorna CopyResult
-    ↓
-agents/copier.efn retorna CopyResult
-    ↓
-main.efn retorna CopyResult
-    ↓
-Application Main Loop recibe el resultado semántico y gestiona el ciclo de vida
+Application Main Loop recibe el resultado y administra el ciclo de vida
 ```
 
 
@@ -6057,6 +6137,7 @@ A continuación se resume la correspondencia entre los componentes del ejemplo c
 | **`.main` (Application Entry)** | `copy-app/application.main` | Demostrado formalmente |
 | **`.emod` (Module Surface)** | `use-cases.emod`, `requesters.emod`, `resolvers.emod`, `contracts.emod`, `domain.emod` | Demostrado formalmente |
 | **`.esig` (Public Function Signature)** | `copy-file.esig`, `copy-completed.esig`, `resolve-copy.esig`, `copy.esig` | Demostrado formalmente |
+| **`.esig` con Signature Dependency Parameters** | `copy_file`, `resolve_copy`, `copy` en `.esig` | Demostrado formalmente |
 | **`.estc` (Shared Struct Type)** | `file-view.estc` | Demostrado formalmente |
 | **`.enum` (Shared Enum Type)** | `copy-result.enum` | Demostrado formalmente |
 | **`.efn` (Function Implementation)** | `main.efn`, `copier.efn`, `copy-resolver.efn`, `std-copy.efn`, `copy-completed.efn` | Demostrado formalmente |
@@ -6067,15 +6148,15 @@ A continuación se resume la correspondencia entre los componentes del ejemplo c
 | **Satisfacción contractual (`:`)** | `: use_cases::copy_file`, `: resolvers::resolve_copy`, `: contracts::copy`, etc. | Demostrado formalmente |
 | **Vinculación en `.root` (`bind ... to ...`)** | `bind module::signature to "path.efn";` | Demostrado formalmente |
 | **Use Case -> Agent** | `use_cases::copy_file` vinculado a `agents/copier.efn` | Demostrado formalmente |
-| **Agent -> Resolver** | `resolvers::resolve_copy` invocado por `copier.efn` | Demostrado formalmente |
-| **Resolver -> Contract** | `contracts::copy` invocado por `copy-resolver.efn` | Demostrado formalmente |
-| **Contract -> Provider** | `contracts::copy` vinculado a `providers/std-copy.efn` | Demostrado formalmente |
-| **Resolver -> Requester** | `requesters::copy_completed` invocado por `copy-resolver.efn` | Demostrado formalmente |
+| **Agent -> Resolver** | `resolvers::resolve_copy` invocado por `copier.efn` reenviando dependencias | Demostrado formalmente |
+| **Resolver -> Contract** | `contracts::copy` invocado por `copy-resolver.efn` reenviando Requester | Demostrado formalmente |
+| **Contract/Provider -> Requester** | `requesters::copy_completed` invocado por `providers/std-copy.efn` | Demostrado formalmente |
 | **Requester -> Responder** | `requesters::copy_completed` vinculado a `responders/copy-completed.efn` | Demostrado formalmente |
-| **Entrada sin parámetros de valor** | `main.efn` con `public fn main() -> CopyResult` | Demostrado formalmente |
+| **Reenvío estricto de dependencias (`Forwarding`)** | Reenvío de `request` y `copy` en `main` $\rightarrow$ `copier` $\rightarrow$ `resolver` $\rightarrow$ `provider` | Demostrado formalmente |
+| **Entrada con Signature Dependency Parameters** | `main.efn` con `public fn main(request, copy) -> CopyResult` | Demostrado formalmente |
 | **Construcción de Struct inmutable** | `FileView { path: ..., content: ... }` | Demostrado formalmente |
 | **Variantes calificadas de Enum** | `CopyResult::Success(...)` | Demostrado formalmente |
 | **Signature Dependency Parameters** | `process(int id, values::search search)` en microejemplo | Demostrado formalmente |
-| **Import alias (`as`)** | `import contracts::copy as copy_provider;` en resolver | Demostrado formalmente |
+| **Import alias (`as`)** | `import hr::Worker as HrWorker;` en microejemplo | Demostrado formalmente |
 | **Pipeline funcional (`|>`, unario y `this`)** | `name \|> format_text \|> append_suffix(this, "_processed")` | Demostrado formalmente |
 | **Relación Provider -> Scope** | Modelo Provider $\to$ Scope $\to$ use $\to$ Active Scope | Recorrido conceptual (sin sintaxis de adquisición en v0.1) |
