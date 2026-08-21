@@ -3304,3 +3304,389 @@ ParenthesizedExpression
 ```
 
 La producción `(ComparisonOperator AdditiveExpression)?` en `ComparisonExpression` restringe gramaticalmente a un máximo de una comparación por nivel, haciendo que secuencias como `a < b < c` sean directamente sintácticamente inválidas.
+
+---
+
+## 11. Conversión explícita
+
+En Evo-Script v0, las transformaciones entre tipos de datos son estrictamente explícitas. El lenguaje no incorpora conversiones implícitas, promociones numéricas automáticas ni coerciones de tipos.
+
+Evo-Script v0 formaliza dos categorías de operaciones explícitas complementarias:
+1. **Conversión explícita (`to_*`)**: transforma un valor inmutable (`Value`) de un tipo semántico a otro, exigiendo representabilidad matemática exacta.
+2. **Parsing numérico (`parse_*`)**: interpreta y valida el contenido textual de una cadena de texto (`string`) para producir un valor numérico tipado.
+
+Se establece la distinción fundamental:
+
+```text
+to_*    = conversión entre Values ya tipados
+parse_* = interpretación de contenido textual para producir un Value numérico
+```
+
+
+### 11.1 Modelo de ConversionExpression
+
+Una conversión explícita constituye una expresión sintáctica (`ConversionExpression`) que evalúa un operando fuente y produce un valor del tipo destino especificado:
+
+```text
+ConversionExpression
+    ↓ análisis semántico estático
+TargetType
+    ↓ evaluación correcta
+TargetValue
+```
+
+Reglas normativas:
+1. **Determinación estática del tipo**: toda `ConversionExpression` posee estáticamente el tipo de retorno asociado a su nombre intrínseco:
+   ```text
+   TypeOf(to_int64(source)) = int64
+   ```
+2. **Distinción entre validez estática y éxito en la evaluación**:
+   - Una conversión es **estáticamente válida** si la combinación del tipo fuente (`SourceType`) y el tipo destino (`TargetType`) está permitida por el sistema de tipos del lenguaje.
+   - El **éxito de la evaluación** depende de si el valor concreto en tiempo de ejecución puede representarse exactamente en el tipo destino.
+   - Ejemplo: si `source` es de tipo `int64`, la expresión `to_int8(source)` es estáticamente válida (`TypeOf(to_int8(source)) = int8`). Si en tiempo de ejecución `source` contiene el valor `500`, la evaluación falla porque `500` no pertenece al dominio $[-128, 127]$ de `int8`.
+3. **Ausencia de tipos intermedios de error**: una conversión válida no produce tuplas, tipos unión ni estructuras `Result`; produce directamente el valor tipado o falla durante la ejecución.
+
+
+### 11.2 Conversion intrinsics y nombres canónicos
+
+La sintaxis formal de una expresión de conversión se define como:
+
+```text
+ConversionExpression
+    ::= ConversionIntrinsicName
+        "("
+        Expression
+        ")"
+```
+
+Cada llamada a un intrinsic de conversión recibe exactamente un argumento (`Expression`).
+
+#### 11.2.1 Nombres intrínsecos canónicos
+Evo-Script v0 define exactamente los siguientes 14 nombres intrínsecos de conversión:
+
+- **Enteros con signo**:
+  - `to_int8`
+  - `to_int16`
+  - `to_int32`
+  - `to_int64`
+  - `to_int128`
+- **Enteros sin signo**:
+  - `to_uint8`
+  - `to_uint16`
+  - `to_uint32`
+  - `to_uint64`
+  - `to_uint128`
+- **Punto flotante**:
+  - `to_float32`
+  - `to_float64`
+- **Numérico dinámico**:
+  - `to_dynamic`
+- **Texto**:
+  - `to_string`
+
+#### 11.2.2 Ausencia de `to_int` y `to_float`
+El lenguaje no define intrinsics denominados `to_int` ni `to_float`. En concordancia con las identidades canónicas `CanonicalType(int) = int32` y `CanonicalType(float) = float64` (Capítulo 5), las conversiones utilizan exclusivamente sus nombres canónicos:
+- Para convertir a `int` se utiliza `to_int32(...)`. Dado que `Compatible(int32, int) == true`, la declaración `let int value = to_int32(source);` es directamente válida.
+- Para convertir a `float` se utiliza `to_float64(...)`. La declaración `let float value = to_float64(source);` es directamente válida.
+
+#### 11.2.3 Reconocimiento léxico y semántico
+Los nombres de los intrinsics de conversión pertenecen léxicamente a la categoría `Identifier` (Capítulo 4). El analizador semántico los reconoce como símbolos intrínsecos reservados del lenguaje. No constituyen funciones ordinarias declaradas por el usuario ni modifican las palabras reservadas léxicas del Capítulo 3.
+
+
+### 11.3 Validez estática y fallo de evaluación
+
+El principio fundamental que rige las conversiones numéricas en Evo-Script v0 es la representabilidad exacta:
+
+```text
+ExactlyRepresentable(Value, TargetType)
+```
+
+Una conversión numérica estáticamente válida produce un valor en tiempo de ejecución si y solo si:
+```text
+ExactlyRepresentable(source Value, TargetType) == true
+```
+Si el valor fuente no puede representarse de forma exacta e idéntica en el tipo destino, la evaluación falla. No se realiza truncamiento silencioso (*truncation*), redondeo implícito (*rounding*), saturación (*saturation*), desbordamiento modular (*wrapping*) ni reinterpretación de bits.
+
+#### 11.3.1 Conversión permitida frente a conversión garantizada
+1. **Conversión permitida estáticamente**: aquella donde el par `(SourceType, TargetType)` es válido según las reglas del lenguaje.
+2. **Conversión garantizada**: una conversión permitida donde la totalidad de los valores posibles del dominio fuente tienen representación exacta en el dominio destino (por ejemplo, `to_int64(int8_value)` o `to_float64(float32_value)`). Incluso en conversiones garantizadas, la operación debe expresarse explícitamente en el código fuente (`let int64 target = int8_value;` es inválido).
+3. **Conversión dependiente del valor**: una conversión permitida donde el éxito en tiempo de ejecución depende de la magnitud del valor concreto (por ejemplo, `to_int8(int64_value)`).
+
+
+### 11.4 Frontera de ExpectedType
+
+Una `ConversionExpression` actúa como una frontera estricta para la propagación de tipos esperados (`ExpectedType`):
+
+> El tipo destino (`TargetType`) de una `ConversionExpression` **NO** proporciona `ExpectedType` a su expresión fuente interna.
+
+```text
+ExpectedType exterior
+    ↓
+ConversionExpression : TargetType
+    X (no se propaga)
+    ↓
+source Expression
+```
+
+Consecuencias normativas:
+1. **Tipado independiente del argumento**: en `to_int64(10)`, el literal `IntegerLiteral("10")` no recibe `ExpectedType(int64)` del intrinsic; se tipa independientemente según su tipo por defecto (`int` / `int32`), y a continuación la expresión aplica la conversión explícita de `int32` a `int64`.
+2. **Conversión de literales enteros a flotantes**: en `to_float64(10)`, el literal `10` se tipa como `int` (`int32`) y luego se convierte explícitamente a `float64`. No se contextualiza directamente como punto flotante.
+3. **Validación del contexto exterior**: en `let int64 result = to_int64(value);`, el contexto de la declaración `let` valida que el tipo resultante de la conversión (`int64`) sea compatible con el tipo declarado, pero dicho `ExpectedType(int64)` no atraviesa la conversión para alterar el tipo de `value`.
+
+
+### 11.5 Conversiones entre enteros
+
+Se admiten conversiones explícitas entre la totalidad de los tipos enteros del lenguaje (`int`, `int8`, `int16`, `int32`, `int64`, `int128`, `uint8`, `uint16`, `uint32`, `uint64`, `uint128`).
+
+Reglas normativas:
+1. **Condición de éxito**: la conversión tiene éxito si y solo si el valor entero matemático pertenece al rango numérico del tipo destino (Capítulo 5.4).
+2. **Signed a Unsigned (`to_uint*`)**:
+   - `let int32 source = 10; to_uint32(source)` evalúa exitosamente a `Value(uint32, 10)`.
+   - `let int32 source = -1; to_uint32(source)` es estáticamente válido pero su evaluación falla porque $-1 \notin [0, 2^{32}-1]$.
+3. **Unsigned a Signed (`to_int*`)**:
+   - `let uint32 source = 10; to_int64(source)` evalúa exitosamente a `Value(int64, 10)` (conversión garantizada).
+   - `let uint128 source = ...; to_int128(source)` tiene éxito si el valor es menor o igual a $2^{127}-1$; falla por desbordamiento en caso contrario.
+4. **Conversiones identidad**: se permite invocar el intrinsic correspondiente al mismo tipo canónico (ej. `to_int32(int32_value)` o `to_int32(int_value)`). La operación es redundante pero semánticamente válida y devuelve el mismo valor.
+
+
+### 11.6 Conversiones entre enteros y flotantes
+
+#### 11.6.1 Entero a Punto Flotante (`to_float32`, `to_float64`)
+Una conversión de un entero hacia un tipo de punto flotante solo tiene éxito si el valor entero matemático puede representarse de manera **exacta** en el formato IEEE 754 destino:
+- `to_float64(10)` produce exactamente `Value(float64, 10.0)`.
+- Valores enteros de gran magnitud pertenecientes a `int64`, `int128`, `uint64` o `uint128` cuyos dígitos significativos excedan la capacidad de la mantisa exacta (53 bits en *binary64*, 24 bits en *binary32*) provocan un fallo de evaluación. No se permite la pérdida silenciosa de precisión por redondeo.
+
+#### 11.6.2 Punto Flotante a Entero (`to_int*`, `to_uint*`)
+Una conversión desde punto flotante hacia un tipo entero solo tiene éxito si se satisfacen conjuntamente dos condiciones:
+1. El valor de punto flotante representa **exactamente** un número entero matemático (su parte fraccionaria es exactamente cero).
+2. Dicho número entero pertenece al rango representable del tipo entero destino.
+
+Consecuencias normativas:
+- `to_int64(10.0)` evalúa exitosamente a `Value(int64, 10)`.
+- `to_int64(10.5)` falla durante la evaluación (no se realiza truncamiento ni redondeo a entero cercano).
+- `to_int32(0.0)` y `to_int32(-0.0)` evalúan exitosamente a `Value(int32, 0)`.
+
+
+### 11.7 Conversiones entre flotantes
+
+#### 11.7.1 `float32` a `float64` (`to_float64`)
+Todo valor representable en IEEE 754 *binary32* tiene representación exacta e idéntica en IEEE 754 *binary64*. Por tanto, `to_float64(float32_value)` es una conversión garantizada.
+
+#### 11.7.2 `float64` a `float32` (`to_float32`)
+Solo tiene éxito si el valor *binary64* coincide exactamente con un valor representable en *binary32*. Si la conversión requeriría redondeo o pérdida de dígitos significativos, la evaluación falla.
+
+#### 11.7.3 Conversiones identidad
+`to_float32(float32_value)` y `to_float64(float64_value)` (o sobre `float`) son operaciones identidad válidas.
+
+
+### 11.8 Conversión hacia `dynamic`
+
+Evo-Script v0 formaliza el intrinsic `to_dynamic` para transferir valores de tipos numéricos fijos hacia el tipo `dynamic`:
+
+```text
+to_dynamic(Expression)
+```
+
+Dado que `Compatible(fixed_numeric, dynamic) == false`, `to_dynamic` constituye el único mecanismo válido para asignar un valor numérico fijo a un binding o parámetro de tipo `dynamic`:
+
+```text
+let int64 fixed_value = 100;
+let dynamic value = to_dynamic(fixed_value); // Válido
+```
+
+Reglas normativas:
+1. **Enteros fijos a dynamic**: todo valor entero fijo (`int8`..`int128`, `uint8`..`uint128`) convertido mediante `to_dynamic` produce un `DynamicValue` de clase `IntegralClass` con el mismo valor matemático exacto y precisión arbitraria (conversión garantizada).
+2. **Flotantes fijos a dynamic**: valores de tipo `float32`, `float64` o `float` producen un `DynamicValue` de clase `FloatingClass` bajo formato IEEE 754 *binary64* (conversión garantizada).
+3. **Identidad dynamic**: `to_dynamic(dynamic_value)` es una operación identidad que preserva el `SemanticType` `dynamic`, su clase interna (`IntegralClass` o `FloatingClass`) y su valor numérico. No realiza cambios de clase interna.
+4. **Tipos no numéricos prohibidos**: aplicar `to_dynamic` sobre `bool`, `string`, `StructType` o `EnumType` es semánticamente inválido (`dynamic` es un tipo exclusivamente numérico).
+
+
+### 11.9 Conversión desde `dynamic`
+
+Dado que el tipo estático de la fuente es únicamente `dynamic`, la validez de la conversión en tiempo de ejecución depende de la clase semántica interna del valor:
+
+1. **`DynamicValue IntegralClass` a entero fijo (`to_int*`, `to_uint*`)**: tiene éxito si el entero matemático cabe en el rango del tipo entero destino; falla por desbordamiento en caso contrario.
+2. **`DynamicValue IntegralClass` a flotante (`to_float32`, `to_float64`)**: tiene éxito si el entero es exactamente representable en la mantisa del formato flotante; falla si requeriría redondeo.
+3. **`DynamicValue FloatingClass` a entero (`to_int*`, `to_uint*`)**: tiene éxito si el flotante representa un entero matemático exacto y dicho entero pertenece al rango destino; falla si contiene parte fraccionaria.
+4. **`DynamicValue FloatingClass` a `float64` (`to_float64`)**: es una conversión garantizada (la clase `FloatingClass` utiliza *binary64*).
+5. **`DynamicValue FloatingClass` a `float32` (`to_float32`)**: tiene éxito si el valor es exactamente representable en *binary32*.
+6. **Transformación explícita de clase dentro de dynamic**: para convertir un `dynamic` de clase `IntegralClass` a clase `FloatingClass`, debe componerse explícitamente:
+   ```text
+   to_dynamic(to_float64(value))
+   ```
+
+
+### 11.10 Conversión a `string`
+
+El intrinsic `to_string` convierte valores escalares nativos a su representación textual canónica e inmutable:
+
+```text
+to_string(Expression)
+```
+
+Tipos admitidos: `bool`, `string`, tipos enteros fijos, tipos de punto flotante y `dynamic`. Aplicar `to_string` sobre valores de tipo `struct` o `enum` es semánticamente inválido (el lenguaje no realiza serialización implícita).
+
+#### 11.10.1 `bool` a `string`
+- `to_string(true)` produce `"true"`.
+- `to_string(false)` produce `"false"`.
+
+#### 11.10.2 `string` a `string`
+Operación identidad: `to_string("hello")` produce `"hello"`.
+
+#### 11.10.3 Enteros a `string`
+Produce la representación decimal canónica en base 10:
+- `to_string(0)` produce `"0"`.
+- `to_string(18)` produce `"18"`.
+- `to_string(-18)` produce `"-18"`.
+- No incluye signo `+` para positivos, ceros iniciales superfluos ni separadores de dígitos.
+- Aplica de forma idéntica a valores de tipo `dynamic` pertenecientes a `IntegralClass`.
+
+#### 11.10.4 Punto flotante a `string`
+Produce la representación decimal canónica más corta que permita reconstruir el valor original (*shortest round-trip representation*):
+1. **Independencia de configuración regional**: utiliza invariablemente el punto (`.`) como separador decimal.
+2. **Preservación visual de la naturaleza flotante**: los valores flotantes que representan números enteros incluyen obligatoriamente la parte fraccionaria `.0`:
+   - `to_string(10.0)` produce `"10.0"` (nunca `"10"`).
+3. **Preservación de signo en cero**:
+   - `to_string(0.0)` produce `"0.0"`.
+   - `to_string(-0.0)` produce `"-0.0"`.
+4. **Notación científica**: cuando la forma más corta requiera exponente, utiliza la letra minúscula `e` sin ceros redundantes ni signo positivo en el exponente (ej. `"1e20"`, `"1.5e-10"`).
+5. **Dynamic FloatingClass**: utiliza las mismas reglas que `float64`, preservando la distinción visual:
+   - `Dynamic IntegralClass(18)` $\to$ `"18"`
+   - `Dynamic FloatingClass(18.0)` $\to$ `"18.0"`
+
+
+### 11.11 Parsing numérico desde `string`
+
+El parsing numérico es la operación formal mediante la cual se analiza e interpreta una secuencia textual para construir un valor numérico tipado.
+
+```text
+ParsingExpression
+    ::= ParsingIntrinsicName
+        "("
+        Expression
+        ")"
+```
+
+Reglas normativas:
+1. **Operando estrictamente textual**: la expresión argumento debe ser de tipo `string` (`TypeOf(Expression) = string`). Pasar cualquier otro tipo es semánticamente inválido.
+2. **Distinción entre conversión y parsing**:
+   - `to_int32("18")` es semánticamente inválido (`to_*` opera entre tipos numéricos/escalares, no parsea texto).
+   - `parse_int32("18")` es la operación válida y produce `Value(int32, 18)`.
+   - `parse_int32(18)` es semánticamente inválido (`parse_*` requiere `string`).
+3. **Frontera de ExpectedType**: `ParsingExpression` es una frontera para `ExpectedType`. El tipo destino no se propaga a la expresión interna (la cual debe ser de tipo `string`).
+
+#### 11.11.1 Nombres intrínsecos de parsing
+Evo-Script v0 define exactamente 12 intrinsics de parsing:
+
+- **Enteros con signo**: `parse_int8`, `parse_int16`, `parse_int32`, `parse_int64`, `parse_int128`
+- **Enteros sin signo**: `parse_uint8`, `parse_uint16`, `parse_uint32`, `parse_uint64`, `parse_uint128`
+- **Punto flotante**: `parse_float32`, `parse_float64`
+
+No existen `parse_int` ni `parse_float`; se utilizan sus equivalentes canónicos `parse_int32` y `parse_float64`.
+
+#### 11.11.2 Parsing de enteros con signo (`parse_int*`)
+La cadena de texto debe satisfacer exactamente la gramática:
+
+```text
+SignedIntegerText
+    ::= "-"? Digits
+
+Digits
+    ::= Digit+
+
+Digit
+    ::= "0".."9"
+```
+
+Reglas normativas:
+1. No se admite espacio en blanco inicial, final ni intermedio (no se realiza recorte o *trim* automático).
+2. No se admite el signo positivo `+`.
+3. No se admiten puntos decimales, exponentes, separadores de miles ni prefijos de base (`0x`, `0b`, `0o`).
+4. Se admiten ceros iniciales (`"018"` evalúa a `18`; `"000"` evalúa a `0`), los cuales no se interpretan como base octal.
+5. El valor matemático debe pertenecer al rango del tipo entero destino.
+
+Ejemplos:
+- `parse_int32("18")` $\to$ `18`
+- `parse_int32("-18")` $\to$ `-18`
+- `parse_int32("0")` $\to$ `0`
+- `parse_int32("-0")` $\to$ `0`
+- Fallos en evaluación: `""`, `" 18"`, `"18 "`, `"+18"`, `"18.0"`, `"1e2"`, `"1_000"`, `"hello"`.
+
+#### 11.11.3 Parsing de enteros sin signo (`parse_uint*`)
+La cadena de texto debe satisfacer exactamente la gramática:
+
+```text
+UnsignedIntegerText
+    ::= Digits
+```
+
+Reglas normativas:
+1. No se admite signo negativo `-` ni positivo `+`.
+2. `parse_uint32("18")` produce `18`.
+3. `parse_uint32("-1")` y `parse_uint32("+1")` fallan en evaluación.
+
+#### 11.11.4 Parsing de punto flotante (`parse_float*`)
+La cadena de texto debe contener una forma explícita de punto flotante:
+
+```text
+FloatingText
+    ::= "-"?
+        (
+            DecimalText
+          | ScientificText
+        )
+
+DecimalText
+    ::= Digits "." Digits
+
+ScientificText
+    ::= (Digits | DecimalText)
+        ("e" | "E")
+        ("+" | "-")?
+        Digits
+```
+
+Reglas normativas:
+1. **Requerimiento de forma flotante**: cadenas con formato estrictamente entero como `"18"` **no** son válidas para parsing flotante (`parse_float64("18")` falla en evaluación). Debe proporcionarse forma decimal (`parse_float64("18.0")`) o científica (`parse_float64("18e0")`).
+2. **Formas no permitidas**: formas abreviadas como `".5"` o `"5."`, cadenas con signo `+`, `"_"` o identificadores como `"NaN"`, `"Infinity"` o `"inf"` fallan en evaluación.
+3. **Representabilidad**: el texto se interpreta con modo de redondeo `roundTiesToEven`. Si el resultado excede los límites finitos del formato destino, el parsing falla. El subdesbordamiento a `0.0` o `-0.0` es válido.
+
+
+### 11.12 Orden de evaluación y composición
+
+#### 11.12.1 Evaluación de ConversionExpression
+1. Se evalúa la expresión argumento exactamente una sola vez.
+2. Si la evaluación del argumento falla, la conversión no se ejecuta.
+3. Se obtiene el `Value` fuente.
+4. Si `ExactlyRepresentable(Value, TargetType) == true`, se produce el `TargetValue`.
+5. Si no es exactamente representable, la evaluación falla.
+
+#### 11.12.2 Evaluación de ParsingExpression
+1. Se evalúa la expresión argumento exactamente una sola vez.
+2. Si el argumento no produce un `Value` de tipo `string` válido, la evaluación falla.
+3. Se valida que el texto cumpla la gramática estricta del parser invocado.
+4. Se comprueba que el valor matemático pertenezca al dominio del tipo destino.
+5. Si es válido, se produce el `TargetValue`; en caso contrario, la evaluación falla.
+
+#### 11.12.3 Composición de operaciones
+Las expresiones de conversión y parsing pueden componerse de forma anidada:
+- `to_dynamic(to_float64(value))` transforma un valor entero o flotante primero a `float64` y luego lo encapsula en `dynamic` como `FloatingClass`.
+- `parse_int32(to_string(18))` convierte el entero `18` en `"18"` y luego lo parsea exitosamente de retorno a `Value(int32, 18)`.
+
+
+### 11.13 Matriz normativa de conversiones y parsing
+
+La siguiente matriz define la validez estática de las familias de operaciones según el tipo de origen:
+
+| Tipo de origen (`SourceType`) | `to_integer` | `to_float` | `to_dynamic` | `to_string` | `parse_integer` | `parse_float` |
+|---|---|---|---|---|---|---|
+| **SignedInteger** (`int`, `int8`..`int128`) | Permitido (rango) | Permitido (exactitud) | Permitido (`IntegralClass`) | Permitido | Inválido | Inválido |
+| **UnsignedInteger** (`uint8`..`uint128`) | Permitido (rango) | Permitido (exactitud) | Permitido (`IntegralClass`) | Permitido | Inválido | Inválido |
+| **FloatingPoint** (`float`, `float32`, `float64`) | Permitido (entero exacto + rango) | Permitido (exactitud) | Permitido (`FloatingClass`) | Permitido | Inválido | Inválido |
+| **Dynamic Numeric** (`dynamic`) | Permitido (según clase y valor) | Permitido (según clase y valor) | Permitido (identidad) | Permitido | Inválido | Inválido |
+| **Boolean** (`bool`) | Inválido | Inválido | Inválido | Permitido | Inválido | Inválido |
+| **Text** (`string`) | Inválido | Inválido | Inválido | Permitido (identidad) | Permitido | Permitido |
+| **Struct** (`StructValue`) | Inválido | Inválido | Inválido | Inválido | Inválido | Inválido |
+| **Enum** (`EnumValue`) | Inválido | Inválido | Inválido | Inválido | Inválido | Inválido |
+
+*Nota normativa*: la indicación «Permitido» describe la validez estática de la operación en tiempo de compilación/análisis. El éxito en tiempo de ejecución está condicionado a la representabilidad matemática exacta del valor concreto según las reglas de este capítulo.
