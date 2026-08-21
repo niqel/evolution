@@ -291,3 +291,270 @@ cantidad de PublicFunctionDeclaration = 1
 ```
 
 La gramática permite una secuencia de declaraciones de nivel superior, mientras que la regla de contener exactamente una función pública constituye una restricción semántica obligatoria sobre la validez del programa `SourceFile`.
+
+---
+
+## 3. Reglas léxicas
+
+El análisis léxico transforma el contenido textual de un archivo `.efn` en una secuencia ordenada de tokens según la cadena de procesamiento:
+
+```text
+source text
+    ↓
+lexer
+    ↓
+tokens
+```
+
+El lexer reconoce las siguientes categorías léxicas:
+- palabras reservadas (`Structural Keywords`);
+- tokens literales reservados (`Boolean Literal Tokens`);
+- nombres de tipos reservados (`Reserved Type Names`);
+- identificadores (`Identifier`);
+- literales (`BooleanLiteral`, `NumericLiteral`, `StringLiteral`);
+- delimitadores;
+- símbolos estructurales y operadores;
+- comentarios;
+- espacios en blanco (`whitespace`).
+
+Los espacios en blanco y los comentarios participan en el análisis léxico como separadores y delimitadores, pero no producen tokens evaluables en la secuencia de salida entregada al parser.
+
+
+### 3.1 Codificación del archivo fuente
+
+Todo archivo `.efn` de Evo-Script v0 debe utilizar estrictamente codificación UTF-8 sin marca de orden de bytes (BOM).
+
+Reglas normativas:
+1. Un archivo que contenga secuencias de bytes que no representen texto UTF-8 válido es léxicamente inválido y produce un error léxico (`lexical error`).
+2. La presencia de una marca de orden de bytes UTF-8 (BOM, secuencia de bytes `0xEF, 0xBB, 0xBF`) al inicio del archivo es inválida y produce un error léxico.
+3. Caracteres Unicode arbitrarios pueden existir válidamente dentro de construcciones léxicas cuya gramática lo permita expresamente, en particular dentro de cadenas de texto (`StringLiteral`) y comentarios (`//`).
+
+
+### 3.2 Espacios en blanco y saltos de línea
+
+Evo-Script v0 reconoce exactamente cuatro caracteres como espacio en blanco (`whitespace`):
+- Espacio en blanco (`space`): `U+0020`
+- Tabulación horizontal (`tab`): `U+0009`
+- Salto de línea (`Line Feed`, `LF`): `U+000A`
+- Retorno de carro (`Carriage Return`, `CR`): `U+000D`
+
+La secuencia formada por un retorno de carro seguido inmediatamente por un salto de línea (`CRLF`, `\r\n`) se procesa como espacio en blanco.
+
+Reglas normativas:
+1. El espacio en blanco separa tokens contiguos cuando sea necesario para evitar ambigüedades léxicas.
+2. El espacio en blanco no produce Values ni posee semántica en tiempo de ejecución.
+3. Evo-Script v0 no es sensible a la indentación (`indentation-insensitive`). La indentación no abre, cierra ni determina bloques de código; los bloques se delimitan exclusivamente mediante `{` y `}`.
+4. Los saltos de línea no terminan sentencias. Toda construcción sintáctica que requiera terminación explícita utiliza el punto y coma (`;`).
+
+Ejemplo de equivalencia léxica:
+
+```text
+let int value = 10;
+```
+
+y:
+
+```text
+let
+    int
+    value
+    =
+    10
+    ;
+```
+
+ambas formas producen exactamente la misma secuencia ordenada de tokens.
+
+
+### 3.3 Comentarios
+
+Evo-Script v0 define una única forma léxica de comentario mediante la secuencia `//`.
+
+Reglas normativas:
+1. Toda secuencia `//` que aparezca fuera de un literal de texto inicia un comentario de línea.
+2. El comentario se extiende hasta el final de la línea física actual (carácter `LF` o secuencia `CRLF`) o hasta el fin de archivo (`EndOfFile`) si el archivo concluye sin un salto de línea posterior.
+3. El contenido textual del comentario es ignorado por el lexer y no produce tokens en la secuencia de salida.
+4. La secuencia `//` ubicada dentro de un literal de texto (`StringLiteral`) no inicia un comentario. Por ejemplo, en `"https://example.com"`, la secuencia `//` forma parte del valor del texto.
+5. Evo-Script v0 no define comentarios multilínea (`/* ... */`).
+6. Evo-Script v0 no define sintaxis especiales para comentarios de documentación. Una secuencia como `/// comentario` se interpreta normalmente como un comentario de línea estándar cuyo contenido textual comienza con el carácter `/`, sin constituir una categoría léxica distinta ni producir un error léxico.
+
+
+### 3.4 Palabras reservadas
+
+Una palabra es una palabra reservada (`Structural Keyword`) si y solo si forma parte activa de la gramática formal de Evo-Script v0.
+
+La lista oficial y exhaustiva de palabras reservadas estructurales en Evo-Script v0 está constituida exactamente por:
+
+```text
+struct
+enum
+fn
+public
+private
+let
+return
+when
+this
+```
+
+Reglas normativas:
+1. Las palabras reservadas no pueden utilizarse como identificadores definidos por el usuario (nombres de funciones, parámetros, bindings, structs, enums, variantes o campos).
+2. Las palabras reservadas son estrictamente sensibles a mayúsculas y minúsculas (`case-sensitive`). La palabra `return` es una keyword reservada, mientras que secuencias como `Return` o `RETURN` no corresponden al token keyword `return`.
+
+
+### 3.5 Tokens literales reservados
+
+Evo-Script v0 define exactamente dos tokens literales booleanos reservados:
+
+```text
+true
+false
+```
+
+Reglas normativas:
+1. Los tokens `true` y `false` están léxicamente reservados y no pueden utilizarse como identificadores definidos por el usuario.
+2. Estos tokens no se clasifican como palabras reservadas estructurales (`Structural Keywords`), sino como literales booleanos cuyo valor y tipado en el sistema de tipos se definen formalmente en el Capítulo 6.
+
+
+### 3.6 Nombres de tipos reservados
+
+Evo-Script v0 define la categoría léxica `Reserved Type Names`. Los nombres de tipos nativos y aliases del lenguaje están reservados a nivel léxico y no pueden utilizarse como identificadores definidos por el usuario en ninguna posición (funciones, parámetros, bindings, structs, enums, variantes o campos).
+
+La lista oficial y exhaustiva de nombres de tipos reservados en Evo-Script v0 es:
+
+```text
+bool
+string
+dynamic
+
+int
+int8
+int16
+int32
+int64
+int128
+
+uint8
+uint16
+uint32
+uint64
+uint128
+
+float
+float32
+float64
+```
+
+
+### 3.7 Delimitadores
+
+El lexer de Evo-Script v0 reconoce los siguientes delimitadores sintácticos individuales:
+
+```text
+(
+)
+{
+}
+,
+;
+.
+:
+::
+```
+
+Reglas normativas:
+1. El lexer reconoce estos caracteres y secuencias como tokens delimitadores individuales.
+2. La secuencia `::` se reconoce léxicamente como un único token compuesto indivisible.
+3. El significado sintáctico y el rol de cada delimitador se determinan por las construcciones gramaticales en las que participan.
+
+
+### 3.8 Símbolos estructurales y operadores
+
+El lexer reconoce los siguientes símbolos estructurales y operadores como tokens individuales:
+
+Símbolos estructurales compuestos:
+```text
+->
+=>
+|>
+```
+
+Operadores y símbolos de expresiones y bindings:
+```text
+=
++
+-
+*
+/
+%
+!
+==
+!=
+<
+<=
+>
+>=
+&&
+||
+```
+
+Reglas normativas:
+1. Los símbolos `->`, `=>` y `|>` son reconocidos como tokens individuales indivisibles.
+2. El símbolo `=` es un token reconocido por el lenguaje cuya utilización válida se restringe a las construcciones gramaticales que lo requieran (como bindings inmutables).
+3. La semántica de evaluación, precedencia, asociatividad y tipado de cada operador se define formalmente en el Capítulo 10.
+
+
+### 3.9 Reconocimiento de tokens compuestos
+
+El lexer aplica formalmente el principio de coincidencia del token más largo (*longest valid token match*):
+
+> Cuando varios tokens válidos comienzan con el mismo prefijo de caracteres, el lexer selecciona siempre el token válido más largo que inicia en la posición actual del flujo de lectura.
+
+Esta regla determina unívocamente la tokenización de símbolos con prefijos compartidos:
+- Ante `::`, el lexer produce el token único `::` (y no dos tokens `:` sucesivos).
+- Ante `==`, el lexer produce el token único `==` (y no dos tokens `=` sucesivos).
+- Ante `=>`, el lexer produce el token único `=>` (y no `=` seguido de `>`).
+- Ante `>=`, el lexer produce el token único `>=` (y no `>` seguido de `=`).
+- Ante `<=`, el lexer produce el token único `<=` (y no `<` seguido de `=`).
+- Ante `!=`, el lexer produce el token único `!=` (y no `!` seguido de `=`).
+- Ante `&&`, el lexer produce el token único `&&`.
+- Ante `||`, el lexer produce el token único `||`.
+- Ante `|>`, el lexer produce el token único `|>` (y no un carácter `|` seguido de `>`).
+- Ante `->`, el lexer produce el token único `->` (y no `-` seguido de `>`).
+
+
+### 3.10 Identificadores y literales
+
+El lexer reconoce como categorías léxicas fundamentales:
+- `Identifier`: nombres definidos por el usuario para funciones, parámetros, bindings, structs, enums, variantes y campos.
+- `BooleanLiteral`: literales booleanos (`true`, `false`).
+- `NumericLiteral`: literales numéricos enteros y de punto flotante.
+- `StringLiteral`: literales de texto delimitados por comillas dobles (`"`).
+
+La gramática formal detallada, reglas de caracteres y convenciones de `Identifier` se definen en el Capítulo 4. La gramática formal, secuencias de escape y representación de los literales se definen en el Capítulo 6.
+
+
+### 3.11 Caracteres no reconocidos
+
+Todo carácter o secuencia de bytes que no pueda formar válidamente un espacio en blanco, comentario, palabra reservada, token literal reservado, nombre de tipo reservado, delimitador, símbolo estructural, operador, identificador o literal válido según las reglas de esta especificación produce un error léxico (`lexical error`).
+
+El lexer:
+1. No ignora silenciosamente caracteres no reconocidos.
+2. No intenta realizar corrección o recuperación automática de errores léxicos.
+3. No produce tokens aproximados o ambiguos.
+
+
+### 3.12 Fin de archivo
+
+Al consumir completamente la totalidad del contenido del archivo fuente en codificación UTF-8, el lexer produce el token conceptual de fin de archivo:
+
+```text
+EndOfFile
+```
+
+Este token señala la conclusión formal de la secuencia de tokens y satisface la regla de producción sintáctica del nivel superior definida en el Capítulo 2:
+
+```text
+SourceFile
+    ::= TopLevelDeclaration* EndOfFile
+```
