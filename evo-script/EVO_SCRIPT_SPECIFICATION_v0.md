@@ -4243,3 +4243,453 @@ Explicación de la ejecución:
 5. Se evalúa la expresión `worker.name`, la cual accede al campo `name` de la estructura y produce el valor `"Ana"`.
 6. La `WhenExpression` concluye exitosamente con el valor `"Ana"`.
 7. El binding `message` queda asociado al valor `"Ana"` (`message == "Ana"`).
+
+---
+
+## 13. Functions
+
+En Evo-Script v0, las funciones constituyen las unidades declarativas de cómputo que transforman valores de entrada (`Values`) en exactamente un valor de retorno (`Value`).
+
+El lenguaje adopta un modelo puramente funcional, inmutable y declarativo:
+- Las funciones son **declaraciones de primer orden** (*callable program declarations*), no valores evaluables.
+- Toda función exige un tipo de retorno explícito y produce siempre un único valor (no existe `void` ni `unit`).
+- El cuerpo de una función se compone exclusivamente de cero o más declaraciones de bindings inmutables (`let`) y exactamente una sentencia final de retorno (`return`).
+
+
+### 13.1 Modelo de FunctionDeclaration
+
+Una declaración de función (`FunctionDeclaration`) define formalmente una operación ejecutable en el programa:
+
+```text
+FunctionDeclaration
+    != Expression
+    != Value
+    != Binding
+```
+
+Reglas normativas:
+1. **Naturaleza declarativa**: `FunctionDeclaration` es una declaración de nivel superior (`TopLevelDeclaration`), no una expresión (`Expression`) ni un valor (`Value`).
+2. **Ausencia de FunctionType en el sistema de tipos**: el espacio de tipos (`Type Space`) de Evo-Script v0 no incorpora tipos de función (`FunctionType`):
+   ```text
+   SemanticType
+       ├── NativeType
+       └── ProgramDefinedType (StructType | EnumType)
+   ```
+   No es posible declarar bindings de tipo función, almacenar funciones en estructuras, pasar funciones como argumentos ni retornar funciones desde otras funciones.
+3. **No evaluabilidad como dato**: el identificador de una función no produce un valor por sí mismo y no puede participar en operaciones de igualdad o asignación.
+
+
+### 13.2 Sintaxis de declaración
+
+La sintaxis formal de una declaración de función se define como:
+
+```text
+FunctionDeclaration
+    ::= FunctionVisibility?
+        "fn"
+        FunctionName
+        "("
+        ParameterList?
+        ")"
+        "->"
+        TypeReference
+        FunctionBody
+
+FunctionVisibility
+    ::= "public"
+     |  "private"
+
+FunctionName
+    ::= SnakeCaseIdentifier
+```
+
+Las tres formas sintácticas válidas para declarar una función son:
+```text
+public fn calculate(...) -> Type
+private fn calculate(...) -> Type
+fn calculate(...) -> Type
+```
+
+Reglas normativas:
+1. **Palabras reservadas estructurales**: `public`, `private` y `fn` son palabras clave estructurales del lenguaje (Capítulo 3). No se admite la forma abreviada `pub fn`.
+2. **Prefijo `fn` obligatorio**: toda función se introduce mediante la palabra clave `fn`.
+
+
+### 13.3 Visibilidad public y private
+
+La visibilidad de una función determina si la operación queda expuesta como la interfaz pública del script `.efn` o si constituye una función auxiliar interna:
+
+```text
+EffectiveVisibility(public fn)  = Public
+EffectiveVisibility(private fn) = Private
+EffectiveVisibility(fn)         = Private
+```
+
+Reglas normativas:
+1. **Equivalencia de `fn` y `private fn`**: omitir el especificador de visibilidad equivale a declarar la función como `private`.
+2. **Exactamente una función pública por archivo**: todo archivo de script `.efn` válido debe contener exactamente una función declarada con visibilidad `public`:
+   ```text
+   Count(PublicFunctionDeclaration) == 1
+   ```
+   Tener cero funciones públicas o más de una función pública en el mismo archivo es semánticamente inválido.
+3. **Funciones privadas**: un archivo `.efn` puede contener cero, una o múltiples funciones con visibilidad `private` (`0..N`).
+4. **Semántica de public frente a ejecución automática**: la visibilidad `public` designa la operación expuesta por el módulo, pero **no** implica ejecución automática inmediata al cargar el archivo (`public != main != startup function`). La invocación de la función pública se rige por los mecanismos de ejecución del entorno host.
+
+
+### 13.4 Nombres y unicidad de funciones
+
+El nombre de una función (`FunctionName`) sigue estrictamente el formato léxico `SnakeCaseIdentifier` (Capítulo 4):
+
+```text
+calculate
+calculate_total
+search_worker
+normalize_value
+```
+
+Reglas normativas:
+1. **Unicidad global dentro del SourceFile**: todo `FunctionName` declarado dentro de un archivo `.efn` debe ser único en el ámbito del archivo. Para cualesquiera dos declaraciones de función distintas $A$ y $B$:
+   ```text
+   FunctionName(A) != FunctionName(B)
+   ```
+2. **Ausencia de sobrecarga (*No Overloads*)**: el lenguaje no admite sobrecarga de funciones bajo ninguna condición:
+   - No se permite sobrecarga por tipo o número de parámetros:
+     ```text
+     // Inválido: sobrecarga de calculate
+     fn calculate(int value) -> int { return value; }
+     fn calculate(string value) -> string { return value; }
+     ```
+   - No se permite sobrecarga por tipo de retorno:
+     ```text
+     // Inválido: sobrecarga de calculate por tipo de retorno
+     fn calculate(int value) -> int { return value; }
+     fn calculate(int value) -> int64 { return to_int64(value); }
+     ```
+   - No se permite sobrecarga por especificador de visibilidad:
+     ```text
+     // Inválido: sobrecarga de calculate por visibilidad
+     public fn calculate(int value) -> int { return value; }
+     private fn calculate(string value) -> string { return value; }
+     ```
+3. **Prohibición de colisión con intrinsics**: un `FunctionName` definido por el usuario no puede coincidir con ningún nombre intrínseco reservado ejecutable del lenguaje (Capítulo 11):
+   - Intrinsics de conversión: `to_int8`..`to_int128`, `to_uint8`..`to_uint128`, `to_float32`, `to_float64`, `to_dynamic`, `to_string`.
+   - Intrinsics de parsing: `parse_int8`..`parse_int128`, `parse_uint8`..`parse_uint128`, `parse_float32`, `parse_float64`.
+   - Declarar `fn to_int64(int value) -> int64 { ... }` o `fn parse_float64(string s) -> float64 { ... }` es semánticamente inválido.
+4. **Correspondencia con el nombre físico del archivo**: conforme a la regla establecida en el Capítulo 4, el nombre físico del archivo `.efn` en formato *kebab-case* debe corresponder exactamente al `FunctionName` de la única función pública del archivo (por ejemplo, `public fn calculate_total(...)` reside en `calculate-total.efn`).
+
+
+### 13.5 Parámetros
+
+La lista de parámetros formales especifica los valores de entrada inmutables requeridos por la función:
+
+```text
+ParameterList
+    ::= Parameter
+        ("," Parameter)*
+
+Parameter
+    ::= TypeReference
+        ParameterName
+
+ParameterName
+    ::= SnakeCaseIdentifier
+```
+
+Reglas normativas:
+1. **Sintaxis canónica `Type name`**: los parámetros se declaran invariablemente como `TypeReference ParameterName` (por ejemplo, `int64 price`), nunca bajo formas como `name: Type`.
+2. **Funciones sin parámetros**: la lista de parámetros es opcional (`ParameterList?`). Declarar funciones sin parámetros (`fn constant() -> int`) es plenamente válido.
+3. **Prohibición de trailing comma**: no se admite coma tras el último parámetro de la lista.
+4. **Tipado explícito obligatorio**: todo parámetro debe especificar un `TypeReference` explícito; no existe inferencia de tipos en la cabecera de las funciones.
+5. **Tipos permitidos**: el `TypeReference` de un parámetro puede referenciar cualquier `SemanticType` válido del lenguaje (tipos nativos, `StructType`, `EnumType`). No se admiten tipos de función.
+6. **Inmutabilidad y semántica de binding**: dentro del ámbito de la función (`FunctionScope`), cada parámetro se comporta como un binding inmutable visible (`ParameterName -> Value`). No se permite reasignación ni mutación de parámetros.
+7. **Unicidad de nombres de parámetros**: los `ParameterName` deben ser mutuamente únicos dentro de la misma función:
+   ```text
+   // Inválido: parámetro value duplicado
+   fn calculate(int value, string value) -> int { return 10; }
+   ```
+8. **Parámetros no utilizados**: no es obligatorio utilizar todos los parámetros declarados en el cuerpo de la función; declarar un parámetro y no referenciarlo es semánticamente válido.
+
+
+### 13.6 Tipo de retorno
+
+Toda función debe declarar obligatoriamente su tipo de retorno mediante la flecha `->` seguida de una referencia de tipo:
+
+```text
+"->" TypeReference
+```
+
+Reglas normativas:
+1. **Obligatoriedad**: omitir la anotación `-> TypeReference` es sintácticamente inválido.
+2. **Ausencia de tipos vacíos (`void` / `unit`)**: Evo-Script v0 no incorpora `void`, `unit` ni tuplas vacías `()`. Toda función debe retornar un valor tipado concreto de un tipo semántico válido:
+   ```text
+   input Values
+       ↓
+   Function
+       ↓
+   result Value
+   ```
+3. **Tipos de retorno permitidos**: el tipo de retorno puede ser cualquier `SemanticType` válido (tipos nativos, `StructType`, `EnumType`). No se admiten tipos de función.
+4. **Resolución adelantada de tipos (*Forward References*)**: las referencias de tipo utilizadas en los parámetros y en el tipo de retorno se resuelven en la fase global de declaraciones de nivel superior (Capítulo 2), por lo que pueden referenciar estructuras o enumeraciones declaradas físicamente más adelante en el mismo archivo.
+
+
+### 13.7 Cuerpo de función
+
+El cuerpo de una función (`FunctionBody`) encapsula el cómputo secuencial y declarativo de la operación:
+
+```text
+FunctionBody
+    ::= "{"
+        LetBindingDeclaration*
+        ReturnStatement
+        "}"
+
+ReturnStatement
+    ::= "return"
+        Expression
+        ";"
+```
+
+Reglas normativas:
+1. **Composición estructural exclusiva**: el cuerpo de una función se compone estrictamente de cero o más declaraciones de bindings locales (`LetBindingDeclaration*`) seguidas por exactamente una sentencia de retorno final (`ReturnStatement`).
+2. **Retorno final obligatorio y único**: toda función contiene exactamente un `ReturnStatement`, el cual debe ser la última construcción estructural del cuerpo.
+3. **Prohibición de retorno anticipado (*No Early Return*)**: no se permite `return` antes de la última posición del cuerpo ni múltiples sentencias `return` en una misma función.
+4. **Prohibición de retorno implícito (*No Implicit Return*)**: la última expresión debe estar precedida obligatoriamente por la palabra clave `return` y concluida con punto y coma (`;`).
+5. **Restricción de elementos directos**: no se admiten directamente en el cuerpo sentencias de expresión sueltas (*ExpressionStatement*), llamadas a función aisladas, declaraciones anidadas de funciones, estructuras o enums. Toda expresión debe formar parte del inicializador de un `let` o de la sentencia `return`.
+6. **Naturaleza de ReturnStatement**: `return` es una sentencia (*Statement*), no una expresión (*Expression*). No puede asignarse a bindings (`let x = return 10;` es inválido) ni utilizarse como rama en un `when` (`Result::Ok => return 10` es inválido).
+
+
+### 13.8 ReturnStatement y ExpectedType
+
+La sentencia de retorno evalúa una expresión y produce el valor final devuelto por la función.
+
+Reglas normativas:
+1. **Propagación de ExpectedType**: el `ReturnType` declarado en la cabecera de la función proporciona `ExpectedType(ReturnType)` a la expresión contenida en el `ReturnStatement`:
+   ```text
+   fn constant() -> int64
+   {
+       return 10;
+   }
+   ```
+   En este caso, el literal entero `10` recibe `ExpectedType(int64)` y se analiza directamente como `int64` (sin conversión implícita).
+2. **Validación de compatibilidad con expresiones ya tipadas**: si la expresión del retorno posee un tipo ya determinado e incompatible con `ReturnType`, el análisis semántico rechaza la función:
+   ```text
+   // Inválido: TypeOf(value) es int32 e incompatible con int64
+   fn invalid() -> int64
+   {
+       let int32 value = 10;
+       return value;
+   }
+   ```
+   Para adaptar un valor con tipo incompatible debe emplearse una conversión explícita (Capítulo 11):
+   ```text
+   // Válido con conversión explícita
+   fn valid() -> int64
+   {
+       let int32 value = 10;
+       return to_int64(value);
+   }
+   ```
+3. **Propagación a expresiones when**: cuando el retorno es una `WhenExpression`, el `ExpectedType(ReturnType)` se propaga a través del `when` hacia cada una de las expresiones de sus ramas que admitan contextualización:
+   ```text
+   fn status_code(Status status) -> int64
+   {
+       return when status {
+           Status::Active => 1,
+           Status::Disabled => 0
+       };
+   }
+   ```
+4. **Compatibilidad con alias canónicos**: la compatibilidad respeta las identidades canónicas `int == int32` y `float == float64` (Capítulo 5).
+
+
+### 13.9 Scope de función y bindings
+
+Cada `FunctionDeclaration` introduce un ámbito semántico de función (`FunctionScope`) aislado e independiente.
+
+```text
+FunctionScope
+{
+    parameters (visibles en todo el cuerpo)
+
+    sequential let bindings (visibles hacia adelante)
+
+    final return
+}
+```
+
+Reglas normativas:
+1. **Visibilidad global de parámetros en el cuerpo**: todos los parámetros formales son visibles desde el inicio del cuerpo de la función y pueden referenciarse en cualquier declaración `let` posterior o en la sentencia `return`.
+2. **Visibilidad secuencial de bindings `let`**: los bindings introducidos mediante `let` siguen la regla de visibilidad léxica secuencial (Capítulo 9). Un binding solo es visible en las líneas posteriores a su declaración; no existen referencias hacia adelante entre bindings `let`.
+3. **No-shadowing entre parámetros y bindings `let`**: declarar un `let` con el mismo nombre que un parámetro formal es semánticamente inválido:
+   ```text
+   // Inválido: let value colisiona con el parámetro value
+   fn calculate(int value) -> int
+   {
+       let int value = 10;
+       return value;
+   }
+   ```
+4. **No-shadowing entre parámetros y bindings de patrón `when`**: un binding de patrón en una expresión `when` no puede reutilizar el nombre de un parámetro visible en la función:
+   ```text
+   // Inválido: pattern worker colisiona con el parámetro worker
+   fn process(Worker worker, SearchResult result) -> string
+   {
+       return when result {
+           SearchResult::Found(Worker worker) => worker.name,
+           SearchResult::NotFound => "none"
+       };
+   }
+   ```
+5. **Independencia de ámbitos entre funciones**: funciones distintas poseen ámbitos totalmente independientes; es válido que parámetros o bindings en funciones diferentes compartan los mismos nombres.
+
+
+### 13.10 Análisis semántico
+
+El análisis semántico de las funciones se formaliza en dos niveles secuenciales:
+
+#### 13.10.1 Análisis a nivel de SourceFile
+Antes de analizar los cuerpos de las funciones:
+1. Se recopilan todas las declaraciones de nivel superior (`TopLevelDeclaration`).
+2. Se reúnen todas las `FunctionDeclaration`.
+3. Se verifica que exista exactamente una función pública: `Count(PublicFunctionDeclaration) == 1`.
+4. Se verifica la unicidad de los nombres de función (`FunctionName`).
+5. Se valida que ningún `FunctionName` colisione con intrinsics reservados ejecutables.
+6. Se resuelven todas las referencias de tipo de los parámetros (`ParameterList`).
+7. Se resuelven todos los tipos de retorno (`ReturnType`).
+
+#### 13.10.2 Análisis de cada FunctionDeclaration
+Para cada función declarada en el archivo:
+1. Se determina su visibilidad efectiva (`EffectiveVisibility`).
+2. Se valida la unicidad de los nombres de parámetros (`ParameterName`).
+3. Se crea un `FunctionScope` local.
+4. Se introducen los parámetros como bindings inmutables y visibles.
+5. Se analizan secuencialmente las declaraciones `LetBindingDeclaration` según las reglas del Capítulo 9.
+6. Se analiza la única sentencia `ReturnStatement` final.
+7. Se suministra `ExpectedType(ReturnType)` a la `ReturnExpression`.
+8. Se verifica que `Compatible(TypeOf(ReturnExpression), ReturnType) == true`.
+9. Si todas las verificaciones son satisfactorias, la función es semánticamente válida.
+
+#### 13.10.3 Reglas complementarias de análisis
+1. **Análisis estático de todas las funciones**: todas las funciones declaradas en el archivo `.efn` (pública y privadas) se analizan estáticamente. Una función privada con errores semánticos invalida todo el archivo, incluso si no es invocada.
+2. **Independencia del Type Dependency Graph**: las referencias a tipos en las cabeceras de las funciones (`ParameterType`, `ReturnType`) **no** añaden aristas al grafo de dependencias de tipos (`Type Dependency Graph`). Dicho grafo rige exclusivamente la composición estructural de valores de datos (`StructValue`, `EnumValue`).
+
+
+### 13.11 FunctionDeclaration, Expressions y Values
+
+Se establece formalmente la frontera conceptual entre funciones, expresiones y valores:
+
+1. **FunctionName aislado no es una expresión**: referenciar un `FunctionName` de forma aislada no produce un valor ni constituye una `BindingReferenceExpression`.
+2. **Invocación en capítulo posterior**: la sintaxis y semántica de invocación de funciones (`FunctionName(...)`) pertenece formalmente al Capítulo 14 (`Function Calls`).
+3. **Ausencia de funciones de primera clase**: Evo-Script v0 no admite funciones como valores de primera clase, funciones de orden superior, variables de función, funciones anónimas, expresiones lambda ni clausuras (*closures*).
+4. **Ausencia de funciones anidadas**: las funciones solo pueden declararse en el nivel superior del archivo (`TopLevelDeclaration`). No se permite declarar funciones dentro de otras funciones.
+5. **Ausencia de características avanzadas de parámetros**: el lenguaje no incluye funciones genéricas, parámetros con valores por defecto, parámetros opcionales, parámetros variádicos, paso de parámetros por referencia (`ref`, `out`, `in`, `mut`) ni parámetros nombrados.
+
+
+### 13.12 Ejemplos canónicos
+
+#### 13.12.1 Función sin parámetros
+```text
+public fn constant() -> int
+{
+    return 10;
+}
+```
+- No declara parámetros (`ParameterList` ausente).
+- Tipo de retorno `int`.
+- El literal `10` se contextualiza directamente como `int` y se retorna.
+
+#### 13.12.2 Función con bindings locales `let`
+```text
+fn double(int64 value) -> int64
+{
+    let int64 result = value * 2;
+
+    return result;
+}
+```
+- El parámetro `value` es visible en todo el cuerpo.
+- El binding `result` se calcula secuencialmente y se retorna.
+
+#### 13.12.3 Función que construye y retorna un struct
+```text
+struct Worker
+{
+    int64 id;
+    string name;
+}
+
+fn create_worker(
+    int64 id,
+    string name
+) -> Worker
+{
+    return Worker {
+        id: id,
+        name: name
+    };
+}
+```
+- El retorno produce un valor tipado de tipo nominal `Worker`.
+
+#### 13.12.4 Función con expresión `when` en el retorno
+```text
+enum WorkerStatus
+{
+    Active,
+    Disabled
+}
+
+fn status_code(WorkerStatus status) -> int64
+{
+    return when status {
+        WorkerStatus::Active => 1,
+        WorkerStatus::Disabled => 0
+    };
+}
+```
+- El `ExpectedType(int64)` del retorno se propaga a los literales de cada rama del `when`.
+
+#### 13.12.5 Ejemplo final integrado
+```text
+struct Worker
+{
+    int64 id;
+    string name;
+}
+
+enum WorkerStatus
+{
+    Active,
+    Disabled
+}
+
+fn status_code(WorkerStatus status) -> int64
+{
+    return when status {
+        WorkerStatus::Active => 1,
+        WorkerStatus::Disabled => 0
+    };
+}
+
+private fn worker_name(Worker worker) -> string
+{
+    return worker.name;
+}
+
+public fn describe_worker(
+    Worker worker,
+    WorkerStatus status
+) -> string
+{
+    let string name = worker.name;
+
+    let int64 code = when status {
+        WorkerStatus::Active => 1,
+        WorkerStatus::Disabled => 0
+    };
+
+    return name;
+}
+```
+- El archivo contiene exactamente una función pública (`describe_worker`) y dos funciones privadas auxiliares (`status_code`, `worker_name`).
+- Todas las funciones se analizan estáticamente y quedan formalmente disponibles para ser invocadas conforme a las reglas del Capítulo 14.
