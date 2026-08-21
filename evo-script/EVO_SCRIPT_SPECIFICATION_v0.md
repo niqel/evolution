@@ -3722,3 +3722,524 @@ La siguiente matriz define la validez estática de las familias de operaciones s
 1. **Conversiones numéricas `to_*` (`to_integer`, `to_float`, `to_dynamic`)**: el éxito está condicionado a la representabilidad matemática exacta del valor fuente en el tipo destino (`ExactlyRepresentable(source Value, TargetType) == true`).
 2. **Parsing de enteros (`parse_integer`)**: el éxito está condicionado a la validez sintáctica del texto (`SignedIntegerText` o `UnsignedIntegerText`) y a que el valor entero matemático pertenezca al rango del tipo destino.
 3. **Parsing de punto flotante (`parse_float`)**: el éxito está condicionado a la validez sintáctica del texto (`FloatingText`), a la conversión mediante `roundTiesToEven` y a la obtención de un resultado numérico finito.
+
+---
+
+## 12. Expresión when
+
+Evo-Script v0 proporciona la expresión `when` como el mecanismo declarativo y exhaustivo para inspeccionar valores de tipo enum (`EnumType`) y seleccionar una alternativa de cómputo en función de la variante activa.
+
+La dualidad fundamental del sistema de tipos se refleja directamente en sus construcciones:
+- `struct` representa una conjunción nominal e inmutable de datos (`struct = AND data`).
+- `enum` representa una disyunción nominal de alternativas (`enum = OR alternatives`).
+- `when` representa la selección exhaustiva de una alternativa de un enum (`when = select one enum alternative`).
+
+
+### 12.1 Modelo de WhenExpression
+
+Una expresión `when` (`WhenExpression`) es una construcción sintáctica de primera clase que produce exactamente un valor (`Value`) al evaluar la rama correspondiente a la variante activa:
+
+```text
+WhenExpression
+    ↓ análisis semántico estático
+SemanticType
+    ↓ evaluación correcta
+Value
+```
+
+Reglas normativas:
+1. **Naturaleza de Expression**: `when` es estrictamente una `Expression`, no una sentencia (*Statement*). Puede aparecer en cualquier posición gramatical donde se admita una expresión (inicializadores de bindings, operandos aritméticos, expresiones anidadas, etc.).
+2. **Determinación estática del tipo**: toda `WhenExpression` semánticamente válida posee exactamente un `SemanticType`:
+   ```text
+   TypeOf(WhenExpression) -> SemanticType
+   ```
+3. **Correspondencia de valor**: cuando la evaluación concluye exitosamente, el valor producido pertenece al tipo estático determinado:
+   ```text
+   Evaluate(WhenExpression) -> Value
+   TypeOf(Value) == TypeOf(WhenExpression)
+   ```
+4. **Distinción Expression frente a Statement**: en declaraciones como:
+   ```text
+   let string message = when result {
+       SearchResult::NotFound => "not found",
+       SearchResult::Found(Worker worker) => worker.name
+   };
+   ```
+   el punto y coma final (`;`) pertenece a la regla `LetBindingDeclaration`, no a la `WhenExpression`.
+
+
+### 12.2 Sintaxis y When Arms
+
+La sintaxis formal de una `WhenExpression` se define como:
+
+```text
+WhenExpression
+    ::= "when"
+        Expression
+        "{"
+        WhenArmList
+        "}"
+
+WhenArmList
+    ::= WhenArm
+        ("," WhenArm)*
+
+WhenArm
+    ::= EnumPattern
+        "=>"
+        Expression
+```
+
+Reglas normativas:
+1. **Separación obligatoria por comas**: las ramas (`WhenArm`) dentro de `WhenArmList` deben estar separadas obligatoriamente por comas (`,`). El salto de línea es un espacio en blanco y no sustituye a la coma separadora.
+2. **Prohibición de trailing comma**: no se admite coma posterior a la última rama. Escribir una coma tras el último `WhenArm` es sintácticamente inválido.
+3. **Marcador estructural `=>`**: el símbolo `=>` actúa exclusivamente como marcador estructural dentro de la producción `WhenArm`. No es un operador aritmético, lógico, de comparación, de asignación ni de encadenamiento (*pipeline*). No participa en la tabla de precedencia de operadores ni posee significado fuera de un `WhenArm`.
+
+
+### 12.3 Expresión inspeccionada y restricción a EnumType
+
+La expresión inmediatamente posterior a la palabra reservada `when` constituye la expresión inspeccionada (*scrutinee*):
+
+```text
+when scrutinee { ... }
+```
+
+Reglas normativas:
+1. **Restricción estricta a EnumType**: el tipo estático del *scrutinee* debe ser necesariamente un tipo enumerado nominal definido por el usuario (`EnumType`):
+   ```text
+   TypeOf(scrutinee) = EnumType E
+   ```
+2. **Tipos prohibidos como scrutinee**: aplicar `when` sobre valores de tipo `bool`, tipos numéricos fijos (`int`, `float`, etc.), `string`, `StructType` o `dynamic` es semánticamente inválido:
+   ```text
+   when true { ... }          // Inválido (bool)
+   when 10 { ... }            // Inválido (numeric)
+   when "hello" { ... }       // Inválido (string)
+   when worker { ... }        // Inválido (StructType)
+   when dynamic_value { ... } // Inválido (dynamic)
+   ```
+   `when` no constituye un mecanismo de selección general (*switch*) sobre tipos primitivos o estructuras.
+3. **Independencia del ExpectedType exterior respecto al scrutinee**: si la `WhenExpression` recibe un `ExpectedType` exterior (por ejemplo, desde una declaración `let`), dicho tipo esperado **no** se propaga al *scrutinee*. El *scrutinee* se analiza y tipa de manera completamente independiente:
+   ```text
+   ExpectedType(T)
+       ↓
+   WhenExpression
+      / \
+     X   ↓
+   scrutinee arms
+   ```
+
+
+### 12.4 Patterns de variantes
+
+Un patrón de variante (`EnumPattern`) especifica la variante de la disyunción que se contrasta en cada rama:
+
+```text
+EnumPattern
+    ::= SimpleVariantPattern
+     |  AssociatedValueVariantPattern
+     |  StructuredVariantPattern
+
+SimpleVariantPattern
+    ::= EnumVariantReference
+
+AssociatedValueVariantPattern
+    ::= EnumVariantReference
+        "("
+        TypeReference
+        BindingName
+        ")"
+
+StructuredVariantPattern
+    ::= EnumVariantReference
+        "{"
+        StructuredPatternFieldList
+        "}"
+
+StructuredPatternFieldList
+    ::= StructuredPatternField
+        ("," StructuredPatternField)*
+
+StructuredPatternField
+    ::= FieldName
+        ":"
+        TypeReference
+        BindingName
+```
+
+Existe una correspondencia biunívoca entre las tres formas de variantes declaradas (Capítulo 8) y las tres formas de patrones:
+
+| Forma declarada de la variante | Forma requerida del patrón (`EnumPattern`) |
+|---|---|
+| SimpleVariant (`VariantName`) | `SimpleVariantPattern` (`EnumType::VariantName`) |
+| AssociatedValueVariant (`VariantName(TypeReference)`) | `AssociatedValueVariantPattern` (`EnumType::VariantName(TypeReference BindingName)`) |
+| StructuredVariant (`VariantName { ... }`) | `StructuredVariantPattern` (`EnumType::VariantName { FieldName: TypeReference BindingName, ... }`) |
+
+#### 12.4.1 SimpleVariantPattern
+Se utiliza para contrastar variantes simples sin datos asociados:
+```text
+Status::Active
+```
+No introduce bindings en el entorno de la rama.
+
+#### 12.4.2 AssociatedValueVariantPattern
+Se utiliza para contrastar variantes con un valor asociado único:
+```text
+SearchResult::Found(Worker worker)
+```
+Reglas normativas:
+1. **Declaración de binding local**: la especificación `TypeReference BindingName` (por ejemplo, `Worker worker`) no construye un nuevo valor; declara un binding local inmutable que recibe el valor del payload asociado de la variante activa.
+2. **Validación estricta de tipo**: el `TypeReference` anotado en el patrón debe coincidir exactamente con el tipo de payload declarado en la variante del enum:
+   ```text
+   Compatible(ResolveType(PatternType), DeclaredPayloadType) == true
+   ```
+   Si una variante declara `Found(Worker)`, escribir `SearchResult::Found(string worker)` es semánticamente inválido. No se realizan conversiones de tipo en el patrón.
+
+#### 12.4.3 StructuredVariantPattern
+Se utiliza para contrastar variantes estructuradas con campos nombrados:
+```text
+SearchResult::Failed {
+    code: int error_code,
+    message: string error_message
+}
+```
+Reglas normativas:
+1. **Correspondencia de campos**: la parte izquierda (`FieldName:`) identifica el campo declarado en la variante; la parte derecha (`TypeReference BindingName`) declara el binding local inmutable que recibe el valor de dicho campo.
+2. **Extracción exhaustiva y completa de campos**: el patrón debe extraer la totalidad de los campos declarados por la variante estructurada, exactamente una vez por cada campo. Omitir un campo o duplicarlo es semánticamente inválido.
+3. **Orden de campos**: los campos se identifican por su nombre (`FieldName`), no por su posición. El orden en el que se listen los campos dentro del patrón es irrelevante siempre que todos los campos declarados estén presentes sin duplicados y sus tipos coincidan.
+4. **Prohibición de trailing comma**: no se admite coma posterior al último campo dentro de `StructuredPatternFieldList`.
+
+#### 12.4.4 Restricciones generales sobre patrones
+1. **Concordancia de forma obligatoria**: la forma sintáctica del patrón debe coincidir con la forma declarada de la variante:
+   - Si la variante es simple (`NotFound`), escribir `NotFound(int x)` o `NotFound { ... }` es inválido.
+   - Si la variante posee payload asociado (`Found(Worker)`), escribir `Found` o `Found { ... }` es inválido.
+   - Si la variante es estructurada (`Failed { ... }`), escribir `Failed` o `Failed(string msg)` es inválido.
+2. **Ausencia de patrones anidados**: no se permite el desestructurado anidado dentro de un `EnumPattern` (por ejemplo, `Result::Found(Worker { id: int id })` es sintácticamente inválido). La inspección de tipos anidados se realiza mediante expresiones `when` anidadas en la `ArmExpression`.
+3. **Ausencia de patrones parciales o comodines**: no se admiten comodines (`_`), patrones de resto (`..`), ni patrones parciales.
+4. **Ausencia de alias y azúcar sintáctico**: no se admiten cláusulas de alias o renombrado como `as`, `@` o `bind`.
+
+
+### 12.5 Bindings locales de pattern
+
+Los bindings declarados en un `AssociatedValueVariantPattern` o `StructuredVariantPattern` son variables locales inmutables asociadas exclusivamente a la rama en la que se definen.
+
+Reglas normativas:
+1. **Inmutabilidad y ciclo de vida**: los bindings de patrón son asociaciones inmutables (`BindingName -> Value`). Existen y son visibles únicamente durante el análisis semántico y la evaluación de la `ArmExpression` de esa rama específica.
+2. **Ausencia de solapamiento (*Shadowing*)**: se aplica la regla de no-shadowing del lenguaje. Si en el ámbito circundante ya existe un binding visible con el mismo nombre, declarar un binding de patrón con ese nombre es semánticamente inválido.
+3. **Ámbitos disjuntos entre ramas**: ramas distintas poseen ámbitos (*scopes*) independientes. Es plenamente válido utilizar el mismo identificador de binding en ramas diferentes:
+   ```text
+   when result {
+       Result::Worker(Worker value) => value.name,
+       Result::Customer(Customer value) => value.name
+   }
+   ```
+   Ambos bindings `value` pertenecen a ámbitos semánticos disjuntos.
+4. **Validez de bindings no utilizados**: no es obligatorio referenciar un binding de patrón dentro de la `ArmExpression`. Declarar un binding y no utilizarlo es semánticamente válido:
+   ```text
+   Result::Found(Worker worker) => "found"
+   ```
+
+
+### 12.6 Exhaustividad y unicidad
+
+La expresión `when` exige exhaustividad absoluta y unicidad en la cobertura de variantes del enum inspeccionado.
+
+```text
+MatchedVariants(WhenExpression) == DeclaredVariants(EnumType)
+```
+
+Reglas normativas:
+1. **Exhaustividad obligatoria**: toda variante declarada en el `EnumType` del *scrutinee* debe tener exactamente una rama correspondiente en la `WhenExpression`.
+2. **Variante faltante**: si el enum `Status` declara `Active`, `Disabled` y `Pending`, omitir `Status::Pending` es semánticamente inválido:
+   ```text
+   // Inválido: falta Status::Pending
+   when status {
+       Status::Active => "active",
+       Status::Disabled => "disabled"
+   }
+   ```
+3. **Variante duplicada**: declarar múltiples ramas para la misma variante es semánticamente inválido:
+   ```text
+   // Inválido: Status::Active aparece duplicado
+   when status {
+       Status::Active => "a",
+       Status::Active => "b",
+       Status::Disabled => "d",
+       Status::Pending => "p"
+   }
+   ```
+4. **Prohibición de cláusulas por defecto o comodines**: el lenguaje no admite `default`, `otherwise`, `else` ni patrones comodín (`_`). Toda variante debe nombrarse explícitamente.
+5. **Referencias completamente calificadas**: cada patrón debe utilizar la referencia calificada `EnumType::VariantName`. Escribir únicamente `VariantName` (por ejemplo, `Active => ...`) es semánticamente inválido.
+6. **Pertenencia exclusiva al EnumType inspeccionado**: todas las variantes referenciadas en una `WhenExpression` deben pertenecer al `EnumType` del *scrutinee*. Incluir una variante de otro enum es semánticamente inválido:
+   ```text
+   // Inválido: OtherResult::Failed no pertenece al tipo de result (SearchResult)
+   when result {
+       SearchResult::Found(...) => ...,
+       OtherResult::Failed(...) => ...
+   }
+   ```
+7. **Independencia del orden de las ramas**: `when` no utiliza semántica de primer acierto (*first-match*). La rama a evaluar se determina unívocamente por la variante activa del valor en tiempo de ejecución. Reordenar textualmente las ramas no altera el significado semántico ni el resultado de la expresión.
+
+
+### 12.7 Tipo resultante y ExpectedType
+
+Toda `WhenExpression` semánticamente válida produce un único tipo semántico común:
+
+```text
+TypeOf(WhenExpression) = T
+```
+
+Todas las expresiones de rama (`ArmExpression`) deben ser compatibles con `T`. El lenguaje no introduce tipos unión (`T | U`), promociones numéricas implícitas ni conversiones automáticas entre ramas.
+
+#### 12.7.1 Propagación de ExpectedType exterior hacia las ramas
+Cuando una `WhenExpression` se encuentra en un contexto que proporciona un `ExpectedType(T)`, dicho tipo esperado se propaga hacia cada una de las `ArmExpression` que admiten tipado contextual:
+
+```text
+let int64 value = when status {
+    Status::Active => 1,
+    Status::Disabled => 0,
+    Status::Pending => 2
+};
+```
+El `DeclaredType` `int64` proporciona `ExpectedType(int64)` a la `WhenExpression`, y este se propaga a los literales enteros `1`, `0` y `2`, tipándolos directamente como `int64` (sin conversiones implícitas posteriores).
+
+El `ExpectedType` exterior **no** afecta ni tipifica al *scrutinee*, a los patrones `EnumPattern` ni a los bindings de patrón.
+
+#### 12.7.2 Contextualización entre expresiones de rama hermanas
+En ausencia de un `ExpectedType` exterior aplicable, si una `ArmExpression` posee un `SemanticType` ya determinado `T` mientras otras ramas contienen expresiones que admiten contextualización (por ejemplo, literales numéricos sin tipo explícito), el tipo `T` proporciona `ExpectedType(T)` a dichas ramas hermanas:
+
+```text
+let int64 existing = 100;
+
+when status {
+    Status::Active => existing,
+    Status::Disabled => 0,
+    Status::Pending => 1
+}
+```
+En este caso:
+- `existing` determina `SemanticType = int64`.
+- Dicho tipo proporciona `ExpectedType(int64)` a los literales `0` y `1`.
+- El tipo resultante de la expresión es `TypeOf(WhenExpression) = int64`.
+- Esta regla es independiente del orden textual de las ramas; aplica idénticamente si el arm tipado aparece al inicio, al medio o al final.
+
+#### 12.7.3 Incompatibilidad entre ramas ya tipadas
+Si dos o más ramas poseen tipos determinados e incompatibles entre sí, la expresión es semánticamente inválida:
+```text
+let int32 first = 10;
+let int64 second = 20;
+
+// Inválido: int32 e int64 son tipos incompatibles
+when status {
+    Status::Active => first,
+    Status::Disabled => second,
+    Status::Pending => 0
+}
+```
+No se realizan conversiones implícitas para unificar tipos dispares ya cerrados.
+
+#### 12.7.4 Tipado por defecto en ausencia de contexto
+Si no existe `ExpectedType` exterior ni ninguna rama con un tipo cerrado no default, los literales aplican sus tipos por defecto (Capítulo 6):
+```text
+when status {
+    Status::Active => 1,
+    Status::Disabled => 2,
+    Status::Pending => 3
+}
+```
+Produce `TypeOf(WhenExpression) = int` (el tipo por defecto de `IntegerLiteral`).
+
+Si ramas sin contexto unificador producen tipos incompatibles por defecto (por ejemplo, `int` y `float`), la expresión es semánticamente inválida:
+```text
+// Inválido sin ExpectedType común: int vs float
+when status {
+    Status::Active => 1,
+    Status::Disabled => 2.0,
+    Status::Pending => 3
+}
+```
+
+#### 12.7.5 Caso del tipo `dynamic`
+Cuando el contexto exterior proporciona `ExpectedType(dynamic)`, cada rama se contextualiza hacia `dynamic`:
+```text
+let dynamic value = when status {
+    Status::Active => 10,
+    Status::Disabled => 10.0,
+    Status::Pending => 20
+};
+```
+- `10` se contextualiza como `DynamicValue IntegralClass(10)`.
+- `10.0` se contextualiza como `DynamicValue FloatingClass(10.0)`.
+- `20` se contextualiza como `DynamicValue IntegralClass(20)`.
+- Todas las ramas poseen estáticamente `SemanticType = dynamic`. La coexistencia de clases internas distintas en tiempo de ejecución es válida bajo el modelo de `dynamic`.
+
+
+### 12.8 Análisis semántico
+
+El análisis semántico de una `WhenExpression` sigue un ordenamiento estricto y determinista:
+
+1. **Análisis del scrutinee**: se analiza semánticamente la expresión *scrutinee* en el entorno de bindings visibles y se determina `TypeOf(scrutinee)`.
+2. **Validación de tipo EnumType**: se exige que `TypeOf(scrutinee)` sea un `EnumType E` definido. Si no es un enum, la expresión es semánticamente inválida.
+3. **Resolución de patrones**: para cada `WhenArm`:
+   - Se resuelve el `EnumPattern`.
+   - Se exige que la variante referenciada pertenezca a `E`.
+   - Se valida que la forma sintáctica del patrón coincida con la forma declarada de la variante en `E`.
+   - Se validan los `TypeReference` de payloads y campos.
+   - En `StructuredVariantPattern`, se valida que se extraigan todos los campos declarados exactamente una vez.
+4. **Validación de exhaustividad y unicidad**: se comprueba que el conjunto de variantes referenciadas coincida exactamente con el conjunto de variantes declaradas en `E`, sin omitir ninguna y sin duplicados.
+5. **Creación de ámbitos locales por rama**: para cada rama, se crea un ámbito semántico local independiente y se introducen los bindings declarados en su patrón como inmutables.
+6. **Validación de no-shadowing**: se verifica que ningún binding de patrón colisione con bindings exteriores visibles.
+7. **Análisis estático de todas las ArmExpression**: se analizan estáticamente **todas** las expresiones de rama en sus respectivos ámbitos. Ninguna rama se omite del análisis estático.
+8. **Unificación de tipo resultante**: se determina el tipo común `T` considerando el `ExpectedType` exterior, la contextualización entre ramas hermanas o los tipos por defecto, y se valida que todas las `ArmExpression` sean compatibles con `T`.
+9. **Asignación de tipo estático**: se establece `TypeOf(WhenExpression) = T`.
+
+
+### 12.9 Evaluación
+
+La evaluación de una `WhenExpression` semánticamente válida procede de acuerdo con las siguientes reglas:
+
+```text
+1. Evaluar la expresión scrutinee exactamente una sola vez.
+2. Si la evaluación del scrutinee falla por una condición de ejecución:
+   - La WhenExpression no produce un valor.
+   - No se selecciona ni evalúa ninguna rama.
+3. Obtener el EnumValue resultante del scrutinee.
+4. Determinar la variante activa: ActiveVariant(EnumValue).
+5. Seleccionar unívocamente el WhenArm correspondiente a dicha variante activa.
+6. Establecer en el ámbito de la rama los bindings locales con los valores del payload o campos del EnumValue.
+7. Evaluar exclusivamente la ArmExpression seleccionada.
+8. Si la ArmExpression produce un Value:
+   - Dicho Value es el resultado final de la WhenExpression.
+9. Si la ArmExpression falla durante su evaluación:
+   - La WhenExpression falla inmediatamente.
+10. Ninguna otra rama es evaluada.
+```
+
+Reglas normativas:
+1. **Evaluación única del scrutinee**: el *scrutinee* se evalúa exactamente una vez al inicio.
+2. **Evaluación exclusiva de la rama activa**: únicamente se evalúa la `ArmExpression` asociada a la variante activa. Las ramas restantes no se ejecutan.
+3. **Ausencia de recuperación (*Fallback*) ante fallo**: si la evaluación de la rama seleccionada falla, la `WhenExpression` falla. El lenguaje no intenta evaluar otras ramas, no busca variantes alternativas ni ejecuta mecanismos de recuperación. `when` no captura errores de evaluación en tiempo de ejecución.
+
+
+### 12.10 Composición y when anidado
+
+Una `WhenExpression` puede utilizarse dentro de cualquier contexto sintáctico que admita una `Expression`.
+
+Para inspeccionar valores en estructuras con enums anidados, se emplean expresiones `when` anidadas (no patrones anidados):
+
+```text
+enum InnerResult
+{
+    Yes,
+    No
+}
+
+enum OuterResult
+{
+    Nested(InnerResult),
+    Empty
+}
+
+let string text = when outer {
+    OuterResult::Nested(InnerResult inner) => when inner {
+        InnerResult::Yes => "yes",
+        InnerResult::No => "no"
+    },
+    OuterResult::Empty => "empty"
+};
+```
+
+Cada `WhenExpression` anidada opera de manera completamente autónoma, manteniendo su propia verificación de exhaustividad, sus propios ámbitos de bindings y su propio tipo resultante.
+
+
+### 12.11 Integración con Expression
+
+`WhenExpression` forma parte formal de las expresiones primarias (`PrimaryExpression`) del lenguaje:
+
+```text
+PrimaryExpression
+    ::= LiteralExpression
+     |  BindingReferenceExpression
+     |  StructConstructionExpression
+     |  SimpleVariantExpression
+     |  AssociatedValueVariantExpression
+     |  StructuredVariantExpression
+     |  ConversionExpression
+     |  ParsingExpression
+     |  WhenExpression
+     |  ParenthesizedExpression
+```
+
+#### 12.11.1 Participación en expresiones compuestas
+Como `PrimaryExpression`, una `WhenExpression` puede actuar directamente como operando en expresiones aritméticas, lógicas o de comparación:
+
+```text
+let int total =
+    base
+    +
+    when status {
+        Status::Active => 10,
+        Status::Disabled => 0,
+        Status::Pending => 5
+    };
+```
+
+#### 12.11.2 Acceso a campos sobre el resultado de when
+Si una `WhenExpression` produce un valor de tipo estructura (`StructType`), puede aplicarse acceso a campos (`.`) directamente sobre el resultado de la expresión:
+
+```text
+let string name = when result {
+    Result::First => worker_a,
+    Result::Second => worker_b
+}.name;
+```
+
+#### 12.11.3 Ejemplo canónico completo
+El siguiente ejemplo ilustra la interacción integral entre estructuras, enumeraciones de diversas formas y la expresión `when`:
+
+```text
+struct Worker
+{
+    int64 id;
+    string name;
+}
+
+enum SearchResult
+{
+    NotFound,
+    Found(Worker),
+    Failed {
+        int code;
+        string message;
+    }
+}
+
+let SearchResult result = SearchResult::Found(
+    Worker {
+        id: 10,
+        name: "Ana"
+    }
+);
+
+let string message = when result {
+    SearchResult::NotFound
+        => "not found",
+
+    SearchResult::Found(Worker worker)
+        => worker.name,
+
+    SearchResult::Failed {
+        code: int error_code,
+        message: string error_message
+    }
+        => error_message
+};
+```
+
+Explicación de la ejecución:
+1. El binding `result` contiene un `EnumValue` de tipo `SearchResult` con variante activa `Found` y payload `Worker { id: 10, name: "Ana" }`.
+2. Al evaluar `when result { ... }`, se evalúa `result` una sola vez y se determina que `ActiveVariant == Found`.
+3. Se selecciona unívocamente la segunda rama (`SearchResult::Found(Worker worker)`).
+4. Se crea en el ámbito de la rama el binding inmutable `Worker worker` con el valor del payload.
+5. Se evalúa la expresión `worker.name`, la cual accede al campo `name` de la estructura y produce el valor `"Ana"`.
+6. La `WhenExpression` concluye exitosamente con el valor `"Ana"`.
+7. El binding `message` queda asociado al valor `"Ana"` (`message == "Ana"`).
