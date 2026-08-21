@@ -562,3 +562,372 @@ Este token señala la conclusión formal de la secuencia de tokens y satisface l
 SourceFile
     ::= TopLevelDeclaration* EndOfFile
 ```
+
+---
+
+## 4. Identificadores y convenciones de nombres
+
+Un identificador (`Identifier`) representa un nombre definido por el programa. Los identificadores se utilizan para nombrar:
+- tipos `struct`;
+- tipos `enum`;
+- variantes de `enum`;
+- funciones;
+- parámetros;
+- bindings;
+- campos.
+
+Evo-Script v0 establece dos niveles diferenciados de validez:
+
+```text
+forma léxica
+    ↓
+convención nominal requerida por su contexto
+```
+
+La forma léxica determina si una secuencia de caracteres puede ser reconocida por el lexer como un token `Identifier`. La convención nominal determina si ese `Identifier` es válido para la clase de símbolo específica que nombra en el programa.
+
+
+### 4.1 Gramática de Identifier
+
+La gramática formal de un identificador general se define como:
+
+```text
+LowercaseLetter
+    ::= "a".."z"
+
+UppercaseLetter
+    ::= "A".."Z"
+
+Letter
+    ::= LowercaseLetter
+     |  UppercaseLetter
+
+Digit
+    ::= "0".."9"
+
+Identifier
+    ::= Letter IdentifierCharacter*
+
+IdentifierCharacter
+    ::= Letter
+     |  Digit
+     |  "_"
+```
+
+Reglas normativas:
+1. Todo identificador debe comenzar obligatoriamente con una letra ASCII mayúscula o minúscula (`a-z`, `A-Z`).
+2. Tras el primer carácter, un identificador puede contener cualquier combinación de letras ASCII, dígitos (`0-9`) y guiones bajos (`_`).
+
+Ejemplos léxicamente válidos:
+- `worker`
+- `worker2`
+- `worker_id`
+- `SearchResult`
+- `Value32`
+- `HTTPResult`
+
+Ejemplos léxicamente inválidos:
+- `2worker` (comienza con un dígito)
+- `_worker` (comienza con un guion bajo)
+- `__worker` (comienza con un guion bajo)
+- `_` (no contiene una letra inicial)
+- `worker-name` (contiene el carácter `-`, reservado como operador o delimitador)
+
+
+### 4.2 Caracteres permitidos
+
+Los identificadores utilizan exclusivamente el subconjunto de caracteres ASCII:
+- `A-Z`
+- `a-z`
+- `0-9`
+- `_`
+
+Los caracteres Unicode no ASCII no forman parte de la gramática de `Identifier`.
+
+Ejemplos inválidos como identificadores:
+- `niño`
+- `México`
+- `búsqueda`
+- `日本`
+
+Esta restricción aplica estrictamente a los identificadores del lenguaje y no afecta a las cadenas de texto (`StringLiteral`) ni a los comentarios (`//`), donde los caracteres Unicode están permitidos según sus propias reglas.
+
+
+### 4.3 Sensibilidad a mayúsculas y minúsculas
+
+Los identificadores son estrictamente sensibles a mayúsculas y minúsculas (`case-sensitive`).
+
+Por consiguiente:
+- `worker`
+- `Worker`
+- `WORKER`
+
+representan tres identificadores léxicos distintos. El lenguaje no realiza transformaciones, normalizaciones ni correcciones automáticas de mayúsculas o minúsculas.
+
+
+### 4.4 Identificadores reservados
+
+Una secuencia de caracteres que coincida exactamente con:
+- una palabra reservada estructural (`Structural Keyword`);
+- un token literal booleano reservado (`Boolean Literal Token`);
+- un nombre de tipo reservado (`Reserved Type Name`);
+
+no puede utilizarse como un identificador definido por el programa.
+
+Ejemplos reservados:
+- `let`
+- `return`
+- `true`
+- `false`
+- `int`
+- `string`
+- `float64`
+
+La reserva de identificadores es sensible a mayúsculas y minúsculas:
+- `return` es una palabra reservada del lenguaje y no puede usarse como identificador.
+- `Return` no coincide con el token reservado `return` y es léxicamente un `Identifier` (su validez dependerá de la convención nominal requerida en el contexto donde se utilice).
+
+
+### 4.5 Convenciones nominales
+
+Evo-Script v0 define exactamente dos convenciones nominales para los identificadores semánticos del código:
+- `PascalCase`
+- `snake_case`
+
+Estas convenciones son reglas normativas de validez y no meras recomendaciones de estilo. Un identificador léxicamente válido que no cumpla con la convención nominal requerida por su clase de símbolo hace que el programa sea sintáctica y semánticamente inválido.
+
+
+### 4.6 PascalCase
+
+Los nombres de las siguientes construcciones deben utilizar estrictamente la convención `PascalCase`:
+- tipos `struct`;
+- tipos `enum`;
+- variantes de `enum`.
+
+La gramática formal de `PascalCaseIdentifier` se define como:
+
+```text
+PascalCaseIdentifier
+    ::= UppercaseLetter PascalCharacter*
+
+PascalCharacter
+    ::= Letter
+     |  Digit
+```
+
+Reglas normativas:
+1. Comienza obligatoriamente con una letra ASCII mayúscula (`A-Z`).
+2. Los caracteres posteriores pueden ser letras ASCII (`A-Z`, `a-z`) o dígitos (`0-9`).
+3. No contiene guiones bajos (`_`).
+
+Ejemplos válidos:
+- `Worker`
+- `SearchResult`
+- `ApplicationState`
+- `Value32`
+- `HTTPResult`
+
+Ejemplos inválidos como PascalCase:
+- `worker` (no inicia con mayúscula)
+- `search_result` (inicia con minúscula y contiene guiones bajos)
+- `_Worker` (inicia con guion bajo)
+- `Worker_Result` (contiene guion bajo)
+
+
+### 4.7 snake_case
+
+Los nombres de las siguientes construcciones deben utilizar estrictamente la convención `snake_case`:
+- funciones;
+- parámetros;
+- bindings;
+- campos.
+
+La gramática formal de `SnakeCaseIdentifier` se define como:
+
+```text
+SnakeCaseIdentifier
+    ::= SnakeSegment ("_" SnakeSegment)*
+
+SnakeSegment
+    ::= LowercaseLetter SnakeCharacter*
+
+SnakeCharacter
+    ::= LowercaseLetter
+     |  Digit
+```
+
+Reglas normativas:
+1. Utiliza exclusivamente letras ASCII minúsculas (`a-z`), dígitos (`0-9`) y guiones bajos (`_`).
+2. Comienza obligatoriamente con una letra ASCII minúscula.
+3. No puede comenzar con un guion bajo (`_`).
+4. No puede terminar con un guion bajo (`_`).
+5. No puede contener guiones bajos consecutivos (`__`).
+6. Cada segmento separado por guion bajo debe iniciar obligatoriamente con una letra minúscula (`LowercaseLetter`).
+
+Consecuencias normativas:
+- `version2` es válido (los dígitos forman parte del segmento que inició con letra).
+- `version_2` es inválido (el segmento tras el guion bajo comienza con un dígito).
+- `value32` es válido (los dígitos forman parte del segmento que inició con letra).
+- `value_32` es inválido (el segmento tras el guion bajo comienza con un dígito).
+- `to_int32` es válido (el segmento `int32` comienza con la letra `i` y contiene dígitos posteriormente).
+
+Ejemplos válidos:
+- `worker`
+- `worker_id`
+- `search_worker`
+- `calculate_total`
+- `value32`
+- `to_int32`
+
+Ejemplos inválidos como snake_case:
+- `Worker` (contiene mayúsculas)
+- `workerId` (contiene mayúsculas)
+- `worker__id` (contiene guiones bajos consecutivos)
+- `worker_` (termina con guion bajo)
+- `_worker` (inicia con guion bajo)
+- `version_2` (segmento numérico aislado)
+- `value_32` (segmento numérico aislado)
+- `search-Worker` (contiene guion medio y mayúscula)
+
+
+### 4.8 Convención según clase de símbolo
+
+La correspondencia entre la clase de símbolo y su convención nominal se define normativamente en la siguiente tabla:
+
+| Clase de símbolo | Convención nominal obligatoria |
+|---|---|
+| Tipo `struct` | `PascalCase` |
+| Tipo `enum` | `PascalCase` |
+| Variante de `enum` | `PascalCase` |
+| Función (`fn`, `private fn`, `public fn`) | `snake_case` |
+| Parámetro de función | `snake_case` |
+| Binding (`let`) | `snake_case` |
+| Campo de `struct` | `snake_case` |
+
+Ejemplo ilustrativo:
+
+```text
+struct Worker
+{
+    int worker_id;
+    string first_name;
+}
+
+enum SearchResult
+{
+    Found(Worker)
+    NotFound
+}
+
+fn describe_worker(Worker worker) -> string
+{
+    let string worker_name = worker.first_name;
+    return worker_name;
+}
+```
+
+Clasificación nominal del ejemplo:
+- `Worker`: `PascalCase` (tipo `struct`)
+- `SearchResult`: `PascalCase` (tipo `enum`)
+- `Found`: `PascalCase` (variante de `enum`)
+- `NotFound`: `PascalCase` (variante de `enum`)
+- `describe_worker`: `snake_case` (función)
+- `worker`: `snake_case` (parámetro)
+- `worker_id`: `snake_case` (campo de `struct`)
+- `first_name`: `snake_case` (campo de `struct`)
+- `worker_name`: `snake_case` (binding local)
+
+
+### 4.9 Validez léxica y validez nominal
+
+Existe una distinción formal entre validez léxica y validez nominal:
+
+1. **Validez léxica**: determinada por el lexer según la producción `Identifier`. Establece si una secuencia de caracteres constituye un identificador general válido.
+2. **Validez nominal**: determinada por el analizador semántico (`semantic analyzer`) según la clase de símbolo declarada. Establece si el identificador satisface la convención `PascalCase` o `snake_case` correspondiente.
+
+Ejemplos:
+- La secuencia `search_result` es un `Identifier` léxicamente válido. Sin embargo, la declaración `struct search_result { ... }` es inválida porque los tipos `struct` requieren obligatoriamente `PascalCase`.
+- La secuencia `CalculateTotal` es un `Identifier` léxicamente válido. Sin embargo, la declaración `fn CalculateTotal() -> int { ... }` es inválida porque las funciones requieren obligatoriamente `snake_case`.
+
+
+### 4.10 Nombre físico del archivo .efn
+
+En Evo-Script v0 existe un único tipo de artefacto fuente operativo: el archivo `.efn`.
+
+El nombre físico del archivo `.efn` utiliza exclusivamente la convención `kebab-case`. La convención `kebab-case` aplica únicamente al sistema de archivos y no constituye una convención válida para identificadores dentro del código fuente.
+
+#### 4.10.1 Identidad del archivo
+
+El nombre físico del archivo `.efn` está determinado obligatoriamente por la única función pública (`public fn`) declarada en el programa. La función pública constituye la identidad semántica del script.
+
+La correspondencia nominal entre la función pública y el nombre del archivo es obligatoria y se deriva mediante el siguiente algoritmo determinista:
+
+```text
+public function name
+    ↓
+reemplazar cada "_" por "-"
+    ↓
+agregar ".efn"
+    ↓
+physical filename
+```
+
+Las letras minúsculas y los dígitos se conservan sin modificación durante la transformación.
+
+Ejemplos obligatorios de correspondencia:
+- `public fn search_worker(...)` -> `search-worker.efn`
+- `public fn calculate_total(...)` -> `calculate-total.efn`
+- `public fn value32(...)` -> `value32.efn`
+- `public fn convert_int32(...)` -> `convert-int32.efn`
+- `public fn to_int32(...)` -> `to-int32.efn`
+
+#### 4.10.2 Regla de validez nominal del archivo
+
+La correspondencia entre el nombre físico del archivo y la función pública es una regla de validez obligatoria.
+
+Ejemplo válido:
+- Archivo en disco: `calculate-total.efn`
+- Contenido del archivo:
+  ```text
+  public fn calculate_total(int value) -> int
+  {
+      return value;
+  }
+  ```
+
+Ejemplo inválido:
+- Archivo en disco: `calculator.efn`
+- Contenido del archivo:
+  ```text
+  public fn calculate_total(int value) -> int
+  {
+      return value;
+  }
+  ```
+  Este programa es inválido porque el nombre físico del archivo no corresponde a la función pública `calculate_total`.
+
+#### 4.10.3 Gramática del nombre físico
+
+El nombre base (*basename*) del archivo físico derivado utiliza exclusivamente los caracteres:
+- `a-z`
+- `0-9`
+- `-`
+
+El nombre base físico no puede:
+- comenzar con `-`;
+- terminar con `-`;
+- contener guiones consecutivos (`--`);
+- contener guiones bajos (`_`);
+- contener letras mayúsculas.
+
+La extensión `.efn` forma parte del nombre físico del archivo en el sistema de archivos, pero no forma parte del identificador semántico de la función dentro del lenguaje (`search_worker` es el identificador semántico de la función; `search-worker.efn` es el nombre físico del archivo).
+
+La derivación nominal opera en un único sentido normativo:
+
+```text
+public fn
+    ↓
+physical .efn filename
+```
+
+No se derivan nombres físicos a partir de tipos `struct` o `enum`, ni se permite que un nombre de archivo físico arbitrario determine el nombre de la función pública.
