@@ -7,8 +7,7 @@ En esta versión:
 - `.efn` constituye el único artefacto fuente operativo del lenguaje en v0.
 - Los conceptos de `struct` y `enum` forman parte del lenguaje como construcciones locales declaradas dentro del mismo archivo `.efn` que las utiliza.
 - Cada archivo `.efn` contiene exactamente una función pública (`public fn`) y puede contener cero o más funciones privadas (`fn` o `private fn`).
-- No existe en v0 sistema de módulos, imports, archivos externos de tipos, firmas abstractas (`.esig`), composición (`.root`, `.main`, `.elib`) ni integración con capacidades externas o Evo-Shell.
-- El propósito exclusivo de la especificación v0 es consolidar y cerrar formalmente el núcleo computacional y semántico del lenguaje antes de introducir mecanismos de modularidad y composición entre archivos.
+- El propósito de la especificación v0 es consolidar y cerrar formalmente el núcleo computacional y semántico del lenguaje.
 
 ---
 
@@ -32,7 +31,6 @@ En esta versión:
 16. Evaluación y errores
 17. Gramática consolidada de Evo-Script v0
 18. Programa canónico autocontenido
-19. Elementos explícitamente fuera de v0
 
 ---
 
@@ -53,7 +51,9 @@ Las funciones privadas pueden declararse de forma explícita mediante `private f
 
 ### 1.1 Script autocontenido
 
-Todo elemento necesario para interpretar y ejecutar un programa Evo-Script v0 se encuentra declarado dentro del mismo archivo `.efn`. Las declaraciones `struct`, las declaraciones `enum` y las funciones auxiliares pertenecen al mismo programa y pueden ser utilizadas por las funciones del archivo de acuerdo con las reglas establecidas por esta especificación.
+Toda declaración propia de un programa Evo-Script v0 se encuentra dentro del mismo archivo `.efn`. El programa no requiere otros archivos fuente para definir sus structs, enums o funciones.
+
+Las declaraciones `struct`, las declaraciones `enum` y las funciones auxiliares pertenecen al mismo programa y pueden ser utilizadas por las funciones del archivo de acuerdo con las reglas establecidas por esta especificación.
 
 El archivo `.efn` constituye una unidad autocontenida de:
 - análisis léxico;
