@@ -5214,3 +5214,581 @@ Explicación del análisis y ejecución:
    - `describe_worker -> worker_name`
    - No existen llamadas desde `create_worker` ni `worker_name`.
    - El grafo es acíclico (DAG válido).
+
+---
+
+## 15. Pipelines
+
+En Evo-Script v0, las expresiones de pipeline (`PipelineExpression`) formalizan cadenas declarativas de transformación de valores mediante el operador estructural de canalización:
+
+```text
+|>
+```
+
+El modelo representa un flujo explícito y unidireccional de valores inmutables:
+
+```text
+source Value
+    ↓
+stage 1
+    ↓
+stage 2
+    ↓
+...
+    ↓
+final Value
+```
+
+Cada etapa del pipeline recibe como entrada el valor producido por la etapa anterior y genera un nuevo valor que se propaga a la etapa subsiguiente. El valor resultante de la última etapa constituye el valor final de la expresión de pipeline completa.
+
+
+### 15.1 Modelo de PipelineExpression
+
+Una `PipelineExpression` es una expresión de primera clase (`Expression`) dentro del sistema de tipos de Evo-Script v0:
+
+```text
+PipelineExpression
+    ↓ análisis semántico estático
+SemanticType
+    ↓ evaluación correcta
+Value
+```
+
+Reglas normativas:
+1. **Naturaleza de Expression**: `PipelineExpression` puede ubicarse en cualquier contexto gramatical donde se admita una `Expression` (inicializador de `let`, sentencia `return`, argumento de llamada a función, inicializador de campo en `struct`, rama de `when`, etc.).
+2. **Determinación estática del tipo**: toda `PipelineExpression` semánticamente válida posee exactamente el tipo semántico (`SemanticType`) correspondiente a la salida de su última etapa.
+3. **Producción directa de valor**: al concluir la evaluación de forma exitosa, la `PipelineExpression` produce directamente el `Value` generado por la etapa final:
+   ```text
+   Evaluate(PipelineExpression) -> Value
+   TypeOf(Value) == TypeOf(PipelineExpression)
+   ```
+4. **Delimitación sintáctica**: el punto y coma (`;`) pertenece a la sentencia contenedora (`LetBindingDeclaration` o `ReturnStatement`), no a la `PipelineExpression` en sí misma:
+   ```text
+   return value
+       |> double
+       |> to_string;
+   ```
+
+
+### 15.2 Sintaxis y precedencia
+
+La estructura sintáctica conceptual de una expresión de pipeline se define como:
+
+```text
+PipelineExpression
+    ::= NonPipelineExpression
+        PipelineStage+
+
+PipelineStage
+    ::= "|>"
+        PipelineStageBody
+```
+
+#### 15.2.1 Precedencia mínima
+El operador `|>` posee la **precedencia más baja** de todos los operadores y combinadores de expresiones en Evo-Script v0:
+- Se sitúa por debajo de los operadores lógicos (`||`, `&&`), comparadores (`==`, `!=`, `<`, `<=`, `>`, `>=`), aritméticos aditivos (`+`, `-`), multiplicativos (`*`, `/`, `%`), unarios (`-`, `!`) y acceso a campos (`.`).
+
+Por consiguiente:
+```text
+a + b |> double
+```
+se interpreta inequívocamente como:
+```text
+(a + b) |> double
+```
+y **no** como `a + (b |> double)`. Para lograr esta última agrupación deben emplearse paréntesis explícitos: `a + (b |> double)`.
+
+Asimismo, una expresión `when` canalizada:
+```text
+when result {
+    ...
+}
+|> normalize
+```
+se interpreta como:
+```text
+(when result { ... }) |> normalize
+```
+
+#### 15.2.2 Asociatividad izquierda
+El operador `|>` es estrictamente **asociativo por la izquierda** (*left-associative*):
+```text
+value
+    |> first
+    |> second
+    |> third
+```
+se analiza y evalúa conceptualmente como:
+```text
+((value |> first) |> second) |> third
+```
+No existe semántica de canalización asociativa por la derecha.
+
+
+### 15.3 Pipeline stages
+
+Evo-Script v0 distingue exactamente dos formas sintácticas para el cuerpo de una etapa (`PipelineStageBody`):
+
+```text
+PipelineStageBody
+    ::= UnaryPipelineTarget
+     |  PipelineStageExpression
+
+UnaryPipelineTarget
+    ::= FunctionName
+     |  ConversionIntrinsicName
+     |  ParsingIntrinsicName
+```
+
+#### 15.3.1 Unary Pipeline Target (Shorthand)
+Permite especificar directamente el identificador de una función unaria de usuario o un intrinsic unario de conversión/parsing:
+```text
+value |> double
+value |> to_string
+text  |> parse_int32
+```
+La etapa recibe implícitamente el valor de entrada del pipeline y lo aplica como único argumento.
+
+#### 15.3.2 Explicit Pipeline Stage
+Una `PipelineStageExpression` es una expresión arbitraria evaluada bajo el contexto de etapa (`PipelineThisContext`) actual, que debe utilizar explícitamente la palabra clave contextual `this` para consumir el valor de entrada:
+```text
+value  |> add(this, 10)
+value  |> add(10, this)
+worker |> this.name
+value  |> this + 10
+result |> when this {
+    Result::Ok(int value) => value,
+    Result::Failed => 0
+}
+```
+
+#### 15.3.3 Ausencia de inserción implícita de argumentos
+El compilador y analizador de Evo-Script v0 **no infiere ni asume** posiciones de argumentos para funciones con múltiples parámetros:
+- No existe regla de inserción en el primer argumento (*no first-argument insertion*).
+- No existe regla de inserción en el último argumento (*no last-argument insertion*).
+- Escribir `value |> add(10)` cuando `add` requiere dos parámetros es semánticamente inválido. Debe especificarse de forma inequívoca `value |> add(this, 10)` o `value |> add(10, this)`.
+
+#### 15.3.4 Consumo obligatorio del input de etapa
+Toda etapa explícita (`PipelineStageExpression`) debe contener al menos una referencia a `this` correspondiente a su contexto activo:
+```text
+CurrentThisReferences(Stage) >= 1
+```
+Etapas como `value |> constant()` (donde `constant()` no consume `this`) son semánticamente inválidas. El pipeline representa transformaciones continuas de valores y prohíbe descartar silenciosamente el valor de la etapa previa.
+
+
+### 15.4 ThisExpression
+
+La expresión contextual `this` representa el valor inmutable de entrada de la etapa de pipeline actual:
+
+```text
+ThisExpression
+    ::= "this"
+```
+
+#### 15.4.1 Modelo semántico de this
+`this` es una palabra clave estructural reservada (Capítulo 3) con semántica puramente contextual:
+- `this` **no** es un binding (`Binding`), no es un parámetro (`Parameter`), no es una variable local, ni un campo.
+- `this` **no** representa un receptor orientado a objetos (*OOP receiver*), ni una instancia de clase, ni `self`.
+- `this` no participa en la tabla ordinaria de asociaciones de nombres (`BindingName -> Value`) ni puede ser declarado, asignado o reasignado.
+
+#### 15.4.2 Tipado y evaluación de this
+Dentro de una etapa de pipeline activa gobernada por un `PipelineThisContext`:
+```text
+TypeOf(this)   = PipelineInputType(CurrentStage)
+Evaluate(this) = PipelineInputValue(CurrentStage)
+```
+
+#### 15.4.3 Invalidez de this fuera de pipeline stages
+El uso de `this` es semánticamente inválido fuera de una `PipelineStageExpression` que posea un `PipelineThisContext` activo. Declaraciones como:
+```text
+// Inválido: this fuera de pipeline stage
+fn calculate(int value) -> int
+{
+    return this;
+}
+```
+o `let int x = this;` son rechazadas durante el análisis semántico estático.
+
+#### 15.4.4 this como expresión de primera clase en la etapa
+`this` puede participar en cualquier construcción de expresión válida según su tipo semántico:
+- Acceso a campos: `this.name` (si `TypeOf(this)` es un `StructType` con campo `name`).
+- Operaciones binarias: `this + 10`.
+- Argumento de función: `calculate(this)`.
+- Escrutinio en `when`: `when this { ... }`.
+
+
+### 15.5 Unary pipeline shorthand
+
+La forma shorthand `source |> target` aplica `target` al valor de entrada del pipeline de manera exacta:
+
+```text
+Evaluate(source) exactamente una vez
+    ↓
+V (PipelineInputValue)
+    ↓
+target(this) con this = V
+```
+
+Reglas normativas:
+1. **Funciones de usuario unarias**: si `target` es un `FunctionName` de usuario, debe resolver a una `FunctionDeclaration` con exactamente un parámetro (`ParameterCount(target) == 1`). Si la función declara 0 o más de 1 parámetro, la forma shorthand es semánticamente inválida y exige la forma explícita con `this`.
+2. **Intrinsics de conversión**: `value |> to_int64` aplica el intrinsic `to_int64` al valor de entrada conforme a las reglas del Capítulo 11.
+3. **Intrinsics de parsing**: `text |> parse_int32` aplica el intrinsic de parsing si el valor de entrada es de tipo `string` (Capítulo 11).
+4. **No sustitución textual**: el shorthand no realiza sustitución de texto en el AST; se evalúa como la invocación de la operación sobre el valor ya evaluado de la etapa previa.
+
+
+### 15.6 Tipado del Value entre etapas
+
+En una cadena de etapas $E_0 \mid> S_1 \mid> S_2 \mid> \dots \mid> S_n$:
+
+```text
+T0 = TypeOf(E0)
+
+TypeOf(this in S1) = T0
+T1 = TypeOf(S1)
+
+TypeOf(this in S2) = T1
+T2 = TypeOf(S2)
+
+...
+
+TypeOf(this in Sn) = T(n-1)
+Tn = TypeOf(Sn)
+
+TypeOf(PipelineExpression) = Tn
+```
+
+Reglas normativas:
+1. **Mutabilidad del tipo a lo largo del flujo**: no se requiere que todas las etapas mantengan el mismo `SemanticType`. Una etapa puede recibir un tipo y producir otro completamente distinto:
+   ```text
+   int32 ──|> to_int64 ──> int64 ──|> double ──> int64 ──|> to_string ──> string
+   ```
+2. **Ausencia de conversiones implícitas entre etapas**: cada etapa debe ser estrictamente compatible con el tipo de salida de la etapa anterior. Si los tipos no coinciden, se requiere una conversión explícita:
+   ```text
+   let int32 source = 10;
+
+   // Inválido: consume requiere int64 pero recibe int32
+   return source |> consume;
+
+   // Válido con conversión explícita
+   return source |> to_int64 |> consume;
+   ```
+
+
+### 15.7 ExpectedType y contextualización mediante this
+
+#### 15.7.1 ExpectedType desde shorthand unario
+Si la expresión inicial del pipeline es un literal contextualizable (por ejemplo, `10 |> identity` donde `identity(int64) -> int64`), el único parámetro de `identity` proporciona `ExpectedType(int64)` al `this` implícito, tipando directamente el literal `10` como `int64` (sin conversión implícita).
+
+#### 15.7.2 ExpectedType a través de this explícito
+Cuando una `ThisExpression` se ubica en una posición del stage que le suministra `ExpectedType(T)`, dicho constraint puede propagarse hacia el `PipelineInputExpression` si este admite tipado contextual:
+```text
+ExpectedType(T)
+    ↓
+ThisExpression
+    ↓
+PipelineInputExpression
+```
+
+#### 15.7.3 Expresiones ya tipadas no se convierten
+Si la expresión de entrada del pipeline ya posee un tipo cerrado e incompatible con la expectativa del stage, el análisis semántico rechaza el programa (exigiendo conversión explícita `to_*`).
+
+#### 15.7.4 Frontera del ExpectedType exterior
+El `ExpectedType` proveniente del contexto exterior (por ejemplo, `let string text = ...`) valida exclusivamente el tipo final de la `PipelineExpression` (`Tn`), pero no se propaga arbitrariamente hacia las etapas intermedias o iniciales salvo a través de las referencias a `this` de cada etapa.
+
+
+### 15.8 Análisis semántico
+
+El análisis semántico de una `PipelineExpression` se efectúa según el siguiente algoritmo determinista:
+
+1. Se reconoce la expresión inicial `PipelineInputExpression` y la secuencia ordenada de etapas `PipelineStage[1..n]`.
+2. Se analiza estáticamente `PipelineInputExpression` y se determina su tipo inicial $T_0$.
+3. Para cada etapa $i$ desde $1$ hasta $n$:
+   - Se crea un contexto local `PipelineThisContext(i)` con `TypeOf(this) = T_{i-1}`.
+   - Si la etapa es `UnaryPipelineTarget`:
+     - Se resuelve el target; si es función de usuario, se exige `ParameterCount == 1`.
+     - Si es un intrinsic (`to_*`, `parse_*`), se aplican sus reglas semánticas estáticas.
+     - Se valida que `T_{i-1}` sea compatible con el tipo requerido por el target.
+     - Se determina el tipo de salida $T_i$.
+   - Si la etapa es `PipelineStageExpression`:
+     - Se verifica que contenga al menos una referencia a `this` asociada a `PipelineThisContext(i)`.
+     - Se analiza estáticamente la expresión completa del stage.
+     - Se recolectan los constraints de `ExpectedType` sobre `this`. Si existen constraints incompatibles entre múltiples usos de `this`, se rechaza el programa.
+     - Se determina el tipo de salida $T_i$.
+4. Se establece el tipo final `TypeOf(PipelineExpression) = T_n`.
+
+Reglas normativas:
+1. **Análisis estático exhaustivo de todas las etapas**: todas las etapas se analizan estáticamente en su totalidad.
+2. **Ausencia de resolución dinámica de tipos**: la compatibilidad entre etapas se comprueba enteramente en tiempo de análisis.
+
+
+### 15.9 Evaluación
+
+Para una `PipelineExpression` semánticamente válida:
+
+```text
+source
+    |> stage_1
+    |> stage_2
+    ...
+    |> stage_n
+```
+
+La evaluación en tiempo de ejecución se ejecuta conforme a las siguientes reglas:
+1. **Evaluación única del source**: se evalúa la expresión `source` exactamente una vez para obtener `Value0`. Si `source` falla, la `PipelineExpression` falla de inmediato y ninguna etapa subsiguiente se evalúa.
+2. **Evaluación secuencial de izquierda a derecha**: para cada etapa $i$ de $1$ a $n$:
+   - Se establece `this = Value_{i-1}` en el contexto de la etapa.
+   - Se evalúa la etapa $i$ exactamente una vez para producir `Value_i`.
+   - Si la etapa $i$ falla durante su evaluación, la `PipelineExpression` falla de inmediato, las etapas posteriores **no** se evalúan y no se produce ningún valor.
+3. **Resultado final**: el valor producido por la última etapa `Value_n` es el resultado final de la evaluación:
+   ```text
+   Evaluate(PipelineExpression) = Value_n
+   ```
+4. **Ausencia de reintentos (*No Fallback*)**: una falla en cualquier punto del pipeline interrumpe definitivamente la evaluación.
+
+
+### 15.10 Uso múltiple de this
+
+Una misma etapa explícita (`PipelineStageExpression`) puede referenciar `this` múltiples veces:
+
+```text
+value |> pair(this, this)
+value |> this + this
+```
+
+Reglas normativas:
+1. **Observación del mismo valor inmutable**: todas las apariciones de `this` dentro de la misma etapa observan exactamente el mismo `PipelineInputValue`.
+2. **Evaluación única del valor previo**: el valor previo **no** se reevalúa; se evalúa una sola vez y se suministra a todas las referencias de `this`.
+3. **Compatibilidad obligatoria de constraints**: si múltiples apariciones de `this` imponen constraints de tipado contextual sobre un input aún no cerrado:
+   - Si los constraints son compatibles (`ExpectedType(int64)` y `ExpectedType(int64)`), se unifican sobre el input.
+   - Si los constraints son incompatibles (por ejemplo, un parámetro requiere `int64` y otro `int32`), el análisis semántico rechaza la expresión como inválida.
+
+
+### 15.11 Pipelines anidados
+
+Dado que `PipelineExpression` es una `Expression`, puede anidarse dentro de una etapa de otro pipeline:
+
+```text
+outer_value
+    |> combine(
+        this,
+        inner_value |> transform(this)
+    )
+```
+
+Reglas normativas:
+1. **Resolución al PipelineThisContext más cercano**: toda `ThisExpression` resuelve léxicamente al `PipelineThisContext` más cercano que la contenga:
+   - El primer `this` en el ejemplo anterior resuelve al contexto del stage exterior (`outer_value`).
+   - El `this` dentro de `transform(this)` resuelve al contexto del stage interior (`inner_value`).
+2. **No interferencia con bindings**: el anidamiento de contextos de `this` no interactúa ni entra en conflicto con los bindings léxicos declarados con `let`.
+3. **this exterior como origen de pipeline interior**: es válido utilizar el `this` de la etapa exterior como la expresión fuente (`source`) de un pipeline interior:
+   ```text
+   outer |> (this |> transform)
+   ```
+
+
+### 15.12 Pipelines y Function Call Graph
+
+Las invocaciones a funciones de usuario realizadas dentro de pipelines se integran de forma natural al `FunctionCallGraph` definido en el Capítulo 14:
+
+1. **Etapas shorthand con funciones de usuario**: una etapa unaria `value |> helper` genera una arista dirigida `caller -> helper` en el grafo de llamadas.
+2. **Llamadas explícitas con this**: una etapa explícita `value |> helper(this, 10)` genera la arista `caller -> helper`.
+3. **Intrinsics sin aristas**: etapas que emplean intrinsics (`to_*`, `parse_*`) no agregan aristas al `FunctionCallGraph`.
+4. **Prohibición absoluta de recursión**: el uso de pipelines no permite eludir la regla de aciclicidad (DAG). Escribir `fn calculate(int v) -> int { return v |> calculate; }` produce un ciclo `calculate -> calculate` y es rechazado estáticamente.
+
+
+### 15.13 Composición con otras Expressions
+
+`PipelineExpression` se integra de forma ortogonal en la totalidad de construcciones del lenguaje:
+
+- **Inicializadores de bindings `let`**:
+  ```text
+  let string text = value |> double |> to_string;
+  ```
+- **Sentencia `return`**:
+  ```text
+  return value |> double |> to_string;
+  ```
+- **Argumentos de llamadas a función**:
+  ```text
+  consume(value |> normalize |> transform)
+  ```
+- **Inicializadores de campos de estructuras**:
+  ```text
+  Worker {
+      id: id,
+      name: raw_name |> normalize_name
+  }
+  ```
+- **Ramas de expresiones `when`**:
+  ```text
+  when result {
+      SearchResult::Found(Worker worker) => worker.name |> normalize_name,
+      SearchResult::NotFound => "unknown"
+  }
+  ```
+- **Canalización posterior a `when`**:
+  ```text
+  when result {
+      SearchResult::Found(Worker worker) => worker.name,
+      SearchResult::NotFound => "unknown"
+  }
+  |> normalize_name
+  ```
+
+
+### 15.14 Ejemplos canónicos
+
+#### 15.14.1 Shorthand de función unaria e intrinsic
+```text
+fn double(int64 value) -> int64
+{
+    return value * 2;
+}
+
+public fn format_value(int64 value) -> string
+{
+    return value
+        |> double
+        |> to_string;
+}
+```
+- `value` entra como `int64`.
+- `|> double` recibe `int64` y produce `int64`.
+- `|> to_string` recibe `int64` y produce `string`.
+- `TypeOf(PipelineExpression) = string`.
+- `FunctionCallGraph`: `format_value -> double`.
+
+#### 15.14.2 Función multiargumento con this explícito
+```text
+fn add(
+    int64 left,
+    int64 right
+) -> int64
+{
+    return left + right;
+}
+
+public fn calculate(int64 value) -> int64
+{
+    return value
+        |> add(this, 10);
+}
+```
+- `this` recibe el valor de `value` (`int64`).
+- El literal `10` recibe `ExpectedType(int64)` del parámetro `right`.
+- `add(this, 10)` produce `int64`.
+
+#### 15.14.3 this en posición intermedia
+```text
+fn surround(
+    string prefix,
+    string value,
+    string suffix
+) -> string
+{
+    return prefix + value + suffix;
+}
+
+public fn bracket(string text) -> string
+{
+    return text
+        |> surround("[", this, "]");
+}
+```
+- `this` indica con precisión que el valor del pipeline se suministra en el segundo parámetro.
+
+#### 15.14.4 Conversión explícita de tipos entre etapas
+```text
+fn double(int64 value) -> int64
+{
+    return value * 2;
+}
+
+public fn calculate(int32 value) -> string
+{
+    return value
+        |> to_int64
+        |> double
+        |> to_string;
+}
+```
+- `int32` se transforma explícitamente a `int64` mediante `to_int64` antes de entrar a `double`.
+- `double` produce `int64` que se convierte a `string` con `to_string`.
+
+#### 15.14.5 Acceso a campos mediante this
+```text
+struct Worker
+{
+    int64 id;
+    string name;
+}
+
+public fn get_name(Worker worker) -> string
+{
+    return worker
+        |> this.name;
+}
+```
+- `TypeOf(this) = Worker`.
+- `this.name` accede al campo `name` y produce `string`.
+
+#### 15.14.6 Expresión when mediante this
+```text
+enum SearchResult
+{
+    NotFound,
+    Found(string)
+}
+
+public fn describe(SearchResult result) -> string
+{
+    return result
+        |> when this {
+            SearchResult::NotFound => "not found",
+            SearchResult::Found(string value) => value
+        };
+}
+```
+- `this` es el valor `SearchResult` recibido.
+- La expresión `when this` evalúa exhaustivamente sus variantes y produce `string`.
+
+#### 15.14.7 Ejemplo final integrado
+```text
+fn double(int64 value) -> int64
+{
+    return value * 2;
+}
+
+fn add(
+    int64 left,
+    int64 right
+) -> int64
+{
+    return left + right;
+}
+
+public fn calculate(int32 value) -> string
+{
+    return value
+        |> to_int64
+        |> double
+        |> add(this, 10)
+        |> to_string;
+}
+```
+
+Explicación del análisis y ejecución:
+1. `value` evalúa a un `Value` de tipo `int32`.
+2. `|> to_int64` convierte el valor a `int64`.
+3. `|> double` recibe `int64` y evalúa a `int64`.
+4. `|> add(this, 10)`:
+   - `this` representa el `int64` producido por `double`.
+   - `10` recibe `ExpectedType(int64)` y se tipa como `int64`.
+   - `add` produce `int64`.
+5. `|> to_string` convierte el `int64` final a `string`.
+6. `TypeOf(PipelineExpression) = string`, compatible con `ReturnType(calculate) = string`.
+7. `FunctionCallGraph`:
+   - `calculate -> double`
+   - `calculate -> add`
+   - Los intrinsics `to_int64` y `to_string` no generan aristas.
+   - El grafo es estrictamente acíclico (DAG válido).
