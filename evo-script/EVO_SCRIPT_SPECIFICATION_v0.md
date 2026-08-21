@@ -1824,10 +1824,13 @@ La gramática formal se define como:
 
 ```text
 StructConstructionExpression
-    ::= StructTypeName
+    ::= StructTypeReference
         "{"
         FieldInitializerList?
         "}"
+
+StructTypeReference
+    ::= Identifier
 
 FieldInitializerList
     ::= FieldInitializer
@@ -1837,6 +1840,19 @@ FieldInitializer
     ::= FieldName ":" Expression
 ```
 
+#### 7.5.1 Declaración frente a referencia de tipo struct
+Existe una distinción formal entre la declaración del nombre de un struct y su referencia en expresiones de construcción:
+- `StructName` (definido en la sección 7.2 como `PascalCaseIdentifier`) se utiliza exclusivamente al **declarar** un nuevo tipo `struct`.
+- `StructTypeReference` (sintácticamente un `Identifier`) se utiliza al **referenciar** un tipo ya existente para construir un `StructValue`.
+
+A nivel léxico, la secuencia que representa el nombre del tipo (por ejemplo, `Worker`) se procesa invariablemente como un token `Identifier` general (Capítulo 4). Durante el análisis semántico, se aplica la resolución de tipos:
+
+```text
+ResolveType(StructTypeReference) -> StructType
+```
+
+El `Identifier` utilizado como `StructTypeReference` debe resolver unívocamente en el `Type Space` a un `SemanticType` cuya categoría sea estrictamente `StructType`. Si la referencia no resuelve a un `StructType` (por ejemplo, si resuelve a un `NativeType`, a un `EnumType` o a un símbolo no declarado), la `StructConstructionExpression` es semánticamente inválida.
+
 Reglas normativas:
 1. **Coma obligatoria**: los inicializadores de campo (`FieldInitializer`) deben estar separados obligatoriamente por una coma (`,`). Los saltos de línea son espacios en blanco (`whitespace`) y no sustituyen la coma delimitadora.
 2. **Ausencia de coma final (trailing comma)**: no se permite una coma después del último inicializador de la lista.
@@ -1844,14 +1860,14 @@ Reglas normativas:
    - `Worker { id: 10, name: "Ana", }` es inválido.
    - `Worker { id: 10 name: "Ana" }` es inválido.
 3. **Ausencia de palabra clave `new`**: Evo-Script v0 no utiliza la palabra clave `new` para la construcción de valores (construcciones como `new Worker { ... }` o `new Worker(...)` son sintácticamente inválidas).
-4. **Ausencia de structs anónimos**: toda construcción requiere indicar explícitamente el nombre nominal del tipo (`StructTypeName`). Expresiones anónimas como `{ id: 10, name: "Ana" }` son sintácticamente inválidas.
+4. **Ausencia de structs anónimos**: toda construcción requiere indicar explícitamente la referencia nominal del tipo (`StructTypeReference`). Expresiones anónimas como `{ id: 10, name: "Ana" }` son sintácticamente inválidas.
 5. **Struct vacío**: un struct sin campos se construye mediante la lista vacía de inicializadores:
    ```text
    Marker {}
    ```
-6. **Resultado de la evaluación**: una `StructConstructionExpression` válida produce exactamente un `StructValue` cuyo `SemanticType` es el `StructTypeName` especificado.
+6. **Resultado de la evaluación**: una `StructConstructionExpression` válida produce exactamente un `StructValue` correspondiente al `StructType` resuelto a partir de la `StructTypeReference`.
 
-#### 7.5.1 Obligatoriedad y correspondencia de campos
+#### 7.5.2 Obligatoriedad y correspondencia de campos
 Para que una `StructConstructionExpression` sea válida, se aplican las siguientes reglas:
 1. **Todos los campos son obligatorios**: cada campo declarado en la definición del `struct` debe recibir un inicializador. No existen valores por defecto implícitos ni mecanismos de inicialización parcial o nula (`null`). Omitir un campo hace que la expresión sea semánticamente inválida.
 2. **Prohibición de campos desconocidos**: especificar un inicializador para un nombre de campo que no forma parte del `struct` es semánticamente inválido.
