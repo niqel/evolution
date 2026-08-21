@@ -1672,3 +1672,363 @@ Reglas normativas:
 1. No existe un Value representativo de ausencia o nulidad (`null`, `nil`, `none`, `undefined`).
 2. La secuencia `null` no es una palabra reservada del lenguaje (no pertenece a las Structural Keywords del Capítulo 3).
 3. Siguiendo las reglas léxicas y nominales, la palabra `null` puede ser utilizada como un `Identifier` ordinario definido por el usuario (por ejemplo, como nombre de parámetro o variable en convención `snake_case`) sin atribuirle ningún significado intrínseco en el sistema de tipos.
+
+---
+
+## 7. Structs locales
+
+En Evo-Script v0, el mecanismo fundamental para modelar la conjunción nominal de datos es la construcción `struct`:
+
+```text
+struct = AND data
+```
+
+Un `struct` define un tipo semántico nominal (`StructType`), declara un conjunto finito de campos tipados, permite instanciar valores estructurados inmutables (`StructValue`) y proyectar dichos campos mediante el operador de acceso (`.`). Un `struct` no define comportamiento ni métodos; la lógica ejecutable pertenece exclusivamente a las funciones.
+
+
+### 7.1 Modelo de struct
+
+Un `struct` define un tipo nominal compuesto por la conjunción de todos los campos que declara:
+
+```text
+struct Worker
+{
+    int id;
+    string name;
+    bool active;
+}
+```
+
+Conceptualmente:
+
+```text
+Worker = id AND name AND active
+```
+
+Relación con el sistema de tipos y valores:
+- `StructType` pertenece a `ProgramDefinedType`, el cual es un `SemanticType` (Capítulo 5).
+- `StructValue` pertenece a `ProgramDefinedValue`, el cual es un `Value` (Capítulo 6).
+
+Se establece formalmente la distinción:
+
+```text
+StructType != StructValue
+```
+
+- `Worker` es el `SemanticType` nominal que describe la estructura y tipo de los datos.
+- `Worker { id: 10, name: "Ana", active: true }` es la expresión sintáctica que produce un `StructValue` concreto cuyo tipo semántico es `Worker`.
+
+
+### 7.2 Declaración de struct
+
+Una declaración `struct` introduce un nuevo `StructType` en el Type Space del archivo `.efn`. Su gramática formal se define como:
+
+```text
+StructDeclaration
+    ::= "struct" StructName
+        "{"
+        StructField*
+        "}"
+
+StructName
+    ::= PascalCaseIdentifier
+
+StructField
+    ::= TypeReference FieldName ";"
+
+FieldName
+    ::= SnakeCaseIdentifier
+```
+
+Reglas normativas:
+1. **Nivel superior**: una `StructDeclaration` solo puede aparecer como `TopLevelDeclaration` dentro del archivo `.efn` (Capítulo 2). No se admiten declaraciones `struct` anidadas dentro de funciones ni dentro de otros structs.
+2. **Convenciones nominales**: `StructName` debe utilizar estrictamente `PascalCaseIdentifier`, mientras que cada `FieldName` debe utilizar estrictamente `SnakeCaseIdentifier` (Capítulo 4).
+3. **Visibilidad local**: todos los structs declarados en un archivo `.efn` son tipos locales del script autocontenido. No existen modificadores de visibilidad para structs (no existen `public struct` ni `private struct`).
+4. **Struct vacío**: la producción `StructField*` permite declaraciones `struct` sin campos:
+   ```text
+   struct Marker
+   {
+   }
+   ```
+   Un struct vacío es un `StructType` nominal válido. Su instanciación se realiza mediante `Marker {}` y posee exactamente un único `StructValue` representable.
+
+
+### 7.3 Declaración y unicidad de campos
+
+Cada campo dentro de un `struct` se declara especificando su tipo y su nombre, terminado obligatoriamente con un punto y coma:
+
+```text
+TypeReference FieldName;
+```
+
+Reglas normativas:
+1. **Punto y coma obligatorio**: toda declaración de campo debe finalizar con el delimitador `;`.
+2. **Unicidad de campos**: dentro de una misma `StructDeclaration`, cada `FieldName` debe aparecer exactamente una vez. Declarar campos con nombres duplicados dentro del mismo `struct` es semánticamente inválido:
+   ```text
+   // Ejemplo inválido
+   struct Worker
+   {
+       int id;
+       string id;
+   }
+   ```
+3. **Independencia nominal entre structs**: diferentes `StructTypes` pueden declarar campos con el mismo nombre. Los campos pertenecen nominalmente a su propio tipo (`Worker.id` y `Customer.id` son campos independientes). No existe un espacio global compartido de nombres de campos.
+4. **Identidad nominal de campos**: la identidad de un campo se determina exclusivamente por su nombre (`FieldName`), no por su posición u orden físico de declaración.
+
+
+### 7.4 Tipos de campos y composición
+
+El tipo declarado para un campo (`TypeReference`) puede ser cualquier `SemanticType` resoluble dentro del `Type Space` del archivo `.efn`:
+- tipos nativos (`NativeType`), tales como `int`, `string`, `bool`, `float64`, `dynamic`, etc.;
+- tipos struct (`StructType`);
+- tipos enum (`EnumType`).
+
+Ejemplo de composición:
+```text
+struct Country
+{
+    int id;
+    string name;
+}
+
+struct Address
+{
+    string street;
+    Country country;
+}
+```
+
+La declaración `Country country;` establece que un `StructValue` de tipo `Address` contiene como valor de dicho campo un `Value` de tipo `Country`. Esto representa una composición estructural pura de datos inmutables.
+
+#### 7.4.1 Referencias adelantadas de tipos
+De conformidad con las reglas del Type Space (Capítulo 5), las declaraciones de nivel superior pueden referenciarse mutuamente sin importar su orden físico en el código fuente:
+```text
+struct Address
+{
+    Country country;
+}
+
+struct Country
+{
+    string name;
+}
+```
+En este ejemplo válido, la referencia a `Country` dentro de `Address` es correcta aunque la declaración de `Country` aparezca físicamente después en el archivo.
+
+
+### 7.5 Struct Construction Expression
+
+La creación de un `StructValue` se expresa en el código fuente mediante una expresión de construcción (`StructConstructionExpression`).
+
+La gramática formal se define como:
+
+```text
+StructConstructionExpression
+    ::= StructTypeName
+        "{"
+        FieldInitializerList?
+        "}"
+
+FieldInitializerList
+    ::= FieldInitializer
+        ("," FieldInitializer)*
+
+FieldInitializer
+    ::= FieldName ":" Expression
+```
+
+Reglas normativas:
+1. **Coma obligatoria**: los inicializadores de campo (`FieldInitializer`) deben estar separados obligatoriamente por una coma (`,`). Los saltos de línea son espacios en blanco (`whitespace`) y no sustituyen la coma delimitadora.
+2. **Ausencia de coma final (trailing comma)**: no se permite una coma después del último inicializador de la lista.
+   - `Worker { id: 10, name: "Ana" }` es válido.
+   - `Worker { id: 10, name: "Ana", }` es inválido.
+   - `Worker { id: 10 name: "Ana" }` es inválido.
+3. **Ausencia de palabra clave `new`**: Evo-Script v0 no utiliza la palabra clave `new` para la construcción de valores (construcciones como `new Worker { ... }` o `new Worker(...)` son sintácticamente inválidas).
+4. **Ausencia de structs anónimos**: toda construcción requiere indicar explícitamente el nombre nominal del tipo (`StructTypeName`). Expresiones anónimas como `{ id: 10, name: "Ana" }` son sintácticamente inválidas.
+5. **Struct vacío**: un struct sin campos se construye mediante la lista vacía de inicializadores:
+   ```text
+   Marker {}
+   ```
+6. **Resultado de la evaluación**: una `StructConstructionExpression` válida produce exactamente un `StructValue` cuyo `SemanticType` es el `StructTypeName` especificado.
+
+#### 7.5.1 Obligatoriedad y correspondencia de campos
+Para que una `StructConstructionExpression` sea válida, se aplican las siguientes reglas:
+1. **Todos los campos son obligatorios**: cada campo declarado en la definición del `struct` debe recibir un inicializador. No existen valores por defecto implícitos ni mecanismos de inicialización parcial o nula (`null`). Omitir un campo hace que la expresión sea semánticamente inválida.
+2. **Prohibición de campos desconocidos**: especificar un inicializador para un nombre de campo que no forma parte del `struct` es semánticamente inválido.
+3. **Prohibición de campos duplicados**: especificar más de un inicializador para el mismo nombre de campo es semánticamente inválido.
+4. **Independencia del orden de inicializadores**: los inicializadores se asocian a los campos por coincidencia de nombre (`FieldName -> Value`) y no por posición. Los siguientes ejemplos producen el mismo `StructValue`:
+   ```text
+   Worker { id: 10, name: "Ana", active: true }
+   Worker { active: true, id: 10, name: "Ana" }
+   ```
+5. **Orden determinista de evaluación**: las expresiones de los inicializadores se evalúan estrictamente de izquierda a derecha en el orden textual en que aparecen en el código fuente. La identidad nominal de los campos es independiente del orden de evaluación de sus expresiones asociadas:
+   ```text
+   field identity != expression evaluation order
+   ```
+
+
+### 7.6 Validación y ExpectedType de campos
+
+Cada campo declarado en un `StructType` proporciona un tipo esperado (`ExpectedType`) a la expresión de su `FieldInitializer` correspondiente:
+
+```text
+struct Worker
+{
+    int64 id;
+    string name;
+}
+```
+
+En la construcción:
+```text
+Worker {
+    id: 10,
+    name: "Ana"
+}
+```
+el inicializador de `id` recibe `ExpectedType(int64)`. Siguiendo las reglas de tipado contextual de literales del Capítulo 6, el `IntegerLiteral("10")` produce directamente un `Value(int64, 10)` sin requerir conversiones implícitas intermedias.
+
+#### 7.6.1 Expresiones no literales en inicializadores
+Cuando el valor de un inicializador es una expresión compuesta o llamada a función:
+```text
+FieldName: Expression
+```
+el tipo producido por la expresión (`TypeOf(Expression)`) debe ser directamente compatible con el tipo declarado del campo (`FieldType`):
+```text
+Compatible(TypeOf(Expression), FieldType) == true
+```
+de conformidad con la regla de compatibilidad exacta de tipos (Capítulo 5). No se realizan conversiones implícitas durante la construcción de structs; cualquier conversión de tipos debe ser explícita mediante las operaciones definidas en el Capítulo 11.
+
+
+### 7.7 Field Access
+
+El acceso a campos (`Field Access`) es la expresión que proyecta un campo específico a partir de un `StructValue`.
+
+Su gramática formal se define como:
+
+```text
+FieldAccessExpression
+    ::= Expression "." FieldName
+```
+
+El delimitador punto (`.`) es el operador de proyección de campos sobre un struct.
+
+#### 7.7.1 Tipado del acceso a campos
+Si una expresión $E$ produce un valor de tipo $S$ (`TypeOf(E) == S`), donde $S$ es un `StructType`, y $S$ contiene un campo $f$ con tipo $T$ ($S.f : T$), entonces:
+```text
+TypeOf(E.f) = T
+```
+`FieldAccessExpression` evalúa la expresión receptora y produce directamente el `Value` asociado al campo proyectado, sin transformaciones ni conversiones.
+
+#### 7.7.2 Restricciones semánticas del receptor
+1. **Receptor StructValue**: la expresión situada a la izquierda del punto (`.`) debe evaluar a un `StructValue`. Si el tipo semántico del receptor no es un `StructType`, el acceso a campo es semánticamente inválido.
+2. **Campo declarado**: el `FieldName` proyectado debe existir en la declaración del `StructType` receptor. El intento de acceder a un campo no declarado es semánticamente inválido.
+3. **Receptores válidos**: cualquier expresión cuyo tipo semántico sea `StructType` puede actuar como receptor de un acceso a campo (por ejemplo, un binding local, el resultado de una función, una expresión de construcción o un acceso a campo previo).
+   ```text
+   worker.name
+   find_worker(10).name
+   worker.address.country.name
+   ```
+
+#### 7.7.3 Encadenamiento de accesos
+El acceso a campos puede encadenarse de forma asociativa hacia la izquierda:
+```text
+worker.address.country.name
+```
+se evalúa e interpreta formalmente como:
+```text
+(((worker.address).country).name)
+```
+Cada subexpresión intermedia debe producir un `StructValue` válido para permitir el siguiente nivel de proyección.
+
+#### 7.7.4 Exclusividad del punto para proyección de campos
+En Evo-Script v0, el operador `.` sobre un `StructValue` se utiliza exclusivamente para la proyección de campos de datos. No define invocación de métodos ni llamadas de miembro (`worker.save()` o `worker.get_name()` no son construcciones válidas). No existen operadores alternativos de acceso (tales como `?.`, `->` o `[]`).
+
+#### 7.7.5 Precedencia
+El acceso a campos es una operación posfija de alta precedencia que se resuelve antes que los operadores binarios aritméticos, lógicos y pipelines:
+- En `worker.age + 10`, se evalúa primero `worker.age` como `FieldAccessExpression` antes de aplicar la suma.
+- En `worker.name |> normalize`, se proyecta primero `worker.name` y su resultado se transfiere como valor de entrada al pipeline.
+
+
+### 7.8 Inmutabilidad de StructValue
+
+En concordancia con el modelo de Values inmutables definido en los Capítulos 1 y 6, todo `StructValue` es estrictamente inmutable.
+
+Una vez construido un `StructValue`, sus campos no pueden modificarse:
+```text
+let Worker worker = Worker {
+    id: 10,
+    name: "Ana"
+};
+
+// Expresiones inválidas: no existe asignación a campos
+worker.name = "Laura";
+worker.id = 20;
+```
+
+#### 7.8.1 Reconstrucción de datos
+Para representar una modificación en el estado o valor de los datos, se construye un nuevo `StructValue` con los valores actualizados:
+```text
+let Worker updated_worker = Worker {
+    id: worker.id,
+    name: "Laura"
+};
+```
+El valor asociado a `worker` permanece intacto e inmutable. `updated_worker` recibe un nuevo `StructValue` independiente. Evo-Script v0 no incorpora sintaxis de actualización destructiva o copia automática por propagación (tales como `with` o `..`).
+
+
+### 7.9 Composición estructural finita
+
+Toda composición de datos definida por el programa debe poseer una estructura estáticamente finita. Un `StructType` no puede contenerse a sí mismo de manera directa o indirecta, ya que esto generaría un requerimiento de contención estructural infinito.
+
+Ejemplo inválido (recursión estructural directa):
+```text
+struct Node
+{
+    int value;
+    Node next;
+}
+```
+La dependencia `Node -> Node` produce un ciclo estructural que hace que la declaración sea semánticamente inválida.
+
+Composición finita válida:
+```text
+struct Country
+{
+    string name;
+}
+
+struct Address
+{
+    Country country;
+}
+
+struct Worker
+{
+    Address address;
+}
+```
+La cadena de contención `Worker -> Address -> Country` es acíclica y termina en tipos fundamentales, constituyendo una composición estructural finita válida.
+
+
+### 7.10 Type Dependency Graph y ciclos
+
+La validez estructural de todos los tipos definidos por el programa dentro de un archivo `.efn` se verifica mediante un grafo de dependencias de tipos (`Type Dependency Graph`).
+
+#### 7.10.1 Construcción del grafo
+1. Cada `ProgramDefinedType` declarado en el archivo `.efn` constituye un nodo del grafo.
+2. Si una declaración `StructType` denominada $A$ contiene un campo cuyo tipo semántico es otro `ProgramDefinedType` denominado $B$, se genera una arista dirigida en el grafo:
+   ```text
+   A -> B
+   ```
+3. Los tipos nativos (`NativeType`) no generan aristas hacia otros tipos.
+
+#### 7.10.2 Condición de aciclicidad (DAG)
+El `Type Dependency Graph` debe ser estrictamente un grafo dirigido acíclico (**DAG**, *Directed Acyclic Graph*).
+
+Reglas normativas:
+1. **Prohibición de recursión directa**: ningún nodo puede poseer una arista hacia sí mismo ($A \to A$).
+2. **Prohibición de recursión indirecta**: no puede existir ningún camino dirigido cerrado de longitud arbitraria ($A \to B \to A$, $A \to B \to C \to A$).
+3. **Convergencia permitida**: dependencias compartidas donde múltiples tipos dependen de un mismo tipo ($A \to C$ y $B \to C$) son válidas siempre que no formen ciclos.
+4. **Independencia del orden**: la detección de ciclos opera sobre la totalidad de las declaraciones de nivel superior del archivo `.efn`. Las referencias adelantadas son válidas si y solo si el grafo global resultante es un DAG.
+5. **Integración con EnumType**: el `Type Dependency Graph` es único para todos los tipos definidos por el programa. Las dependencias originadas por variantes de `EnumType` (Capítulo 8) se integran en este mismo grafo, validando que no existan ciclos mixtos entre structs y enums.
