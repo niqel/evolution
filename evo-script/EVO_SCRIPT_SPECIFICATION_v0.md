@@ -114,3 +114,180 @@ evaluator
 ```
 
 sin requerir decisiones adicionales sobre la sintaxis o la semántica del lenguaje. Este criterio formal establece el cierre técnico normativo de la especificación v0.
+
+---
+
+## 2. Archivo fuente .efn
+
+Un archivo `.efn` representa un programa completo de Evo-Script v0. Su contenido está formado exclusivamente por declaraciones de nivel superior (`TopLevelDeclaration`).
+
+Las declaraciones permitidas en un archivo `.efn` son:
+- declaraciones `struct`;
+- declaraciones `enum`;
+- declaraciones de función (`fn`, `private fn`, `public fn`).
+
+Un archivo `.efn` válido contiene:
+- cero o más declaraciones `struct`;
+- cero o más declaraciones `enum`;
+- cero o más funciones privadas;
+- exactamente una función pública.
+
+Estructuralmente, un archivo `.efn` se compone de:
+
+```text
+.efn
+├── struct      0..N
+├── enum        0..N
+├── private fn  0..N
+└── public fn   exactamente 1
+```
+
+La única función pública constituye la operación expuesta por el programa.
+
+
+### 2.1 Declaraciones de nivel superior
+
+Únicamente las siguientes construcciones sintácticas pueden aparecer directamente en el nivel superior de un archivo `.efn`:
+- `struct`
+- `enum`
+- `fn`
+- `private fn`
+- `public fn`
+
+Los bindings, expresiones y sentencias propios del cuerpo de una función no pueden aparecer directamente en el nivel superior. Por consiguiente, no son válidos en el nivel superior del archivo:
+- declaraciones de binding `let`;
+- llamadas a funciones (`Function Calls`);
+- pipelines (`|>`);
+- sentencias `return`;
+- expresiones ejecutables.
+
+Ejemplo inválido:
+
+```text
+let int value = 10;
+
+public fn calculate() -> int
+{
+    return value;
+}
+```
+
+El programa anterior es inválido porque el binding `let` aparece en el nivel superior del archivo fuera del cuerpo de una función.
+
+
+### 2.2 Orden de las declaraciones
+
+Las declaraciones de nivel superior pueden escribirse en cualquier orden dentro del archivo `.efn`. El orden físico en el código fuente no determina si una declaración puede ser referenciada por otra declaración del mismo programa.
+
+Antes de validar las referencias entre tipos y funciones, todas las declaraciones de nivel superior del archivo `.efn` deben ser reconocidas como pertenecientes al mismo programa.
+
+Esto permite que una función invoque o haga referencia a otra función o tipo que aparezca posteriormente en el archivo:
+
+```text
+public fn calculate(int value) -> int
+{
+    return double(value);
+}
+
+fn double(int value) -> int
+{
+    return value * 2;
+}
+```
+
+En este ejemplo válido, la posición posterior de la función `double` no impide que `calculate` pueda referenciarla e invocarla.
+
+
+### 2.3 Función pública del programa
+
+Todo archivo `.efn` válido debe contener exactamente una función declarada mediante `public fn`.
+
+No puede existir un archivo `.efn` válido con:
+- cero funciones públicas;
+- más de una función pública.
+
+La única función pública constituye la operación expuesta por el programa.
+
+Ejemplo válido:
+
+```text
+fn double(int value) -> int
+{
+    return value * 2;
+}
+
+public fn calculate(int value) -> int
+{
+    return double(value);
+}
+```
+
+Ejemplo inválido:
+
+```text
+public fn first() -> int
+{
+    return 1;
+}
+
+public fn second() -> int
+{
+    return 2;
+}
+```
+
+El ejemplo anterior es inválido porque el archivo contiene más de una función pública.
+
+
+### 2.4 Funciones privadas
+
+Un archivo `.efn` puede contener cero o más funciones privadas.
+
+Las siguientes dos formas de declaración son semánticamente equivalentes respecto a su visibilidad:
+
+```text
+fn calculate() -> int
+{
+    return 10;
+}
+```
+
+y:
+
+```text
+private fn calculate() -> int
+{
+    return 10;
+}
+```
+
+La palabra clave `private` hace explícita una visibilidad que ya está implícita cuando se utiliza únicamente la palabra clave `fn`. Por lo tanto:
+- `fn` define una función privada.
+- `private fn` define una función privada explícita.
+
+La visibilidad pública se declara siempre de forma completa mediante `public fn`. No se utiliza ninguna abreviación como `pub`.
+
+
+### 2.5 Estructura sintáctica general
+
+La estructura sintáctica general de nivel superior de un archivo `.efn` se define como:
+
+```text
+SourceFile
+    ::= TopLevelDeclaration* EndOfFile
+
+TopLevelDeclaration
+    ::= StructDeclaration
+     |  EnumDeclaration
+     |  FunctionDeclaration
+```
+
+Esta estructura sintáctica expresa las categorías de declaraciones que pueden existir directamente dentro del archivo fuente. Las reglas detalladas para `StructDeclaration`, `EnumDeclaration` y `FunctionDeclaration` se definen formalmente en sus respectivos capítulos.
+
+Adicionalmente a la estructura sintáctica, se aplica la siguiente restricción semántica sobre `SourceFile`:
+
+```text
+cantidad de PublicFunctionDeclaration = 1
+```
+
+La gramática permite una secuencia de declaraciones de nivel superior, mientras que la regla de contener exactamente una función pública constituye una restricción semántica obligatoria sobre la validez del programa `SourceFile`.
