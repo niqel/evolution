@@ -4333,7 +4333,7 @@ Reglas normativas:
    ```
    Tener cero funciones públicas o más de una función pública en el mismo archivo es semánticamente inválido.
 3. **Funciones privadas**: un archivo `.efn` puede contener cero, una o múltiples funciones con visibilidad `private` (`0..N`).
-4. **Semántica de public frente a ejecución automática**: la visibilidad `public` designa la operación expuesta por el módulo, pero **no** implica ejecución automática inmediata al cargar el archivo (`public != main != startup function`). La invocación de la función pública se rige por los mecanismos de ejecución del entorno host.
+4. **Semántica de public frente a ejecución automática**: la visibilidad `public` designa la única operación expuesta por el archivo `.efn`. La visibilidad `public` no provoca por sí misma la evaluación de la función. La semántica de invocación de funciones se define separadamente en el Capítulo 14.
 
 
 ### 13.4 Nombres y unicidad de funciones
@@ -4509,9 +4509,11 @@ Cada `FunctionDeclaration` introduce un ámbito semántico de función (`Functio
 ```text
 FunctionScope
 {
-    parameters (visibles en todo el cuerpo)
+    parameters
+        (visibles desde el inicio del FunctionBody)
 
-    sequential let bindings (visibles hacia adelante)
+    sequential let bindings
+        (cada binding visible únicamente después de su declaración)
 
     final return
 }
