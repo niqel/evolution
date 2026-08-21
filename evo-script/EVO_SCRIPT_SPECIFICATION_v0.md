@@ -631,7 +631,7 @@ Ejemplos léxicamente inválidos:
 - `_worker` (comienza con un guion bajo)
 - `__worker` (comienza con un guion bajo)
 - `_` (no contiene una letra inicial)
-- `worker-name` (contiene el carácter `-`, reservado como operador o delimitador)
+- `worker-name` (contiene el carácter `-`, que no forma parte de Identifier)
 
 
 ### 4.2 Caracteres permitidos
@@ -694,7 +694,7 @@ Evo-Script v0 define exactamente dos convenciones nominales para los identificad
 - `PascalCase`
 - `snake_case`
 
-Estas convenciones son reglas normativas de validez y no meras recomendaciones de estilo. Un identificador léxicamente válido que no cumpla con la convención nominal requerida por su clase de símbolo hace que el programa sea sintáctica y semánticamente inválido.
+Estas convenciones son reglas normativas de validez y no meras recomendaciones de estilo. Un identificador léxicamente válido que no cumpla con la convención nominal requerida por su clase de símbolo hace que el programa sea semánticamente inválido.
 
 
 ### 4.6 PascalCase
