@@ -3541,16 +3541,28 @@ Produce la representación decimal canónica en base 10:
 - No incluye signo `+` para positivos, ceros iniciales superfluos ni separadores de dígitos.
 - Aplica de forma idéntica a valores de tipo `dynamic` pertenecientes a `IntegralClass`.
 
-#### 11.10.4 Punto flotante a `string`
-Produce la representación decimal canónica más corta que permita reconstruir el valor original (*shortest round-trip representation*):
-1. **Independencia de configuración regional**: utiliza invariablemente el punto (`.`) como separador decimal.
-2. **Preservación visual de la naturaleza flotante**: los valores flotantes que representan números enteros incluyen obligatoriamente la parte fraccionaria `.0`:
+#### 11.10.4 Punto flotante a string
+La conversión de un valor de punto flotante a texto genera la representación decimal canónica más corta que permita reconstruir exactamente el valor original (*shortest round-trip representation*):
+
+1. **Principio shortest round-trip**: la representación textual debe contener la menor cantidad de dígitos significativos necesaria para que, analizada nuevamente bajo el mismo tipo (`float32` para *binary32*, `float64` / `float` / `dynamic FloatingClass` para *binary64*) mediante `parse_float*` y `roundTiesToEven`, reproduzca de forma idéntica el mismo `Floating Value`.
+2. **Criterio de desempate determinista**: para todas las representaciones decimales válidas capaces de realizar *round-trip* exacto:
+   - Se seleccionan las candidatas con el menor número necesario de dígitos significativos.
+   - Entre las candidatas anteriores, se elige la de menor longitud textual total en caracteres.
+   - Si persiste empate de longitud entre una forma decimal no científica y una forma científica, se prefiere la forma decimal no científica.
+3. **Normalización canónica**:
+   - Se utiliza invariablemente el punto (`.`) como separador decimal (independiente de la configuración regional).
+   - La notación científica utiliza la letra minúscula `e` (nunca `E`).
+   - El exponente positivo no incluye signo `+` (ej. `"1e20"`, nunca `"1e+20"`).
+   - El exponente no incluye ceros iniciales redundantes (ej. `"1e5"`, nunca `"1e05"`).
+   - El exponente negativo conserva el signo `-` (ej. `"1.5e-10"`).
+   - Se eliminan los ceros fraccionarios finales innecesarios.
+4. **Preservación de `.0` en formas decimales no científicas**: cuando la representación seleccionada utiliza notación decimal no científica y el valor de punto flotante representa un entero matemático, se preserva obligatoriamente la parte fraccionaria `.0`:
    - `to_string(10.0)` produce `"10.0"` (nunca `"10"`).
-3. **Preservación de signo en cero**:
    - `to_string(0.0)` produce `"0.0"`.
    - `to_string(-0.0)` produce `"-0.0"`.
-4. **Notación científica**: cuando la forma más corta requiera exponente, utiliza la letra minúscula `e` sin ceros redundantes ni signo positivo en el exponente (ej. `"1e20"`, `"1.5e-10"`).
-5. **Dynamic FloatingClass**: utiliza las mismas reglas que `float64`, preservando la distinción visual:
+5. **Formas científicas sin obligación de `.0`**: cuando la forma canónica seleccionada es científica (por ejemplo, `"1e20"`), la presencia de `e` ya identifica de forma unívoca la naturaleza flotante; no se exige forzar `"1.0e20"`.
+6. **Coherencia con FloatingText**: la salida producida por `to_string` sobre un valor flotante satisface siempre la gramática de `FloatingText` (`DecimalText` o `ScientificText`), nunca produciendo un texto puramente entero como `"18"`.
+7. **Dynamic FloatingClass**: utiliza las mismas reglas que `float64`, preservando visualmente la distinción entre clases:
    - `Dynamic IntegralClass(18)` $\to$ `"18"`
    - `Dynamic FloatingClass(18.0)` $\to$ `"18.0"`
 
@@ -3648,8 +3660,11 @@ ScientificText
 
 Reglas normativas:
 1. **Requerimiento de forma flotante**: cadenas con formato estrictamente entero como `"18"` **no** son válidas para parsing flotante (`parse_float64("18")` falla en evaluación). Debe proporcionarse forma decimal (`parse_float64("18.0")`) o científica (`parse_float64("18e0")`).
-2. **Formas no permitidas**: formas abreviadas como `".5"` o `"5."`, cadenas con signo `+`, `"_"` o identificadores como `"NaN"`, `"Infinity"` o `"inf"` fallan en evaluación.
-3. **Representabilidad**: el texto se interpreta con modo de redondeo `roundTiesToEven`. Si el resultado excede los límites finitos del formato destino, el parsing falla. El subdesbordamiento a `0.0` o `-0.0` es válido.
+2. **Formas no permitidas**: formas abreviadas como `".5"` o `"5."`, cadenas con signo `+` aislado o al inicio, separadores `_` o identificadores como `"NaN"`, `"Infinity"` o `"inf"` fallan en evaluación.
+3. **Semántica de redondeo y ausencia de exigencia de exactitud decimal-binaria**: el texto se interpreta matemáticamente en base 10 y se convierte al formato destino (*binary32* para `parse_float32`, *binary64* para `parse_float64`) utilizando el modo de redondeo estándar `roundTiesToEven`. No se exige que la fracción decimal matemática tenga una representación binaria exacta:
+   - `parse_float64("0.1")` es válido y produce el `Value(float64)` correspondiente al valor binario más cercano según `roundTiesToEven`.
+   - `parse_float32("0.1")` es válido y produce el `Value(float32)` correspondiente.
+4. **Límites de representabilidad**: si el resultado de la conversión excede el máximo valor finito representable (produciendo desbordamiento a infinito), el parsing falla durante la evaluación. El subdesbordamiento (*underflow*) a `0.0` o `-0.0` es válido.
 
 
 ### 11.12 Orden de evaluación y composición
@@ -3661,12 +3676,26 @@ Reglas normativas:
 4. Si `ExactlyRepresentable(Value, TargetType) == true`, se produce el `TargetValue`.
 5. Si no es exactamente representable, la evaluación falla.
 
-#### 11.12.2 Evaluación de ParsingExpression
-1. Se evalúa la expresión argumento exactamente una sola vez.
-2. Si el argumento no produce un `Value` de tipo `string` válido, la evaluación falla.
-3. Se valida que el texto cumpla la gramática estricta del parser invocado.
-4. Se comprueba que el valor matemático pertenezca al dominio del tipo destino.
-5. Si es válido, se produce el `TargetValue`; en caso contrario, la evaluación falla.
+#### 11.12.2 Análisis semántico y evaluación de ParsingExpression
+El procesamiento de una `ParsingExpression` se divide formalmente en dos fases secuenciales:
+
+**Fase de análisis semántico estático**:
+1. Se resuelve el `ParsingIntrinsicName` y se determina el `TargetType`.
+2. Se analiza semánticamente la `Expression` argumento en el entorno de bindings visibles.
+3. Se valida estáticamente que `TypeOf(source) == string`. Si el argumento no es de tipo `string` (por ejemplo, `parse_int32(18)`), la expresión es semánticamente inválida y es rechazada estáticamente; no llega a la fase de evaluación.
+4. Se establece `TypeOf(ParsingExpression) = TargetType`.
+5. Se aplica la frontera de `ExpectedType` (el `TargetType` no se propaga a la expresión argumento).
+
+**Fase de evaluación**:
+Únicamente una `ParsingExpression` semánticamente válida puede ejecutarse:
+1. Se evalúa la `Expression` argumento exactamente una sola vez.
+2. Si la evaluación de `source` falla por una condición de ejecución, la `ParsingExpression` no produce un valor y el parsing no se ejecuta.
+3. La evaluación exitosa de `source` produce necesariamente un `Value(string, text)`, ya que su tipo fue comprobado durante el análisis semántico.
+4. Se valida que el contenido `text` cumpla estrictamente la gramática textual del parser invocado (`SignedIntegerText`, `UnsignedIntegerText` o `FloatingText`).
+5. Se interpreta el contenido textual según el tipo numérico destino:
+   - Para enteros (`parse_int*`, `parse_uint*`): se comprueba que el valor entero matemático pertenezca al rango representable del `TargetType`.
+   - Para flotantes (`parse_float32`, `parse_float64`): se aplica `roundTiesToEven` y se comprueba que el resultado sea un valor finito.
+6. Si la interpretación concluye exitosamente, se produce el `TargetValue`; si el texto no es sintácticamente conforme o no puede producir un valor válido dentro del dominio destino, la evaluación falla.
 
 #### 11.12.3 Composición de operaciones
 Las expresiones de conversión y parsing pueden componerse de forma anidada:
@@ -3689,4 +3718,7 @@ La siguiente matriz define la validez estática de las familias de operaciones s
 | **Struct** (`StructValue`) | Inválido | Inválido | Inválido | Inválido | Inválido | Inválido |
 | **Enum** (`EnumValue`) | Inválido | Inválido | Inválido | Inválido | Inválido | Inválido |
 
-*Nota normativa*: la indicación «Permitido» describe la validez estática de la operación en tiempo de compilación/análisis. El éxito en tiempo de ejecución está condicionado a la representabilidad matemática exacta del valor concreto según las reglas de este capítulo.
+*Nota normativa*: la indicación «Permitido» describe la validez estática de la operación durante el análisis semántico. El éxito en tiempo de ejecución se rige por las siguientes reglas diferenciadas por familia:
+1. **Conversiones numéricas `to_*` (`to_integer`, `to_float`, `to_dynamic`)**: el éxito está condicionado a la representabilidad matemática exacta del valor fuente en el tipo destino (`ExactlyRepresentable(source Value, TargetType) == true`).
+2. **Parsing de enteros (`parse_integer`)**: el éxito está condicionado a la validez sintáctica del texto (`SignedIntegerText` o `UnsignedIntegerText`) y a que el valor entero matemático pertenezca al rango del tipo destino.
+3. **Parsing de punto flotante (`parse_float`)**: el éxito está condicionado a la validez sintáctica del texto (`FloatingText`), a la conversión mediante `roundTiesToEven` y a la obtención de un resultado numérico finito.
