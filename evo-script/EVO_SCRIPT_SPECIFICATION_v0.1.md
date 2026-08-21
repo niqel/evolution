@@ -2869,6 +2869,169 @@ Reglas normativas:
    donde `lookup` declara `values::search search` en sus parámetros. El transporte de la capacidad es estático y no involucra closures ni punteros a función como datos.
 
 
+### 11.3.3 Nota de diseño prospectiva para Evo-Script v0.2: dependencia por nombre importado
+
+Se registra exclusivamente con carácter de **nota de diseño prospectiva NO operativa para una posible versión v0.2** la idea conceptual de una simplificación sintáctica en la declaración de `Signature Dependency Parameters`.
+
+1. **Estado normativo y obligatorio en Evo-Script v0.1**:
+   En Evo-Script v0.1, la forma normativa y obligatoria continúa siendo la especificación explícita y calificada de la firma:
+
+   ```text
+   import callbacks::completed;
+
+   public fn execute(string value, callbacks::completed completed) -> ResultType {
+       ...
+   }
+   ```
+
+   La forma oficial de un Signature Dependency Parameter en v0.1 sigue siendo:
+
+   ```text
+   modulo::firma nombre_local
+   ```
+
+   Por ejemplo:
+
+   ```text
+   callbacks::completed completed
+   ```
+
+   El `import` hace conocida la Signature en el archivo, pero no elimina en v0.1 la necesidad de declarar explícitamente su identidad formal en el parámetro.
+
+2. **Candidato conceptual para v0.2 (Dependencia por nombre importado)**:
+   Para una futura Evo-Script v0.2 se registra como candidato conceptual una forma abreviada donde una Signature previamente importada pueda utilizarse directamente por su nombre local dentro de la lista de parámetros.
+
+   Ejemplo prospectivo:
+
+   ```text
+   import callbacks::completed;
+
+   public fn execute(string value, completed) -> ResultType {
+       ...
+   }
+   ```
+
+   En esta propuesta futura, `completed` seguiría siendo semánticamente un `Signature Dependency Parameter`.
+
+   NO sería:
+   - un Value Parameter;
+   - una función como Value;
+   - una closure;
+   - una lambda;
+   - un function pointer de primer orden;
+   - un parámetro con tipo dinámico;
+   - inferencia general de tipos.
+
+   La identidad formal del parámetro se resolvería estáticamente a partir de la Signature importada con ese nombre local.
+
+   Conceptualmente:
+
+   ```text
+   import callbacks::completed;
+                  │
+                  └── introduce `completed` en Signature Space
+
+   public fn execute(string value, completed) -> ResultType
+                                   │
+                                   └── dependencia de callbacks::completed
+   ```
+
+3. **Preservación estricta de la separación entre Signature Space y Value Space**:
+   La propuesta preserva la separación total entre `Signature Space` y `Value Space`. Una dependencia abreviada seguiría sin pertenecer al espacio de valores y no podría utilizarse como dato.
+
+   Continuarían siendo inválidas construcciones conceptuales como:
+
+   ```text
+   let x = completed;
+   return completed;
+   ```
+
+   y tampoco podría almacenarse en structs, enums o bindings.
+
+4. **Integración natural con alias de importación (`as`)**:
+   La propuesta se integra naturalmente con los aliases `as` que ya existen en Evo-Script para desambiguar firmas homónimas importadas:
+
+   ```text
+   import callbacks_a::completed as first_completed;
+   import callbacks_b::completed as second_completed;
+
+   public fn execute(string value, first_completed, second_completed) -> ResultType {
+       ...
+   }
+   ```
+
+   Aquí:
+   - `first_completed` representaría una dependencia cuya identidad formal continúa siendo `callbacks_a::completed`.
+   - `second_completed` representaría `callbacks_b::completed`.
+
+   El alias solo define el nombre local en `Signature Space`; no altera la identidad formal de la Signature.
+
+5. **Motivación de eliminación de redundancia visual**:
+   Esta propuesta futura tiene como motivación eliminar redundancia visual.
+
+   La forma v0.1:
+
+   ```text
+   import requesters::completed;
+
+   public fn execute(string value, requesters::completed completed) -> ResultType {
+       ...
+   }
+   ```
+
+   podría expresarse en una futura v0.2 como:
+
+   ```text
+   import requesters::completed;
+
+   public fn execute(string value, completed) -> ResultType {
+       ...
+   }
+   ```
+
+   sin modificar la arquitectura ni la semántica de dependencia funcional.
+
+6. **Preservación del transporte composicional (`Signature Dependency Forwarding`)**:
+   El `Signature Dependency Forwarding` seguiría funcionando exactamente como transporte estructural de capacidades. La abreviación no convertiría las Signatures en Values.
+
+   Por ejemplo, conceptualmente:
+
+   ```text
+   import callbacks::completed;
+
+   public fn execute(string value, completed) -> ResultType {
+       return process(value, completed);
+   }
+   ```
+
+   seguiría significando que `completed` transporta una dependencia cuya identidad formal fue resuelta estáticamente desde `callbacks::completed`.
+
+7. **Delimitación formal y carácter NO operativo en v0.1**:
+   Se deja expresamente indicado que esta sintaxis abreviada es:
+   - un candidato conceptual para Evo-Script v0.2;
+   - no normativa;
+   - no operativa;
+   - no implementada;
+   - inválida en Evo-Script v0.1.
+
+   No se formaliza todavía su gramática definitiva ni se agregan errores nuevos del sistema en v0.1; se registra únicamente como idea conceptual para consideración futura.
+
+8. **Restricciones absolutas de alcance**:
+   Esta nota prospectiva **NO introduce**:
+   - closures;
+   - lambdas;
+   - first-class functions;
+   - function pointers como Values;
+   - inferencia general de tipos;
+   - Value Parameters sin tipo explícito;
+   - resolución dinámica;
+   - nuevas keywords;
+   - nuevas extensiones;
+   - cambios a `import`;
+   - cambios a `as`;
+   - cambios a `.root`.
+
+
 ### 11.4 Tipo de resultado
 
 La cláusula:
