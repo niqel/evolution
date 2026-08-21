@@ -5838,3 +5838,435 @@ Explicación del análisis y ejecución:
    - `calculate -> add`
    - Los intrinsics `to_int64` y `to_string` no generan aristas.
    - El grafo es estrictamente acíclico (DAG válido).
+
+---
+
+## 16. Evaluación y errores
+
+En Evo-Script v0, el procesamiento de un programa y la ejecución de sus expresiones se rigen por una separación estricta y determinista entre cuatro fases: análisis léxico, análisis sintáctico, análisis semántico estático y evaluación en tiempo de ejecución.
+
+Este capítulo consolida normativamente las categorías de error y fallo del lenguaje:
+- `LexicalError`: anomalía en la transformación de caracteres a tokens.
+- `SyntaxError`: secuencia de tokens que no satisface la gramática del lenguaje.
+- `SemanticError`: incumplimiento de las reglas de tipado, resolución o estructura sobre un AST válido.
+- `EvaluationFailure`: imposibilidad de producir un valor válido durante la evaluación de una expresión semánticamente válida para una combinación concreta de valores.
+
+
+### 16.1 Modelo de fases
+
+El procesamiento de un programa Evo-Script v0 se formaliza mediante la siguiente secuencia de transformaciones deterministas:
+
+```text
+Lex(SourceText)
+    ├── TokenStream
+    └── LexicalError
+
+Parse(TokenStream)
+    ├── AST
+    └── SyntaxError
+
+Analyze(AST)
+    ├── SemanticallyValidProgram
+    └── SemanticError
+
+Evaluate(Expression, EvaluationContext)
+    ├── Value
+    └── EvaluationFailure
+```
+
+Reglas normativas:
+1. **Disyunción estricta de categorías**:
+   ```text
+   LexicalError != SyntaxError != SemanticError != EvaluationFailure
+   ```
+   Cada categoría pertenece a una fase específica y ninguna condición de error puede reclasificarse a otra fase.
+2. **Evaluación sujeta a validez semántica**: la fase de evaluación opera exclusivamente sobre expresiones pertenecientes a un `SourceFile` que haya superado satisfactoriamente el análisis semántico estático (`SemanticallyValidProgram`).
+3. **Ausencia de ejecución automática**: la especificación formaliza la evaluación de expresiones e invocaciones cuando son solicitadas, sin presuponer la autoejecución al cargar el archivo (`public != main != startup function`).
+
+
+### 16.2 LexicalError
+
+Un `LexicalError` ocurre durante la fase de análisis léxico (`Lexer`) cuando el texto fuente (`SourceText`) contiene secuencias que no se ajustan a las reglas léxicas formalizadas en el Capítulo 3.
+
+Condiciones que producen `LexicalError`:
+- Secuencia de bytes que no constituye UTF-8 válido o presencia de Byte Order Mark (BOM).
+- Caracteres no reconocidos en el alfabeto léxico del lenguaje.
+- Literal de cadena de texto (`StringLiteral`) sin delimitador de cierre válido en la misma línea.
+- Secuencia de escape no reconocida o mal formada dentro de una cadena de texto (por ejemplo, `\x` o `\u` inválido).
+
+Regla normativa:
+> Si ocurre un `LexicalError`, no se produce un `TokenStream` válido y el compilador/intérprete no genera ningún AST para dicho archivo.
+
+
+### 16.3 SyntaxError
+
+Un `SyntaxError` ocurre durante la fase de análisis sintáctico (`Parser`) cuando una secuencia válida de tokens no satisface la gramática formal de Evo-Script v0.
+
+Condiciones que producen `SyntaxError`:
+- Estructura incompleta o tokens faltantes (por ejemplo, `let int value = ;` o punto y coma faltante tras la declaración de un campo en `struct`).
+- Presencia de comas finales (*trailing commas*) en listas donde están prohibidas (por ejemplo, `calculate(10, 20,)`).
+- Uso de palabras clave en posiciones gramaticales no permitidas (por ejemplo, `let x = return 10;`).
+
+Regla normativa:
+> Si ocurre un `SyntaxError`, la fase de análisis sintáctico es interrumpida y no se produce un AST semánticamente analizable.
+
+
+### 16.4 SemanticError
+
+Un `SemanticError` ocurre durante la fase de análisis semántico estático (`SemanticAnalyzer`) cuando un AST sintácticamente válido viola alguna de las reglas de tipos, resolución de nombres o restricciones estructurales del lenguaje.
+
+Condiciones representativas que producen `SemanticError`:
+1. **Incompatibilidad de tipos**: asignación o retorno con tipos no compatibles (por ejemplo, `let int64 other = value;` cuando `TypeOf(value) == int32`).
+2. **Identificadores no resueltos**: referencia a un tipo (`TypeReference`), función (`FunctionName`) o binding no declarado en el ámbito correspondiente.
+3. **Aridad incorrecta en llamadas**: discrepancia entre el número de argumentos de una `FunctionCallExpression` y los parámetros de la función (`ArgumentCount != ParameterCount`).
+4. **Falta de exhaustividad o duplicación en `when`**: omitir variantes de una enumeración o duplicar patrones en una `WhenExpression`.
+5. **Uso de `this` sin contexto**: referenciar `this` fuera de una `PipelineStageExpression` gobernada por un `PipelineThisContext` activo.
+6. **Ciclos de dependencia o llamada**: presencia de ciclos en el grafo de dependencias de tipos (`Type Dependency Graph`) o en el grafo de llamadas a funciones (`FunctionCallGraph`).
+7. **Violaciones de bindings y visibilidad**: redefinición de bindings visibles en el mismo ámbito léxico, autorreferencias en `let` o violación de la regla de exactamente una función pública por archivo (`Count(PublicFunctionDeclaration) != 1`).
+
+
+### 16.5 EvaluationFailure
+
+Un `EvaluationFailure` ocurre durante la fase de evaluación cuando una expresión semánticamente válida no puede producir un valor tipado (`Value`) para una combinación concreta de valores en tiempo de ejecución.
+
+Se utiliza la notación formal de especificación:
+```text
+EvaluationOutcome
+    ::= Value
+     |  EvaluationFailure
+```
+
+Reglas normativas:
+1. **Naturaleza de EvaluationOutcome**: `EvaluationOutcome` es exclusivamente una herramienta notacional de la especificación. No constituye un `SemanticType`, ni un `Value`, ni una estructura o enumeración inspeccionable por el programa.
+2. **Distinción absoluta entre EvaluationFailure y Value**:
+   ```text
+   EvaluationFailure != Value
+   ```
+   Un `EvaluationFailure` no es un dato: no puede asignarse a un binding `let`, no puede pasarse como argumento, no puede retornarse como resultado, no puede examinarse mediante `when` ni encapsularse dentro de `dynamic`.
+3. **Ausencia de mecanismos de recuperación (*No Catch / No Try*)**: Evo-Script v0 no incorpora construcciones de captura o recuperación de fallos (`try`, `catch`, `throw`, `otherwise`, `fallback`). Un `EvaluationFailure` aborta de forma determinista la evaluación de la expresión contenedora.
+
+
+### 16.6 Separación entre validez estática y fallo de evaluación
+
+La especificación establece una frontera estricta entre la corrección estática de un programa y el éxito de su evaluación:
+
+```text
+Static Validity != Runtime Success
+```
+
+- **Validez semántica estática**: certifica que una expresión utiliza construcciones y operadores definidos para sus respectivos `SemanticTypes`.
+- **Evaluación en tiempo de ejecución**: determina si la aplicación de la operación sobre instancias concretas de `Values` produce un valor válido dentro del dominio del tipo.
+
+#### 16.6.1 Caso de la división por cero
+Dada la función:
+```text
+fn divide(int left, int right) -> int
+{
+    return left / right;
+}
+```
+La expresión `left / right` es semánticamente válida porque el operador `/` está definido para operandos de tipo `int`. Sin embargo, la invocación `divide(10, 0)` produce un `EvaluationFailure` en tiempo de ejecución debido al valor divisor `0`.
+
+#### 16.6.2 Expresiones constantes y plegado (*Constant Folding*)
+La expresión `10 / 0` es:
+- Léxicamente válida.
+- Sintácticamente válida.
+- Semánticamente válida (`TypeOf(10) == int`, `TypeOf(0) == int`, `/` soportado).
+- Evaluativamente fallida (`EvaluationFailure`).
+
+Si un compilador o analizador detecta este fallo anticipadamente mediante optimizaciones o evaluación constante (*constant folding*), **la clasificación normativa permanece como EvaluationFailure**. La anticipación temporal en la detección no reclasifica un fallo de evaluación como `SemanticError`.
+
+#### 16.6.3 Literales fuera de rango estático frente a parsing
+- Un literal contextual fuera de rango (por ejemplo, `let int8 value = 500;`) es un **`SemanticError`** en tiempo de análisis estático (Capítulo 6).
+- Una operación de parsing sobre una cadena de texto (por ejemplo, `parse_int8("500")`) es semánticamente válida por tipos (`string -> int8`), pero produce un **`EvaluationFailure`** en tiempo de ejecución al analizar el contenido textual (Capítulo 11).
+
+
+### 16.7 Modelo de evaluación
+
+La semántica de evaluación se define formalmente mediante un contexto de evaluación (`EvaluationContext`):
+
+```text
+EvaluationContext
+{
+    ParameterName  -> Value
+    LetBindingName -> Value
+    active PipelineThisContext (cuando aplique)
+    active pattern bindings   (al evaluar la rama seleccionada de un when)
+}
+```
+
+Reglas normativas:
+1. **Naturaleza del contexto**: `EvaluationContext` es una construcción interna de la especificación para describir la semántica del lenguaje; no es visible ni manipulable por el código de Evo-Script.
+2. **Evaluación unívoca**: para toda expresión semánticamente válida:
+   ```text
+   Evaluate(Expression, EvaluationContext) -> Value | EvaluationFailure
+   ```
+3. **Ausencia de estados nulos o parciales**: la evaluación exitosa produce siempre exactamente un `Value` completo y tipado. No existen valores nulos (`null`), indefinidos (`undefined`) ni estructuras parcialmente construidas.
+4. **Preservación del tipo**:
+   ```text
+   TypeOf(Evaluate(Expression, Context)) == TypeOf(Expression)
+   ```
+
+
+### 16.8 Orden determinista de evaluación
+
+La evaluación de subexpresiones requeridas sigue un orden secuencial estricto y determinista:
+
+1. **Expresiones unarias (`-e`, `!e`)**:
+   - Se evalúa `e`. Si produce `Value`, se aplica la operación unaria. Si `e` falla, la operación no se aplica y la expresión completa produce `EvaluationFailure`.
+2. **Expresiones binarias ordinarias (`left OP right`)**:
+   - Para operadores aritméticos (`+`, `-`, `*`, `/`, `%`) y comparadores (`==`, `!=`, `<`, `<=`, `>`, `>=`):
+     1. Se evalúa `left` completamente.
+     2. Si `left` produce `Value`, se evalúa `right` completamente.
+     3. Si `right` produce `Value`, se aplica la operación `OP`.
+     4. Si `left` falla, `right` **no** se evalúa. Si `right` falla, `OP` **no** se aplica.
+3. **Llamadas a funciones (`FunctionCallExpression`)**:
+   - Los argumentos se evalúan secuencialmente de izquierda a derecha (`Argument[0]` a `Argument[n-1]`) exactamente una vez. Si el argumento $i$ falla, los argumentos posteriores y el cuerpo de la función no se evalúan.
+4. **Construcción de estructuras (`StructConstructionExpression`)**:
+   - Los inicializadores de los campos se evalúan en el orden textual en que fueron declarados en la expresión. Si un inicializador falla, los posteriores no se evalúan y el `StructValue` no se construye.
+5. **Construcción de variantes de enumeraciones**:
+   - Variantes con campos estructurados: se evalúan los inicializadores en orden textual.
+   - Variantes con valor asociado (`Result::Found(e)`): se evalúa `e` una sola vez. Si falla, el `EnumValue` no se construye.
+6. **Acceso a campos (`FieldAccessExpression`)**:
+   - Se evalúa la expresión base para obtener el `StructValue` y se proyecta el valor del campo correspondiente.
+7. **Conversiones y Parsing**:
+   - `to_*(expression)`: se evalúa `expression` antes de intentar la conversión.
+   - `parse_*(expression)`: se evalúa `expression` (produciendo `string`) antes de intentar el parsing numérico.
+
+
+### 16.9 Propagación de EvaluationFailure
+
+La regla fundamental de propagación de fallos establece:
+
+> Si la evaluación de una subexpresión requerida produce `EvaluationFailure`, la construcción contenedora que exige dicho valor produce inmediatamente `EvaluationFailure` y omite toda evaluación posterior dependiente.
+
+Reglas normativas:
+1. **Inicializadores `let`**: si la expresión inicializadora de una declaración `let` produce `EvaluationFailure`, el binding **no** se establece (no existen bindings parciales o no inicializados).
+2. **Cuerpo de función (`FunctionBody`)**: si una declaración `let` intermedia o la expresión del `ReturnStatement` produce `EvaluationFailure`, las sentencias posteriores no se evalúan y la `FunctionCallExpression` completa produce `EvaluationFailure`.
+
+
+### 16.10 Short-circuit y caminos no evaluados
+
+La especificación distingue formalmente entre el análisis semántico estático (que valida todas las ramas y subexpresiones del AST) y la evaluación dinámica (que evalúa únicamente el camino requerido):
+
+#### 16.10.1 Operador lógico AND (`&&`)
+1. Se evalúa `left`.
+2. Si `left == false`, el resultado es `false` y `right` **no** se evalúa.
+```text
+// Produce false sin EvaluationFailure
+false && (10 / 0 == 1)
+```
+
+#### 16.10.2 Operador lógico OR (`||`)
+1. Se evalúa `left`.
+2. Si `left == true`, el resultado es `true` y `right` **no** se evalúa.
+```text
+// Produce true sin EvaluationFailure
+true || (10 / 0 == 1)
+```
+
+#### 16.10.3 Expresión `when`
+1. Se evalúa la expresión escrutada (`scrutinee`) produciendo un `EnumValue`.
+2. Se identifica unívocamente la rama correspondiente a la variante activa.
+3. Se evalúa **únicamente** la expresión de la rama seleccionada.
+4. Las expresiones de las ramas no seleccionadas **no** se evalúan.
+
+Regla normativa:
+> Una subexpresión que no forma parte del camino de ejecución seleccionado en una evaluación concreta **no** puede producir `EvaluationFailure` durante dicha evaluación.
+
+
+### 16.11 Fallos aritméticos
+
+Los fallos aritméticos corresponden a operaciones válidas por tipos pero que no pueden producir un valor matemático o numérico representable (Capítulo 10):
+
+1. **Desbordamiento en enteros fijos (*Fixed Integer Overflow*)**: cualquier operación sobre enteros fijos cuyo resultado exceda el rango representable produce `EvaluationFailure` (no ocurre truncamiento modular ni saturación).
+2. **Negación del mínimo entero con signo**: `-MIN` para enteros con signo en complemento a dos produce `EvaluationFailure`.
+3. **División y resto por cero en enteros**: `x / 0` y `x % 0` producen `EvaluationFailure`.
+4. **Caso especial `MIN / -1`**: produce `EvaluationFailure` en enteros con signo (mientras que `MIN % -1` produce exitosamente `0`).
+5. **División flotante por cero (`±0.0`)**: `x / 0.0` y `x / -0.0` producen `EvaluationFailure` (no se producen valores infinitos).
+6. **Resultados flotantes no finitos**: cualquier operación flotante que según el estándar IEEE-754 produciría `+Infinity`, `-Infinity` o `NaN` produce `EvaluationFailure` en Evo-Script v0.
+7. **Discrepancia de clases internas en `dynamic`**: si una operación aritmética sobre valores de tipo `dynamic` recibe una combinación incompatible de `IntegralClass` y `FloatingClass`, produce `EvaluationFailure`.
+
+
+### 16.12 Fallos de conversión
+
+Una `ConversionExpression` (`to_*`) semánticamente válida produce `EvaluationFailure` si el valor concreto no puede representarse de forma exacta en el tipo destino (Capítulo 11):
+
+1. **Regla ExactlyRepresentable**: para conversiones numéricas entre enteros o desde punto flotante a enteros, si `ExactlyRepresentable(Value, TargetType) == false`, la conversión produce `EvaluationFailure`.
+   - `let int64 value = 200; to_int8(value)` produce `EvaluationFailure` (200 excede el rango de `int8`).
+   - `to_int32(10.5)` produce `EvaluationFailure` (la parte fraccionaria impide la representación exacta).
+2. **Conversiones desde `dynamic`**: si el valor subyacente contenido en `dynamic` no es compatible o no es exactamente representable en el tipo destino fijo, la conversión produce `EvaluationFailure`.
+
+
+### 16.13 Fallos de parsing
+
+Una `ParsingExpression` (`parse_*`) semánticamente válida produce `EvaluationFailure` si el contenido de la cadena de texto no puede interpretarse como un número válido del tipo destino (Capítulo 11):
+
+1. **Texto numérico mal formado**:
+   - `parse_int32("hello")` produce `EvaluationFailure` (formato no numérico).
+   - `parse_float64("18")` produce `EvaluationFailure` (no cumple la gramática de `FloatingText` que exige punto decimal).
+2. **Magnitud fuera de rango representable**:
+   - `parse_int8("500")` produce `EvaluationFailure` (500 excede el rango de `int8`).
+
+
+### 16.14 Evaluación de structs, enums y when
+
+En un programa semánticamente válido:
+1. **Estructuras**: no pueden ocurrir errores en tiempo de ejecución por campos inexistentes, duplicados o tipos erróneos. La construcción de un `StructValue` falla únicamente si falla la evaluación de alguna de sus expresiones inicializadoras.
+2. **Enumeraciones**: no pueden ocurrir errores en tiempo de ejecución por variantes inexistentes o formas erróneas de payload. La construcción de un `EnumValue` falla únicamente si falla la expresión de su payload.
+3. **Expresiones when**: el análisis semántico garantiza que toda variante tiene exactamente una rama coincidente y exhaustiva. En tiempo de ejecución no pueden ocurrir fallos por "rama no encontrada" o "caso ambiguo". La evaluación de un `when` falla únicamente si falla la expresión del escrutinio o la expresión de la rama activa seleccionada.
+
+
+### 16.15 Evaluación de funciones
+
+1. **Validez estática vs fallos en llamadas**: errores como funciones no declaradas, aridad incorrecta, incompatibilidad de tipos o ciclos de llamadas son `SemanticError` detectados estáticamente.
+2. **Ejecución de llamadas**: una `FunctionCallExpression` produce `EvaluationFailure` si y solo si falla la evaluación de alguno de sus argumentos, un inicializador `let` en el cuerpo de la función o la expresión del `ReturnStatement`.
+3. **Funciones no invocadas**: una función semánticamente válida que contenga una operación potencialmente fallida (por ejemplo, división por cero condicional) no produce ningún `EvaluationFailure` si no es invocada durante la evaluación concreta.
+
+
+### 16.16 Evaluación de pipelines
+
+La evaluación de una `PipelineExpression` se efectúa secuencialmente de izquierda a derecha:
+1. Se evalúa `source` una sola vez para producir `Value0`. Si `source` falla, el pipeline falla de inmediato.
+2. Para cada etapa subsiguiente $i$, se evalúa la etapa con `this = Value_{i-1}`.
+3. Si una etapa falla, las etapas posteriores no se evalúan y la `PipelineExpression` produce `EvaluationFailure`.
+4. Múltiples referencias a `this` dentro de una misma etapa observan el mismo valor evaluado previamente (el valor no se reevalúa).
+
+
+### 16.17 Determinismo y terminación de v0
+
+Evo-Script v0 establece una garantía formal de determinismo y terminación:
+
+#### 16.17.1 Determinismo
+Para cualquier expresión semánticamente válida evaluada bajo un `EvaluationContext` compatible, el resultado es estrictamente determinista: produce un único `Value` o un `EvaluationFailure`. No existe orden no especificado ni ambigüedad en la selección de caminos de ejecución.
+
+#### 16.17.2 Terminación semántica
+Dado que Evo-Script v0:
+- Contiene árboles de sintaxis finitos.
+- No incluye bucles ni iteraciones (`while`, `for`, `loop`).
+- Prohíbe de forma absoluta la recursión directa e indirecta (`FunctionCallGraph` es un DAG acíclico).
+
+Se garantiza que **toda evaluación en el modelo semántico de Evo-Script v0 concluye en un número finito de pasos** en `Value` o `EvaluationFailure`.
+
+#### 16.17.3 Exclusión de fallos de recursos del entorno
+Condiciones externas del entorno de ejecución (tales como agotamiento de memoria del sistema, terminación forzada del proceso o fallos de hardware) no constituyen `EvaluationFailure` en la semántica del lenguaje y quedan fuera de la especificación de Evo-Script.
+
+
+### 16.18 Diagnósticos y límites de la especificación
+
+#### 16.18.1 Aspectos normativos
+La especificación define de forma obligatoria:
+- La fase exacta que rechaza o procesa cada construcción.
+- La validez o invalidez estática de un `SourceFile`.
+- El resultado semántico de la evaluación (`Value` frente a `EvaluationFailure`).
+- El orden observable de evaluación y los caminos no evaluados.
+- Las condiciones aritméticas, de conversión y de parsing que originan `EvaluationFailure`.
+
+#### 16.18.2 Aspectos no normativos
+Quedan fuera del alcance normativo de la especificación (libres a la implementación):
+- El texto exacto, idioma o formato de los mensajes de diagnóstico de error.
+- Los códigos numéricos de error o representación visual (colores, estilos).
+- El formato exacto de trazas de ejecución.
+- La cantidad de errores estáticos reportados en una sola pasada de compilación/análisis.
+
+
+### 16.19 Tabla normativa de clasificación
+
+A continuación se resume la clasificación formal de las situaciones de error y fallo en Evo-Script v0:
+
+| Situación | Clasificación | Fase |
+|---|---|---|
+| UTF-8 inválido / BOM / token no reconocido | `LexicalError` | Lexer |
+| Cadena de texto sin cerrar / escape inválido | `LexicalError` | Lexer |
+| Tokens no satisfacen la gramática / coma final no permitida | `SyntaxError` | Parser |
+| Estructura o sintaxis incompleta | `SyntaxError` | Parser |
+| Nombre de función, binding o campo no resuelto | `SemanticError` | Semantic Analyzer |
+| Referencia de tipo (`TypeReference`) no resuelta | `SemanticError` | Semantic Analyzer |
+| Tipo incompatible en binding, return o argumento | `SemanticError` | Semantic Analyzer |
+| Literal contextual entero fuera del rango representable | `SemanticError` | Semantic Analyzer |
+| Aridad incorrecta en llamada a función | `SemanticError` | Semantic Analyzer |
+| `when` no exhaustivo o con variantes duplicadas | `SemanticError` | Semantic Analyzer |
+| Uso de `this` fuera de un `PipelineThisContext` activo | `SemanticError` | Semantic Analyzer |
+| Grafo de dependencias de tipos (`Type Dependency Graph`) cíclico | `SemanticError` | Semantic Analyzer |
+| Grafo de llamadas (`FunctionCallGraph`) cíclico | `SemanticError` | Semantic Analyzer |
+| Desbordamiento en operación entera fija | `EvaluationFailure` | Evaluator |
+| División o resto entero por cero (`x / 0`, `x % 0`) | `EvaluationFailure` | Evaluator |
+| División entera `MIN / -1` | `EvaluationFailure` | Evaluator |
+| División flotante por cero (`x / ±0.0`) | `EvaluationFailure` | Evaluator |
+| Resultado flotante no finito (`±Infinity`, `NaN`) | `EvaluationFailure` | Evaluator |
+| Discrepancia de clases aritméticas en `dynamic` | `EvaluationFailure` | Evaluator |
+| Conversión válida por tipos pero valor no representable | `EvaluationFailure` | Evaluator |
+| `parse_*` con texto numérico mal formado | `EvaluationFailure` | Evaluator |
+| `parse_*` con valor fuera del rango del tipo destino | `EvaluationFailure` | Evaluator |
+| Fallo en subexpresión requerida durante evaluación | `EvaluationFailure` (propagado) | Evaluator |
+| Operación potencialmente fallida en camino no evaluado | `No EvaluationFailure` | Evaluator |
+
+
+### 16.20 Ejemplos canónicos
+
+#### 16.20.1 SemanticError vs EvaluationFailure
+- **Ejemplo de SemanticError**:
+  ```text
+  let int32 value = 10;
+  let int64 other = value;
+  ```
+  *Explicación*: la sintaxis es válida, pero el analizador semántico rechaza la asignación estática porque `Compatible(int32, int64) == false`.
+
+- **Ejemplo de EvaluationFailure**:
+  ```text
+  fn divide(int left, int right) -> int
+  {
+      return left / right;
+  }
+
+  public fn calculate() -> int
+  {
+      return divide(10, 0);
+  }
+  ```
+  *Explicación*: el análisis semántico valida la función y la llamada (`int / int` es válido), pero la evaluación en tiempo de ejecución falla con `EvaluationFailure` al dividir por cero.
+
+#### 16.20.2 Fallo de parsing en tiempo de evaluación
+```text
+public fn calculate() -> int32
+{
+    return parse_int32("hello");
+}
+```
+*Explicación*: la expresión es semánticamente válida (`string -> int32`), pero produce `EvaluationFailure` al evaluar la cadena textual no numérica `"hello"`.
+
+#### 16.20.3 Evaluación en cortocircuito
+```text
+public fn calculate() -> bool
+{
+    return false && (10 / 0 == 1);
+}
+```
+*Explicación*: `false && ...` evalúa el operando izquierdo como `false` y omite la evaluación del operando derecho. La función concluye exitosamente retornando `false` sin producir `EvaluationFailure`.
+
+#### 16.20.4 Rama no evaluada en expresión when
+```text
+enum Status
+{
+    Active,
+    Disabled
+}
+
+public fn process(Status status) -> int
+{
+    return when status {
+        Status::Active => 42,
+        Status::Disabled => 10 / 0
+    };
+}
+```
+*Explicación*: todas las ramas se analizan y validan estáticamente. Si la función se invoca con `Status::Active`, se evalúa únicamente la primera rama y produce `42` sin ejecutar la división por cero de la rama no seleccionada.
+
+#### 16.20.5 Fallo de conversión por valor no representable
+```text
+public fn convert_value(int64 value) -> int8
+{
+    return to_int8(value);
+}
+```
+*Explicación*: la función es semánticamente válida. Si en tiempo de ejecución se invoca con el valor `int64(200)`, la evaluación produce `EvaluationFailure` debido a que 200 no es exactamente representable en `int8`.
