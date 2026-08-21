@@ -1304,7 +1304,7 @@ Value producido
 Binding
 ```
 
-Un literal (`Literal`) pertenece exclusivamente al código fuente. Un valor (`Value`) es el dato semántico inmutable producido por la evaluación correcta de una expresión. Un enlace (`Binding`) asocia posteriormente un identificador a un Value en memoria lógica. Por consiguiente, se establece formalmente:
+Un literal (`Literal`) pertenece exclusivamente al código fuente. Un valor (`Value`) es el dato semántico inmutable producido por la evaluación correcta de una expresión. Un enlace (`Binding`) asocia posteriormente un identificador a un Value. Por consiguiente, se establece formalmente:
 
 ```text
 Literal != Value != Binding
@@ -1495,7 +1495,11 @@ Ejemplos:
 let int8 small = 10;        // Produce Value(int8, 10)
 let int64 large = 10;       // Produce Value(int64, 10)
 let dynamic value = 10;     // Produce Value(dynamic, integral 10)
-let default_val = 10;       // Produce Value(int, 10) -> canónicamente int32
+```
+
+En ausencia de un `ExpectedType` numérico:
+```text
+IntegerLiteral("10") + sin ExpectedType -> Value(int, 10) (canónicamente int32)
 ```
 
 
@@ -1637,10 +1641,10 @@ A nivel léxico:
 - `-10.5` se compone del token operador `-` y el token `DecimalLiteral("10.5")`.
 
 #### 6.12.1 Regla de representabilidad para literal directo con operador unario `-`
-Para permitir la escritura del valor mínimo representable en los tipos enteros con signo (cuyo valor absoluto no es representable como entero positivo del mismo tipo), cuando el operador unario `-` se aplica directamente a un `NumericLiteral` bajo un `ExpectedType` entero con signo, la representabilidad se comprueba sobre el valor matemático resultante completo:
+Para permitir la escritura del valor mínimo representable en los tipos enteros con signo (cuyo valor absoluto no es representable como entero positivo del mismo tipo), cuando el operador unario `-` se aplica directamente a un `IntegerLiteral` bajo un `ExpectedType` entero con signo, la representabilidad se comprueba sobre el valor matemático resultante completo de la negación:
 
 ```text
--(NumericLiteral)
+-(IntegerLiteral)
 ```
 
 Consecuencias normativas:
@@ -1648,6 +1652,10 @@ Consecuencias normativas:
 - `let int8 b = -129;` es semánticamente inválido ($-129 \notin [-128, 127]$).
 - `let int16 c = -32768;` es válido ($-32\,768 \in [-32\,768, 32\,767]$).
 - `let int16 d = -32769;` es semánticamente inválido.
+
+Esta excepción de representabilidad aplica única y exclusivamente a `IntegerLiteral`. Las formas `DecimalLiteral` y `ScientificLiteral` **no** participan de esta excepción y continúan sin producir tipos enteros:
+- `let int8 e = -1.0;` es semánticamente inválido porque `1.0` es un `DecimalLiteral`.
+- `let int8 f = -1e0;` es semánticamente inválido porque `1e0` es un `ScientificLiteral`.
 
 Para tipos enteros sin signo (`unsigned`), la aplicación del operador unario `-` sobre un literal numérico es semánticamente inválida:
 - `let uint8 value = -1;` es semánticamente inválido porque $-1$ no pertenece al dominio de `uint8`.
