@@ -2690,6 +2690,7 @@ Evo-Script v0 distingue formalmente entre:
 - **Visibilidad léxica**: propiedad determinada estáticamente durante el análisis semántico, que define en qué regiones del código el `BindingName` es un identificador resoluble.
 - **Establecimiento dinámico del binding**: evento que ocurre durante la evaluación, mediante el cual el `BindingName` queda efectivamente ligado al `Value` producido tras evaluar con éxito su inicializador.
 
+
 ### 9.6 Binding Reference Expression
 
 Una vez declarado y visible, un binding se referencia en expresiones mediante su identificador:
@@ -2827,3 +2828,445 @@ Flujo semántico del ejemplo:
 2. `worker_id` se referencia como `BindingReferenceExpression` en la construcción de `Worker`, evaluando al `Value(int64, 10)`.
 3. La `StructConstructionExpression` produce `StructValue(Worker)` y se asocia al binding inmutable `worker`.
 4. `worker` se referencia como `BindingReferenceExpression` en el inicializador de `SearchResult::Found(worker)`, produciendo `EnumValue(SearchResult)` asociado al binding inmutable `result`.
+
+---
+
+## 10. Expresiones y operadores
+
+En Evo-Script v0, una expresión (`Expression`) es una construcción sintáctica que representa un cómputo determinista sobre datos inmutables y produce exactamente un valor (`Value`).
+
+El lenguaje separa formalmente el análisis estático de las expresiones de su posterior ejecución:
+
+```text
+Expression
+    ↓ análisis semántico estático
+SemanticType
+    ↓ evaluación correcta
+Value
+```
+
+
+### 10.1 Modelo de Expression
+
+Toda expresión semánticamente válida posee exactamente un tipo semántico (`SemanticType`) determinado estáticamente:
+
+```text
+TypeOf(Expression) -> SemanticType
+```
+
+Cuando una expresión se evalúa de manera exitosa en tiempo de ejecución, produce exactamente un valor inmutable (`Value`) cuyo tipo coincide de forma idéntica con el tipo estático determinado:
+
+```text
+Evaluate(Expression) -> Value
+TypeOf(Value) == TypeOf(Expression)
+```
+
+#### 10.1.1 Validez estática frente a fallo de evaluación
+Evo-Script v0 distingue formalmente la validez semántica estática del éxito de la evaluación dinámica:
+- Una expresión como `a / b` es estáticamente válida si `a` y `b` poseen tipos compatibles para la división (`TypeOf(a / b) = int`).
+- Si durante la evaluación el valor concreto de `b` es cero, la operación no puede producir un `Value` válido y la evaluación falla por una condición de ejecución.
+
+#### 10.1.2 Expresiones y sentencias
+Este capítulo define exclusivamente expresiones que producen valores. Una expresión no constituye por sí misma una sentencia independiente (`Statement`). La sintaxis `Expression ";"` no es una construcción general del lenguaje, y su eventual utilización dentro de funciones o bloques se rige por las reglas específicas de dichos capítulos.
+
+
+### 10.2 Primary Expressions y agrupación
+
+Las expresiones primarias (`PrimaryExpression`) constituyen los operandos fundamentales del lenguaje. Integran las siguientes categorías sintácticas ya definidas:
+- `LiteralExpression`: literales booleanos, numéricos y de texto (Capítulo 6).
+- `BindingReferenceExpression`: referencias a bindings inmutables visibles (Capítulo 9).
+- `StructConstructionExpression`: construcción de valores struct (Capítulo 7).
+- `SimpleVariantExpression`: construcción de variantes simples de enum (Capítulo 8).
+- `AssociatedValueVariantExpression`: construcción de variantes de enum con valor asociado (Capítulo 8).
+- `StructuredVariantExpression`: construcción de variantes estructuradas de enum (Capítulo 8).
+- `ParenthesizedExpression`: expresiones delimitadas por paréntesis.
+
+#### 10.2.1 ParenthesizedExpression
+La agrupación explícita mediante paréntesis modifica únicamente la estructura de precedencia del árbol sintáctico (AST):
+
+```text
+ParenthesizedExpression
+    ::= "(" Expression ")"
+```
+
+Reglas normativas:
+1. No introduce un nuevo tipo en el sistema de tipos:
+   ```text
+   TypeOf((Expression)) = TypeOf(Expression)
+   ```
+2. No produce tuplas ni altera el valor generado:
+   ```text
+   Evaluate((Expression)) = Evaluate(Expression)
+   ```
+
+#### 10.2.2 Integración de Field Access
+El acceso a campos (`FieldAccessExpression`, Capítulo 7) opera como una expresión posfija de alta precedencia:
+```text
+worker.age + 10
+```
+se agrupa e interpreta formalmente como `(worker.age) + 10`. El operador `.` proyecta exclusivamente campos de datos y no define invocación de métodos.
+
+
+### 10.3 ExpectedType en expresiones numéricas compuestas
+
+Cuando una expresión compuesta se evalúa en una posición sintáctica que exige un tipo específico, el `ExpectedType` recibido contextualiza la operación completa y se propaga hacia los operandos y literales susceptibles de tipado contextual.
+
+#### 10.3.1 Propagación a literales contextuales
+En una declaración como:
+```text
+let int64 result = 10 + 20;
+```
+el `DeclaredType` `int64` proporciona `ExpectedType(int64)` a la expresión aditiva. Durante el análisis semántico, dicho `ExpectedType` se propaga a los literales `10` y `20`, tipándolos directamente como `int64`. La operación se valida como `int64 + int64 -> int64` sin requerir conversiones intermedias implícitas (`int -> int64`).
+
+#### 10.3.2 Inmutabilidad del tipo en expresiones previamente tipadas
+El `ExpectedType` no altera retroactivamente ni convierte el tipo semántico de expresiones que ya poseen un tipo cerrado:
+```text
+let int32 first = 10;
+let int64 result = first + 20; // Semánticamente inválido
+```
+Dado que `first` posee estáticamente `TypeOf(first) = int32`, el `ExpectedType(int64)` no convierte `first` en `int64`. Al exigir la suma operandos de tipos compatibles y al ser `Compatible(int32, int64) == false`, la expresión es semánticamente inválida y requiere una conversión explícita.
+
+#### 10.3.3 Expresiones sin ExpectedType externo
+En ausencia de un `ExpectedType` provisto por el contexto exterior:
+- `10 + 20` se analiza bajo los tipos por defecto de sus literales (`int + int`), produciendo `int` (canónicamente `int32`).
+- `10.0 + 20.0` se analiza bajo los tipos por defecto (`float + float`), produciendo `float` (canónicamente `float64`).
+
+
+### 10.4 Operadores aritméticos
+
+Evo-Script v0 define exactamente cinco operadores aritméticos binarios:
+- Suma: `+`
+- Resta: `-`
+- Multiplicación: `*`
+- División: `/`
+- Residuo: `%`
+
+#### 10.4.1 Gramática de expresiones aritméticas
+```text
+AdditiveExpression
+    ::= MultiplicativeExpression
+        (("+" | "-") MultiplicativeExpression)*
+
+MultiplicativeExpression
+    ::= UnaryExpression
+        (("*" | "/" | "%") UnaryExpression)*
+```
+
+#### 10.4.2 Compatibilidad de operandos
+Los dos operandos de un operador aritmético binario deben ser tipos numéricos directamente compatibles según la función de compatibilidad del Capítulo 5:
+```text
+Compatible(TypeOf(left), TypeOf(right)) == true
+```
+Consecuencias normativas:
+- `int + int32` es válido porque `CanonicalType(int) == CanonicalType(int32)`.
+- `int32 + int64`, `int + float`, `uint32 + int32` y `float32 + float64` son semánticamente inválidos.
+- Evo-Script v0 no realiza ampliación automática (*widening*), promociones numéricas ni aritmética mixta entre tipos numéricos distintos.
+
+#### 10.4.3 Tipo resultante
+Para cualquier tipo numérico de tamaño fijo $T$ válido para la operación:
+```text
+T OP T -> T
+```
+Ejemplos:
+- `int64 + int64 -> int64`
+- `float32 * float32 -> float32`
+- `uint128 - uint128 -> uint128`
+
+#### 10.4.4 Naturaleza exclusivamente numérica de `+`
+El operador `+` está definido única y exclusivamente para tipos numéricos. No existe sobrecarga del operador `+` para concatenación de cadenas de texto. Expresiones como `"hello" + "world"` son semánticamente inválidas.
+
+
+### 10.5 Semántica numérica de evaluación
+
+La evaluación de operaciones aritméticas sobre valores válidos se rige por las siguientes reglas deterministas:
+
+#### 10.5.1 Enteros de tamaño fijo (`+`, `-`, `*`)
+Para los tipos enteros de tamaño fijo (`int8`..`int128`, `uint8`..`uint128`), los operadores `+`, `-` y `*` calculan el resultado matemático exacto.
+- Si el resultado matemático pertenece al rango representable del tipo $T$, se produce el `Value(T, resultado)`.
+- Si el resultado matemático excede o desborda los límites del tipo, la evaluación falla y no produce un valor. No se aplica truncamiento silencioso (*wrapping*), saturación ni promoción automática.
+
+#### 10.5.2 División entera (`/`)
+La división entre tipos enteros de tamaño fijo se define como truncamiento hacia cero (*truncation toward zero*):
+- Ejemplos para enteros con signo:
+  - `10 / 3` evalúa a `3`
+  - `-10 / 3` evalúa a `-3`
+  - `10 / -3` evalúa a `-3`
+  - `-10 / -3` evalúa a `3`
+- Para enteros sin signo (`unsigned`), produce el cociente entero no negativo exacto.
+- **Caso `MIN_VALUE / -1`**: en enteros con signo de tamaño fijo, la división del valor mínimo representable entre `-1` genera un resultado positivo que excede el valor máximo del tipo (por ejemplo, en `int8`, $-128 / -1 = 128 \notin [-128, 127]$). La expresión es estáticamente válida pero su evaluación falla por desbordamiento.
+
+#### 10.5.3 Operador de residuo (`%`)
+El operador `%` está definido única y exclusivamente para tipos enteros con signo y sin signo (`int8`..`int128`, `uint8`..`uint128`). No está definido para tipos de punto flotante (`float`, `float32`, `float64`).
+
+El residuo $r$ satisface la identidad matemática fundamental:
+```text
+dividendo = cociente * divisor + r
+```
+donde `cociente` es el cociente truncado hacia cero de `dividendo / divisor`.
+
+Reglas para enteros con signo:
+- `10 % 3` evalúa a `1`
+- `-10 % 3` evalúa a `-1`
+- `10 % -3` evalúa a `1`
+- `-10 % -3` evalúa a `-1`
+- Cuando $r \neq 0$, el signo del residuo coincide invariablemente con el signo del dividendo.
+
+Reglas para enteros sin signo:
+- $0 \le r < \text{divisor}$ cuando $\text{divisor} \neq 0$.
+
+**Caso `MIN_VALUE % -1`**: en tipos enteros con signo de tamaño fijo, la operación `MIN_VALUE % -1` evalúa exitosamente a `0`, ya que el residuo matemático exacto es $0$ y pertenece al dominio del tipo (la operación no falla).
+
+#### 10.5.4 División y residuo por cero
+- En aritmética entera, evaluar `a / 0` o `a % 0` (con divisor igual a cero) provoca un fallo de evaluación y no produce un valor.
+- En aritmética de punto flotante, evaluar `a / 0.0` o `a / -0.0` provoca un fallo de evaluación y no produce un valor. No se generan valores infinitos ni indeterminaciones como resultado de la división por cero.
+
+#### 10.5.5 Aritmética de punto flotante
+Las operaciones sobre `float32` y `float64` siguen el estándar IEEE 754 con modo de redondeo `roundTiesToEven`.
+- Si una operación produce un resultado no finito (`NaN`, `+Infinity`, `-Infinity`), la evaluación falla y no genera un `Value` válido.
+- El subdesbordamiento (*underflow*) a cero ($0.0$ o $-0.0$) está permitido y constituye un valor válido.
+
+
+### 10.6 Operaciones sobre `dynamic`
+
+De conformidad con el Capítulo 5, `dynamic` es un único tipo numérico estático propio. Sus valores pertenecen internamente a dos clases semánticas:
+- `IntegralClass`: valores enteros de precisión arbitraria.
+- `FloatingClass`: valores reales IEEE 754 *binary64*.
+
+#### 10.6.1 Tipado estático y prohibición de mezcla con tipos fijos
+Se admiten las operaciones binarias `+`, `-`, `*` y `/` entre dos operandos de tipo `dynamic`:
+```text
+dynamic OP dynamic -> dynamic
+```
+No se permite la aritmética directa entre `dynamic` y tipos numéricos fijos (`dynamic + int`, `float64 * dynamic`), ya que `Compatible(dynamic, T) == false`.
+
+#### 10.6.2 Evaluación entre valores de la misma clase
+1. **`IntegralClass OP IntegralClass`**:
+   - `+`, `-`, `*` se evalúan con precisión entera arbitraria y producen un `DynamicValue` de clase `IntegralClass`. No sufren desbordamiento por tamaño finito.
+   - `/` aplica división entera con truncamiento hacia cero y produce un `DynamicValue` de clase `IntegralClass`.
+2. **`FloatingClass OP FloatingClass`**:
+   - `+`, `-`, `*`, `/` se evalúan bajo semántica IEEE 754 *binary64* y producen un `DynamicValue` de clase `FloatingClass`. Si el resultado no es finito, la evaluación falla.
+
+#### 10.6.3 Prohibición de mezcla de clases en tiempo de ejecución
+Si durante la evaluación de una operación aritmética sobre dos valores de tipo `dynamic` uno de los operandos pertenece a `IntegralClass` y el otro a `FloatingClass`, la evaluación falla. El lenguaje no realiza conversiones automáticas ni promociones implícitas entre clases internas; cualquier cambio de formato debe realizarse mediante conversión explícita.
+
+#### 10.6.4 Invalidez de `%` sobre `dynamic`
+La expresión `dynamic % dynamic` es semánticamente inválida. El operador `%` requiere garantías estáticas de integralidad que el tipo `dynamic` no proporciona en tiempo de análisis.
+
+
+### 10.7 Operadores de igualdad
+
+Evo-Script v0 define dos operadores de igualdad:
+- Igualdad: `==`
+- Desigualdad: `!=`
+
+Toda expresión de igualdad produce exactamente un valor de tipo `bool`:
+```text
+TypeOf(left == right) = bool
+TypeOf(left != right) = bool
+```
+
+#### 10.7.1 Tipos numéricos de tamaño fijo
+La comparación de igualdad solo está permitida entre operandos del mismo tipo numérico compatible (`Compatible(TypeOf(left), TypeOf(right)) == true`).
+- `int64 == int64` es válido.
+- `int == int32` es válido por compatibilidad canónica.
+- `int32 == int64` es semánticamente inválido.
+
+#### 10.7.2 Tipo `bool`
+Compara la coincidencia exacta de los valores lógicos:
+- `true == true` evalúa a `true`.
+- `true == false` evalúa a `false`.
+
+#### 10.7.3 Tipo `string`
+Compara la coincidencia exacta e inmutable de la secuencia de valores escalares Unicode (*Unicode Scalar Values*). Es estrictamente sensible a mayúsculas y minúsculas y no realiza normalizaciones automáticas ni comparaciones por puntero.
+
+#### 10.7.4 Valores de tipo struct (`StructValue`)
+La igualdad solo está permitida entre dos valores del mismo `StructType` nominal (`Worker == Worker`).
+- Dos `StructValues` son iguales si y solo si todos sus campos correspondientes son iguales según las reglas de igualdad de sus respectivos tipos.
+- La comparación es estructural y recursiva sobre la composición de datos. Dado que el `Type Dependency Graph` es acíclico (DAG), la verificación de igualdad siempre concluye de manera finita.
+- Dos structs de tipos nominales distintos (`Worker == Customer`) son estáticamente incompatibles, aun cuando posean campos con nombres y tipos idénticos.
+
+#### 10.7.5 Valores de tipo enum (`EnumValue`)
+La igualdad solo está permitida entre dos valores del mismo `EnumType` nominal (`Status == Status`).
+1. Si los dos valores poseen variantes activas distintas, la comparación produce `false`.
+2. Si ambos poseen la misma `SimpleVariant`, produce `true`.
+3. Si ambos poseen la misma `AssociatedValueVariant`, produce el resultado de comparar recursivamente sus valores asociados.
+4. Si ambos poseen la misma `StructuredVariant`, produce el resultado de comparar recursivamente todos los campos estructurados correspondientes.
+
+#### 10.7.6 Igualdad sobre `dynamic`
+Se permite la comparación `dynamic == dynamic`:
+- Dos valores `dynamic` de clase `IntegralClass` son iguales si representan el mismo número entero matemático.
+- Dos valores `dynamic` de clase `FloatingClass` son iguales si representan el mismo valor de punto flotante según IEEE 754.
+- Si un operando pertenece a `IntegralClass` y el otro a `FloatingClass` (por ejemplo, `Dynamic Integral 10` y `Dynamic Floating 10.0`), la comparación produce invariablemente `false` sin realizar conversiones automáticas de clase.
+
+
+### 10.8 Operadores de orden
+
+Evo-Script v0 define cuatro operadores de orden relacional:
+- Menor que: `<`
+- Menor o igual que: `<=`
+- Mayor que: `>`
+- Mayor o igual que: `>=`
+
+Toda expresión de orden produce un resultado de tipo `bool`.
+
+Reglas normativas:
+1. **Restricción a tipos numéricos fijos**: los operadores de orden están permitidos única y exclusivamente entre operandos del mismo tipo numérico fijo compatible (`Compatible(TypeOf(left), TypeOf(right)) == true`).
+2. **Tipos no ordenables**: los operadores de orden no están definidos para `bool`, `string`, `StructType`, `EnumType` ni `dynamic`. Expresiones como `"a" < "b"` o `val_dynamic < 10` son semánticamente inválidas. Para comparar valores `dynamic` debe realizarse previamente una conversión explícita a un tipo numérico fijo.
+3. **Prohibición de encadenamiento de comparaciones (*comparison chaining*)**: las expresiones de comparación no son encadenables. Construcciones como `a < b < c`, `a == b == c` o `a <= b >= c` son sintácticamente inválidas. Para expresar múltiples relaciones debe utilizarse conjunción lógica explícita:
+   ```text
+   (a < b) && (b < c)
+   ```
+
+
+### 10.9 Operadores lógicos y cortocircuito
+
+Evo-Script v0 define tres operadores lógicos:
+- Negación lógica: `!`
+- Conjunción lógica (AND): `&&`
+- Disyunción lógica (OR): `||`
+
+Reglas de tipado:
+- `!` opera sobre `bool` y produce `bool`.
+- `&&` y `||` requieren que ambos operandos sean de tipo `bool` y producen `bool`.
+- No existe el concepto de veracidad implícita (*truthiness*); tipos numéricos o textos no pueden utilizarse como condiciones lógicas (`1 && true` es semánticamente inválido).
+
+#### 10.9.1 Análisis semántico estático
+Ambos operandos de `&&` y `||` deben analizarse y validarse semánticamente en su totalidad. El hecho de que la evaluación pueda omitir el operando derecho no exime a dicho operando de ser estáticamente válido y de tipo `bool`.
+
+#### 10.9.2 Semántica de evaluación y cortocircuito (*short-circuit*)
+1. **Operador `&&` (conjunción)**:
+   - Se evalúa primero el operando izquierdo (`left`).
+   - Si `left` produce `false`, el resultado de la expresión es `false` y el operando derecho (`right`) **no se evalúa**.
+   - Si `left` produce `true`, se evalúa el operando derecho (`right`) y su valor determina el resultado final.
+2. **Operador `||` (disyunción)**:
+   - Se evalúa primero el operando izquierdo (`left`).
+   - Si `left` produce `true`, el resultado de la expresión es `true` y el operando derecho (`right`) **no se evalúa**.
+   - Si `left` produce `false`, se evalúa el operando derecho (`right`) y su valor determina el resultado final.
+
+#### 10.9.3 Fallos de evaluación en cortocircuito
+- Si el operando izquierdo falla durante su evaluación, la operación termina inmediatamente y el operando derecho no se evalúa.
+- Si el operando derecho es omitido por la regla de cortocircuito, cualquier condición de fallo que hubiera ocurrido al evaluar el operando derecho no llega a ejecutarse.
+
+
+### 10.10 Operadores unarios
+
+Evo-Script v0 define exactamente dos operadores unarios prefijos:
+- Negación lógica: `!`
+- Negación aritmética: `-`
+
+No existe el operador unario positivo `+` (expresiones como `+10` son sintácticamente inválidas).
+
+#### 10.10.1 Operador unario `!`
+Aplica exclusivamente sobre expresiones de tipo `bool` (`!bool -> bool`), invirtiendo su valor de verdad:
+- `!true` produce `false`.
+- `!false` produce `true`.
+
+#### 10.10.2 Operador unario `-`
+Aplica sobre tipos enteros con signo (`int`, `int8`, `int16`, `int32`, `int64`, `int128`), tipos de punto flotante (`float`, `float32`, `float64`) y `dynamic`.
+- **Prohibición sobre enteros sin signo**: aplicar `-` sobre tipos `unsigned` (`uint8`..`uint128`) es semánticamente inválido (ej. `-value` donde `value` es `uint32` es inválido).
+- **Negación sobre `dynamic`**: si el valor es de clase `IntegralClass`, produce el entero dinámico matemáticamente negado; si es de clase `FloatingClass`, produce el flotante dinámico negado.
+- **Negación dinámica de valor mínimo**: si una expresión produce el valor mínimo representable de un tipo entero con signo fijo (por ejemplo, $-128$ en `int8`), evaluar `-min_value` falla en ejecución porque $+128$ no pertenece al dominio de `int8`.
+
+
+### 10.11 Orden de evaluación
+
+La evaluación de los operandos en expresiones binarias sigue un orden determinista estricto de izquierda a derecha:
+
+1. **Operadores binarios ordinarios** (`+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `<=`, `>`, `>=`):
+   - Se evalúa completamente el operando izquierdo (`left`).
+   - Si `left` produce un `Value` válido, se evalúa completamente el operando derecho (`right`).
+   - Si ambos operandos concluyen exitosamente, se aplica la operación correspondiente y se genera el `Value` resultante.
+2. **Operadores de cortocircuito** (`&&`, `||`):
+   - Se evalúa primero el operando izquierdo y se evalúa el operando derecho únicamente cuando las reglas de cortocircuito (sección 10.9) lo exijan.
+3. **Operadores unarios** (`!`, `-`):
+   - Se evalúa primero la subexpresión operando y a continuación se aplica el operador unario correspondiente.
+
+
+### 10.12 Precedencia, asociatividad y agrupación
+
+La estructura gramatical de Evo-Script v0 establece una precedencia determinista y unívoca sin requerir paréntesis obligatorios para desambiguar expresiones comunes.
+
+#### 10.12.1 Tabla de precedencia
+De mayor a menor precedencia:
+
+| Nivel | Categoría | Operadores | Asociatividad |
+|---|---|---|---|
+| 1 | Proyección de campos | `.` (Field Access) | Izquierda |
+| 2 | Unarios | `!`, `-` | Prefijo (derecha) |
+| 3 | Multiplicativos | `*`, `/`, `%` | Izquierda |
+| 4 | Aditivos | `+`, `-` | Izquierda |
+| 5 | Comparación | `==`, `!=`, `<`, `<=`, `>`, `>=` | No asociativo |
+| 6 | Conjunción lógica | `&&` | Izquierda |
+| 7 | Disyunción lógica | `\|\|` | Izquierda |
+
+#### 10.12.2 Consecuencias normativas de la precedencia
+- `a + b * c` se agrupa e interpreta formalmente como `a + (b * c)`.
+- `age >= 18 && active` se agrupa como `(age >= 18) && active`.
+- `admin || active && authorized` se agrupa como `admin || (active && authorized)`.
+- `a - b - c` se asocia por la izquierda como `(a - b) - c`.
+- `!!ready` se agrupa hacia el operando como `!(!ready)`.
+
+#### 10.12.3 Delimitadores y asignación
+- El símbolo `::` no es un operador binario de expresión; forma parte exclusiva de `EnumVariantReference` (Capítulo 8).
+- El símbolo `=` no es un operador de expresión ni define asignación ejecutable; participa exclusivamente en la declaración `LetBindingDeclaration` (Capítulo 9).
+
+
+### 10.13 Gramática del núcleo de Expression
+
+La gramática formal del núcleo de expresiones de Evo-Script v0 se define como:
+
+```text
+Expression
+    ::= LogicalOrExpression
+
+LogicalOrExpression
+    ::= LogicalAndExpression
+        ("||" LogicalAndExpression)*
+
+LogicalAndExpression
+    ::= ComparisonExpression
+        ("&&" ComparisonExpression)*
+
+ComparisonExpression
+    ::= AdditiveExpression
+        (ComparisonOperator AdditiveExpression)?
+
+ComparisonOperator
+    ::= "=="
+     |  "!="
+     |  "<"
+     |  "<="
+     |  ">"
+     |  ">="
+
+AdditiveExpression
+    ::= MultiplicativeExpression
+        (("+" | "-") MultiplicativeExpression)*
+
+MultiplicativeExpression
+    ::= UnaryExpression
+        (("*" | "/" | "%") UnaryExpression)*
+
+UnaryExpression
+    ::= "!" UnaryExpression
+     |  "-" UnaryExpression
+     |  PostfixExpression
+
+PostfixExpression
+    ::= PrimaryExpression
+        ("." FieldName)*
+
+PrimaryExpression
+    ::= LiteralExpression
+     |  BindingReferenceExpression
+     |  StructConstructionExpression
+     |  SimpleVariantExpression
+     |  AssociatedValueVariantExpression
+     |  StructuredVariantExpression
+     |  ParenthesizedExpression
+
+ParenthesizedExpression
+    ::= "(" Expression ")"
+```
+
+La producción `(ComparisonOperator AdditiveExpression)?` en `ComparisonExpression` restringe gramaticalmente a un máximo de una comparación por nivel, haciendo que secuencias como `a < b < c` sean directamente sintácticamente inválidas.
