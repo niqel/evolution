@@ -5504,12 +5504,26 @@ El análisis semántico de una `PipelineExpression` se efectúa según el siguie
 1. Se reconoce la expresión inicial `PipelineInputExpression` y la secuencia ordenada de etapas `PipelineStage[1..n]`.
 2. Se reconocen estructuralmente todas las etapas y se resuelven sus targets sin aplicar todavía *default typing* a expresiones que continúen siendo contextualizables.
 3. Para cada etapa, se identifican los constraints de `ExpectedType` aplicables a su entrada de pipeline mediante `implicit this` o `ThisExpression` explícitas.
-4. Se propagan dichos constraints de `ExpectedType` hacia la expresión que produce la entrada de la etapa correspondiente cuando esta todavía admita tipado contextual:
-   - Para un target unario con parámetro de tipo $T$, se suministra `ExpectedType(T)` al `this` implícito.
-   - Para una etapa explícita con `ThisExpression`, los constraints de `ExpectedType` que reciba `this` se propagan a la expresión de entrada de la etapa.
-5. Si múltiples constraints de `ExpectedType` sobre la misma entrada de pipeline resultan mutuamente incompatibles, la `PipelineExpression` es semánticamente inválida.
-6. Se aplican los constraints de `ExpectedType` compatibles encontrados.
-7. Se aplica *default typing* únicamente a aquellas expresiones contextualizables que hayan quedado sin un `ExpectedType` aplicable.
+4. **Propagación transitiva de constraints**: se propagan dichos constraints de `ExpectedType` de forma transitiva hacia atrás a lo largo de la cadena de etapas enlazadas mediante `this` y hacia la expresión que produce la entrada de cada etapa cuando esta todavía admita tipado contextual:
+   ```text
+   ExpectedType(T)
+       ↓
+   ThisExpression(stage N)
+       ↓
+   PipelineInputExpression(stage N)
+       ↓
+   ThisExpression(stage N-1)
+       ↓
+   PipelineInputExpression(stage N-1)
+       ↓
+   ...
+       ↓
+   contextualizable source
+   ```
+   El proceso de propagación se repite de manera determinista hasta alcanzar un estado estable (punto fijo de constraints) donde no se descubran nuevos constraints de `ExpectedType` aplicables, o hasta alcanzar una expresión con `SemanticType` ya cerrado o que no admita tipado contextual.
+5. Si múltiples constraints de `ExpectedType` sobre la misma entrada de pipeline resultan mutuamente incompatibles, la `PipelineExpression` es semánticamente inválida (sin preferencia por orden textual).
+6. Se aplican los constraints de `ExpectedType` compatibles encontrados sobre las expresiones contextualizables.
+7. Una vez concluida la propagación transitiva y aplicados los constraints, se aplica *default typing* únicamente a aquellas expresiones contextualizables que hayan quedado sin un `ExpectedType` aplicable.
 8. Se determina formalmente el tipo inicial $T_0 = \text{TypeOf}(\text{PipelineInputExpression})$.
 9. Para cada etapa $i$ secuencialmente de izquierda a derecha ($1 \le i \le n$):
    - Se establece `TypeOf(this)` en `PipelineThisContext(i)` como $T_{i-1}$.
@@ -5525,9 +5539,32 @@ El análisis semántico de una `PipelineExpression` se efectúa según el siguie
 11. Se establece el tipo final `TypeOf(PipelineExpression) = T_n`.
 
 Reglas normativas:
-1. **Prioridad de ExpectedType sobre default typing**: los constraints de `ExpectedType` aplicables a una expresión contextualizable se resuelven siempre antes de aplicar *default typing*, garantizando que construcciones como `10 |> identity` (donde `identity(int64) -> int64`) tipen directamente el literal como `int64`.
-2. **Análisis estático exhaustivo de todas las etapas**: todas las etapas se analizan estáticamente en su totalidad.
-3. **Ausencia de resolución dinámica de tipos**: la compatibilidad entre etapas se comprueba enteramente en tiempo de análisis estático sin redescubrimiento dinámico en tiempo de ejecución.
+1. **Propagación transitiva y prioridad de ExpectedType**: la propagación de constraints de `ExpectedType` a través de la cadena de `PipelineThisContext` y `ThisExpression` es transitiva y se completa siempre antes de aplicar *default typing*.
+   - **Ejemplo normativo transitivo**:
+     ```text
+     fn identity(int64 value) -> int64
+     {
+         return value;
+     }
+
+     public fn calculate() -> int64
+     {
+         return 10
+             |> this
+             |> identity;
+     }
+     ```
+     En este programa:
+     1. La función `identity` impone `ExpectedType(int64)` sobre su entrada (etapa 2).
+     2. La entrada de la etapa 2 es el resultado de la etapa 1 (`this`).
+     3. El `this` de la etapa 1 representa la entrada inicial del pipeline (`10`).
+     4. El constraint `ExpectedType(int64)` se propaga transitivamente a través de las etapas hasta alcanzar el literal `10`.
+     5. El literal `10` se tipa directamente como `int64` (`10 -> int64`).
+     6. No se aplica *default typing* a `int` ni ocurre conversión implícita (`10 -> int -> int64` no ocurre).
+2. **Entrada ya tipada detiene la propagación**: si la entrada del pipeline ya posee un tipo cerrado (por ejemplo, `let int32 source = 10; source |> this |> identity`), la propagación alcanza `source` pero no altera su tipo `int32`, resultando en un error semántico de incompatibilidad de tipos que exige conversión explícita (`source |> to_int64 |> identity`).
+3. **Ausencia de inferencia global**: la propagación transitiva se circunscribe estrictamente al camino lineal y explícito de relaciones `PipelineStage`, `PipelineThisContext`, `ThisExpression` y `PipelineInputExpression` dentro de la `PipelineExpression`. No constituye inferencia global de tipos ni atraviesa expresiones no relacionadas.
+4. **Análisis estático exhaustivo de todas las etapas**: todas las etapas se analizan estáticamente en su totalidad.
+5. **Ausencia de resolución dinámica de tipos**: la compatibilidad entre etapas se comprueba enteramente en tiempo de análisis estático sin redescubrimiento dinámico en tiempo de ejecución.
 
 
 ### 15.9 Evaluación
