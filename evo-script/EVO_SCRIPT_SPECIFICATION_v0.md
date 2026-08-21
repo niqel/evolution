@@ -7359,3 +7359,562 @@ La siguiente tabla resume casos donde una construcción es aceptada por el parse
 La gramática formal consolidada en este Capítulo 17 se considera cerrada y normativa bajo el siguiente criterio:
 
 > A partir de un flujo de tokens conforme a las reglas léxicas de los Capítulos 3 y 4, cualquier implementador independiente puede construir de forma determinista y unívoca el árbol de sintaxis abstracta (`AST`) de cualquier programa válido de Evo-Script v0 sin requerir decisiones adicionales de diseño sobre delimitación de expresiones, resolución de solapamientos EBNF (gobernados por la Sección 17.13), delimitación de llaves en `when` frente a construcciones de estructuras, precedencias, asociatividades o estructura de bloques.
+
+---
+
+## 18. Programa canónico autocontenido
+
+Este capítulo culmina la especificación de Evo-Script v0 presentando un programa completo y autocontenido. Su propósito es servir como prueba de integración integral, demostrando que las reglas normativas formalizadas a lo largo de los Capítulos 1 al 17 son exhaustivas y suficientes para procesar determinísticamente un archivo de código fuente desde su texto original hasta su valor final resultante sin requerir ninguna decisión adicional de diseño.
+
+
+### 18.1 Propósito del programa canónico
+
+El programa canónico demuestra de forma continua e integrada la cadena completa de compilación y ejecución de Evo-Script v0:
+
+```text
+SourceText
+    ↓
+Lexical Analysis (Lexer)
+    ↓
+TokenStream
+    ↓
+Syntactic Analysis (Parser)
+    ↓
+Abstract Syntax Tree (AST)
+    ↓
+Declaration Collection & Type Space
+    ↓
+Type Dependency Graph Validation
+    ↓
+FunctionCallGraph Construction
+    ↓
+Semantic Analysis & ExpectedType Propagation
+    ↓
+SemanticallyValidProgram
+    ↓
+Evaluation (Evaluator)
+    ↓
+Final Value
+```
+
+Este capítulo ilustra la aplicación práctica y coordinada de las reglas normativas ya existentes; no introduce ninguna regla sintáctica, semántica o de evaluación nueva.
+
+Asimismo, se reitera que una función marcada con visibilidad `public` representa una operación expuesta al exterior del archivo y no un punto de entrada de ejecución automática. A efectos de esta demostración canónica, el escenario evaluado corresponde conceptualmente a la invocación explícita de `Evaluate(canonical_program())`.
+
+
+### 18.2 Archivo canonical-program.efn
+
+Conforme a las reglas de nomenclatura y estructura de archivos establecidas en los Capítulos 2 y 4, la presencia de la función pública `canonical_program` determina unívocamente el nombre del archivo de código fuente como `canonical-program.efn`.
+
+A continuación se presenta el código fuente completo del programa canónico:
+
+```text
+struct Worker
+{
+    int64 id;
+    string name;
+}
+
+struct Summary
+{
+    int64 id;
+    string name;
+    string id_text;
+    float64 score;
+    bool valid;
+}
+
+enum WorkerStatus
+{
+    Active,
+    Disabled
+}
+
+enum SearchResult
+{
+    NotFound,
+    Found(Worker),
+    Failed {
+        int code;
+        string message;
+    }
+}
+
+public fn canonical_program() -> Summary
+{
+    let int64 id = "41"
+        |> parse_int64
+        |> add(this, 1);
+
+    let Worker worker = create_worker(id, "Ana");
+
+    let SearchResult result =
+        SearchResult::Found(worker);
+
+    let WorkerStatus status =
+        WorkerStatus::Active;
+
+    let string name =
+        result
+        |> result_name;
+
+    let int64 code =
+        status
+        |> status_code;
+
+    let string id_text =
+        id
+        |> to_dynamic
+        |> to_string;
+
+    let float64 score =
+        id
+        |> to_float64;
+
+    let bool valid =
+        !(code == 0)
+        && (score >= 42.0);
+
+    return Summary {
+        id: id,
+        name: name,
+        id_text: id_text,
+        score: score,
+        valid: valid
+    };
+}
+
+fn add(int64 left, int64 right) -> int64
+{
+    return left + right;
+}
+
+fn create_worker(
+    int64 id,
+    string name
+) -> Worker
+{
+    return Worker {
+        id: id,
+        name: name
+    };
+}
+
+private fn result_name(SearchResult result) -> string
+{
+    return when result {
+        SearchResult::NotFound
+            => "not found",
+
+        SearchResult::Found(Worker worker)
+            => worker.name,
+
+        SearchResult::Failed {
+            code: int error_code,
+            message: string error_message
+        }
+            => error_message
+    };
+}
+
+fn status_code(WorkerStatus status) -> int64
+{
+    return when status {
+        WorkerStatus::Active
+            => 1,
+
+        WorkerStatus::Disabled
+            => 0
+    };
+}
+
+fn create_not_found() -> SearchResult
+{
+    return SearchResult::NotFound;
+}
+
+fn create_failure(
+    int code,
+    string message
+) -> SearchResult
+{
+    return SearchResult::Failed {
+        code: code,
+        message: message
+    };
+}
+```
+
+
+### 18.3 Cobertura de construcciones de Evo-Script v0
+
+El programa canónico integra y ejercita las principales familias estructurales del lenguaje:
+
+| Construcción | Ejemplo canónico | Cobertura |
+|---|---|---|
+| `StructDeclaration` | `struct Worker { ... }`, `struct Summary { ... }` | Sí |
+| `StructConstructionExpression` | `Worker { ... }`, `Summary { ... }` | Sí |
+| `EnumDeclaration` | `enum WorkerStatus { ... }`, `enum SearchResult { ... }` | Sí |
+| `SimpleVariant` | `Active`, `Disabled`, `NotFound` | Sí |
+| `AssociatedValueVariant` | `Found(Worker)` | Sí |
+| `StructuredVariant` | `Failed { int code; string message; }` | Sí |
+| `SimpleVariantExpression` | `WorkerStatus::Active`, `SearchResult::NotFound` | Sí |
+| `AssociatedValueVariantExpression` | `SearchResult::Found(worker)` | Sí |
+| `StructuredVariantExpression` | `SearchResult::Failed { code: code, message: message }` | Sí |
+| `SimpleVariantPattern` | `SearchResult::NotFound => ...` | Sí |
+| `AssociatedValueVariantPattern` | `SearchResult::Found(Worker worker) => ...` | Sí |
+| `StructuredVariantPattern` | `SearchResult::Failed { code: int error_code, ... } => ...` | Sí |
+| `LetBindingDeclaration` | `let int64 id = ...;`, `let Worker worker = ...;`, etc. | Sí |
+| `public fn` | `public fn canonical_program() -> Summary` | Sí |
+| `private fn` explícita | `private fn result_name(SearchResult result) -> string` | Sí |
+| `private fn` implícita | `fn add(...)`, `fn create_worker(...)`, etc. | Sí |
+| `FunctionCallExpression` | `create_worker(id, "Ana")`, `add(this, 1)` | Sí |
+| `FieldAccessExpression` | `worker.name` | Sí |
+| `WhenExpression` | `when result { ... }`, `when status { ... }` | Sí |
+| `PipelineExpression` | `"41" \|> parse_int64 \|> add(this, 1)`, etc. | Sí |
+| `UnaryPipelineTarget` (función de usuario) | `result \|> result_name`, `status \|> status_code` | Sí |
+| `UnaryPipelineTarget` (intrinsic) | `parse_int64`, `to_dynamic`, `to_string`, `to_float64` | Sí |
+| Etapa explícita de pipeline | `add(this, 1)` | Sí |
+| `ThisExpression` | `this` en `add(this, 1)` | Sí |
+| `ParsingExpression` | `parse_int64` | Sí |
+| `ConversionExpression` | `to_dynamic`, `to_string`, `to_float64` | Sí |
+| Operador aritmético | `left + right` | Sí |
+| Operador relacional / comparación | `code == 0`, `score >= 42.0` | Sí |
+| Operador lógico | `!(code == 0)`, `... && ...` | Sí |
+| `ParenthesizedExpression` | `(code == 0)`, `(score >= 42.0)` | Sí |
+
+El programa canónico no pretende abarcar cada tipo nativo concreto ni cada operador aritmético individual de forma redundante, sino garantizar la cobertura de todas las familias ortogonales de la gramática y el sistema de tipos. Los casos límite no presentes se rigen estrictamente por sus respectivos capítulos.
+
+
+### 18.4 Análisis léxico
+
+El lexer escanea el texto del archivo produciendo un `TokenStream` determinista conforme a los Capítulos 3, 4 y 6. Fragmentos representativos demuestran la tokenización:
+
+#### 18.4.1 Declaración de función pública
+Para la signatura `public fn canonical_program() -> Summary`:
+```text
+Keyword("public")
+Keyword("fn")
+Identifier("canonical_program")
+Symbol("(")
+Symbol(")")
+Symbol("->")
+Identifier("Summary")
+```
+El lexema `Summary` es analizado léxicamente como `Identifier`; su resolución a `StructType` corresponde a la fase de análisis semántico.
+
+#### 18.4.2 Canalización y nombres de intrinsics
+Para la expresión `id |> to_dynamic |> to_string`:
+```text
+Identifier("id")
+Operator("|>")
+Identifier("to_dynamic")
+Operator("|>")
+Identifier("to_string")
+```
+Los identificadores `to_dynamic`, `to_string`, `parse_int64` y `to_float64` se categorizan léxicamente como `Identifier`. Su reconocimiento como intrinsics ocurre en el parser y el analizador semántico según los Capítulos 11 y 17.
+
+#### 18.4.3 Literales
+- Cadenas de texto: `"41"`, `"Ana"`, `"not found"`, `"none"` producen tokens `StringLiteral`.
+- Enteros: `1`, `0` producen tokens `IntegerLiteral`.
+- Decimales: `42.0` produce el token `DecimalLiteral`.
+
+
+### 18.5 Parsing y estructura AST
+
+El parser procesa el `TokenStream` y construye el `AST` unificado del archivo sin ambigüedades.
+
+#### 18.5.1 AST del SourceFile
+```text
+SourceFile
+├── StructDeclaration(Worker)
+├── StructDeclaration(Summary)
+├── EnumDeclaration(WorkerStatus)
+├── EnumDeclaration(SearchResult)
+├── FunctionDeclaration(canonical_program) [Visibility: Public]
+├── FunctionDeclaration(add) [Visibility: Private (implícita)]
+├── FunctionDeclaration(create_worker) [Visibility: Private (implícita)]
+├── FunctionDeclaration(result_name) [Visibility: Private (explícita)]
+├── FunctionDeclaration(status_code) [Visibility: Private (implícita)]
+├── FunctionDeclaration(create_not_found) [Visibility: Private (implícita)]
+└── FunctionDeclaration(create_failure) [Visibility: Private (implícita)]
+```
+El parser produce exactamente las 11 declaraciones de nivel superior. La regla de que el archivo contiene exactamente una función pública se valida posteriormente en el analizador semántico.
+
+#### 18.5.2 AST del cuerpo de `canonical_program`
+```text
+FunctionBody
+├── LetBindingDeclaration(id)
+├── LetBindingDeclaration(worker)
+├── LetBindingDeclaration(result)
+├── LetBindingDeclaration(status)
+├── LetBindingDeclaration(name)
+├── LetBindingDeclaration(code)
+├── LetBindingDeclaration(id_text)
+├── LetBindingDeclaration(score)
+├── LetBindingDeclaration(valid)
+└── ReturnStatement(Summary { ... })
+```
+El cuerpo consta exclusivamente de una secuencia de declaraciones `let` seguida obligatoriamente por un único `ReturnStatement`, sin sentencias de expresión ni retornos anticipados.
+
+#### 18.5.3 AST del pipeline inicial
+Para la inicialización de `id`:
+```text
+PipelineExpression
+    source: StringLiteral("41")
+    stage 1: UnaryPipelineTarget("parse_int64")
+    stage 2: PipelineStageExpression
+                 FunctionCallExpression
+                     name: "add"
+                     arguments:
+                         ThisExpression
+                         IntegerLiteral("1")
+```
+
+#### 18.5.4 AST de expresiones sobre variantes de enumeraciones
+- `SearchResult::NotFound` $\to$ `SimpleVariantExpression`.
+- `SearchResult::Found(worker)` $\to$ `AssociatedValueVariantExpression`.
+- `SearchResult::Failed { code: code, message: message }` $\to$ `StructuredVariantExpression`.
+
+#### 18.5.5 AST de la expresión `when` en `result_name`
+```text
+WhenExpression
+    scrutinee: BindingReferenceExpression(result)
+    arms:
+        WhenArm
+            pattern: SimpleVariantPattern(SearchResult::NotFound)
+            body: StringLiteral("not found")
+        WhenArm
+            pattern: AssociatedValueVariantPattern(SearchResult::Found(Worker worker))
+            body: PostfixExpression(worker.name)
+        WhenArm
+            pattern: StructuredVariantPattern(SearchResult::Failed { code: int error_code, message: string error_message })
+            body: BindingReferenceExpression(error_message)
+```
+La desambiguación sintáctica reconoce determinísticamente que `result` es el scrutinee y la llave `{` abre el bloque `WhenArmList` conforme a la Sección 17.13.
+
+
+### 18.6 Recolección de declaraciones y Type Space
+
+Durante la fase de recolección de declaraciones, el analizador semántico construye el `Type Space` global:
+
+```text
+Type Space
+├── Native Types
+│   ├── int (CanonicalType: int32)
+│   ├── float (CanonicalType: float64)
+│   ├── bool
+│   ├── string
+│   ├── dynamic
+│   ├── int8, int16, int32, int64, int128
+│   ├── uint8, uint16, uint32, uint64, uint128
+│   └── float32, float64
+│
+└── Program-Defined Types (Nominales)
+    ├── StructType(Worker)
+    ├── StructType(Summary)
+    ├── EnumType(WorkerStatus)
+    └── EnumType(SearchResult)
+```
+Todos los nombres nominales son únicos y no colisionan con tipos nativos ni entre sí.
+
+
+### 18.7 Type Dependency Graph
+
+El analizador semántico construye el grafo dirigido de dependencias de tipos estructurales (`Type Dependency Graph`):
+- `Worker`: campos `id: int64` y `name: string` (solo tipos nativos $\to$ sin aristas).
+- `Summary`: todos sus campos son tipos nativos $\to$ sin aristas.
+- `WorkerStatus`: solo variantes simples $\to$ sin aristas.
+- `SearchResult`: la variante asociada `Found(Worker)` referencia a `Worker` $\to$ introduce la arista `SearchResult ──> Worker`. La variante estructurada `Failed` utiliza solo tipos nativos (`int`, `string`).
+
+```mermaid
+graph TD
+    SearchResult --> Worker
+    Summary
+    WorkerStatus
+```
+
+El `Type Dependency Graph` es un grafo acíclico dirigido (DAG) sin ciclos directos ni indirectos. Las referencias a tipos en parámetros y retornos de funciones no forman parte de este grafo.
+
+
+### 18.8 FunctionCallGraph
+
+El analizador semántico construye el grafo de llamadas a funciones de usuario (`FunctionCallGraph`):
+- `canonical_program` invoca a `add`, `create_worker`, `result_name` y `status_code` (tanto por llamadas directas como por etapas de pipeline).
+- `create_not_found` y `create_failure` son declaraciones válidas sin llamadores en el programa.
+- Los intrinsics (`parse_int64`, `to_dynamic`, `to_string`, `to_float64`) no son funciones de usuario y no generan aristas en el grafo.
+
+```mermaid
+graph TD
+    canonical_program --> add
+    canonical_program --> create_worker
+    canonical_program --> result_name
+    canonical_program --> status_code
+    create_not_found
+    create_failure
+```
+
+El `FunctionCallGraph` es estrictamente un DAG sin ciclos, garantizando la ausencia total de recursión en el programa.
+
+
+### 18.9 Análisis semántico
+
+El analizador semántico valida exitosamente todas las restricciones estáticas del programa:
+1. **Resolución de tipos**: todos los `TypeReference` (`int64`, `string`, `float64`, `bool`, `int`, `Worker`, `Summary`, `WorkerStatus`, `SearchResult`) resuelven unívocamente en el `Type Space`.
+2. **Unicidad de función pública**: existe exactamente una función pública (`canonical_program`).
+3. **Unicidad de funciones**: todos los nombres de función son únicos y no colisionan con intrinsics.
+4. **Parámetros**: los nombres de parámetros son únicos por función e inmutables.
+5. **Inmutabilidad y no-shadowing**: todos los bindings `let` cumplen la regla de no-shadowing y son visibles únicamente después de su declaración.
+6. **Llamadas y aridad**: todas las invocaciones a funciones resuelven a declaraciones válidas con aridad exacta y tipos de argumentos compatibles.
+7. **Construcción de estructuras**: `Worker` y `Summary` se instancian inicializando exactamente sus campos declarados sin duplicados ni omisiones.
+8. **Variantes de enumeraciones**: cada expresión de variante coincide con la forma declarada (`Simple`, `AssociatedValue` o `Structured`).
+9. **Exhaustividad de `when`**: las expresiones `when` en `result_name` y `status_code` cubren exhaustivamente todas las variantes de `SearchResult` y `WorkerStatus` sin ramas duplicadas.
+10. **Contexto de `this`**: la expresión `this` se utiliza exclusivamente dentro de una etapa explícita de pipeline (`add(this, 1)`) con un `PipelineThisContext` activo y tipado.
+11. **Aciclicidad de grafos**: tanto el `Type Dependency Graph` como el `FunctionCallGraph` son DAGs válidos.
+12. **Cobertura estática total**: todas las declaraciones del archivo, incluidas las funciones no invocadas (`create_not_found`, `create_failure`), son completamente validadas.
+
+El resultado del análisis semántico concluye que el archivo es un `SemanticallyValidProgram`.
+
+
+### 18.10 Propagación de ExpectedType
+
+La contextualización bidireccional de tipos opera sin conversiones implícitas:
+
+1. **Literal `1` en pipeline**:
+   - `add` declara `(int64 left, int64 right) -> int64`.
+   - El segundo parámetro propaga `ExpectedType(int64)` sobre `IntegerLiteral("1")`.
+   - El literal se tipa directamente como `int64` (sin conversión implícita desde `int`).
+2. **Llamada a `create_worker(id, "Ana")`**:
+   - Parámetros `int64 id` y `string name` contextualizan los argumentos.
+   - `id` ya posee el tipo cerrado `int64`; `"Ana"` es invariablemente `string`.
+3. **Ramas de `status_code`**:
+   - La signatura `-> int64` propaga `ExpectedType(int64)` a la expresión `when` y a cada una de sus ramas.
+   - Los literales `1` y `0` reciben `ExpectedType(int64)` y se tipan directamente como `int64`.
+4. **Conversión explícita a `float64`**:
+   - `id |> to_float64` utiliza la función intrínseca de conversión para transformar `int64` en `float64`.
+5. **Comparaciones contextualizadas**:
+   - En `code == 0`, como `code: int64`, el literal `0` recibe `ExpectedType(int64)` y produce `Value(int64, 0)`.
+   - En `score >= 42.0`, como `score: float64`, el literal `42.0` recibe `ExpectedType(float64)` y produce `Value(float64, 42.0)`.
+
+
+### 18.11 Evaluación completa
+
+La evaluación determinista de `Evaluate(canonical_program())` procede paso a paso:
+
+1. **Evaluación de `id`**:
+   - `"41"` se evalúa a `Value(string, "41")`.
+   - `parse_int64("41")` produce `Value(int64, 41)`.
+   - La etapa `add(this, 1)` liga `this = Value(int64, 41)` y evalúa `41 + 1`, produciendo `Value(int64, 42)`.
+   - Se crea el binding `id = Value(int64, 42)`.
+2. **Evaluación de `worker`**:
+   - `create_worker(42, "Ana")` evalúa `Worker { id: 42, name: "Ana" }`.
+   - Se crea el binding inmutable `worker = Value(Worker, { id: 42, name: "Ana" })`.
+3. **Evaluación de `result`**:
+   - `SearchResult::Found(worker)` empaqueta el valor de `worker` en la variante asociada `Found`.
+   - Se crea el binding `result = Value(SearchResult, Found(worker))`.
+4. **Evaluación de `status`**:
+   - `WorkerStatus::Active` produce `Value(WorkerStatus, Active)`.
+   - Se crea el binding `status = Value(WorkerStatus, Active)`.
+5. **Evaluación de `name`**:
+   - `result |> result_name` invoca `result_name(result)`.
+   - La expresión `when result` inspecciona la variante activa `Found`, seleccionando la rama `SearchResult::Found(Worker worker) => worker.name`.
+   - Se establece el binding local del patrón `worker` y se accede al campo `worker.name`, retornando `Value(string, "Ana")`.
+   - Las ramas no seleccionadas (`NotFound`, `Failed`) no se evalúan.
+   - Se crea el binding `name = Value(string, "Ana")`.
+6. **Evaluación de `code`**:
+   - `status |> status_code` invoca `status_code(status)`.
+   - La variante activa `Active` selecciona la rama `WorkerStatus::Active => 1`, retornando `Value(int64, 1)`.
+   - Se crea el binding `code = Value(int64, 1)`.
+7. **Evaluación de `id_text`**:
+   - `id |> to_dynamic` transforma `Value(int64, 42)` en `Value(dynamic, IntegralClass(42))`.
+   - `|> to_string` formatea el entero dinámico a `Value(string, "42")`.
+   - Se crea el binding `id_text = Value(string, "42")`.
+8. **Evaluación de `score`**:
+   - `id |> to_float64` convierte `42` en representación de punto flotante exacta `Value(float64, 42.0)`.
+   - Se crea el binding `score = Value(float64, 42.0)`.
+9. **Evaluación de `valid`**:
+   - Subexpresión izquierda: `code == 0` evalúa `1 == 0` $\to$ `false`. La negación `!(false)` produce `true`.
+   - Operador `&&`: como el operando izquierdo es `true`, se evalúa el operando derecho.
+   - Subexpresión derecha: `score >= 42.0` evalúa `42.0 >= 42.0` $\to$ `true`.
+   - Conjunción: `true && true` produce `Value(bool, true)`.
+   - Se crea el binding `valid = Value(bool, true)`.
+10. **Construcción y retorno de `Summary`**:
+    - Se evalúan en orden textual los inicializadores del struct:
+      - `id`: `Value(int64, 42)`
+      - `name`: `Value(string, "Ana")`
+      - `id_text`: `Value(string, "42")`
+      - `score`: `Value(float64, 42.0)`
+      - `valid`: `Value(bool, true)`
+    - Se construye y retorna la estructura `Summary`.
+
+
+### 18.12 Value final
+
+El resultado conceptual exacto producido por `Evaluate(canonical_program())` es:
+
+```text
+Summary {
+    id: 42,
+    name: "Ana",
+    id_text: "42",
+    score: 42.0,
+    valid: true
+}
+```
+
+Formalmente, el evaluador produce:
+
+```text
+Value(
+    Summary,
+    {
+        id: Value(int64, 42),
+        name: Value(string, "Ana"),
+        id_text: Value(string, "42"),
+        score: Value(float64, 42.0),
+        valid: Value(bool, true)
+    }
+)
+```
+
+Se confirma la preservación estricta de tipos:
+```text
+TypeOf(final Value) == Summary == ReturnType(canonical_program)
+```
+
+
+### 18.13 Funciones no invocadas y análisis estático
+
+El programa canónico contiene declaraciones de funciones y ramas de `when` que no forman parte de la ruta de ejecución concreta de `canonical_program`:
+1. **`create_not_found()`**: demuestra la construcción de `SimpleVariantExpression` (`SearchResult::NotFound`). Aunque no se invoca en tiempo de ejecución, es analizada y validada semánticamente en su totalidad.
+2. **`create_failure(int, string)`**: demuestra la construcción de `StructuredVariantExpression` (`SearchResult::Failed { ... }`). Se analiza estáticamente con el mismo rigor que las funciones invocadas.
+3. **Ramas no activas de `when`**: en `result_name`, las ramas para `NotFound` y `Failed` se validan exhaustivamente durante el análisis semántico, pero no se evalúan en tiempo de ejecución debido a que la variante activa del valor escrutado es `Found`.
+
+Esto formaliza la distinción normativa: el analizador semántico valida el 100% de las declaraciones y ramas del programa, mientras que el evaluador recorre únicamente la ruta demandada por los valores dinámicos.
+
+
+### 18.14 Ausencia de EvaluationFailure en la ejecución canónica
+
+La ejecución concreta de `Evaluate(canonical_program())` concluye con éxito absoluto sin producir `EvaluationFailure`:
+- **Parsing**: `"41"` contiene exclusivamente dígitos válidos dentro del rango representable de `int64`.
+- **Aritmética**: `41 + 1 = 42` no desborda el dominio de `int64`.
+- **Conversiones**: `to_dynamic`, `to_string` y `to_float64` operan sobre valores exactamente representables en sus dominios de destino.
+- **Operaciones booleanas y relacionales**: operan sobre operandos válidos y definidos.
+
+Este resultado confirma que el programa canónico es un caso de éxito válido, sin menoscabo de que las condiciones que provocan `EvaluationFailure` (división por cero, desbordamiento de conversión, fallo de parsing) permanezcan normadas por el Capítulo 16.
+
+
+### 18.15 Criterio final de cierre de Evo-Script v0
+
+La exitosa derivación del programa canónico a través de todas las fases del lenguaje demuestra que la especificación de Evo-Script v0 contenida en este documento es completa, coherente y autosuficiente:
+
+> A partir exclusivamente del texto de `EVO_SCRIPT_SPECIFICATION_v0.md`, cualquier implementador independiente puede construir de forma determinista el lexer, parser, analizador semántico y evaluador para transformar cualquier archivo `.efn` válido en su valor final o en un error normativo, sin requerir ninguna decisión adicional de diseño sintáctico o semántico.
+
+Habiéndose completado todas las secciones normativas desde el Capítulo 1 hasta el Capítulo 18 sin contradicciones:
+
+```text
+======================================================================
+Evo-Script v0
+Specification Status: CLOSED
+======================================================================
+```
