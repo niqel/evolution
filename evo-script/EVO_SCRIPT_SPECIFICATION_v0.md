@@ -1289,3 +1289,378 @@ Las identidades `int == int32` y `float == float64` no constituyen conversiones 
 
 #### Tipado de literales numéricos
 La asignación de tipo a los literales numéricos (`NumericLiteral`) se rige por las reglas de tipado contextual definidas en el Capítulo 6. El hecho de que un literal como `10` pueda utilizarse para inicializar un `int8` o un `int64` no constituye una conversión implícita entre Values, sino la determinación estática del tipo del propio literal al ser analizado.
+
+---
+
+## 6. Literales y Values
+
+En Evo-Script v0, la evaluación de expresiones y el manejo de datos se rigen por la distinción formal entre tres conceptos fundamentales:
+
+```text
+forma textual del literal
+    ↓ determinación de su tipo semántico
+Value producido
+    ↓ asociación de identificador (opcional)
+Binding
+```
+
+Un literal (`Literal`) pertenece exclusivamente al código fuente. Un valor (`Value`) es el dato semántico inmutable producido por la evaluación correcta de una expresión. Un enlace (`Binding`) asocia posteriormente un identificador a un Value en memoria lógica. Por consiguiente, se establece formalmente:
+
+```text
+Literal != Value != Binding
+```
+
+
+### 6.1 Modelo de Value
+
+Un Value es un dato semántico inmutable producido durante la evaluación correcta de un programa Evo-Script.
+
+Todo Value posee exactamente un tipo semántico (`SemanticType`), de conformidad con el sistema de tipos definido en el Capítulo 5. Los Values se clasifican conceptualmente en:
+
+```text
+Value
+    ├── NativeValue
+    └── ProgramDefinedValue
+
+ProgramDefinedValue
+    ├── StructValue
+    └── EnumValue
+```
+
+Reglas normativas:
+1. **Inmutabilidad inherente**: todo Value en Evo-Script v0 es conceptualmente inmutable desde la semántica observable del lenguaje.
+2. **Independencia de Bindings**: un Value existe independientemente de si está asociado a un identificador mediante `let` o si es el resultado directo de una función o pipeline. Por ejemplo, una llamada `calculate()` produce un Value de retorno sin requerir un binding intermedio.
+3. **Diferenciación conceptual**:
+   - `int` es un tipo (`SemanticType`).
+   - `43` es un literal en el código fuente (`IntegerLiteral`).
+   - `Value(int, 43)` es el dato semántico producido tras la evaluación.
+   - `let int age = 43;` es la sentencia que establece un binding entre el nombre `age` y el Value producido.
+
+
+### 6.2 Literal Expression
+
+Un literal es una expresión sintáctica constante escrita directamente en el código fuente:
+
+```text
+Literal
+    ↓ evaluación semántica correcta
+Value
+```
+
+Las expresiones literales reconocidas en Evo-Script v0 son:
+
+```text
+LiteralExpression
+    ::= BooleanLiteral
+     |  StringLiteral
+     |  NumericLiteral
+```
+
+
+### 6.3 BooleanLiteral
+
+Los literales booleanos representan valores lógicos constantes. Su gramática formal está constituida por los tokens reservados:
+
+```text
+BooleanLiteral
+    ::= "true"
+     |  "false"
+```
+
+Reglas normativas:
+1. `true` produce un Value de tipo `bool` con valor lógico verdadero.
+2. `false` produce un Value de tipo `bool` con valor lógico falso.
+3. Los literales booleanos **no** poseen tipado contextual hacia otros tipos: producen invariablemente un Value de tipo `bool`.
+4. No existen conversiones implícitas de `BooleanLiteral` a tipos numéricos o de texto (por ejemplo, nunca `true -> int`, `true -> string` ni `true -> dynamic`).
+
+
+### 6.4 StringLiteral
+
+Los literales de cadena de texto representan secuencias constantes de caracteres Unicode. En Evo-Script v0 se delimitan exclusivamente mediante comillas dobles (`"`).
+
+La gramática formal de `StringLiteral` se define como:
+
+```text
+StringLiteral
+    ::= '"' StringElement* '"'
+
+StringElement
+    ::= StringCharacter
+     |  EscapeSequence
+```
+
+`StringCharacter` representa cualquier valor escalar Unicode (*Unicode Scalar Value*) escrito directamente en el archivo fuente UTF-8, excepto:
+- la comilla doble (`"`);
+- la barra invertida (`\`);
+- el salto de línea LF (`U+000A`);
+- el retorno de carro CR (`U+000D`).
+
+Ejemplos válidos:
+- `""`
+- `"Hello"`
+- `"México"`
+- `"niño"`
+- `"日本"`
+- `"😀"`
+
+Todo `StringLiteral` produce directamente un Value de tipo `string`. No posee tipado contextual hacia otros tipos.
+
+#### 6.4.1 Secuencias de escape
+Evo-Script v0 reconoce exactamente las siguientes cinco secuencias de escape:
+
+| Secuencia fuente | Carácter resultante | Denominación |
+|---|---|---|
+| `\"` | `"` (`U+0022`) | Comilla doble |
+| `\\` | `\` (`U+005C`) | Barra invertida (backslash) |
+| `\n` | `LF` (`U+000A`) | Salto de línea (Line Feed) |
+| `\r` | `CR` (`U+000D`) | Retorno de carro (Carriage Return) |
+| `\t` | `TAB` (`U+0009`) | Tabulación horizontal |
+
+```text
+EscapeSequence
+    ::= '\\"'
+     |  '\\\\'
+     |  '\\n'
+     |  '\\r'
+     |  '\\t'
+```
+
+Cualquier otra secuencia iniciada por `\` (por ejemplo, `\q`, `\x`, `\z`, `\u`) no es reconocida y produce un error léxico. No se preserva silenciosamente la barra invertida de secuencias desconocidas.
+
+#### 6.4.2 Caracteres Unicode y ausencia de escapes especiales
+Dado que los archivos `.efn` se codifican estrictamente en UTF-8 sin BOM, los caracteres Unicode se escriben de forma directa en el código fuente. Evo-Script v0 no utiliza secuencias de escape numéricas o Unicode (tales como `\uXXXX` o `\UXXXXXXXX`).
+
+#### 6.4.3 Prohibición de cadenas multilínea físicas
+Un `StringLiteral` no puede contener saltos de línea físicos sin escapar. Si el analizador encuentra un carácter `LF`, `CR` o el fin de archivo `EndOfFile` antes de la comilla de cierre (`"`), el literal es inválido. Los saltos de línea en el texto deben representarse mediante la secuencia de escape `\n`.
+
+
+### 6.5 NumericLiteral
+
+Evo-Script v0 define exactamente tres formas sintácticas para los literales numéricos:
+
+```text
+Digit
+    ::= "0".."9"
+
+Digits
+    ::= Digit+
+
+IntegerLiteral
+    ::= Digits
+
+DecimalLiteral
+    ::= Digits "." Digits
+
+ScientificLiteral
+    ::= (Digits | DecimalLiteral)
+        ("e" | "E")
+        ("+" | "-")?
+        Digits
+
+NumericLiteral
+    ::= IntegerLiteral
+     |  DecimalLiteral
+     |  ScientificLiteral
+```
+
+Ejemplos válidos:
+- Enteros: `0`, `10`, `1000`
+- Decimales: `0.0`, `0.5`, `10.25`, `123.456`
+- Científicos: `1e10`, `1E10`, `1e+10`, `1e-10`, `1.5e10`, `1.5E10`, `1.5e+10`, `1.5e-10`
+
+Reglas normativas:
+1. **Separador decimal único**: el punto (`.`) es el único separador decimal reconocido. La coma (`,`) no es un separador decimal válido.
+2. **Ausencia de separadores de dígitos**: no se permiten guiones bajos (`_`) ni otros separadores dentro de `NumericLiteral` (ej. `1_000`, `1_000.50` y `1e1_000` son inválidos).
+3. **Base decimal exclusiva**: los literales numéricos se expresan exclusivamente en base 10 (no se admiten prefijos hexadecimales `0x`, binarios `0b` u octales `0o`).
+4. **Ausencia de sufijos de tipo**: los literales no admiten sufijos de tipo (ej. `10i32`, `10u64`, `10.5f32` son inválidos). La determinación del tipo se realiza mediante análisis contextual.
+5. **Ausencia de literales especiales**: no existen literales numéricos intrínsecos denominados `NaN`, `Infinity` o `inf`.
+
+
+### 6.6 IntegerLiteral
+
+Un `IntegerLiteral` está formado exclusivamente por una secuencia de dígitos decimales (`Digits`) sin punto decimal, exponente ni signo integrado.
+
+Reglas normativas:
+1. **Tipado contextual entero**: según el tipo esperado (`ExpectedType`) del contexto, un `IntegerLiteral` produce directamente un Value de cualquiera de los tipos enteros del lenguaje:
+   - `int` (canónicamente `int32`);
+   - `int8`, `int16`, `int32`, `int64`, `int128`;
+   - `uint8`, `uint16`, `uint32`, `uint64`, `uint128`;
+   - `dynamic` (produciendo un `dynamic integral value`).
+2. **Creación directa**: el literal se evalúa directamente en el tipo esperado; no se genera un Value intermedio de tipo por defecto para luego aplicar una conversión.
+3. **Tipo por defecto**: en ausencia de un contexto que provea un `ExpectedType` numérico explícito, un `IntegerLiteral` produce un Value de tipo `int` (canónicamente `int32`).
+4. **Incompatibilidad con tipos de punto flotante**: un `IntegerLiteral` **no** adquiere directamente un tipo de punto flotante (`float`, `float32`, `float64`) únicamente por contexto. Declaraciones como `let float64 value = 10;` son semánticamente inválidas; debe escribirse una forma decimal como `10.0` o científica como `1e1`.
+
+Ejemplos:
+```text
+let int8 small = 10;        // Produce Value(int8, 10)
+let int64 large = 10;       // Produce Value(int64, 10)
+let dynamic value = 10;     // Produce Value(dynamic, integral 10)
+let default_val = 10;       // Produce Value(int, 10) -> canónicamente int32
+```
+
+
+### 6.7 DecimalLiteral
+
+Un `DecimalLiteral` está formado por una secuencia de dígitos antes y después del punto decimal (`Digits "." Digits`).
+
+Reglas normativas:
+1. **Dígitos obligatorios**: se requiere al menos un dígito antes y al menos un dígito después del punto decimal. Formas incompletas como `.5` o `5.` son sintácticamente inválidas.
+2. **Naturaleza de punto flotante**: todo `DecimalLiteral` es una forma textual de punto flotante. Según el `ExpectedType`, produce directamente un Value de:
+   - `float` (canónicamente `float64`);
+   - `float32`;
+   - `float64`;
+   - `dynamic` (produciendo un `dynamic floating value`).
+3. **Tipo por defecto**: en ausencia de un `ExpectedType` numérico explícito, un `DecimalLiteral` produce un Value de tipo `float` (canónicamente `float64`).
+4. **Incompatibilidad con tipos enteros**: un `DecimalLiteral` no adquiere tipos enteros por contexto. Declaraciones como `let int32 value = 10.5;` son semánticamente inválidas (no se realiza truncamiento ni redondeo implícito).
+
+Ejemplos:
+```text
+let float32 a = 10.5;       // Produce Value(float32, 10.5)
+let float64 b = 10.5;       // Produce Value(float64, 10.5)
+let float c = 10.5;         // Produce Value(float64, 10.5)
+let dynamic d = 10.5;       // Produce Value(dynamic, floating 10.5)
+```
+
+
+### 6.8 ScientificLiteral
+
+Un `ScientificLiteral` está formado por una mantisa entera o decimal seguida de un indicador de exponente (`e` o `E`), un signo opcional (`+` o `-`) y una secuencia de dígitos exponentes (`Digits`).
+
+Reglas normativas:
+1. **Naturaleza de punto flotante**: un `ScientificLiteral` es invariablemente una forma textual de punto flotante, incluso cuando su mantisa no contenga punto decimal o su exponente sea positivo (ej. `1e10` es un literal de punto flotante, no un entero).
+2. **Tipado contextual**: según el `ExpectedType`, produce directamente un Value de `float`, `float32`, `float64` o `dynamic` (produciendo un `dynamic floating value`).
+3. **Tipo por defecto**: en ausencia de un `ExpectedType` numérico explícito, produce un Value de tipo `float` (canónicamente `float64`).
+4. **Incompatibilidad con tipos enteros**: un `ScientificLiteral` no puede inicializar bindings de tipos enteros (ej. `let int64 value = 1e10;` es semánticamente inválido).
+5. **Forma canónica y exponente completo**: el exponente debe contener al menos un dígito (formas como `1e`, `1e+` son inválidas). La mantisa debe ser un entero o decimal canónico (formas como `.5e10` o `5.e10` son inválidas; deben escribirse como `0.5e10` o `5.0e10`).
+
+
+### 6.9 Tipado contextual de literales numéricos
+
+El analizador semántico determina el tipo de un `NumericLiteral` mediante el concepto de tipo esperado (`ExpectedType`):
+
+```text
+TypeOf(NumericLiteral, ExpectedType)
+```
+
+Cuando un literal numérico se evalúa en una posición sintáctica donde el contexto exige un tipo numérico compatible con su categoría textual, el literal adquiere **directamente** dicho `SemanticType`. No se genera un Value intermedio de tipo por defecto ni se aplica una conversión implícita posterior.
+
+#### 6.9.1 Fuentes de ExpectedType
+El `ExpectedType` proviene de las siguientes construcciones del lenguaje:
+1. **Declaración de binding tipado**:
+   ```text
+   let int64 value = 100;
+   ```
+   `IntegerLiteral("100")` con `ExpectedType(int64)` produce directamente `Value(int64, 100)`.
+2. **Argumento en llamada a función**:
+   ```text
+   fn process(int64 value) -> int64
+   {
+       return value;
+   }
+
+   process(100);
+   ```
+   El argumento `100` recibe `ExpectedType(int64)` de la firma de la función invocada.
+3. **Expresión de retorno tipada**:
+   ```text
+   fn calculate() -> int64
+   {
+       return 100;
+   }
+   ```
+   El literal `100` recibe `ExpectedType(int64)` del tipo de retorno declarado.
+4. **Inicialización de campos de struct tipados**:
+   El tipo declarado para el campo en la definición del `struct` proporciona el `ExpectedType` al instanciar el campo correspondiente.
+
+#### 6.9.2 Tipado por defecto en ausencia de ExpectedType
+Cuando no existe un `ExpectedType` numérico provisto por el contexto:
+- `IntegerLiteral` adopta el tipo `int` (`int32`).
+- `DecimalLiteral` adopta el tipo `float` (`float64`).
+- `ScientificLiteral` adopta el tipo `float` (`float64`).
+
+
+### 6.10 Literales `dynamic`
+
+En concordancia con el Capítulo 5, el tipo `dynamic` es un tipo numérico propio que admite tanto valores enteros de precisión arbitraria como valores de punto flotante IEEE 754 *binary64*.
+
+Reglas normativas:
+1. **Literal entero en contexto dynamic**:
+   ```text
+   let dynamic integer_value = 10;
+   ```
+   Produce directamente un `Value(dynamic, integral 10)` con semántica de precisión arbitraria, sin conversión implícita desde `int`.
+2. **Literal decimal o científico en contexto dynamic**:
+   ```text
+   let dynamic floating_value = 10.5;
+   let dynamic scientific_value = 1e100;
+   ```
+   Produce directamente un `Value(dynamic, floating ...)` con semántica IEEE 754 *binary64*, sin conversión implícita desde `float`.
+3. **No alteración de expresiones con operandos fijos**:
+   Un contexto destino de tipo `dynamic` no modifica retroactivamente la evaluación de una expresión formada por operandos de tipos fijos:
+   ```text
+   int8 a
+   int8 b
+   let dynamic result = a + b;
+   ```
+   En este caso, la suma `a + b` se evalúa estrictamente bajo las reglas de `int8`.
+
+
+### 6.11 Representabilidad de literales
+
+Todo literal numérico debe poder representar un Value válido dentro del dominio del `ExpectedType` asignado. La representabilidad se valida estáticamente durante el análisis semántico.
+
+#### 6.11.1 Literales enteros de tamaño fijo
+El valor matemático denotado por un `IntegerLiteral` debe pertenecer estrictamente al rango numérico del tipo entero fijo esperado:
+- `let uint8 a = 255;` es válido ($255 \in [0, 255]$).
+- `let uint8 b = 256;` es semánticamente inválido ($256 \notin [0, 255]$).
+- `let int8 c = 127;` es válido ($127 \in [-128, 127]$).
+- `let int8 d = 128;` es semánticamente inválido ($128 \notin [-128, 127]$).
+
+La invalidez de un literal fuera de rango se detecta durante el análisis semántico antes de la ejecución del programa.
+
+#### 6.11.2 Literales enteros en `dynamic`
+Un `IntegerLiteral` evaluado bajo `ExpectedType(dynamic)` no está acotado por los límites de los enteros fijos y puede representar cualquier magnitud entera finita.
+
+#### 6.11.3 Literales de punto flotante y redondeo
+Para `DecimalLiteral` y `ScientificLiteral`, el valor matemático denotado se mapea semánticamente al formato destino correspondiente (`float32` a IEEE 754 *binary32*, `float64`/`float`/`dynamic` a IEEE 754 *binary64*) utilizando el modo de redondeo estándar **roundTiesToEven**:
+- `let float64 value = 0.1;` es válido. No se exige que la fracción decimal tenga una representación binaria exacta; el literal adopta el valor binario más cercano según `roundTiesToEven`.
+- Si la magnitud matemática de un literal excede el máximo valor finito representable en el formato destino (produciendo un desbordamiento a infinito), el literal es semánticamente inválido. No se genera silenciosamente `Infinity` o `-Infinity` a partir de un literal.
+- Los literales extremadamente pequeños que, bajo `roundTiesToEven`, se aproximen a un número subnormal o a cero son Values válidos.
+
+
+### 6.12 Signo negativo y NumericLiteral
+
+El carácter `-` no forma parte de la gramática de `IntegerLiteral`, `DecimalLiteral` ni `ScientificLiteral`.
+
+A nivel léxico:
+- `-10` se compone del token operador `-` y el token `IntegerLiteral("10")`.
+- `-10.5` se compone del token operador `-` y el token `DecimalLiteral("10.5")`.
+
+#### 6.12.1 Regla de representabilidad para literal directo con operador unario `-`
+Para permitir la escritura del valor mínimo representable en los tipos enteros con signo (cuyo valor absoluto no es representable como entero positivo del mismo tipo), cuando el operador unario `-` se aplica directamente a un `NumericLiteral` bajo un `ExpectedType` entero con signo, la representabilidad se comprueba sobre el valor matemático resultante completo:
+
+```text
+-(NumericLiteral)
+```
+
+Consecuencias normativas:
+- `let int8 a = -128;` es válido (el valor resultante $-128$ pertenece al dominio $[-128, 127]$ de `int8`).
+- `let int8 b = -129;` es semánticamente inválido ($-129 \notin [-128, 127]$).
+- `let int16 c = -32768;` es válido ($-32\,768 \in [-32\,768, 32\,767]$).
+- `let int16 d = -32769;` es semánticamente inválido.
+
+Para tipos enteros sin signo (`unsigned`), la aplicación del operador unario `-` sobre un literal numérico es semánticamente inválida:
+- `let uint8 value = -1;` es semánticamente inválido porque $-1$ no pertenece al dominio de `uint8`.
+
+#### 6.12.2 Ausencia de operador unario `+`
+Evo-Script v0 no define un operador unario `+`. Construcciones como `+10` o `+10.5` son sintácticamente inválidas. El carácter `+` únicamente es válido como signo explícito del exponente dentro de la gramática interna de `ScientificLiteral` (ej. `1e+10`).
+
+
+### 6.13 Ausencia de `null`
+
+Evo-Script v0 no define una expresión `NullLiteral` ni posee un valor semántico intrínseco `null`.
+
+Reglas normativas:
+1. No existe un Value representativo de ausencia o nulidad (`null`, `nil`, `none`, `undefined`).
+2. La secuencia `null` no es una palabra reservada del lenguaje (no pertenece a las Structural Keywords del Capítulo 3).
+3. Siguiendo las reglas léxicas y nominales, la palabra `null` puede ser utilizada como un `Identifier` ordinario definido por el usuario (por ejemplo, como nombre de parámetro o variable en convención `snake_case`) sin atribuirle ningún significado intrínseco en el sistema de tipos.
