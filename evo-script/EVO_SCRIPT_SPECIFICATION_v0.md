@@ -2479,3 +2479,317 @@ Reglas normativas:
    }
    ```
 4. **Referencias adelantadas válidas**: las referencias adelantadas entre enums y structs son plenamente válidas siempre que el grafo global resultante no contenga ciclos.
+
+---
+
+## 9. Bindings inmutables con let
+
+En Evo-Script v0, el mecanismo fundamental para asociar un nombre a un dato dentro del cuerpo de una función o bloque de ejecución es la declaración `let`:
+
+```text
+let Type name = Expression;
+```
+
+Un binding representa una asociación semántica inmutable entre un identificador (`BindingName`), un tipo semántico declarado (`DeclaredType`) y un valor inmutable (`Value`) producido por la evaluación de una expresión:
+
+```text
+BindingName -> Value
+```
+
+Se mantiene la distinción formal establecida en los capítulos precedentes:
+
+```text
+Type != Value != Binding
+```
+
+
+### 9.1 Modelo de Binding
+
+Un binding no representa una celda de memoria mutable, un contenedor modificable ni una variable de almacenamiento físico. Un binding es una asociación semántica unívoca e inmutable entre un nombre y un `Value` tipado.
+
+Ejemplo:
+```text
+let int age = 43;
+```
+
+Conceptualmente:
+- `int` es el `SemanticType` declarado para el binding.
+- `43` es un literal en el código fuente (`IntegerLiteral`) que, evaluado bajo `ExpectedType(int)`, produce `Value(int, 43)`.
+- `age` es el `BindingName` introducido por la declaración.
+- Se establece la asociación inmutable:
+  ```text
+  age -> Value(int, 43)
+  ```
+
+El identificador `age` no es literalmente el `Value`, sino el nombre simbólico mediante el cual las expresiones posteriores referencian y obtienen el `Value` asociado.
+
+
+### 9.2 Let Binding Declaration
+
+La creación de un binding se expresa en el código fuente mediante una declaración `LetBindingDeclaration`. Su gramática formal se define como:
+
+```text
+LetBindingDeclaration
+    ::= "let"
+        TypeReference
+        BindingName
+        "="
+        Expression
+        ";"
+
+BindingName
+    ::= SnakeCaseIdentifier
+```
+
+Reglas normativas:
+1. **Forma canónica única**: `let Type name = Expression;` es la única forma sintáctica admitida para declarar bindings en Evo-Script v0. No se admiten sintaxis alternativas tales como `let name: Type = Expression;`, `let name = Expression;` o `int name = Expression;`.
+2. **Punto y coma obligatorio**: toda `LetBindingDeclaration` debe finalizar obligatoriamente con el delimitador `;`.
+3. **Convención nominal**: `BindingName` debe utilizar estrictamente la convención `SnakeCaseIdentifier` (Capítulo 4).
+4. **Palabras reservadas**: no se admiten palabras clave como `var`, `const`, `auto`, `infer` ni operadores de declaración como `:=`.
+
+Ejemplos válidos:
+```text
+let int age = 43;
+
+let Worker worker = Worker {
+    id: 10,
+    name: "Ana"
+};
+
+let SearchResult result = SearchResult::NotFound;
+```
+
+
+### 9.3 Tipo explícito e inicialización obligatoria
+
+Toda declaración de binding en Evo-Script v0 debe especificar su tipo e inicializarse de forma obligatoria en la misma sentencia:
+
+1. **Tipo explícito obligatorio**: el `TypeReference` debe indicarse explícitamente. Evo-Script v0 no incorpora inferencia de tipos para declaraciones `let`:
+   - `let int age = 43;` es válido.
+   - `let age = 43;` es sintácticamente inválido.
+2. **Inicialización obligatoria**: todo binding debe recibir una `Expression` inicializadora en su declaración. No existen bindings no inicializados, inicializaciones diferidas ni valores por defecto implícitos:
+   - `let int age;` es sintácticamente inválido.
+3. **Condición de existencia**: un binding válido requiere la concurrencia estática y dinámica de:
+   ```text
+   DeclaredType AND BindingName AND Value
+   ```
+   No puede existir un binding sin un `Value` asociado.
+
+
+### 9.4 ExpectedType y compatibilidad
+
+El `TypeReference` declarado en una `LetBindingDeclaration` proporciona un tipo esperado (`ExpectedType`) a la `Expression` inicializadora:
+
+#### 9.4.1 Tipado contextual de literales
+Cuando la expresión inicializadora es un literal, el `ExpectedType` determina directamente el tipo del `Value` producido, de conformidad con las reglas del Capítulo 6:
+```text
+let int64 value = 10;
+```
+`IntegerLiteral("10")` bajo `ExpectedType(int64)` produce directamente `Value(int64, 10)` sin conversiones intermedias (`int -> int64`).
+
+#### 9.4.2 Construcción de tipos definidos por el programa
+- **StructValue**:
+  ```text
+  let Worker worker = Worker {
+      id: 10,
+      name: "Ana"
+  };
+  ```
+  La `StructConstructionExpression` produce `StructValue(Worker)`, el cual coincide con el `DeclaredType` `Worker`.
+- **EnumValue**:
+  ```text
+  let SearchResult result = SearchResult::NotFound;
+  ```
+  La `SimpleVariantExpression` produce `EnumValue(SearchResult)`, el cual coincide con el `DeclaredType` `SearchResult`.
+
+#### 9.4.3 Expresiones no literales y compatibilidad exacta
+Para expresiones no literales (tales como llamadas a funciones, operadores o referencias a otros bindings), el tipo semántico resultante (`TypeOf(Expression)`) debe ser directamente compatible con el `DeclaredType`:
+```text
+Compatible(TypeOf(Expression), DeclaredType) == true
+```
+Si una función `calculate()` produce un valor de tipo `int32`:
+- `let int32 a = calculate();` es válido (`Compatible(int32, int32) == true`).
+- `let int64 b = calculate();` es semánticamente inválido porque `Compatible(int32, int64) == false`. No se aplican conversiones ni promociones numéricas implícitas.
+
+#### 9.4.4 Caso particular de `dynamic`
+De acuerdo con las reglas de los Capítulos 5 y 6:
+- `let dynamic value = 10;` es válido porque el literal entero adopta contextual y directamente el tipo `dynamic` (`dynamic integral value`).
+- `let int value = 10; let dynamic other = value;` es semánticamente inválido, ya que `value` es una expresión de tipo `int` y `Compatible(int, dynamic) == false`. Toda transferencia de un tipo numérico de tamaño fijo hacia `dynamic` requiere una conversión explícita (Capítulo 11).
+
+
+### 9.5 Evaluación del inicializador y creación del Binding
+
+La ejecución de una `LetBindingDeclaration` sigue un orden semántico estricto y determinista:
+
+1. Se resuelve el `TypeReference` en el `Type Space`.
+2. Se establece el `DeclaredType` del binding.
+3. Se proporciona `ExpectedType(DeclaredType)` a la `Expression` inicializadora.
+4. Se evalúa la `Expression` exactamente una vez.
+5. Se obtiene el `Value` resultante de la evaluación.
+6. Se valida la compatibilidad exacta entre el tipo del `Value` y `DeclaredType`.
+7. Se crea la asociación inmutable `BindingName -> Value`.
+8. El identificador `BindingName` entra formalmente en visibilidad.
+
+```text
+Expression
+    ↓ evaluación (exactamente una vez)
+Value
+    ↓ validación de compatibilidad exacta
+BindingName -> Value
+```
+
+#### 9.5.1 Evaluación única
+La `Expression` inicializadora se evalúa exactamente una sola vez en el momento de procesar la declaración. Los usos posteriores del `BindingName` obtienen directamente el `Value` ya producido sin reevaluar la expresión original:
+```text
+let int value = calculate();
+
+// La siguiente expresión utiliza dos veces el Value ya obtenido;
+// la función calculate() NO se invoca nuevamente:
+value + value
+```
+
+#### 9.5.2 Inexistencia del binding durante su propio inicializador
+Un `BindingName` no es visible ni existe dentro de su propia `Expression` inicializadora:
+```text
+let int value = value + 1; // Inválido: `value` no está visible en el lado derecho
+```
+El binding entra en visibilidad únicamente después de concluir exitosamente la totalidad de la sentencia delimitada por el punto y coma (`;`). Por tanto, las autorreferencias y los bindings recursivos (`recursive let`) son semánticamente inválidos.
+
+
+### 9.6 Binding Reference Expression
+
+Una vez declarado y visible, un binding se referencia en expresiones mediante su identificador:
+
+```text
+BindingReferenceExpression
+    ::= Identifier
+```
+
+Reglas normativas:
+1. **Reconocimiento léxico**: el analizador léxico reconoce un `Identifier` estándar (Capítulo 4). No existen tokens léxicos especiales para nombres de bindings.
+2. **Resolución semántica**: durante el análisis semántico, el identificador se resuelve en el entorno de bindings visibles en la posición actual del código:
+   ```text
+   ResolveBinding(Identifier, SourcePosition) -> visible Binding
+   ```
+3. **Tipado y evaluación**:
+   - `TypeOf(BindingReferenceExpression) = DeclaredType(Binding)`
+   - La evaluación de la referencia produce el `Value` inmutable asociado al binding.
+4. **Contexto sintáctico**: la categoría léxica `Identifier` participa en diversas producciones del lenguaje (como `StructTypeReference`, `EnumTypeReference`, etc.). La resolución semántica determina unívocamente la categoría del símbolo en función del contexto sintáctico y el ámbito.
+
+
+### 9.7 Visibilidad y orden léxico
+
+El ámbito de visibilidad de un binding se rige estrictamente por el orden léxico del código fuente:
+
+> Un binding es visible desde el punto inmediatamente posterior a la conclusión de su `LetBindingDeclaration` (tras el `;`) hasta el final del bloque o ámbito léxico contenedor.
+
+Ejemplo conceptual:
+```text
+{
+    let int first = 10;
+
+    // `first` es visible a partir de aquí
+
+    let int second = first + 10;
+
+    // `first` y `second` son visibles a partir de aquí
+}
+```
+
+#### 9.7.1 Prohibición de forward references para bindings
+A diferencia de las declaraciones de nivel superior (`TopLevelDeclaration` como `struct`, `enum` y funciones), que pueden resolverse con independencia de su orden físico en el archivo, las declaraciones `let` dependen estrictamente del orden secuencial de aparición:
+```text
+{
+    let int second = first + 10; // Inválido: `first` no es visible aún
+    let int first = 10;
+}
+```
+El intento de referenciar un binding antes de su declaración textual es semánticamente inválido.
+
+#### 9.7.2 Ámbitos léxicos
+Las construcciones del lenguaje que introducen cuerpos o ramas de ejecución (tales como funciones y expresiones condicionales) delimitan ámbitos léxicos. Las reglas de binding establecidas en este capítulo aplican de forma uniforme a cualquier ámbito que admita declaraciones `let`.
+
+
+### 9.8 Unicidad de nombres y ausencia de shadowing
+
+Evo-Script v0 prohíbe el ocultamiento (*shadowing*) de bindings visibles:
+
+> En cualquier posición textual dada de un programa, no puede existir más de un binding visible con el mismo `BindingName`.
+
+```text
+cantidad de bindings visibles con BindingName X <= 1
+```
+
+Reglas normativas:
+1. **Mismo ámbito**: es semánticamente inválido declarar dos bindings con el mismo nombre dentro del mismo ámbito:
+   ```text
+   let int age = 43;
+   let int age = 44; // Inválido: `age` ya está declarado y visible
+   ```
+2. **Ámbitos anidados**: si un binding declarado en un ámbito exterior continúa visible dentro de un ámbito anidado interior, el ámbito interior no puede declarar un binding con el mismo nombre:
+   ```text
+   {
+       let int value = 10;
+       {
+           let int value = 20; // Inválido: oculta el binding visible `value` del ámbito exterior
+       }
+   }
+   ```
+   No se permite el uso de shadowing para simular mutabilidad o reasignación de variables.
+3. **Ámbitos disjuntos**: el mismo `BindingName` puede reutilizarse válidamente en ámbitos independientes cuya visibilidad no se superpone (es decir, cuando la visibilidad del primer binding haya concluido antes del inicio del segundo).
+4. **Parámetros de función**: las reglas formales que rigen la interacción entre los parámetros de una función y los bindings locales `let` se definen en el Capítulo 13.
+
+
+### 9.9 Inmutabilidad y ausencia de asignación
+
+Todo binding creado mediante `let` es estrictamente inmutable durante la totalidad de su ciclo de vida y visibilidad.
+
+Reglas normativas:
+1. **Ausencia de reasignación**: una vez establecido el enlace `BindingName -> Value`, este no puede modificarse ni redirigirse hacia otro valor:
+   ```text
+   let int age = 43;
+
+   // Expresión o sentencia inválida: no existe reasignación
+   age = 44;
+   ```
+2. **Ausencia de operadores de asignación**: Evo-Script v0 no define sentencias de asignación (`AssignmentStatement`) ni operadores de asignación modificadores (`=`, `+=`, `-=`, `*=`, `/=`, `%=`). El símbolo `=` participa exclusivamente en la sintaxis de inicialización de `LetBindingDeclaration`.
+3. **Ausencia de palabras clave de mutabilidad**: el lenguaje no incorpora palabras clave como `mut`, `mutable`, `var` ni sentencias de modificación como `set`.
+4. **Transformación mediante nuevos valores y bindings**: para representar el resultado de una computación o un estado actualizado, el programa construye un nuevo `Value` y, si requiere nombrarlo, introduce un nuevo binding inmutable con un identificador unívoco:
+   ```text
+   let int age = 43;
+   let int next_age = age + 1;
+   ```
+   `age` permanece asociado inmutablemente a `Value(int, 43)`, mientras que `next_age` se asocia independientemente a `Value(int, 44)`.
+
+
+### 9.10 Bindings no utilizados
+
+Un binding declarado e inicializado válidamente según las reglas de esta especificación es plenamente correcto en el lenguaje, independientemente de si es referenciado posteriormente en el código:
+
+```text
+let int unused_value = 10;
+```
+
+Reglas normativas:
+1. La ausencia de referencias posteriores a un binding no constituye un error semántico ni invalida la compilación o ejecución del programa.
+2. El lenguaje no impone la obligación de consumo de los bindings declarados.
+
+#### 9.10.1 Ejemplo canónico integrado
+El siguiente ejemplo ilustra la interacción canónica de bindings inmutables con tipos nativos, valores struct y valores enum definidos en los capítulos precedentes:
+
+```text
+let int64 worker_id = 10;
+
+let Worker worker = Worker {
+    id: worker_id,
+    name: "Ana"
+};
+
+let SearchResult result = SearchResult::Found(worker);
+```
+
+Flujo semántico del ejemplo:
+1. `IntegerLiteral("10")` evaluado bajo `ExpectedType(int64)` produce `Value(int64, 10)`, estableciendo el binding `worker_id -> Value(int64, 10)`.
+2. `worker_id` se referencia como `BindingReferenceExpression` en la construcción de `Worker`, evaluando al `Value(int64, 10)`.
+3. La `StructConstructionExpression` produce `StructValue(Worker)` y se asocia al binding inmutable `worker`.
+4. `worker` se referencia como `BindingReferenceExpression` en el inicializador de `SearchResult::Found(worker)`, produciendo `EnumValue(SearchResult)` asociado al binding inmutable `result`.
