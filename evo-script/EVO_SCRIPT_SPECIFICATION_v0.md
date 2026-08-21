@@ -2266,6 +2266,16 @@ Reglas normativas:
    ResolveVariant(EnumType, VariantName) -> declared variant
    ```
 4. **Calificación obligatoria**: las variantes deben referenciarse siempre de forma calificada mediante `EnumType::Variant`. No se permite el uso de nombres de variantes aislados (por ejemplo, escribir `NotFound` directamente como expresión es semánticamente inválido).
+5. **Correspondencia de forma entre declaración y construcción**: tras resolver `EnumVariantReference`, el analizador semántico debe validar que la forma de la expresión de construcción utilizada coincida exactamente con la forma declarada de la variante resuelta:
+   ```text
+   SimpleVariant          <-> SimpleVariantExpression
+   AssociatedValueVariant <-> AssociatedValueVariantExpression
+   StructuredVariant      <-> StructuredVariantExpression
+   ```
+   Cualquier discordancia entre la forma declarada y la forma de construcción es semánticamente inválida:
+   - Si la variante es `SimpleVariant` (ej. `Result::Empty`), únicamente puede construirse mediante `SimpleVariantExpression` (`Result::Empty`). Intentar construirla como `Result::Empty(worker)` o `Result::Empty { value: worker }` es semánticamente inválido.
+   - Si la variante es `AssociatedValueVariant` (ej. `Result::Found(Worker)`), únicamente puede construirse mediante `AssociatedValueVariantExpression` (`Result::Found(worker)`). Escribir `Result::Found` (sin valor asociado) o `Result::Found { worker: worker }` es semánticamente inválido.
+   - Si la variante es `StructuredVariant` (ej. `Result::Failed { string message; }`), únicamente puede construirse mediante `StructuredVariantExpression` (`Result::Failed { message: "error" }`). Escribir `Result::Failed` (sin carga estructurada) o `Result::Failed("error")` es semánticamente inválido.
 
 
 ### 8.6 Construcción de variante simple
@@ -2358,7 +2368,7 @@ Cada campo o carga declarado en una variante de enum proporciona un tipo esperad
        Success(int64)
    }
 
-   Result::Success(10); // 10 recibe ExpectedType(int64)
+   Result::Success(10) // 10 recibe ExpectedType(int64)
    ```
 2. **Campos de StructuredVariant**:
    ```text
@@ -2373,7 +2383,7 @@ Cada campo o carga declarado en una variante de enum proporciona un tipo esperad
    Event::Movement {
        x: 10,  // 10 recibe ExpectedType(int64)
        y: 20   // 20 recibe ExpectedType(int64)
-   };
+   }
    ```
 3. **Compatibilidad estricta**: las expresiones no literales deben producir valores directamente compatibles con el tipo esperado de la carga. No existen conversiones implícitas.
 4. **Orden de evaluación**: en `StructuredVariantExpression`, las expresiones de los inicializadores se evalúan estrictamente de izquierda a derecha en el orden textual en que aparecen en el código fuente:
@@ -2414,7 +2424,7 @@ EnumValue != StructValue
 Por consiguiente, el operador de acceso a campos (`.`) definido en el Capítulo 7 **no** aplica directamente sobre un `EnumValue`. Expresiones como `result.message` son semánticamente inválidas sobre un enum, dado que `message` solo existe cuando la variante activa es aquella que declara dicho campo.
 
 #### 8.11.1 Selección de alternativas mediante `when`
-Para inspeccionar la variante activa de un `EnumValue` y acceder a su carga de datos, el programa debe utilizar la expresión de selección exhaustiva `when` (definida formalmente en el Capítulo 12).
+Para inspeccionar la variante activa de un `EnumValue` y acceder a su carga de datos, el programa debe utilizar la expresión `when` (definida formalmente en el Capítulo 12).
 
 #### 8.11.2 Distinción formal entre `::` y `.`
 Evo-Script v0 diferencia estrictamente los roles sintácticos de `::` y `.`:
