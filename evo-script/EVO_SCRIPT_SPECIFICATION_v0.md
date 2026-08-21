@@ -372,7 +372,11 @@ Evo-Script v0 define una única forma léxica de comentario mediante la secuenci
 
 Reglas normativas:
 1. Toda secuencia `//` que aparezca fuera de un literal de texto inicia un comentario de línea.
-2. El comentario se extiende hasta el final de la línea física actual (carácter `LF` o secuencia `CRLF`) o hasta el fin de archivo (`EndOfFile`) si el archivo concluye sin un salto de línea posterior.
+2. El comentario iniciado mediante `//` termina ante cualquiera de las siguientes condiciones:
+   - un salto de línea individual `LF` (`U+000A`);
+   - un retorno de carro individual `CR` (`U+000D`);
+   - una secuencia `CRLF` (`\r\n`), la cual constituye una única terminación física de línea para este propósito;
+   - el fin de archivo (`EndOfFile`) si el archivo concluye antes de encontrar una terminación de línea.
 3. El contenido textual del comentario es ignorado por el lexer y no produce tokens en la secuencia de salida.
 4. La secuencia `//` ubicada dentro de un literal de texto (`StringLiteral`) no inicia un comentario. Por ejemplo, en `"https://example.com"`, la secuencia `//` forma parte del valor del texto.
 5. Evo-Script v0 no define comentarios multilínea (`/* ... */`).
