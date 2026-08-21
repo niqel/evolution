@@ -931,3 +931,342 @@ physical .efn filename
 ```
 
 No se derivan nombres físicos a partir de tipos `struct` o `enum`, ni se permite que un nombre de archivo físico arbitrario determine el nombre de la función pública.
+
+---
+
+## 5. Sistema de tipos
+
+Evo-Script v0 posee un sistema de tipos semántico propio, estático y determinista.
+
+Todo Value producido por una evaluación correcta posee exactamente un tipo semántico. Los tipos del lenguaje se organizan en la siguiente jerarquía conceptual:
+
+```text
+SemanticType
+    ├── NativeType
+    └── ProgramDefinedType
+
+ProgramDefinedType
+    ├── StructType
+    └── EnumType
+```
+
+Un nombre de tipo representa una identidad semántica formal dentro del lenguaje. La representación binaria o en memoria utilizada internamente por una implementación concreta no forma parte del sistema de tipos observable ni de la semántica del lenguaje.
+
+
+### 5.1 Modelo de tipos
+
+El sistema de tipos de Evo-Script v0 se caracteriza por:
+1. **Verificación estática**: la compatibilidad de tipos y la validez de las operaciones se comprueban durante el análisis semántico.
+2. **Ausencia de tipos implícitos**: todo parámetro, campo y binding posee un tipo declarado explícitamente.
+3. **Inmutabilidad inherente**: los tipos describen Values inmutables; no existen tipos puntero, tipos referencia ni tipos mutables.
+4. **Identidad nominal**: los tipos definidos por el programa se diferencian por su nombre unívoco y no por su estructura interna.
+
+
+### 5.2 Tipos nativos
+
+Evo-Script v0 define exactamente 17 tipos nativos (`NativeType`), clasificados conceptualmente en las siguientes categorías:
+
+```text
+Boolean
+    bool
+
+Text
+    string
+
+SignedInteger
+    int
+    int8
+    int16
+    int32
+    int64
+    int128
+
+UnsignedInteger
+    uint8
+    uint16
+    uint32
+    uint64
+    uint128
+
+FloatingPoint
+    float
+    float32
+    float64
+
+DynamicNumeric
+    dynamic
+```
+
+El tipo `dynamic` es exclusivamente un tipo numérico. No representa un tipo genérico, un objeto arbitrario, un contenedor heterogéneo ni habilita despacho dinámico o reflexión.
+
+
+### 5.3 Aliases `int` y `float`
+
+Evo-Script v0 define exactamente dos aliases semánticos de tipos nativos:
+
+```text
+CanonicalType(int)   = int32
+CanonicalType(float) = float64
+```
+
+Reglas normativas:
+1. `int` e `int32` representan exactamente el mismo tipo semántico canónico.
+2. `float` y `float64` representan exactamente el mismo tipo semántico canónico.
+3. En cualquier contexto del lenguaje, escribir `int` es completamente intercambiable e indistinguible de escribir `int32`.
+4. En cualquier contexto del lenguaje, escribir `float` es completamente intercambiable e indistinguible de escribir `float64`.
+5. La equivalencia entre `int` e `int32`, y entre `float` y `float64`, no constituye una conversión ni una promoción implícita, sino una identidad canónica absoluta.
+
+
+### 5.4 Tipos enteros de tamaño fijo
+
+Los tipos enteros de tamaño fijo definen dominios numéricos con límites matemáticos exactos:
+
+#### Tipos enteros con signo (SignedInteger)
+
+- `int8`: $-2^7 \dots 2^7 - 1$ (rango: $-128 \dots 127$)
+- `int16`: $-2^{15} \dots 2^{15} - 1$ (rango: $-32\,768 \dots 32\,767$)
+- `int32`: $-2^{31} \dots 2^{31} - 1$ (rango: $-2\,147\,483\,648 \dots 2\,147\,483\,647$)
+- `int64`: $-2^{63} \dots 2^{63} - 1$ (rango: $-9\,223\,372\,036\,854\,775\,808 \dots 9\,223\,372\,036\,854\,775\,807$)
+- `int128`: $-2^{127} \dots 2^{127} - 1$ (rango: $-170\,141\,183\,460\,469\,231\,731\,687\,303\,715\,884\,105\,728 \dots 170\,141\,183\,460\,469\,231\,731\,687\,303\,715\,884\,105\,727$)
+
+El tipo `int` posee exactamente el mismo dominio y rango que `int32`.
+
+#### Tipos enteros sin signo (UnsignedInteger)
+
+- `uint8`: $0 \dots 2^8 - 1$ (rango: $0 \dots 255$)
+- `uint16`: $0 \dots 2^{16} - 1$ (rango: $0 \dots 65\,535$)
+- `uint32`: $0 \dots 2^{32} - 1$ (rango: $0 \dots 4\,294\,967\,295$)
+- `uint64`: $0 \dots 2^{64} - 1$ (rango: $0 \dots 18\,446\,744\,073\,709\,551\,615$)
+- `uint128`: $0 \dots 2^{128} - 1$ (rango: $0 \dots 340\,282\,366\,920\,938\,463\,463\,374\,607\,431\,768\,211\,455$)
+
+
+### 5.5 Tipos de punto flotante
+
+Los tipos de punto flotante representan números reales aproximados según el estándar IEEE 754:
+- `float32`: corresponde semánticamente al formato de precisión simple IEEE 754 *binary32*.
+- `float64`: corresponde semánticamente al formato de precisión doble IEEE 754 *binary64*.
+- `float`: alias semántico exacto de `float64`.
+
+La referencia a los formatos IEEE 754 define el comportamiento y dominio semántico de los tipos reales en el lenguaje, sin condicionar los mecanismos de optimización internos que una implementación pueda emplear.
+
+
+### 5.6 Tipos `bool` y `string`
+
+#### 5.6.1 Tipo `bool`
+El tipo `bool` representa el dominio de valores lógicos del lenguaje, compuesto exclusivamente por los dos valores:
+```text
+true
+false
+```
+
+#### 5.6.2 Tipo `string`
+El tipo `string` representa una secuencia finita e inmutable de texto Unicode formada por valores escalares Unicode (*Unicode Scalar Values*).
+
+El tipo `string` es un tipo de primer nivel en el lenguaje; no expone punteros, búferes mutables ni detalles de representación en memoria.
+
+
+### 5.7 Tipo `dynamic`
+
+`dynamic` es un tipo numérico propio que no equivale a ninguno de los tipos enteros o de punto flotante de tamaño fijo:
+
+```text
+dynamic != int8
+dynamic != int16
+dynamic != int32
+dynamic != int64
+dynamic != int128
+
+dynamic != uint8
+dynamic != uint16
+dynamic != uint32
+dynamic != uint64
+dynamic != uint128
+
+dynamic != float32
+dynamic != float64
+```
+
+#### 5.7.1 Naturaleza numérica
+El tipo `dynamic` permite representar valores numéricos cuya magnitud entera no está limitada por los rangos finitos de los tipos enteros fijos del lenguaje. Para valores enteros, `dynamic` opera con precisión entera arbitraria.
+
+#### 5.7.2 Independencia de evaluación de expresiones
+En Evo-Script v0, el tipo esperado en el destino de una asignación o binding no altera de forma retroactiva el tipo ni la semántica de evaluación de los operandos de una expresión.
+
+Por ejemplo, dados:
+```text
+int8 a
+int8 b
+```
+la expresión `a + b` se evalúa estrictamente como una operación sobre operandos de tipo `int8`. Si se escribe:
+```text
+let dynamic result = a + b;
+```
+el hecho de que la variable destino `result` sea de tipo `dynamic` **no** convierte los operandos `a` y `b` a `dynamic`, **no** altera la semántica de la suma y **no** evita un eventual desbordamiento propio del tipo `int8`. La asignación requiere que el resultado producido sea directamente compatible con `dynamic`.
+
+#### 5.7.3 Operaciones directas
+El tipo `dynamic` puede utilizarse directamente en declaraciones y expresiones cuyos operandos sean de tipo `dynamic`:
+```text
+let dynamic a = ...;
+let dynamic b = ...;
+let dynamic result = a + b;
+```
+Las reglas operativas detalladas de las operaciones sobre `dynamic` se definen en el Capítulo 10. La conversión explícita entre `dynamic` y otros tipos numéricos, cuando esté permitida, se define en el Capítulo 11.
+
+
+### 5.8 Tipos definidos por el programa
+
+El programa puede introducir nuevos tipos de datos mediante declaraciones en el nivel superior del archivo `.efn`:
+
+```text
+ProgramDefinedType
+    ::= StructType
+     |  EnumType
+```
+
+- Una declaración `struct Worker` introduce un tipo semántico denominado `Worker`.
+- Una declaración `enum SearchResult` introduce un tipo semántico denominado `SearchResult`.
+
+Todos los tipos definidos por el programa pertenecen al mismo archivo `.efn` autocontenido. Dado que las declaraciones de nivel superior pueden escribirse en cualquier orden, las referencias adelantadas entre tipos son plenamente válidas:
+
+```text
+struct Node
+{
+    Element value;
+}
+
+struct Element
+{
+    int id;
+}
+```
+
+En este ejemplo válido, la referencia a `Element` dentro de `Node` es correcta independientemente de su orden físico en el código fuente.
+
+
+### 5.9 Identidad nominal de tipos
+
+Los tipos `struct` y `enum` definidos por el programa poseen identidad estrictamente nominal. Dos tipos con nombres distintos representan tipos semánticos diferentes e incompatibles, aun cuando su estructura interna o sus campos sean exactamente idénticos.
+
+Ejemplo:
+```text
+struct Point
+{
+    int x;
+    int y;
+}
+
+struct Coordinate
+{
+    int x;
+    int y;
+}
+```
+Formalmente:
+```text
+Point != Coordinate
+```
+A pesar de que `Point` y `Coordinate` declaran campos idénticos con los mismos tipos, constituyen dos tipos completamente independientes en el sistema de tipos.
+
+De igual manera:
+```text
+enum StateA
+{
+    Active
+    Inactive
+}
+
+enum StateB
+{
+    Active
+    Inactive
+}
+```
+produce formalmente:
+```text
+StateA != StateB
+```
+
+Evo-Script v0 no admite equivalencia estructural de tipos.
+
+
+### 5.10 Type Space y resolución de tipos
+
+Cada archivo `.efn` posee un único espacio de tipos (`Type Space`) que agrupa la totalidad de los tipos reconocidos en el programa:
+
+```text
+Type Space = Native Types ∪ Program Defined Types
+```
+
+Toda mención de un tipo en firmas de funciones, parámetros, tipos de retorno, campos de structs o bindings locales debe resolver exactamente a una entrada unívoca dentro del Type Space.
+
+#### Unicidad de nombres en el Type Space
+Dentro del Type Space de un archivo `.efn`, dos tipos definidos por el programa no pueden compartir el mismo nombre.
+
+Ejemplo inválido:
+```text
+struct Worker
+{
+    int id;
+}
+
+enum Worker
+{
+    Empty
+}
+```
+El código anterior es semánticamente inválido porque ambas declaraciones intentan registrar el identificador `Worker` en el mismo Type Space. Las categorías `struct` y `enum` comparten el mismo espacio de nombres de tipos.
+
+
+### 5.11 Compatibilidad exacta de tipos
+
+La compatibilidad entre dos tipos en Evo-Script v0 se rige por el principio de identidad canónica exacta:
+
+> Dos tipos $A$ y $B$ son directamente compatibles si y solo si su tipo semántico canónico es idéntico.
+
+```text
+Compatible(A, B) := CanonicalType(A) == CanonicalType(B)
+```
+
+Evaluación de compatibilidad en casos representativos:
+
+```text
+Compatible(int, int32)       = true
+Compatible(float, float64)   = true
+
+Compatible(int8, int16)      = false
+Compatible(int32, int64)     = false
+Compatible(int32, uint32)    = false
+Compatible(int32, float32)   = false
+Compatible(float32, float64) = false
+
+Compatible(Worker, Worker)   = true
+Compatible(Worker, Customer) = false
+
+Compatible(dynamic, dynamic) = true
+Compatible(dynamic, int32)   = false
+Compatible(dynamic, int64)   = false
+Compatible(dynamic, float64) = false
+```
+
+Evo-Script v0 no incorpora subtipado, covarianza, contravarianza, tipos unión ni tipado estructural.
+
+
+### 5.12 Ausencia de promociones y conversiones implícitas
+
+Evo-Script v0 no realiza promociones numéricas implícitas, conversiones implícitas ni coerciones automáticas de ningún tipo.
+
+No existen conversiones implícitas entre:
+- tipos enteros de diferente tamaño (ej. `int8` $\to$ `int16`, `int32` $\to$ `int64`);
+- tipos enteros con signo y sin signo (ej. `int32` $\to$ `uint32`);
+- tipos enteros y tipos de punto flotante (ej. `int32` $\to$ `float32`, `int32` $\to$ `float64`);
+- tipos de punto flotante de diferente precisión (ej. `float32` $\to$ `float64`);
+- tipos numéricos fijos y `dynamic` (ej. `int32` $\to$ `dynamic`, `dynamic` $\to$ `int32`);
+- ningún tipo definido por el programa y otro tipo, aun con estructura equivalente.
+
+Toda transformación entre tipos semánticamente distintos debe ser explícita en el código fuente mediante las operaciones normativas definidas en el Capítulo 11 (*Conversión explícita*).
+
+#### Aliases frente a conversiones
+Las identidades `int == int32` y `float == float64` no constituyen conversiones implícitas porque ambos identificadores resuelven exactamente al mismo tipo canónico.
+
+#### Tipado de literales numéricos
+La asignación de tipo a los literales numéricos (`NumericLiteral`) se rige por las reglas de tipado contextual definidas en el Capítulo 6. El hecho de que un literal como `10` pueda utilizarse para inicializar un `int8` o un `int64` no constituye una conversión implícita entre Values, sino la determinación estática del tipo del propio literal al ser analizado.
