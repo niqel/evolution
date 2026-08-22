@@ -7442,8 +7442,7 @@ enum SearchResult
 
 public fn canonical_program() -> Summary
 {
-    let int64 id = "41"
-        |> parse_int64
+    let int64 id = parse_int64("41")
         |> add(this, 1);
 
     let Worker worker = create_worker(id, "Ana");
@@ -7468,8 +7467,7 @@ public fn canonical_program() -> Summary
         |> to_string;
 
     let float64 score =
-        id
-        |> to_float64;
+        to_float64(id);
 
     let bool valid =
         !(code == 0)
@@ -7571,13 +7569,13 @@ El programa canónico integra y ejercita las principales familias estructurales 
 | `FunctionCallExpression` | `create_worker(id, "Ana")`, `add(this, 1)` | Sí |
 | `FieldAccessExpression` | `worker.name` | Sí |
 | `WhenExpression` | `when result { ... }`, `when status { ... }` | Sí |
-| `PipelineExpression` | `"41" \|> parse_int64 \|> add(this, 1)`, etc. | Sí |
+| `PipelineExpression` | `parse_int64("41") \|> add(this, 1)`, etc. | Sí |
 | `UnaryPipelineTarget` (función de usuario) | `result \|> result_name`, `status \|> status_code` | Sí |
-| `UnaryPipelineTarget` (intrinsic) | `parse_int64`, `to_dynamic`, `to_string`, `to_float64` | Sí |
+| `UnaryPipelineTarget` (intrinsic) | `to_dynamic`, `to_string` | Sí |
 | Etapa explícita de pipeline | `add(this, 1)` | Sí |
 | `ThisExpression` | `this` en `add(this, 1)` | Sí |
-| `ParsingExpression` | `parse_int64` | Sí |
-| `ConversionExpression` | `to_dynamic`, `to_string`, `to_float64` | Sí |
+| `ParsingExpression` | `parse_int64("41")` | Sí |
+| `ConversionExpression` | `to_float64(id)` | Sí |
 | Operador aritmético | `left + right` | Sí |
 | Operador relacional / comparación | `code == 0`, `score >= 42.0` | Sí |
 | Operador lógico | `!(code == 0)`, `... && ...` | Sí |
@@ -7603,8 +7601,24 @@ Identifier("Summary")
 ```
 El lexema `Summary` es analizado léxicamente como `Identifier`; su resolución a `StructType` corresponde a la fase de análisis semántico.
 
-#### 18.4.2 Canalización y nombres de intrinsics
-Para la expresión `id |> to_dynamic |> to_string`:
+#### 18.4.2 Invocaciones a funciones intrínsecas y canalización
+Para la expresión de parsing `parse_int64("41")`:
+```text
+Identifier("parse_int64")
+Symbol("(")
+StringLiteral("41")
+Symbol(")")
+```
+
+Para la expresión de conversión `to_float64(id)`:
+```text
+Identifier("to_float64")
+Symbol("(")
+Identifier("id")
+Symbol(")")
+```
+
+Para la expresión de canalización `id |> to_dynamic |> to_string`:
 ```text
 Identifier("id")
 Operator("|>")
@@ -7612,7 +7626,7 @@ Identifier("to_dynamic")
 Operator("|>")
 Identifier("to_string")
 ```
-Los identificadores `to_dynamic`, `to_string`, `parse_int64` y `to_float64` se categorizan léxicamente como `Identifier`. Su reconocimiento como intrinsics ocurre en el parser y el analizador semántico según los Capítulos 11 y 17.
+Los identificadores `parse_int64`, `to_float64`, `to_dynamic` y `to_string` se categorizan léxicamente como `Identifier`. En el parser, `parse_int64("41")` se clasifica como `ParsingExpression`, `to_float64(id)` como `ConversionExpression`, y `to_dynamic` / `to_string` tras `|>` como `UnaryPipelineTarget` conforme a los Capítulos 11, 15 y 17.
 
 #### 18.4.3 Literales
 - Cadenas de texto: `"41"`, `"Ana"`, `"not found"`, `"none"` producen tokens `StringLiteral`.
@@ -7661,15 +7675,19 @@ El cuerpo consta exclusivamente de una secuencia de declaraciones `let` seguida 
 Para la inicialización de `id`:
 ```text
 PipelineExpression
-    source: StringLiteral("41")
-    stage 1: UnaryPipelineTarget("parse_int64")
-    stage 2: PipelineStageExpression
-                 FunctionCallExpression
-                     name: "add"
-                     arguments:
-                         ThisExpression
-                         IntegerLiteral("1")
+    source:
+        ParsingExpression
+            intrinsic: "parse_int64"
+            argument: StringLiteral("41")
+    stage 1:
+        PipelineStageExpression
+            FunctionCallExpression
+                name: "add"
+                arguments:
+                    ThisExpression
+                    IntegerLiteral("1")
 ```
+La inicialización de `score` produce directamente un `ConversionExpression` con intrinsic `to_float64` y argumento `id`, mientras que `id_text` produce un `PipelineExpression` con dos etapas consecutivas de `UnaryPipelineTarget` (`to_dynamic` y `to_string`).
 
 #### 18.5.4 AST de expresiones sobre variantes de enumeraciones
 - `SearchResult::NotFound` $\to$ `SimpleVariantExpression`.
@@ -7780,9 +7798,10 @@ El resultado del análisis semántico concluye que el archivo es un `Semanticall
 
 La contextualización bidireccional de tipos opera sin conversiones implícitas:
 
-1. **Literal `1` en pipeline**:
-   - `add` declara `(int64 left, int64 right) -> int64`.
-   - El segundo parámetro propaga `ExpectedType(int64)` sobre `IntegerLiteral("1")`.
+1. **Expresión de parsing y pipeline para `id`**:
+   - `parse_int64("41")` es un `ParsingExpression` con tipo de retorno cerrado `int64`.
+   - El pipeline recibe como input el valor tipado `int64`.
+   - En `|> add(this, 1)`, la signatura `add(int64 left, int64 right) -> int64` liga `this: int64` y el segundo parámetro propaga `ExpectedType(int64)` sobre `IntegerLiteral("1")`.
    - El literal se tipa directamente como `int64` (sin conversión implícita desde `int`).
 2. **Llamada a `create_worker(id, "Ana")`**:
    - Parámetros `int64 id` y `string name` contextualizan los argumentos.
@@ -7790,8 +7809,9 @@ La contextualización bidireccional de tipos opera sin conversiones implícitas:
 3. **Ramas de `status_code`**:
    - La signatura `-> int64` propaga `ExpectedType(int64)` a la expresión `when` y a cada una de sus ramas.
    - Los literales `1` y `0` reciben `ExpectedType(int64)` y se tipan directamente como `int64`.
-4. **Conversión explícita a `float64`**:
-   - `id |> to_float64` utiliza la función intrínseca de conversión para transformar `int64` en `float64`.
+4. **Expresión de conversión explícita `to_float64(id)`**:
+   - `id` posee el tipo semántico cerrado `int64`.
+   - `to_float64(id)` es un `ConversionExpression` que transforma explícitamente `int64` en `float64` conforme a las reglas del Capítulo 11 (sin conversiones implícitas).
 5. **Comparaciones contextualizadas**:
    - En `code == 0`, como `code: int64`, el literal `0` recibe `ExpectedType(int64)` y produce `Value(int64, 0)`.
    - En `score >= 42.0`, como `score: float64`, el literal `42.0` recibe `ExpectedType(float64)` y produce `Value(float64, 42.0)`.
@@ -7802,8 +7822,8 @@ La contextualización bidireccional de tipos opera sin conversiones implícitas:
 La evaluación determinista de `Evaluate(canonical_program())` procede paso a paso:
 
 1. **Evaluación de `id`**:
-   - `"41"` se evalúa a `Value(string, "41")`.
-   - `parse_int64("41")` produce `Value(int64, 41)`.
+   - `StringLiteral("41")` se evalúa a `Value(string, "41")`.
+   - La expresión `parse_int64("41")` ejecuta el parsing numérico y produce `Value(int64, 41)`.
    - La etapa `add(this, 1)` liga `this = Value(int64, 41)` y evalúa `41 + 1`, produciendo `Value(int64, 42)`.
    - Se crea el binding `id = Value(int64, 42)`.
 2. **Evaluación de `worker`**:
@@ -7830,7 +7850,7 @@ La evaluación determinista de `Evaluate(canonical_program())` procede paso a pa
    - `|> to_string` formatea el entero dinámico a `Value(string, "42")`.
    - Se crea el binding `id_text = Value(string, "42")`.
 8. **Evaluación de `score`**:
-   - `id |> to_float64` convierte `42` en representación de punto flotante exacta `Value(float64, 42.0)`.
+   - `to_float64(id)` evalúa la `ConversionExpression` sobre `Value(int64, 42)`, produciendo la representación exacta de punto flotante `Value(float64, 42.0)`.
    - Se crea el binding `score = Value(float64, 42.0)`.
 9. **Evaluación de `valid`**:
    - Subexpresión izquierda: `code == 0` evalúa `1 == 0` $\to$ `false`. La negación `!(false)` produce `true`.
@@ -7896,9 +7916,9 @@ Esto formaliza la distinción normativa: el analizador semántico valida el 100%
 ### 18.14 Ausencia de EvaluationFailure en la ejecución canónica
 
 La ejecución concreta de `Evaluate(canonical_program())` concluye con éxito absoluto sin producir `EvaluationFailure`:
-- **Parsing**: `"41"` contiene exclusivamente dígitos válidos dentro del rango representable de `int64`.
+- **Parsing**: `parse_int64("41")` procesa `"41"` que contiene exclusivamente dígitos válidos dentro del rango representable de `int64`.
 - **Aritmética**: `41 + 1 = 42` no desborda el dominio de `int64`.
-- **Conversiones**: `to_dynamic`, `to_string` y `to_float64` operan sobre valores exactamente representables en sus dominios de destino.
+- **Conversiones**: `to_float64(id)` y las etapas `to_dynamic` / `to_string` operan sobre valores exactamente representables en sus dominios de destino.
 - **Operaciones booleanas y relacionales**: operan sobre operandos válidos y definidos.
 
 Este resultado confirma que el programa canónico es un caso de éxito válido, sin menoscabo de que las condiciones que provocan `EvaluationFailure` (división por cero, desbordamiento de conversión, fallo de parsing) permanezcan normadas por el Capítulo 16.
