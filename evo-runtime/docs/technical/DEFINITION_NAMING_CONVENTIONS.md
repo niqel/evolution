@@ -210,7 +210,7 @@ Representa la frontera de solicitud a través de la cual un consumidor invoca un
 
 ## 9. Convenciones sobre Estructuras de Datos
 
-Las definiciones de estructuras de datos técnicas de Evo Runtime se mantendrán conceptualmente separadas de las definiciones de acciones. 
+Las definiciones de estructuras de datos técnicas de Evo Runtime se mantendrán conceptualmente separadas de las definiciones de acciones.
 
 La arquitectura distinguirá formalmente entre estructuras de datos con propiedad (*owned*) y con préstamo (*borrowed*). Su diseño, nomenclatura y ubicación dentro del árbol técnico se formalizarán en el Data Dictionary y en la especificación técnica correspondiente cuando se desarrollen las necesidades concretas de datos.
 
