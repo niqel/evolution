@@ -1,0 +1,226 @@
+direction: right
+
+title: "Evo Runtime Model A — Component Ownership Map"
+
+# ----------------------------------------------------------------------
+# 1. FIXED CORE COMPONENTS (Cargo crates)
+# ----------------------------------------------------------------------
+core: "Core (Model A Static Set)" {
+  style.fill: "#eef2ff"
+  style.stroke: "#4338ca"
+  style.stroke-width: 2
+
+  evo_runtime: "Evo Runtime\n[crate: evo-runtime]\n(FIXED Core Component)" {
+    style.fill: "#c7d2fe"
+    style.stroke: "#3730a3"
+    style.stroke-width: 2
+  }
+
+  evo_values: "EvoV\n[crate: evo-values]\n(FIXED Core Component)" {
+    style.fill: "#c7d2fe"
+    style.stroke: "#3730a3"
+    style.stroke-width: 2
+  }
+
+  evo_query_engine: "EvoQ\n[crate: evo-query-engine]\n(FIXED Core Engine)" {
+    style.fill: "#c7d2fe"
+    style.stroke: "#3730a3"
+    style.stroke-width: 2
+  }
+
+  evo_script_engine: "EvoS\n[crate: evo-script-engine]\n(FIXED Core Engine)" {
+    style.fill: "#c7d2fe"
+    style.stroke: "#3730a3"
+    style.stroke-width: 2
+  }
+}
+
+# ----------------------------------------------------------------------
+# 2. RUNTIME COORDINATION DOMAIN (Candidates)
+# ----------------------------------------------------------------------
+runtime_domain: "Evo Runtime Coordination Domain" {
+  style.fill: "#f0fdf4"
+  style.stroke: "#15803d"
+  style.stroke-width: 2
+
+  entry_point: "Entry Point\n(Runtime Domain Candidate)" {
+    style.fill: "#dcfce7"
+    style.stroke: "#166534"
+  }
+
+  execution: "Execution\n(Runtime Domain Candidate)" {
+    style.fill: "#dcfce7"
+    style.stroke: "#166534"
+  }
+
+  execution_context: "Execution Context\n(Runtime Domain Candidate)" {
+    style.fill: "#dcfce7"
+    style.stroke: "#166534"
+  }
+
+  invocation: "Invocation\n(Runtime Domain Candidate)" {
+    style.fill: "#dcfce7"
+    style.stroke: "#166534"
+  }
+
+  operation: "Operation\n(Runtime Domain Candidate)" {
+    style.fill: "#dcfce7"
+    style.stroke: "#166534"
+  }
+
+  required_operation: "Required Operation\n(Runtime Domain Candidate)" {
+    style.fill: "#dcfce7"
+    style.stroke: "#166534"
+  }
+
+  implementation: "Implementation\n(Runtime Domain Candidate)" {
+    style.fill: "#dcfce7"
+    style.stroke: "#166534"
+  }
+
+  result: "Result\n(Runtime Domain Candidate)" {
+    style.fill: "#dcfce7"
+    style.stroke: "#166534"
+  }
+
+  failure: "Failure\n(Runtime Domain Candidate)" {
+    style.fill: "#dcfce7"
+    style.stroke: "#166534"
+  }
+
+  provider: "Provider\n(Runtime Domain Candidate)" {
+    style.fill: "#dcfce7"
+    style.stroke: "#166534"
+  }
+
+  capability: "Capability\n(Runtime Domain Candidate)" {
+    style.fill: "#dcfce7"
+    style.stroke: "#166534"
+  }
+}
+
+# ----------------------------------------------------------------------
+# 3. COMPONENT AFFINITIES (Strong Affinities)
+# ----------------------------------------------------------------------
+affinities: "Component Affinities" {
+  style.fill: "#fefce8"
+  style.stroke: "#a16207"
+  style.stroke-width: 2
+
+  value_concept: "Value\n(Strong Affinity: evo-values)" {
+    style.fill: "#fef9c3"
+    style.stroke: "#854d0e"
+  }
+
+  query_work: "Query Work\n(Strong Affinity: evo-query-engine)" {
+    style.fill: "#fef9c3"
+    style.stroke: "#854d0e"
+  }
+
+  evo_script_impl: "Evo-Script Implementation\n(Strong Affinity: evo-script-engine)" {
+    style.fill: "#fef9c3"
+    style.stroke: "#854d0e"
+  }
+}
+
+# ----------------------------------------------------------------------
+# 4. EXTERNAL / CROSS-CUTTING CONCEPTS
+# ----------------------------------------------------------------------
+external: "External / Cross-cutting Concepts" {
+  style.fill: "#f8fafc"
+  style.stroke: "#64748b"
+  style.stroke-width: 2
+
+  host: "Host\n(External Role)" {
+    style.fill: "#f1f5f9"
+    style.stroke: "#475569"
+  }
+
+  evo_app: "Evo Application\n(Functional Concept)" {
+    style.fill: "#f1f5f9"
+    style.stroke: "#475569"
+  }
+
+  engine_role: "Engine\n(Architectural Role)" {
+    style.fill: "#f1f5f9"
+    style.stroke: "#475569"
+  }
+
+  evo_script_lang: "Evo-Script\n(Language)" {
+    style.fill: "#f1f5f9"
+    style.stroke: "#475569"
+  }
+}
+
+# ----------------------------------------------------------------------
+# 5. RELATIONSHIPS
+# ----------------------------------------------------------------------
+
+# External interactions
+external.host -> core.evo_runtime: "requests start"
+external.evo_app -> runtime_domain.entry_point: "declares"
+core.evo_runtime -> runtime_domain.execution: "starts from Entry Point"
+
+# Execution flow
+runtime_domain.execution -> runtime_domain.execution_context: "has"
+runtime_domain.execution -> runtime_domain.result: "concludes with"
+runtime_domain.operation -> runtime_domain.result: "can produce"
+
+# Result outcomes
+runtime_domain.result -> affinities.value_concept: "success carries"
+runtime_domain.result -> runtime_domain.failure: "failure expresses"
+
+# Operations & Resolution
+runtime_domain.required_operation -> core.evo_runtime: "resolved by"
+core.evo_runtime -> runtime_domain.implementation: "resolves to"
+runtime_domain.implementation -> external.engine_role: "may require"
+
+# Providers & Capabilities
+runtime_domain.provider -> runtime_domain.capability: "provides"
+runtime_domain.required_operation -> runtime_domain.capability: "mapping pending (UNDEFINED)" {
+  style.stroke-dash: 5
+  style.stroke: "#dc2626"
+}
+
+# Core Components & Affinities
+core.evo_values -> affinities.value_concept: "common base"
+core.evo_query_engine -> affinities.query_work: "performs"
+core.evo_script_engine -> affinities.evo_script_impl: "executes"
+affinities.evo_script_impl -> external.evo_script_lang: "written in"
+
+# Engine roles
+external.engine_role -> core.evo_query_engine: "role of"
+external.engine_role -> core.evo_script_engine: "role of"
+
+# ----------------------------------------------------------------------
+# 6. LEGEND
+# ----------------------------------------------------------------------
+legend: "Legend (Ownership Status)" {
+  style.fill: "#ffffff"
+  style.stroke: "#94a3b8"
+
+  leg_fixed: "FIXED\nClosed mapping to Core crate" {
+    style.fill: "#c7d2fe"
+    style.stroke: "#3730a3"
+  }
+
+  leg_affinity: "STRONG AFFINITY\nClear component responsibility, open Rust type" {
+    style.fill: "#fef9c3"
+    style.stroke: "#854d0e"
+  }
+
+  leg_candidate: "RUNTIME DOMAIN CANDIDATE\nCoordinated by evo-runtime, open Rust representation" {
+    style.fill: "#dcfce7"
+    style.stroke: "#166534"
+  }
+
+  leg_external: "EXTERNAL / CROSS-CUTTING\nExternal role, language or architectural concept" {
+    style.fill: "#f1f5f9"
+    style.stroke: "#475569"
+  }
+
+  leg_pending: "PENDING / UNDEFINED\nRelationship not defined yet" {
+    style.stroke-dash: 5
+    style.stroke: "#dc2626"
+  }
+}
