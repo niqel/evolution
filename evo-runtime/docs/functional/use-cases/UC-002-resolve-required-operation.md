@@ -21,12 +21,12 @@ Durante una Execution activa, una unidad participante requiere una Operation.
 
 1. Una unidad participante requiere una Operation.
 2. La solicitud de resolución llega a Evo Runtime.
-3. Evo Runtime determina qué Implementation disponible o potencial puede
-   satisfacer la Required Operation.
-4. Si existe exactamente una resolución válida, Evo Runtime selecciona esa
-   Implementation funcionalmente.
-5. La Implementation resuelta queda determinada y lista para proceder hacia
-   disponibilidad e Invocation.
+3. Evo Runtime determina qué Implementation puede satisfacer la Required
+   Operation.
+4. Si existe exactamente una resolución válida, Evo Runtime resuelve la
+   Required Operation hacia esa Implementation.
+5. La Implementation queda resuelta y puede continuar hacia las acciones
+   funcionales posteriores.
 
 ## Successful Outcome
 

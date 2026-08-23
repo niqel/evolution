@@ -19,14 +19,14 @@ que debe participar en la Execution.
 
 ## Main Flow
 
-1. Evo Runtime recibe la referencia funcional de la Implementation resuelta.
-2. Evo Runtime determina si la Implementation ya se encuentra funcionalmente
-   disponible para participar.
-3. Si ya está disponible, el flujo continúa sin trabajo preparatorio adicional.
-4. Si no está disponible pero puede hacerse disponible bajo el modelo funcional
-   vigente, Evo Runtime permite que alcance el estado disponible.
-5. La Implementation queda funcionalmente disponible para los siguientes pasos
-   de Invocation.
+1. Evo Runtime continúa con la Implementation resuelta.
+2. Evo Runtime determina si la Implementation ya está funcionalmente disponible
+   para participar.
+3. Si ya está disponible, continúa sin trabajo adicional de disponibilidad.
+4. Si aún no está disponible pero puede hacerse disponible, Evo Runtime la hace
+   funcionalmente disponible bajo el modelo vigente.
+5. La Implementation queda funcionalmente disponible para continuar hacia
+   Invocation.
 
 ## Successful Outcome
 
@@ -35,8 +35,7 @@ Execution.
 
 ## Failure Outcomes
 
-- La Implementation resuelta no puede hacerse disponible debido a ausencia de
-  recursos o error en la preparación.
+- La Implementation requerida no puede hacerse funcionalmente disponible.
 
 ## Invariants
 

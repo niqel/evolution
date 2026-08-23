@@ -26,13 +26,13 @@ motor, fallo en invocación, error en EvoS o error en EvoQ).
 3. Evo Runtime propaga el Failure a través del flujo de ejecución correspondiente.
 4. El trabajo dependiente que requería un Value inexistente no procede como si
    el resultado hubiera sido exitoso.
-5. El Failure se propaga hasta constituir el Result fallido de la Operation o de
-   la Execution según corresponda.
+5. El Failure puede contribuir al Result fallido de una Operation o de la
+   Execution, según corresponda.
 
 ## Successful Outcome
 
-El Failure es propagado correctamente a través de la Execution, preservando la
-integridad del flujo de control sin convertirlo falsamente en un Value exitoso.
+El Failure es propagado correctamente preservando su significado y su
+distinción respecto de un Value exitoso.
 
 ## Failure Outcomes
 
@@ -45,8 +45,8 @@ informa fielmente el Failure original.
 - `Result != Failure`
 - `Result != Value`
 - Un Failure no debe transformarse silenciosamente en un Value exitoso.
-- Propagar un Failure en una operación no implica necesariamente la terminación
-  abrupta de toda la aplicación, a menos que no exista manejo alternativo.
+- Propagar un Failure en una Operation no implica necesariamente finalizar
+  toda la Evo Application.
 - El Failure permanece asociado con la Execution correspondiente.
 
 ## Related User Stories

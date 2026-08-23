@@ -10,8 +10,8 @@ Engine.
 
 ## Trigger
 
-Una Required Operation ha sido resuelta hacia una Implementation que requiere
-ejecución mediante el lenguaje Evo-Script.
+Una Required Operation ha sido resuelta hacia una Evo-Script Implementation
+que debe participar en la Execution.
 
 ## Preconditions
 
@@ -23,7 +23,7 @@ ejecución mediante el lenguaje Evo-Script.
 
 1. Evo Runtime reconoce que la Implementation disponible es una Evo-Script
    Implementation.
-2. Evo Runtime delega la ejecución de la implementación en el engine EvoS.
+2. Evo Runtime utiliza EvoS.
 3. Los Values de entrada provistos participan sobre la base común de EvoV.
 4. EvoS ejecuta la Evo-Script Implementation.
 5. El trabajo ejecutado produce un Result (Value en caso exitoso o Failure si
@@ -42,8 +42,7 @@ exitoso (potencialmente conteniendo un Value).
 
 ## Failure Outcomes
 
-- Se produce un Failure durante la interpretación o ejecución del código
-  Evo-Script.
+- Se produce un Failure durante la ejecución de la Evo-Script Implementation.
 
 ## Invariants
 
@@ -51,7 +50,7 @@ exitoso (potencialmente conteniendo un Value).
 - `EvoS = Engine`
 - `EvoS != Evo Runtime`
 - `EvoV != Engine`
-- Evo Runtime coordina la ejecución; EvoS ejecuta el lenguaje Evo-Script.
+- Evo Runtime coordina la ejecución; EvoS ejecuta Evo-Script Implementations.
 - EvoS no asume la coordinación global de dependencias ni el ciclo de vida de la
   Execution.
 - La Evo Application no selecciona, crea ni administra directamente el engine

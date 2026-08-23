@@ -27,8 +27,7 @@ Evo Runtime.
    permanecen vinculados a esa misma Execution.
 4. El trabajo ejecutado mediante EvoS o EvoQ se desarrolla dentro de la
    continuidad del mismo Execution Context.
-5. Otras Executions concurrentes o secuenciales mantienen sus propios contextos
-   independientes.
+5. Otra Execution mantiene un Execution Context distinto.
 
 ## Successful Outcome
 
@@ -37,8 +36,8 @@ largo de todas sus actividades directas y transitivas.
 
 ## Failure Outcomes
 
-La pérdida de continuidad o corrupción del contexto impide reconocer
-adecuadamente el trabajo como perteneciente a la misma Execution.
+La pérdida de la continuidad necesaria impide reconocer correctamente el
+trabajo como perteneciente a la misma Execution.
 
 ## Invariants
 

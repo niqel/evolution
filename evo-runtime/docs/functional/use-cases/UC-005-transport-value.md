@@ -24,8 +24,8 @@ participar en etapas posteriores de la Execution.
    Operation, EvoS o EvoQ.
 2. El Value cruza una frontera funcional coordinada por Evo Runtime.
 3. Evo Runtime preserva el significado funcional del Value.
-4. El Value continúa hacia otra Operation, implementación EvoS o consulta EvoQ
-   según corresponda.
+4. El Value puede continuar hacia otra Operation, hacia trabajo ejecutado
+   mediante EvoS o hacia Query Work realizado mediante EvoQ, según corresponda.
 5. El Value permanece funcionalmente asociado con la misma Execution activa.
 
 ## Successful Outcome

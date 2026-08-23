@@ -10,22 +10,20 @@ consultas.
 
 ## Trigger
 
-Durante una Execution activa se requiere realizar trabajo funcional de consulta
-sobre Values.
+Durante una Execution activa se requiere realizar Query Work.
 
 ## Preconditions
 
 - Existe una Execution activa.
 - EvoQ forma parte del Core estático disponible para Evo Runtime.
-- Existen Values sobre los cuales realizar el trabajo de consulta sobre la base
-  común de EvoV.
 
 ## Main Flow
 
-1. Una unidad participante requiere realizar Query Work sobre Values.
-2. La solicitud de consulta es atendida y coordinada mediante Evo Runtime.
-3. Evo Runtime delega el trabajo de consulta en el engine EvoQ.
-4. EvoQ recibe los Values de entrada estructurados sobre la base común de EvoV.
+1. Una unidad participante requiere realizar Query Work.
+2. La necesidad es atendida y coordinada mediante Evo Runtime.
+3. Evo Runtime utiliza EvoQ.
+4. Si el Query Work requiere Values de entrada, EvoQ trabaja con ellos sobre la
+   base común de EvoV.
 5. EvoQ realiza el Query Work correspondiente.
 6. EvoQ produce un Result (Value en caso exitoso o Failure si ocurre un error).
 7. El outcome producido regresa a Evo Runtime para continuar participando en la
@@ -42,7 +40,7 @@ conteniendo un Value).
 
 ## Failure Outcomes
 
-- Se produce un Failure durante el procesamiento o ejecución de la consulta.
+- Se produce un Failure durante Query Work.
 
 ## Invariants
 

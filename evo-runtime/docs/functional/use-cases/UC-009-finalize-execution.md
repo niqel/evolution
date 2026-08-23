@@ -20,11 +20,12 @@ concluido.
 
 1. Evo Runtime reconoce que todas las actividades funcionales requeridas para la
    Execution han terminado.
-2. El trabajo transitivo pendiente recibe la oportunidad de concluir de forma
-   ordenada.
+2. El trabajo transitivo requerido obtiene oportunidad de concluir antes de que
+   Evo Runtime considere finalizada la Execution cuando todavía sea necesario
+   para completar el trabajo.
 3. Evo Runtime determina el Result final de la Execution.
-4. El Result final refleja el estado global: éxito (potencialmente conteniendo un
-   Value) o fracaso (expresando un Failure).
+4. El Result final puede representar éxito mediante un Value o fracaso mediante
+   un Failure.
 5. El Host recibe el Result final de la Execution.
 6. La Execution concluye y deja de estar activa.
 
@@ -34,14 +35,13 @@ La Execution finaliza formalmente y el Host recibe el Result final.
 
 ## Failure Outcomes
 
-- La conclusión incorrecta de actividades transitivas o un fallo no recuperado
-  genera un Result final de tipo Failure.
+- La conclusión incorrecta de la Execution puede producir un Failure.
 
 ## Invariants
 
-- El retorno de la función de entrada (`entry return`) no equivale
-  automáticamente a la finalización total de la Execution si existen tareas
-  transitivas pendientes.
+- `entry return != Execution finalization`: el retorno del Entry Point no
+  implica por sí mismo que todo el trabajo requerido por la Execution haya
+  concluido.
 - Finalizar una Execution no afecta ni finaliza accidentalmente otra Execution
   distinta.
 - `Result != Value`

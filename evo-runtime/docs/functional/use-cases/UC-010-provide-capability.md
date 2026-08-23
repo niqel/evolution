@@ -20,8 +20,7 @@ Un Provider proporciona una Capability utilizable por Evo Runtime.
 
 1. Existe un Provider que ofrece una Capability individual.
 2. El Provider pone dicha Capability a disposición funcional de Evo Runtime.
-3. La Capability queda registrada/disponible funcionalmente para participar en el
-   ecosistema cuando corresponda.
+3. La Capability queda funcionalmente disponible para Evo Runtime.
 4. Una unidad participante que posteriormente requiera funcionalidad no necesita
    conocer ni administrar directamente el Provider original.
 
@@ -32,9 +31,8 @@ coordinadas por Evo Runtime.
 
 ## Failure Outcomes
 
-Si una Capability requerida no está disponible o su proveedor falla al
-ofrecerla, el trabajo dependiente no puede completarse como exitoso y genera un
-Failure.
+Si una Capability necesaria no está disponible, el trabajo dependiente no
+puede continuar como si dicha Capability estuviera disponible.
 
 ## Invariants
 
@@ -51,7 +49,7 @@ Failure.
 
 ## Related User Stories
 
-- US-010 (Use a Capability Provided by a Provider)
+- US-010 (Provide a Capability)
 - US-011 (Provide the Evo Base Core)
 
 ## Related Data Dictionary Terms
