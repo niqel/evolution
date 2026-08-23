@@ -34,7 +34,7 @@ status:
 | Term | Canonical Category | Component Affinity / Responsibility | Ownership Status | Notes |
 | --- | --- | --- | --- | --- |
 | **Evo Runtime** | Core Component | `evo-runtime` | FIXED | Platform coordinator of the Core; coordinates execution, resolution, and invocations. |
-| **EvoV** | Core Component | `evo-values` | FIXED | Common Values base for the Evo ecosystem; not an engine. |
+| **EvoV** | Core Component | `evo-values` | FIXED | Common Values base for the Evo Core; not an engine. |
 | **EvoQ** | Core Component / Engine | `evo-query-engine` | FIXED | Base query engine of the Core; performs Query Work. |
 | **EvoS** | Core Component / Engine | `evo-script-engine` | FIXED | Base engine for Evo-Script; executes Evo-Script Implementations. |
 | **Core** | Architectural Concept | Cross-cutting (`evo-runtime`, `evo-values`, `evo-query-engine`, `evo-script-engine`) | EXTERNAL / CROSS-CUTTING | Static Model A foundation set; fixed composition without dynamic discovery. |
@@ -55,7 +55,7 @@ status:
 | **Capability** | Functional Concept | Evo Runtime coordination domain | RUNTIME DOMAIN CANDIDATE | Discrete capability provided by a Provider; `Required Operation != Capability`. |
 | **Evo-Script** | Language | External language domain | EXTERNAL / CROSS-CUTTING | Programming language executed via EvoS; `Evo-Script != EvoS`. |
 | **Evo-Script Implementation** | Implementation Kind | EvoS / `evo-script-engine` | STRONG AFFINITY | Implementation written in Evo-Script executed by EvoS. |
-| **Query Work** | Functional Work | EvoQ / `evo-query-engine` | STRONG AFFINITY | Query evaluation work performed by EvoQ. |
+| **Query Work** | Functional Work | EvoQ / `evo-query-engine` | STRONG AFFINITY | Functional query work performed by EvoQ. |
 
 ---
 
