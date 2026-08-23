@@ -3,7 +3,8 @@
 ## Historia
 
 Como una Aplicación Evo,
-quiero disponer de EvoV, EvoQ y EvoS como componentes base de Evo Runtime,
+quiero disponer de EvoV y de los engines EvoQ y EvoS como componentes base de
+Evo Runtime,
 para poder utilizar las capacidades fundamentales de Evo sin depender de
 Providers adicionales instalados o descubiertos durante la ejecución.
 
@@ -15,9 +16,14 @@ Core base de Evo.
 Ese Core está compuesto funcionalmente por:
 
 - EvoV, como base común de Values;
-- EvoQ, como sistema base de consultas;
+- EvoQ, como engine base de consultas;
 - EvoS, como engine base para Evo-Script;
 - Evo Runtime, como plataforma responsable de coordinar la ejecución.
+
+EvoQ y EvoS son los engines base conocidos por Evo Runtime dentro del Core.
+
+EvoV no es un engine. EvoV proporciona la base común de Values compartida por
+los componentes del Core.
 
 Estos componentes forman parte del entorno base de Evo y no son Providers
 adicionales.
@@ -36,8 +42,10 @@ define por separado.
 - EvoQ forma parte del Core base de Evo.
 - EvoS forma parte del Core base de Evo.
 - EvoV proporciona la base común de Values utilizada por el ecosistema Evo.
-- EvoQ proporciona el sistema base de consultas de Evo.
+- EvoV no es un engine.
+- EvoQ proporciona el engine base de consultas de Evo.
 - EvoS proporciona el engine base capaz de trabajar con Evo-Script.
+- Evo Runtime conoce a EvoQ y EvoS como engines base del Core.
 - Los componentes del Core no necesitan ser descubiertos dinámicamente como
   Providers adicionales durante una ejecución.
 - Una Aplicación Evo no necesita instalar EvoV, EvoQ o EvoS como Providers

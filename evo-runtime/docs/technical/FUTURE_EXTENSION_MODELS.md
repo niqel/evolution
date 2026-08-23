@@ -12,6 +12,61 @@ El Modelo A del Core base se documenta funcionalmente mediante US-011 y se
 desarrollará técnicamente por separado.
 
 ======================================================================
+Modelo A — Core Estático
+======================================================================
+
+El Modelo A representa el Core base conocido en tiempo de composición por
+Rust/Cargo.
+
+Los cuatro componentes base son:
+
+    evo-runtime
+        → Evo Runtime
+
+    evo-values
+        → EvoV
+
+    evo-query-engine
+        → EvoQ
+
+    evo-script-engine
+        → EvoS
+
+Conceptualmente:
+
+                         Evo Runtime
+                              │
+                  ┌───────────┴───────────┐
+                  ▼                       ▼
+                    EvoQ                 EvoS
+             evo-query-engine     evo-script-engine
+                  │                       │
+                  └───────────┬───────────┘
+                              ▼
+                             EvoV
+                         evo-values
+
+EvoQ y EvoS son engines del Core conocidos por Evo Runtime.
+
+EvoV no es un engine.
+
+EvoV constituye la base común de Values compartida por los componentes del
+Core.
+
+Mantener la distinción:
+
+    Evo-Script
+        = lenguaje
+
+    EvoS
+        = engine del Core capaz de trabajar con Evo-Script
+
+El Modelo A no necesita discovery dinámico de estos componentes.
+
+La composición física concreta mediante Cargo, crates y linking se documentará
+en la arquitectura técnica correspondiente y no queda cerrada por esta nota.
+
+======================================================================
 Modelo B — Extensiones Rust
 ======================================================================
 
