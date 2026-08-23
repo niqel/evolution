@@ -6,7 +6,7 @@ This document consolidates the canonical architectural and functional vocabulary
 derived from User Stories US-001 through US-014 for Evo Runtime Model A.
 
 Model A Functional Coverage is closed (see
-[MODEL_A_FUNCTIONAL_COVERAGE.md](file:///home/niqel504/repos/evolution/evo-runtime/docs/functional/MODEL_A_FUNCTIONAL_COVERAGE.md)).
+[MODEL_A_FUNCTIONAL_COVERAGE.md](MODEL_A_FUNCTIONAL_COVERAGE.md)).
 
 This document defines canonical functional concepts, roles, requirements, and
 outcomes. It does not define Rust structs, enums, traits, function pointers,
