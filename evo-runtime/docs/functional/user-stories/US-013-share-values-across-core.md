@@ -1,77 +1,76 @@
-# US-013 — Compartir Values entre los Componentes del Core
+# US-013 — Compartir Values y Outcomes entre los Componentes del Core
 
 ## Historia
 
 Como una Aplicación Evo,
-quiero que los Values puedan participar entre Evo Runtime, EvoQ y EvoS
-conservando su significado,
+quiero que los Values y Outcomes (Result y Failure) puedan participar entre
+Evo Runtime, EvoQ y EvoS conservando su significado,
 para que los componentes del Core puedan interoperar sobre una base común de
-información proporcionada por EvoV.
+información y resultados proporcionada por EvoV.
 
 ## Contexto
 
-EvoV proporciona la base común de Values del Core de Evo.
+EvoV proporciona la base común de Values y Outcomes del Core de Evo.
 
-Evo Runtime, EvoQ y EvoS pueden trabajar con Values sobre esa misma base
-semántica.
+Evo Runtime, EvoQ y EvoS pueden trabajar con Values, Results y Failures sobre
+esa misma base semántica.
 
-Un Value producido durante el trabajo de un componente del Core puede continuar
-participando en la ejecución a través de otros componentes del Core sin dejar de
-representar funcionalmente la misma información.
+Un Value o un Outcome producido durante el trabajo de un componente del Core
+puede continuar participando en la ejecución a través de otros componentes del
+Core sin dejar de representar funcionalmente la misma información o estado de
+resultado.
 
 Por ejemplo, un Value producido por una implementación ejecutada mediante EvoS
 puede regresar a Evo Runtime y posteriormente participar en trabajo realizado
-mediante EvoQ.
+mediante EvoQ. De igual modo, un Result o Failure producido por EvoS o EvoQ
+puede ser recibido y propagado por Evo Runtime preservando su distinción
+semántica.
 
-De la misma forma, un Value que participe en trabajo realizado mediante EvoQ
-puede continuar a través de Evo Runtime y participar posteriormente en una
-implementación ejecutada mediante EvoS.
+Compartir una base común de Values y Outcomes no implica que todos los
+componentes tengan las mismas responsabilidades:
 
-Compartir una base común de Values no implica que todos los componentes tengan
-las mismas responsabilidades.
+- EvoV proporciona la base común de Values y Outcomes;
+- Evo Runtime continúa coordinando la ejecución;
+- EvoQ continúa siendo el engine base de consultas;
+- EvoS continúa siendo el engine base para Evo-Script.
 
-EvoV proporciona la base común de Values.
+Se preservan estrictamente las distinciones:
 
-Evo Runtime continúa coordinando la ejecución.
-
-EvoQ continúa siendo el engine base de consultas.
-
-EvoS continúa siendo el engine base para Evo-Script.
-
-Un Failure continúa siendo distinto de un Value y no forma parte del modelo de
-Values exitosos únicamente por atravesar componentes del Core.
+- `Result != Value`
+- `Result != Failure`
+- `Value != Failure`
 
 ## Criterios de Aceptación
 
-- EvoV proporciona la base común de Values del Core.
-- Evo Runtime puede trabajar con Values proporcionados sobre la base de EvoV.
-- EvoQ puede trabajar con Values proporcionados sobre la base de EvoV.
-- EvoS puede trabajar con Values proporcionados sobre la base de EvoV.
-- Un Value puede pasar de EvoS a Evo Runtime conservando su significado
-  funcional.
-- Un Value puede pasar de Evo Runtime a EvoQ conservando su significado
-  funcional.
-- Un Value puede pasar de EvoQ a Evo Runtime conservando su significado
-  funcional.
-- Un Value puede pasar de Evo Runtime a EvoS conservando su significado
-  funcional.
-- Un Value puede continuar participando en distintas operaciones del Core sin
-  requerir un modelo semántico de Value diferente para cada componente.
-- Compartir Values no cambia las responsabilidades funcionales de Evo Runtime,
-  EvoQ, EvoS o EvoV.
-- EvoV continúa siendo la base común de Values y no un engine.
+- EvoV proporciona la base común de Values y Outcomes (Result y Failure) del Core.
+- Evo Runtime puede trabajar con Values, Results y Failures proporcionados sobre
+  la base de EvoV.
+- EvoQ puede trabajar con Values, Results y Failures proporcionados sobre la base
+  de EvoV.
+- EvoS puede trabajar con Values, Results y Failures proporcionados sobre la base
+  de EvoV.
+- Un Value puede pasar entre componentes del Core (EvoS, Evo Runtime, EvoQ)
+  conservando su significado funcional.
+- Un Result o Failure puede ser transmitido entre componentes del Core
+  conservando su significado funcional.
+- Los Outcomes y Values pueden participar en distintas operaciones del Core sin
+  requerir un modelo semántico diferente para cada componente.
+- Compartir Values y Outcomes no cambia las responsabilidades funcionales de
+  Evo Runtime, EvoQ, EvoS o EvoV.
+- EvoV continúa siendo la base común de Values y Outcomes y no un engine.
 - EvoQ continúa siendo el engine base de consultas.
 - EvoS continúa siendo el engine base para Evo-Script.
 - Evo Runtime continúa siendo responsable de coordinar la ejecución.
-- Un Failure permanece distinguible de un Value correcto.
+- `Result != Value`, `Result != Failure` y `Value != Failure` se preservan en
+  todo el Core.
 
 ## Fuera de Alcance
 
 Esta historia no define:
 
-- la representación Rust de Value;
-- structs Rust para Value;
-- enums Rust para Value;
+- la representación Rust de Value, Result o Failure;
+- structs Rust para Value, Result o Failure;
+- enums Rust para Value, Result o Failure;
 - traits;
 - generics;
 - ownership;
@@ -90,14 +89,14 @@ Esta historia no define:
 - deserialización;
 - formato binario;
 - representación en memoria;
-- copia física de Values;
-- movimiento físico de Values;
+- copia física de Values o Outcomes;
+- movimiento físico de Values u Outcomes;
 - conversión física entre representaciones;
-- optimizaciones de Value;
-- almacenamiento de Values;
-- persistencia de Values;
-- caching de Values;
-- identidad física de un Value;
+- optimizaciones de Value u Outcomes;
+- almacenamiento de Values u Outcomes;
+- persistencia de Values u Outcomes;
+- caching de Values u Outcomes;
+- identidad física de un Value u Outcome;
 - query operators concretos;
 - sintaxis de EvoQ;
 - implementación interna de EvoQ;

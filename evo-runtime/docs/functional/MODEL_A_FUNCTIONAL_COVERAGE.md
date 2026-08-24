@@ -22,7 +22,7 @@ models, Provider model, Scope model or Evo composition model.
 The Model A static Core is composed functionally by:
 
 - Evo Runtime, as the platform responsible for coordinating execution;
-- EvoV, as the common Values base;
+- EvoV, as the common Values and Outcomes base;
 - EvoQ, as the base query engine;
 - EvoS, as the base engine for Evo-Script.
 
@@ -38,7 +38,7 @@ Conceptually:
                   └───────────┬───────────┘
                               ▼
                              EvoV
-                     common Values base
+                 common Values & Outcomes base
 ```
 
 EvoQ and EvoS are engines of the Core.
@@ -65,7 +65,7 @@ EvoS is the Core engine capable of working with Evo-Script.
 | US-010 | Use a Capability provided by a Provider |
 | US-011 | Provide the Evo base Core |
 | US-012 | Execute an Evo-Script Implementation through EvoS |
-| US-013 | Share Values across Core components through EvoV |
+| US-013 | Share Values and Outcomes across Core components through EvoV |
 | US-014 | Execute query work through EvoQ |
 
 Together, these stories cover the functional execution path of Model A:
@@ -88,7 +88,7 @@ Execution
                     ↓
                 Query Work
 
-EvoV provides the common Values base used across the Core.
+EvoV provides the common Values and Outcomes base used across the Core.
 ```
 
 The reviewed functional coverage includes:
@@ -106,7 +106,7 @@ The reviewed functional coverage includes:
 - availability of the static Evo Core;
 - EvoS participation for Evo-Script execution;
 - EvoQ participation for query work;
-- shared Value semantics through EvoV.
+- shared Value and Outcome semantics through EvoV.
 
 No further User Story is required for the functional coverage of the Model A
 static Core at this stage.

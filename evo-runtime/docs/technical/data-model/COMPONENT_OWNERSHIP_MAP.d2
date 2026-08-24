@@ -3,7 +3,7 @@ direction: right
 title: "Evo Runtime Model A — Component Ownership Map"
 
 # ----------------------------------------------------------------------
-# 1. FIXED CORE COMPONENTS (Cargo crates)
+# 1. FIXED CORE COMPONENTS & OWNED TYPES (Cargo crates)
 # ----------------------------------------------------------------------
 core: "Core (Model A Static Set)" {
   style.fill: "#eef2ff"
@@ -17,9 +17,24 @@ core: "Core (Model A Static Set)" {
   }
 
   evo_values: "EvoV\n[crate: evo-values]\n(FIXED Core Component)" {
-    style.fill: "#c7d2fe"
+    style.fill: "#e0e7ff"
     style.stroke: "#3730a3"
     style.stroke-width: 2
+
+    value_concept: "Value\n(FIXED: evo-values)" {
+      style.fill: "#c7d2fe"
+      style.stroke: "#3730a3"
+    }
+
+    result_concept: "Result\n(FIXED: evo-values)" {
+      style.fill: "#c7d2fe"
+      style.stroke: "#3730a3"
+    }
+
+    failure_concept: "Failure\n(FIXED: evo-values)" {
+      style.fill: "#c7d2fe"
+      style.stroke: "#3730a3"
+    }
   }
 
   evo_query_engine: "EvoQ\n[crate: evo-query-engine]\n(FIXED Core Engine)" {
@@ -78,16 +93,6 @@ runtime_domain: "Evo Runtime Coordination Domain" {
     style.stroke: "#166534"
   }
 
-  result: "Result\n(Runtime Domain Candidate)" {
-    style.fill: "#dcfce7"
-    style.stroke: "#166534"
-  }
-
-  failure: "Failure\n(Runtime Domain Candidate)" {
-    style.fill: "#dcfce7"
-    style.stroke: "#166534"
-  }
-
   provider: "Provider\n(Runtime Domain Candidate)" {
     style.fill: "#dcfce7"
     style.stroke: "#166534"
@@ -106,11 +111,6 @@ affinities: "Component Affinities" {
   style.fill: "#fefce8"
   style.stroke: "#a16207"
   style.stroke-width: 2
-
-  value_concept: "Value\n(Strong Affinity: evo-values)" {
-    style.fill: "#fef9c3"
-    style.stroke: "#854d0e"
-  }
 
   query_work: "Query Work\n(Strong Affinity: evo-query-engine)" {
     style.fill: "#fef9c3"
@@ -163,12 +163,13 @@ core.evo_runtime -> runtime_domain.execution: "starts from Entry Point"
 
 # Execution flow
 runtime_domain.execution -> runtime_domain.execution_context: "has"
-runtime_domain.execution -> runtime_domain.result: "concludes with"
-runtime_domain.operation -> runtime_domain.result: "can produce"
+runtime_domain.execution -> core.evo_values.result_concept: "concludes with"
+runtime_domain.operation -> core.evo_values.result_concept: "can produce"
 
-# Result outcomes
-runtime_domain.result -> affinities.value_concept: "success carries"
-runtime_domain.result -> runtime_domain.failure: "failure expresses"
+# Result outcomes & EvoV ownership
+core.evo_values.result_concept -> core.evo_values.value_concept: "success branch"
+core.evo_values.result_concept -> core.evo_values.failure_concept: "failure branch"
+core.evo_runtime -> core.evo_values.failure_concept: "propagates"
 
 # Operations & Resolution
 runtime_domain.required_operation -> core.evo_runtime: "resolved by"
@@ -183,7 +184,6 @@ runtime_domain.required_operation -> runtime_domain.capability: "mapping pending
 }
 
 # Core Components & Affinities
-core.evo_values -> affinities.value_concept: "common base"
 core.evo_query_engine -> affinities.query_work: "performs"
 core.evo_script_engine -> affinities.evo_script_impl: "executes"
 affinities.evo_script_impl -> external.evo_script_lang: "written in"

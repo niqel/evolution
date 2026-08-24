@@ -34,7 +34,7 @@ phase.
   - Mantiene Execution Context.
   - Reconoce Execution Finalization.
   - Conoce EvoQ y EvoS como Engines base del Core.
-  - Trabaja con Values sobre la base común de EvoV.
+  - Trabaja con Values y Outcomes sobre la base común de EvoV.
 - **Invariants / Distinctions**:
   - `Evo Runtime != Engine`
   - `Evo Runtime != EvoQ`
@@ -47,11 +47,13 @@ phase.
 ### EvoV
 
 - **Category**: Core Component
-- **Definition**: Base común de Values del Core de Evo.
+- **Definition**: Base semántica común de Values y Outcomes (Result y Failure)
+  del Core de Evo.
 - **Relationships**:
   - Proporciona la base semántica común utilizada por Evo Runtime.
   - Proporciona la base semántica común utilizada por EvoQ.
   - Proporciona la base semántica común utilizada por EvoS.
+  - Proporciona la base común para Value, Result y Failure.
 - **Invariants / Distinctions**:
   - `EvoV != Engine`
   - `EvoV != EvoQ`
@@ -72,7 +74,7 @@ phase.
   - Es conocido por Evo Runtime.
   - Realiza Query Work.
   - Puede recibir Values.
-  - Trabaja con Values sobre la base común de EvoV.
+  - Trabaja con Values y Outcomes sobre la base común de EvoV.
   - Puede producir un Value.
   - Puede producir un Failure.
   - El resultado vuelve a participar en la Execution a través de Evo Runtime.
@@ -94,7 +96,7 @@ phase.
   - Es conocido por Evo Runtime.
   - Ejecuta Evo-Script Implementations.
   - Puede recibir Values.
-  - Trabaja con Values sobre la base común de EvoV.
+  - Trabaja con Values y Outcomes sobre la base común de EvoV.
   - Puede producir Value.
   - Puede producir Failure.
   - Las Required Operations transitivas continúan pasando por Evo Runtime.
@@ -342,7 +344,7 @@ phase.
     - same memory instance
     - Rust ownership semantics
 - **Sources**: US-004, US-005, US-007, US-008, US-011, US-012, US-013, US-014
-- **Technical Mapping**: Not defined yet.
+- **Technical Mapping**: `evo-values`
 
 ### Failure
 
@@ -363,8 +365,8 @@ phase.
   - `Failure != successful Value`
   - Un Failure no debe convertirse silenciosamente en un Value correcto.
 - **Sources**: US-001, US-002, US-003, US-004, US-005, US-006, US-007, US-008,
-  US-009, US-012, US-014
-- **Technical Mapping**: Not defined yet.
+  US-009, US-012, US-013, US-014
+- **Technical Mapping**: `evo-values`
 
 ### Result
 
@@ -389,10 +391,10 @@ phase.
 - **Invariants / Distinctions**:
   - `Result != Value`
   - `Result != Failure`
-  - NO asumir representación mediante `std::result::Result`,
-    `Result<Value, Failure>`, Rust enum o struct.
-- **Sources**: US-001, US-004, US-007, US-009, US-012, US-014
-- **Technical Mapping**: Not defined yet.
+  - La semántica funcional de Result no equivale a asumir la sintaxis o tipo
+    concreto de `std::result::Result` en el nivel funcional.
+- **Sources**: US-001, US-004, US-007, US-009, US-012, US-013, US-014
+- **Technical Mapping**: `evo-values`
 
 ---
 
@@ -535,7 +537,7 @@ componentes del Core.
 
 - `Evo Runtime`: architectural / core component platform.
 - `evo-runtime`: technical Cargo package / crate name.
-- `EvoV`: architectural / core component (common Values base).
+- `EvoV`: architectural / core component (common Values and Outcomes base).
 - `evo-values`: technical Cargo package / crate name.
 - `EvoQ`: architectural / core engine (query engine).
 - `evo-query-engine`: technical Cargo package / crate name.
@@ -555,8 +557,9 @@ El Data Dictionary precede a:
 3. Technical Mapping
 4. Rust Implementation
 
-Por lo tanto, salvo los cuatro nombres de crates del Core ya acordados, las
-representaciones técnicas permanecen abiertas.
+Por lo tanto, salvo los nombres de crates del Core y los tipos fundamentales de
+outcomes y valores asignados a `evo-values`, las representaciones técnicas
+concretas permanecen abiertas.
 
 No se decide todavía qué términos serán:
 - `definitions/structs/owned`
@@ -569,7 +572,7 @@ No se decide todavía qué términos serán:
 - `providers`
 
 Tampoco se decide qué conceptos serán structs, enums, function pointers,
-aliases, módulos o archivos.
+aliases, módulos o archivos dentro de `evo-runtime`.
 
 ---
 

@@ -15,15 +15,15 @@ Core base de Evo.
 
 Ese Core está compuesto funcionalmente por:
 
-- EvoV, como base común de Values;
+- EvoV, como base común de Values y Outcomes;
 - EvoQ, como engine base de consultas;
 - EvoS, como engine base para Evo-Script;
 - Evo Runtime, como plataforma responsable de coordinar la ejecución.
 
 EvoQ y EvoS son los engines base conocidos por Evo Runtime dentro del Core.
 
-EvoV no es un engine. EvoV proporciona la base común de Values compartida por
-los componentes del Core.
+EvoV no es un engine. EvoV proporciona la base común de Values y Outcomes
+(Result y Failure) compartida por los componentes del Core.
 
 Estos componentes forman parte del entorno base de Evo y no son Providers
 adicionales.
@@ -41,7 +41,7 @@ define por separado.
 - EvoV forma parte del Core base de Evo.
 - EvoQ forma parte del Core base de Evo.
 - EvoS forma parte del Core base de Evo.
-- EvoV proporciona la base común de Values utilizada por el ecosistema Evo.
+- EvoV proporciona la base común de Values y Outcomes utilizada por el Core de Evo.
 - EvoV no es un engine.
 - EvoQ proporciona el engine base de consultas de Evo.
 - EvoS proporciona el engine base capaz de trabajar con Evo-Script.
