@@ -2,54 +2,55 @@
 
 ## Historia
 
-Como host,
-quiero que Evo Runtime inicie una Aplicación Evo desde su punto de entrada declarado,
-para poder ejecutar la aplicación sin conocer su implementación interna.
+Como un caller/host,
+quiero iniciar una Evo Application proporcionando su acción Run,
+para que Evo Runtime la mantenga activa hasta que termine y me entregue su Result.
 
 ## Contexto
 
-Una Aplicación Evo declara dónde comienza su ejecución.
+Evo Runtime Model A tiene una responsabilidad mínima y acotada: iniciar una Evo
+Application a partir de la acción Run que dicha aplicación proporciona.
 
-El host solicita la ejecución de la aplicación, pero no necesita conocer
-qué unidad ejecutable, engine, provider o implementación interna realiza
-el trabajo de la aplicación.
+Evo Runtime no administra la lógica interna de la aplicación, no resuelve
+operaciones, no determina ni selecciona engines, no administra providers ni
+capacidades, no transporta Values entre operaciones y no mantiene un Context ni
+una entidad Execution propia.
 
-Evo Runtime es responsable de interpretar el punto de entrada declarado
-por la aplicación e iniciar la ejecución desde ese punto.
+El flujo de control es directo:
 
-El mecanismo utilizado para declarar el punto de entrada forma parte del
-modelo de aplicación de Evo Runtime y se definirá por separado.
+1. El Host solicita a Evo Runtime iniciar la aplicación proporcionando su
+   acción Run.
+2. Evo Runtime invoca la acción Run.
+3. La llamada Start permanece activa mientras la acción Run continúe ejecutándose.
+4. Cuando la acción Run concluye y entrega un Result, Evo Runtime retorna dicho
+   Result al Host.
+
+Múltiples llamadas a Start pueden ejecutarse de forma independiente sin compartir
+estado ni interferir funcionalmente entre sí.
 
 ## Criterios de Aceptación
 
-- Un host puede solicitar a Evo Runtime que inicie una Aplicación Evo.
-- La aplicación tiene un único punto de entrada inicial declarado.
-- Evo Runtime determina el punto de entrada declarado sin requerir que el host
-  conozca su implementación interna.
-- Evo Runtime inicia la ejecución desde ese punto de entrada.
-- El host no necesita resolver por sí mismo las dependencias de la aplicación.
-- El host no necesita localizar ni cargar por sí mismo las unidades ejecutables
-  internas.
-- El host no necesita conocer qué engine ejecutará finalmente el punto de entrada.
-- Iniciar una aplicación no requiere cargar capabilities o implementaciones
-  que no estén relacionadas con la ejecución solicitada.
-- Si la aplicación no puede proporcionar un punto de entrada declarado válido,
-  la ejecución no comienza y Evo Runtime reporta un fallo.
-- El resultado de la ejecución se devuelve a través de la frontera de Evo Runtime.
+- Evo Runtime acepta una acción Run proporcionada por la Evo Application.
+- Evo Runtime invoca la acción Run recibida.
+- La ejecución de Start permanece activa mientras la acción Run esté activa.
+- Cuando la acción Run retorna un Result, Start retorna dicho Result al Host.
+- Cada invocación de Start es completamente independiente de otras invocaciones.
+- Múltiples invocaciones de Start pueden coexistir funcionalmente.
+- El Failure de una invocación de Start no implica ni produce el Failure de otra.
+- Evo Runtime no participa ni conoce las operaciones internas, engines o
+  providers que la aplicación utilice tras ser iniciada.
+- No se requiere una entidad Context.
+- No se requiere una entidad Execution.
+- No se requiere un Use Case separado de Finalize (la conclusión de Run finaliza
+  la llamada Start).
 
 ## Fuera de Alcance
 
 Esta historia no define:
 
-- la sintaxis o formato de archivo de `.main`;
-- cómo `.root` realiza la composición;
-- cómo se resuelven las dependencias;
-- cómo se localizan físicamente las unidades ejecutables;
-- el registro de engines;
-- el ciclo de vida de providers;
-- los scopes;
-- la representación concreta de los fallos del Runtime;
-- la representación concreta de los Values devueltos.
-
-Estas responsabilidades se definirán mediante historias separadas,
-casos de uso o capítulos normativos de Evo Runtime.
+- Mecanismos de concurrencia física (hilos del SO, tareas asíncronas, procesos).
+- Estructura o lógica interna de la aplicación ejecutada.
+- Definición interna de los tipos Result o Failure (pertenecientes a `evo-values`).
+- Carga dinámica de extensiones o engines.
+- Formatos de paquetes, ejecutables o manifests.
+- APIs técnicas o firmas concretas en Rust.

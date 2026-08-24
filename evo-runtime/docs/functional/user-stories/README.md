@@ -1,15 +1,15 @@
-# User Stories de Evo Runtime
+# Evo Runtime Model A — Functional User Stories
 
-Este directorio contiene las historias de usuario funcionales que describen las necesidades, capacidades y comportamiento observable de **Evo Runtime** desde la perspectiva del usuario o consumidor del sistema.
+Status: FUNCTIONAL CLOSED
 
-## Convenciones de documentación
+This directory contains the canonical functional User Story for Evo Runtime
+Model A.
 
-1. **Un archivo por historia de usuario**: cada historia de usuario se documenta de forma independiente en su propio archivo Markdown.
-2. **Convención de nombres**:
-   ```text
-   US-001-start-application.md
-   US-002-<descripcion-kebab-case>.md
-   ```
-3. **Enfoque funcional y de comportamiento observable**: las historias describen *qué* necesita el usuario y *cómo se comporta* el sistema ante diferentes escenarios.
-4. **Independencia técnica**: las historias de usuario **no** deben contener detalles de implementación en Rust, ni definir Agents, function pointers, Providers, estructuras internas ni decisiones de bajo nivel.
-5. **Trazabilidad con casos de uso**: posteriormente, cada historia de usuario podrá relacionarse formalmente con uno o más casos de uso de la arquitectura técnica.
+In Model A, Evo Runtime has a single, minimal responsibility: starting an Evo
+Application by invoking its provided Run action and returning the final Result.
+
+## Catalog
+
+| ID | Title |
+| --- | --- |
+| [US-001](US-001-start-application.md) | Iniciar una Aplicación Evo (Start an Evo Application) |

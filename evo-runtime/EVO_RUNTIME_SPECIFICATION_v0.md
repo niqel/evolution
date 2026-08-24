@@ -1,127 +1,169 @@
 # Evo Runtime Specification v0
 
-Evo Runtime es la plataforma de ejecución y composición del ecosistema Evo. Su propósito es definir de manera formal y determinista cómo se inicia, compone, prepara y ejecuta una aplicación Evo.
+Status: MODEL A CLOSED
 
-El Runtime establece la frontera operativa entre unidades ejecutables, capabilities, contracts, providers y contextos de ejecución. Su diseño permite la composición modular y la carga bajo demanda, garantizando que una aplicación solo cargue y prepare los recursos estrictamente necesarios para cada ejecución.
+## 1. Purpose
 
-Esta especificación mantiene una separación arquitectónica estricta:
-- **Evo-Script**: lenguaje de scripting autocontenido cuyo comportamiento en archivos `.efn` se encuentra formalizado de manera independiente en su propia especificación.
-- **Evo Runtime**: plataforma que interpreta la composición y selección de entrada de una aplicación para preparar, resolver y ejecutar unidades ejecutables y capabilities.
-- **Engines y productos (Evo-Shell, Evo-CLI, Evo-UI, EvoQ)**: herramientas e interfaces construidas sobre Evo Runtime que reutilizan su infraestructura de ejecución.
-
----
-
-## Índice
-
-1. Propósito y alcance de Evo Runtime v0
-2. Modelo de aplicación Evo
-3. Archivo .main
-4. Archivo .root
-5. Unidades ejecutables
-6. Resolución y composición
-7. Dependency Closure
-8. Carga y preparación bajo demanda
-9. Values en la frontera del Runtime
-10. Invocation y Execution Context
-11. Capabilities
-12. Contracts
-13. Providers
-14. Scopes
-15. Pipelines entre capabilities y providers
-16. Failures y fronteras de error
-17. Lifecycle del Runtime
-18. Determinismo y reglas de resolución
-19. Gramática y formato consolidado de .main y .root
-20. Aplicación canónica autocontenida
+Evo Runtime Model A defines the minimal platform boundary for starting an Evo
+Application. In Model A, the Runtime has a single, minimal responsibility:
+initiating execution by invoking the `Run` action provided by an Evo Application,
+maintaining the invocation active while the application runs, and delivering the
+final `Result` to the caller.
 
 ---
 
-## Mapa inicial de la especificación
+## 2. Runtime Boundary
 
-### 1. Propósito y alcance de Evo Runtime v0
-Define la frontera del Runtime respecto a Evo-Script, hosts, engines y providers.
+The architectural boundary of Evo Runtime Model A is defined by:
+- Exactly **one Use Case** provided by the Runtime (`Start`).
+- Exactly **one Requester** consumed from the application (`Run`).
+- Exactly **one outcome type** (`Result`) defined by `evo-values`.
 
-### 2. Modelo de aplicación Evo
-Define conceptualmente qué elementos forman una aplicación ejecutable por Evo Runtime.
-
-### 3. Archivo .main
-Formalizará cómo una aplicación identifica su operación inicial.
-
-### 4. Archivo .root
-Formalizará el composition root funcional de una aplicación.
-
-### 5. Unidades ejecutables
-Definirá qué elementos puede preparar e invocar el Runtime y cómo se relacionan con unidades como `.efn`.
-
-### 6. Resolución y composición
-Definirá cómo una dependencia o capability requerida se resuelve contra la composición declarada.
-
-### 7. Dependency Closure
-Definirá cómo se determina el conjunto transitivo de elementos requeridos por una ejecución.
-
-### 8. Carga y preparación bajo demanda
-Formalizará la diferencia entre elementos conocidos, resueltos, cargados, preparados e inicializados.
-
-### 9. Values en la frontera del Runtime
-Definirá cómo argumentos y resultados atraviesan la frontera entre Runtime, unidades ejecutables y capabilities.
-
-### 10. Invocation y Execution Context
-Formalizará cómo se invoca una operación y qué contexto runtime participa durante su evaluación.
-
-### 11. Capabilities
-Definirá qué representa una capacidad disponible para una ejecución.
-
-### 12. Contracts
-Definirá la descripción abstracta de operaciones que pueden ser satisfechas por implementaciones externas.
-
-### 13. Providers
-Definirá cómo infraestructura, librerías Rust, sistema operativo o servicios externos implementan capabilities/contracts.
-
-### 14. Scopes
-Definirá los contextos runtime asociados a capabilities/providers sin confundir Scope con prompt, Provider o lenguaje Evo-Script.
-
-### 15. Pipelines entre capabilities y providers
-Definirá cómo Values pueden fluir entre operaciones pertenecientes a diferentes capabilities/providers.
-
-### 16. Failures y fronteras de error
-Distinguirá errores de composición, carga, resolución, provider e `EvaluationFailure`.
-
-### 17. Lifecycle del Runtime
-Definirá creación, preparación, ejecución, reutilización y finalización de recursos/runtime contexts.
-
-### 18. Determinismo y reglas de resolución
-Definirá cuándo una composición es válida y cómo evitar resolución ambigua.
-
-### 19. Gramática y formato consolidado de .main y .root
-Consolidará únicamente después de cerrar la semántica previa la sintaxis normativa de ambos formatos.
-
-### 20. Aplicación canónica autocontenida
-Servirá como prueba integral de la especificación del Runtime, de forma análoga al programa canónico de Evo-Script v0.
+```text
+Caller / Host
+     │
+     │ calls Start(Run)
+     ▼
+┌───────────────────────────────┐
+│ Evo Runtime                   │
+│                               │
+│  Use Case: Start              │
+│       │                       │
+│       │ calls run()           │
+│       ▼                       │
+│  Requester: Run               │
+└───────┬───────────────────────┘
+        │
+        ▼
+Evo Application (active)
+        │
+        │ returns Result
+        ▼
+   Result (evo-values)
+```
 
 ---
 
-## Principios rectores de diseño
+## 3. Start Use Case
 
-Los siguientes principios arquitectónicos guían la dirección de la futura especificación:
-
-1. **Carga bajo demanda (On-demand / Lazy execution)**: Evo Runtime debe poder ejecutar una aplicación sin cargar ni inicializar capacidades que dicha ejecución no necesita.
-2. **Diferenciación de estados de ciclo de vida**: se distingue conceptualmente entre los estados de un elemento dentro del runtime:
-   ```text
-   known != resolved != loaded != prepared != initialized
-   ```
-3. **Composición abstracta desacoplada**: la composición completa de una aplicación puede ser conocida y validada sin necesidad de materializar todas sus implementaciones en memoria.
-4. **Desacoplamiento de artefactos de configuración**:
-   - `.root` representa la declaración de composición; **no** es el Runtime.
-   - `.main` representa la selección de inicio; **no** es el Runtime.
-   - **Evo Runtime** es la plataforma que interpreta y utiliza ambos para preparar y orquestar una ejecución.
-5. **Independencia del lenguaje Evo-Script**: Evo-Script define formalmente el comportamiento de programas `.efn` y permanece completamente independiente de la semántica del Runtime, de Evo-Shell y de providers concretos.
-6. **Reutilización transversal por engines**: Evo Runtime proporciona la infraestructura base sobre la cual engines como Evo-CLI, Evo-UI o EvoQ, así como hosts externos, pueden integrarse de manera homogénea.
-7. **Providers como frontera de infraestructura**: los providers representan adaptadores de infraestructura o implementaciones externas, cuyo modelo exacto se formalizará en el Capítulo 13.
-8. **Claridad conceptual de Scope**: el concepto de Scope designa un contexto runtime de resolución y no debe confundirse con prompts, providers ni construcciones léxicas del lenguaje Evo-Script.
+- **Category**: Use Case (Provided by `evo-runtime`)
+- **Definition**: `definitions/use_cases/start.rs`
+- **Function Pointer Type**: `pub type Start = fn(run_request::Request) -> Result;`
+- **Semantics**:
+  1. Receives the `Run` requester function pointer from the caller.
+  2. Invokes `run()`.
+  3. Remains active on the call stack for the duration of `run()`.
+  4. Returns the `Result` produced by `run()` directly to the caller.
+  5. Does not require explicit `stop()`, `close()`, or `finalize()` operations;
+     termination of `run()` naturally concludes `start()`.
 
 ---
 
-## Estado inicial
+## 4. Run Requester
 
-Documento creado como scaffold de diseño y mapa de trabajo.
-Ningún capítulo normativo ha sido desarrollado todavía.
+- **Category**: Requester (Consumed by `evo-runtime` from the Evo Application)
+- **Definition**: `definitions/requesters/run_request.rs`
+- **Function Pointer Type**: `pub type Request = fn() -> Result;`
+- **Semantics**:
+  1. Represents the entry point action that the application provides to the
+     Runtime.
+  2. Encapsulates the application's entire execution lifecycle.
+  3. Returns `Result` upon completion.
+
+---
+
+## 5. Result
+
+- `Result` is the canonical outcome type representing the conclusion of an
+  execution (success or failure).
+- Defined and owned by `evo-values`.
+- From the perspective of Evo Runtime, `Result` is a concrete outcome type;
+  no generics are exposed across the Runtime boundary.
+- `Result != Failure`: a failed outcome is expressed through the failure branch
+  of `Result`.
+
+---
+
+## 6. Independent Start Invocations
+
+Evo Runtime supports multiple concurrent or sequential Start invocations:
+
+```text
+Start(run_app_1)  ──►  App 1  ──►  Result 1
+Start(run_app_2)  ──►  App 2  ──►  Result 2
+```
+
+- Each invocation of `Start` is isolated and independent.
+- Failure of one application does not affect another application.
+- Evo Runtime does not share state across invocations.
+
+---
+
+## 7. Runtime Non-Responsibilities
+
+Evo Runtime Model A deliberately excludes all internal coordination
+mechanisms:
+- **No Context struct**: The Runtime does not maintain execution context or
+  session state.
+- **No Execution entity**: The execution lifecycle is represented solely by the
+  active call stack of `Start(run)`.
+- **No Engine resolution**: The Runtime does not discover, load, or select
+  engines (e.g. EvoS, EvoQ).
+- **No Provider / Contract management**: Providers and capabilities are not
+  managed by the Runtime.
+- **No Value transport**: Data flow between operations occurs directly inside
+  the application.
+- **No Operation resolution**: The Runtime does not resolve dependencies or
+  symbols.
+
+---
+
+## 8. Engines and Applications
+
+Once `Start` invokes `run()`, the Evo Application executes its domain logic
+directly with its own dependencies, libraries, and engines:
+
+```text
+Evo Application
+  ├── Parsers / Lexers
+  ├── Evo-Script Engine (EvoS)
+  ├── Query Engine (EvoQ)
+  └── External Providers / Libraries
+```
+
+Evo Runtime does not act as an intermediary, service locator, or message bus for
+these internal interactions.
+
+---
+
+## 9. Future Compiled Engine Extension
+
+Future extension architectures may support installing and loading compiled
+engines dynamically without recompiling the product.
+
+This future capability:
+- Remains completely outside the scope of Model A.
+- Does not introduce engine registries or dynamic loaders into `evo-runtime`.
+- Will be defined in a separate technical extension specification.
+
+---
+
+## 10. Technical Mapping
+
+| Concept | Architectural Role | Technical Definition File | Technical Type |
+| --- | --- | --- | --- |
+| **Start** | Use Case | `definitions/use_cases/start.rs` | `pub type Start = fn(run_request::Request) -> Result;` |
+| **Run** | Requester | `definitions/requesters/run_request.rs` | `pub type Request = fn() -> Result;` |
+| **Starter** | Agent (future) | `agents/starter/start.rs` | `pub fn start(run: run_request::Request) -> Result` |
+| **Result** | Outcome Type | `evo-values` | Outcome type from `evo-values` |
+
+---
+
+## 11. Closed Invariants
+
+1. `Start != Run`
+2. `Result != Failure`
+3. `Start(run)` receives the function pointer `run`, not the evaluated result.
+4. Evo Runtime provides exactly 1 Use Case (`Start`) and consumes exactly 1
+   Requester (`Run`).
+5. Evo Runtime has no Context, no Execution entity, and no Providers in Model A.

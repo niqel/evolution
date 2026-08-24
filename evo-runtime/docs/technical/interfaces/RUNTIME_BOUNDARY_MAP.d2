@@ -1,0 +1,46 @@
+direction: right
+
+title: "Evo Runtime Model A — Boundary Map"
+
+host: "Host\n(External Caller)" {
+  style.fill: "#f8fafc"
+  style.stroke: "#475569"
+  style.stroke-width: 2
+}
+
+runtime: "Evo Runtime [crate: evo-runtime]" {
+  style.fill: "#eef2ff"
+  style.stroke: "#4338ca"
+  style.stroke-width: 2
+
+  start_uc: "Start\n[USE CASE]\n[function pointer: fn(Request) -> Result]" {
+    style.fill: "#c7d2fe"
+    style.stroke: "#3730a3"
+    style.stroke-width: 2
+  }
+
+  run_req: "Run\n[REQUESTER]\n[function pointer: fn() -> Result]" {
+    style.fill: "#fed7aa"
+    style.stroke: "#c2410c"
+    style.stroke-width: 2
+  }
+}
+
+app: "Evo Application\n(Active Execution)" {
+  style.fill: "#f0fdf4"
+  style.stroke: "#15803d"
+  style.stroke-width: 2
+}
+
+result_out: "Result\n[crate: evo-values]" {
+  style.fill: "#fef9c3"
+  style.stroke: "#854d0e"
+  style.stroke-width: 2
+}
+
+# Interactions
+host -> runtime.start_uc: "1. calls Start(run)"
+runtime.start_uc -> runtime.run_req: "2. invokes"
+runtime.run_req -> app: "3. executes"
+app -> result_out: "4. produces"
+result_out -> host: "5. returned by Start"
