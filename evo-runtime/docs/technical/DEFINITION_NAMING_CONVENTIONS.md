@@ -69,6 +69,17 @@ Cada archivo representa **una única acción**.
 1. **Nombre de archivo**: coincide con la acción o `action_qualifier.rs` (por ejemplo, `copy.rs`, `copy_full.rs`, `rename.rs`).
 2. **Firma arquitectónica**: el archivo declara la firma completa mediante un alias público de tipo function pointer (`pub type ... = fn(...);`).
 3. **Nombre del tipo**: utiliza `PascalCase` derivado directamente del nombre de la acción.
+4. **Responsabilidad de acción proporcionada (*Determine* vs *Resolve*)**: los nombres de los Use Cases expresan la acción y responsabilidad proporcionada por Evo Runtime. Se distingue rigurosamente entre:
+   - `determine`: objetivo y responsabilidad de la acción provista por el Use Case (determinar un resultado o satisfacer una necesidad).
+   - `resolve`: mecanismo interno o estrategia de resolución utilizado por componentes resolvedores (`resolvers/`).
+
+   **Ejemplo canónico (UC-002)**:
+   - Functional Use Case: *Resolve Required Operation*
+   - Technical Action / Use Case: `determine_implementation`
+   - Archivo de definición: `definitions/use_cases/determine_implementation.rs`
+   - Tipo function pointer: `pub type DetermineImplementation = fn(...);`
+
+   El identificador `resolve` queda reservado para los módulos de resolución interna (`resolvers/`) y **no** se utiliza como nombre de Use Case para evitar ambigüedades arquitectónicas.
 
 ### Ejemplos conceptuales
 ```rust
@@ -77,6 +88,9 @@ pub type Copy = fn(...);
 
 // definitions/use_cases/copy_full.rs
 pub type CopyFull = fn(...);
+
+// definitions/use_cases/determine_implementation.rs
+pub type DetermineImplementation = fn(...);
 ```
 
 
