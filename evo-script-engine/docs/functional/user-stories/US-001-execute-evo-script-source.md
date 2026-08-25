@@ -23,7 +23,7 @@ The Evo-Script Engine is the execution component responsible for processing and
 evaluating complete Evo-Script source programs.
 
 A program in Evo-Script v0 lives entirely within a single `.efn` source file and
-declares exactly one public entry function (`public fn`), alongside optional
+declares exactly one public function (`public fn`), alongside optional
 private functions, structs, and enums local to the file.
 
 The Consumer provides the **complete source text** of the program directly to
