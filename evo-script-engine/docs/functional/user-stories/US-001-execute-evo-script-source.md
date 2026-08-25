@@ -85,10 +85,10 @@ the parameters declared by the program's single public function.
 4. **Strict Positional Mapping**: Mapping from Invocation Values to parameters
    is strictly positional:
    ```text
-   InvocationValue[0] ──► Parameter[0]
-   InvocationValue[1] ──► Parameter[1]
+   InvocationValue[0]     ──► Parameter[0]
+   InvocationValue[1]     ──► Parameter[1]
    ...
-   InvocationValue[N] ──► Parameter[N]
+   InvocationValue[N - 1] ──► Parameter[N - 1]
    ```
 5. **Declaration Order**: The order of Invocation Values corresponds directly to
    the declaration order of parameters in the public function signature.
