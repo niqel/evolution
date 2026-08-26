@@ -1,10 +1,9 @@
-# Evo Runtime Definition Naming Conventions
+# Convenciones de Nomenclatura para Definiciones de Evo Runtime
 
 Este documento establece formalmente el vocabulario, las responsabilidades y las convenciones de nombres utilizadas para estructurar las **definitions** e **implementaciones** de la arquitectura técnica en Rust de **Evo Runtime**.
 
 > [!NOTE]
 > Este documento técnico pertenece exclusivamente a la arquitectura de implementación en Rust de `evo-runtime`. **No** forma parte de la sintaxis ni semántica de Evo-Script, ni altera el contenido de `EVO_SCRIPT_SPECIFICATION_v0.md` o `EVO_RUNTIME_SPECIFICATION_v0.md`. La especificación normativa define *qué* debe hacer el Runtime; este documento define *cómo* nombramos las piezas técnicas de su implementación.
-
 
 ---
 
@@ -20,18 +19,17 @@ Se establecen las siguientes tres categorías de definitions:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                            ARCHITECTURAL BOUNDARY                           │
+│                            FRONTERA ARQUITECTÓNICA                          │
 ├───────────────────────────────┬─────────────────────────────────────────────┤
-│ Definitions (Function Pointer)│ Implementations (Concrete Functions)        │
+│ Definitions (Function Pointer)│ Implementaciones (Funciones Concretas)      │
 ├───────────────────────────────┼─────────────────────────────────────────────┤
 │ Use Case  (action.rs)         │ Agent    (agents/<subject>/<action>.rs)     │
 │ Contract  (action_provide.rs) │ Provider (providers/<provider>/provide.rs)  │
-│ Requester (action_request.rs) │ Consumer / Requester implementation         │
+│ Requester (action_request.rs) │ Implementación de Consumer / Requester      │
 └───────────────────────────────┴─────────────────────────────────────────────┘
 ```
 
 > **Regla fundamental**: `Use Case`, `Contract` y `Requester` son *definitions* expresadas mediante function pointers. `Agent` y `Provider` son *implementaciones concretas* de funciones cuyas firmas satisfacen dichas definiciones.
-
 
 ---
 
@@ -51,7 +49,6 @@ action_qualifier.rs
 - `rename.rs`
 
 Esta convención es deliberada: permite que al listar o explorar el árbol de archivos alfabéticamente, todas las variantes de una misma familia de acción permanezcan agrupadas de forma contigua. Nombres como `copy_full.rs` son intencionales y **no** deben alterarse a `full_copy.rs`.
-
 
 ---
 
@@ -88,7 +85,6 @@ agents/
     └── start.rs   // pub fn start(run: run_request::Request) -> Result
 ```
 
-
 ---
 
 ## 4. Agents
@@ -124,7 +120,6 @@ Conceptualmente: `Subject.action` (por ejemplo, `Copier.copy` o `Copier.copy_ful
    ```
 3. **Preservación de firma**: el Agent **no** redefine la firma arquitectónica; debe satisfacer la firma declarada por la definition del Use Case correspondiente.
 
-
 ---
 
 ## 5. Contracts
@@ -152,7 +147,6 @@ Un **Contract** describe una capacidad requerida por el sistema que será satisf
    ```
 3. **Diferenciación por namespace**: `copy_provide::Provide` y `copy_full_provide::Provide` son Contracts distintos; el contexto semántico de la acción lo aporta el módulo/archivo contenedor, no el identificador del tipo.
 
-
 ---
 
 ## 6. Providers
@@ -168,7 +162,6 @@ Un **Provider** es una implementación concreta de infraestructura externa (sist
    }
    ```
 2. **Aislamiento de infraestructura**: el Provider encapsula las dependencias externas o de bajo nivel respecto al caso de uso que lo consume.
-
 
 ---
 
@@ -198,7 +191,6 @@ Representa la frontera de solicitud a través de la cual un consumidor invoca un
    ```
 4. **Principio de necesidad**: un Requester solo se define cuando existe un consumidor que realmente requiere esa frontera explícita; no se crean capas vacías por mera simetría arquitectónica.
 
-
 ---
 
 ## 8. Resumen de Convenciones
@@ -214,7 +206,6 @@ Representa la frontera de solicitud a través de la cual un consumidor invoca un
 - **Use Case / Contract / Requester**: definiciones abstractas expresadas exclusivamente mediante *function pointers*.
 - **Agent / Provider**: implementaciones concretas expresadas como *funciones regulares* en Rust.
 
-
 ---
 
 ## 9. Convenciones sobre Estructuras de Datos
@@ -222,7 +213,6 @@ Representa la frontera de solicitud a través de la cual un consumidor invoca un
 Las definiciones de estructuras de datos técnicas de Evo Runtime se mantendrán conceptualmente separadas de las definiciones de acciones.
 
 La arquitectura distinguirá formalmente entre estructuras de datos con propiedad (*owned*) y con préstamo (*borrowed*). Su diseño, nomenclatura y ubicación dentro del árbol técnico se formalizarán en el Data Dictionary y en la especificación técnica correspondiente cuando se desarrollen las necesidades concretas de datos.
-
 
 ---
 
