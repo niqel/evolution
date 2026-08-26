@@ -1,33 +1,33 @@
-# Evo-Script Engine — Functional Documentation
+# Evo-Script Engine — Documentación Funcional
 
 Status: FUNCTIONAL DESIGN — NOT CLOSED
 
-This directory contains the functional design documentation for the
-`evo-script-engine` component.
+Este directorio contiene la documentación de diseño funcional para el componente
+`evo-script-engine`.
 
-## Architectural Design Sequence
+## Secuencia de Diseño Arquitectónico
 
-The formal development and specification of `evo-script-engine` follows this
-canonical design sequence:
+El desarrollo formal y la especificación de `evo-script-engine` sigue esta
+secuencia de diseño canónica:
 
-1. **User Stories**: Capturing functional goals from the perspective of Consumers.
-2. **Data Dictionary**: Consolidating canonical functional vocabulary.
-3. **Use Cases**: Deriving individual discrete functional actions.
-4. **Functional Coverage**: Verifying complete traceability from stories to use cases.
-5. **Functional Model Closed**: Formal closure of the functional model.
-6. **Technical Interfaces**: Defining boundary function pointers and entry points.
-7. **Technical Data Model**: Defining technical representations and ownership.
-8. **Sequence Diagrams**: Documenting runtime interaction flows.
-9. **Structure Diagrams**: Documenting modular and component relationships.
-10. **Technical Mapping**: Mapping definitions to concrete files and types.
-11. **Technical Model Closed**: Formal closure of the technical design.
-12. **Evo-Script Engine Specification v0**: Normative specification document.
-13. **Rust Implementation**: Concrete crate code and automated verification.
+1. **User Stories**: Captura de objetivos funcionales desde la perspectiva de los Consumers.
+2. **Data Dictionary**: Consolidación del vocabulario funcional canónico.
+3. **Use Cases**: Derivación de acciones funcionales discretas individuales.
+4. **Functional Coverage**: Verificación de trazabilidad completa desde historias a use cases.
+5. **Functional Model Closed**: Cierre formal del modelo funcional.
+6. **Technical Interfaces**: Definición de function pointers de frontera y puntos de entrada.
+7. **Technical Data Model**: Definición de representaciones técnicas y ownership.
+8. **Sequence Diagrams**: Documentación de flujos de interacción en runtime.
+9. **Structure Diagrams**: Documentación de relaciones modulares y de componentes.
+10. **Technical Mapping**: Mapeo de definiciones a archivos y tipos concretos.
+11. **Technical Model Closed**: Cierre formal del diseño técnico.
+12. **Evo-Script Engine Specification v0**: Documento de especificación normativa.
+13. **Rust Implementation**: Código concreto del crate y verificación automatizada.
 
 ---
 
-## Directory Organization
+## Organización del Directorio
 
-- [`user-stories/`](user-stories/README.md): Candidate and closed functional User Stories.
-- [`DATA_DICTIONARY.md`](DATA_DICTIONARY.md): Canonical functional vocabulary for evo-script-engine v0 (*FUNCTIONAL CLOSED*).
-- [`use-cases/`](use-cases/README.md): Candidate and closed functional Use Cases (*Not Started*).
+- [`user-stories/`](user-stories/README.md): User Stories funcionales candidatas y cerradas (*FUNCTIONAL CLOSED*).
+- [`DATA_DICTIONARY.md`](DATA_DICTIONARY.md): Vocabulario funcional canónico para evo-script-engine v0 (*FUNCTIONAL CLOSED*).
+- [`use-cases/`](use-cases/README.md): Use Cases funcionales candidatos y cerrados (*FUNCTIONAL DESIGN — IN PROGRESS*).
