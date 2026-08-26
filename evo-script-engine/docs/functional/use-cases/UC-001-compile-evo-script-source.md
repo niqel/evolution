@@ -133,7 +133,8 @@ El Use Case se inicia cuando el `Consumer` proporciona exactamente un
 1. Durante el procesamiento del `Source Text`, el `Evo-Script Engine` detecta que
    alguna regla léxica, sintáctica o semántica de
    `Evo-Script Language Specification v0` no se cumple.
-2. La compilación se detiene y **no** produce un `Compiled Program` exitoso.
+2. La compilación no concluye exitosamente y **no** produce un `Compiled Program`
+   exitoso.
 3. Se genera información diagnóstica representada funcionalmente mediante
    `Failure`.
 4. El `Failure` contiene:
@@ -211,7 +212,7 @@ Trigger
     Consumer solicita Compile con exactamente 1 Source Text
 
 Input
-    Source Text (completo, 1 unidad .efn)
+    Source Text (completo)
 
 Procesamiento Funcional
     Evo-Script Language Specification v0
