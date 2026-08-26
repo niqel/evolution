@@ -2,5 +2,6 @@
 
 Status: TECHNICAL DESIGN — NOT STARTED
 
-This directory will contain technical data model specifications, type
-classifications, and component ownership mappings for `evo-script-engine`.
+Este directorio contendrá especificaciones del modelo de datos técnico,
+clasificaciones de tipos y mapeos de component ownership para
+`evo-script-engine`.
