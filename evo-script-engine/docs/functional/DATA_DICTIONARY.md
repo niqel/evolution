@@ -169,7 +169,7 @@ layouts, or binary formats.
   - Minimal v0 data elements:
     ```text
     Failure
-    ├── description: string (mandatory diagnostic explanation)
+    ├── description: exactly 1
     └── source line: 0..1 (1-based line number in Source Text, if applicable)
     ```
   - **Description**: Textual explanation of the failure (always present).
@@ -304,7 +304,7 @@ Result
   └── failure branch ──────────────────────► Expresses Failure
 
 Failure
-  ├── description ─────────────────────────► Exactly 1 (mandatory string)
+  ├── description ─────────────────────────► Exactly 1 (mandatory textual description)
   └── source line ─────────────────────────► 0..1 (1-based, present when line exists)
 
 Compile
