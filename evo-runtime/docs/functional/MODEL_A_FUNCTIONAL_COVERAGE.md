@@ -2,72 +2,75 @@
 
 Status: FUNCTIONAL CLOSED
 
-## Purpose
+## Propósito
 
-This document records the completed functional coverage of Evo Runtime Model A.
+Este documento registra la cobertura funcional completada de Evo Runtime Model A.
 
-In Model A, Evo Runtime has a single, minimal responsibility: starting an Evo
-Application by invoking its provided Run action and returning the final Result.
+En Model A, Evo Runtime tiene una responsabilidad única y mínima: iniciar una
+Evo Application invocando su acción Run proporcionada y retornando el Result
+final.
 
-## Functional Scope and Traceability
+## Alcance Funcional y Trazabilidad
 
-The functional coverage of Model A is fully covered by exactly one User Story
-and one Use Case:
+La cobertura funcional de Model A está completamente cubierta por exactamente
+una User Story y un Use Case:
 
-| User Story | Functional Responsibility | Primary Use Case |
+| User Story | Responsabilidad Funcional | Primary Use Case |
 | --- | --- | --- |
-| [US-001](user-stories/US-001-start-application.md) | Start an Evo Application | [UC-001](use-cases/UC-001-start-evo-application.md) |
+| [US-001](user-stories/US-001-start-application.md) | Iniciar una Evo Application | [UC-001](use-cases/UC-001-start-evo-application.md) |
 
-## Functional Execution Path
+## Ruta de Ejecución Funcional
 
-The canonical execution path of Model A is:
+La ruta de ejecución canónica de Model A es:
 
 ```text
 Host
   │
-  │ calls Start(Run)
+  │ llama Start(Run)
   ▼
 Evo Runtime
   │
-  │ invokes Run()
+  │ invoca Run()
   ▼
-Evo Application (Run active)
+Evo Application (Run activo)
   │
-  │ completes with Result
+  │ concluye con Result
   ▼
 Evo Runtime
   │
-  │ returns Result
+  │ retorna Result
   ▼
 Host
 ```
 
-## Independence of Multiple Start Invocations
+## Independencia de Múltiples Invocaciones de Start
 
-Evo Runtime supports multiple independent Start invocations:
+Evo Runtime soporta múltiples invocaciones independientes de Start:
 
 ```text
 Host / Caller
-  ├── Start(Run_A) ──► Application A (active) ──► Result A
-  ├── Start(Run_B) ──► Application B (active) ──► Result B
-  └── Start(Run_C) ──► Application C (active) ──► Result C
+  ├── Start(Run_A) ──► Application A (activa) ──► Result A
+  ├── Start(Run_B) ──► Application B (activa) ──► Result B
+  └── Start(Run_C) ──► Application C (activa) ──► Result C
 ```
 
-- Each Start invocation operates independently.
-- Failure of Application A does not cause failure of Application B or C.
-- There is no shared Context or Execution tracking entity in Evo Runtime.
+- Cada invocación de Start opera de manera independiente.
+- El fallo de la Application A no produce el fallo de la Application B o C.
+- No existe ningún Context compartido ni entidad de seguimiento de Execution en
+  Evo Runtime.
 
-## Non-Responsibilities of Evo Runtime Model A
+## No Responsabilidades de Evo Runtime Model A
 
-All internal operations, engine executions, and provider integrations occur
-outside of Evo Runtime:
+Todas las operaciones internas, ejecuciones de engines e integraciones de
+providers ocurren fuera de Evo Runtime:
 
-- Evo Runtime does **not** resolve operations or dependencies.
-- Evo Runtime does **not** select or load engines (such as EvoS or EvoQ).
-- Evo Runtime does **not** manage providers, capabilities, or contracts.
-- Evo Runtime does **not** parse commands or execute Evo-Script files.
-- Evo Runtime does **not** maintain an internal Context or Execution entity.
-- Evo Runtime does **not** transport Values across internal application boundaries.
+- Evo Runtime **no** resuelve operaciones ni dependencias.
+- Evo Runtime **no** selecciona ni carga engines (como EvoS o EvoQ).
+- Evo Runtime **no** administra providers, capabilities ni contracts.
+- Evo Runtime **no** parsea comandos ni ejecuta archivos Evo-Script.
+- Evo Runtime **no** mantiene un Context interno ni una entidad Execution.
+- Evo Runtime **no** transporta Values a través de las fronteras internas de la
+  aplicación.
 
-Once Start invokes Run, the application interacts directly with its own
-libraries, engines, and providers.
+Una vez que Start invoca a Run, la aplicación interactúa directamente con sus
+propias bibliotecas, engines y providers.
