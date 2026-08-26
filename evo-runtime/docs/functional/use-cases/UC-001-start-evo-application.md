@@ -2,7 +2,7 @@
 
 Status: FUNCTIONAL
 
-## Goal
+## Objetivo
 
 Evo Runtime inicia una Evo Application ejecutando la acción Run que dicha
 aplicación proporciona, manteniéndose activo mientras Run se ejecuta y
@@ -13,12 +13,12 @@ retornando su Result final hacia el Host.
 El Host solicita a Evo Runtime iniciar una Evo Application proporcionando su
 acción Run.
 
-## Preconditions
+## Precondiciones
 
 - Existe una Evo Application que proporciona una acción Run compatible.
 - Evo Runtime está listo para recibir la solicitud del Host.
 
-## Main Flow
+## Flujo Principal
 
 1. El Host invoca la acción Start de Evo Runtime, pasando la acción Run de la
    Evo Application.
@@ -30,16 +30,16 @@ acción Run.
 6. Evo Runtime recibe el Result de Run.
 7. Evo Runtime retorna el Result al Host, concluyendo la llamada a Start.
 
-## Successful Outcome
+## Outcome Exitoso
 
 La aplicación finaliza su ejecución y entrega un Result exitoso al Host.
 
-## Failure Outcomes
+## Outcomes de Fallo
 
 La aplicación finaliza con un fallo y entrega un Result que expresa un Failure
 al Host.
 
-## Invariants
+## Invariantes
 
 - `Start != Run`: Start es la responsabilidad de Evo Runtime; Run es la acción
   proporcionada por la Evo Application.
@@ -54,11 +54,11 @@ al Host.
   aplicación.
 - `Result != Failure` (el modelo de resultados pertenece a `evo-values`).
 
-## Related User Stories
+## User Stories Relacionadas
 
 - US-001 (Iniciar una Aplicación Evo)
 
-## Related Data Dictionary Terms
+## Términos del Data Dictionary Relacionados
 
 - Evo Runtime
 - Host
@@ -68,7 +68,7 @@ al Host.
 - Result
 - Failure
 
-## Out of Scope
+## Fuera de Alcance
 
 - Concurrencia a bajo nivel (hilos del SO, tareas asíncronas, schedulers).
 - Resolución de operaciones o dependencias internas.
