@@ -73,9 +73,9 @@ Engine.
 - **Format Open**: The internal technical representation of a Compiled Program
   is not frozen at this functional stage (e.g. bytecode, IR, validated AST, or
   binary format remain open technical candidates).
-- **No Persistence in Engine**: The Engine produces the Compiled Program in
-  memory and returns it to the Consumer. Persisting, caching, or writing the
-  Compiled Program to storage is the responsibility of the Consumer or external
+- **No Persistence in Engine**: The Engine produces the Compiled Program and
+  returns it to the Consumer. Persisting, caching, or writing the Compiled
+  Program to storage is the responsibility of the Consumer or external
   components.
 
 ---
@@ -121,8 +121,8 @@ Engine.
 9. Compile does not accept or require Invocation Values.
 10. Compile does not persist, write to disk, or store the resulting Compiled
     Program.
-11. Once the Compiled Program (or compilation failure) is returned, the Compile
-    invocation is complete.
+11. The Compile invocation completes after either successful production of a
+    Compiled Program or failed compilation.
 
 ---
 
