@@ -2,7 +2,7 @@ direction: right
 
 title: "Evo Runtime Model A — Boundary Map"
 
-host: "Host\n(External Caller)" {
+host: "Host\n(Caller externo)" {
   style.fill: "#f8fafc"
   style.stroke: "#475569"
   style.stroke-width: 2
@@ -26,7 +26,7 @@ runtime: "Evo Runtime [crate: evo-runtime]" {
   }
 }
 
-app: "Evo Application\n(Active Execution)" {
+app: "Evo Application\n(Ejecución activa)" {
   style.fill: "#f0fdf4"
   style.stroke: "#15803d"
   style.stroke-width: 2
@@ -39,8 +39,8 @@ result_out: "Result\n[crate: evo-values]" {
 }
 
 # Interactions
-host -> runtime.start_uc: "1. calls Start(run)"
-runtime.start_uc -> runtime.run_req: "2. invokes"
-runtime.run_req -> app: "3. executes"
-app -> result_out: "4. produces"
-result_out -> host: "5. returned by Start"
+host -> runtime.start_uc: "1. llama Start(run)"
+runtime.start_uc -> runtime.run_req: "2. invoca"
+runtime.run_req -> app: "3. ejecuta"
+app -> result_out: "4. produce"
+result_out -> host: "5. retornado por Start"
