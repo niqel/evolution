@@ -1,9 +1,21 @@
 # Evo-Script Engine — Use Cases
 
-Status: NOT STARTED
+Status: FUNCTIONAL DESIGN — IN PROGRESS
 
-This directory will contain the functional Use Cases for `evo-script-engine`.
+Este directorio contiene los Use Cases funcionales de `evo-script-engine` v0.
 
-Use Cases will be derived systematically once the candidate User Stories and the
-Data Dictionary for `evo-script-engine` have been reviewed, consolidated, and
-closed.
+Los Use Cases se derivan formalmente de las User Stories funcionalmente cerradas
+y del Data Dictionary funcionalmente cerrado.
+
+## Catálogo de Use Cases
+
+| Use Case | Descripción | Estado |
+| --- | --- | --- |
+| [UC-001](UC-001-compile-evo-script-source.md) | Compilar Source Text de Evo-Script | FUNCTIONAL CLOSED |
+| UC-002 | Execute Compiled | PENDIENTE |
+| UC-003 | Execute Source | PENDIENTE |
+
+> [!NOTE]
+> `UC-001` se encuentra formalmente cerrado. `UC-002` y `UC-003` corresponden a
+> las operaciones `Execute Compiled` y `Execute Source`, y serán abordados en
+> pasos posteriores.
