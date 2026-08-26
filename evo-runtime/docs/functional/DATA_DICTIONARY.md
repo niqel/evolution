@@ -2,125 +2,125 @@
 
 Status: FUNCTIONAL CLOSED
 
-This document consolidates the canonical architectural and functional vocabulary
-for Evo Runtime Model A, derived from the closed Model A functional scope.
+Este documento consolida el vocabulario arquitectónico y funcional canónico
+para Evo Runtime Model A, derivado del alcance funcional cerrado de Model A.
 
-Evo Runtime Model A defines a minimal boundary with exactly **seven canonical
-terms**.
+Evo Runtime Model A define una frontera mínima con exactamente **siete términos
+canónicos**.
 
 ---
 
-## 1. Canonical Terms
+## 1. Términos Canónicos
 
 ### Evo Runtime
 
-- **Category**: Core Component / Platform
-- **Definition**: Plataforma mínima responsable de iniciar la ejecución de una
+- **Categoría**: Core Component / Platform
+- **Definición**: Plataforma mínima responsable de iniciar la ejecución de una
   Evo Application mediante la acción funcional Start.
-- **Relationships**:
+- **Relaciones**:
   - Proporciona la acción `Start`.
   - Recibe la acción `Run` proporcionada por una Evo Application.
   - Retorna el `Result` final hacia el Host.
-- **Invariants / Distinctions**:
+- **Invariantes / Distinciones**:
   - Evo Runtime no administra la lógica interna, engines ni dependencias de la
     aplicación tras haberla iniciado.
-- **Sources**: US-001, UC-001
-- **Technical Mapping**: `evo-runtime`
+- **Fuentes**: US-001, UC-001
+- **Mapeo Técnico**: `evo-runtime`
 
 ### Host
 
-- **Category**: External Role
-- **Definition**: Caller externo (usuario, proceso, shell o sistema operativo)
+- **Categoría**: External Role
+- **Definición**: Caller externo (usuario, proceso, shell o sistema operativo)
   que solicita a Evo Runtime iniciar una Evo Application y recibe el Result final.
-- **Relationships**:
+- **Relaciones**:
   - `Host -> requests -> Start(Run)`
   - `Host <- receives <- Result`
-- **Invariants / Distinctions**:
+- **Invariantes / Distinciones**:
   - `Host != Evo Application` (aunque un producto integrado pueda actuar en
     ambos roles).
   - El Host no administra el ciclo de vida interno de la aplicación.
-- **Sources**: US-001, UC-001
-- **Technical Mapping**: External caller
+- **Fuentes**: US-001, UC-001
+- **Mapeo Técnico**: External caller
 
 ### Evo Application
 
-- **Category**: External Application Domain
-- **Definition**: Aplicación cliente cuya acción ejecutable Run es proporcionada
+- **Categoría**: External Application Domain
+- **Definición**: Aplicación cliente cuya acción ejecutable Run es proporcionada
   a Evo Runtime para iniciar su ejecución.
-- **Relationships**:
+- **Relaciones**:
   - Proporciona la acción `Run` compatible con Evo Runtime.
   - Ejecuta su trabajo interno interactuando directamente con sus librerías,
     engines y providers.
-- **Invariants / Distinctions**:
+- **Invariantes / Distinciones**:
   - Las operaciones y estados internos de la Evo Application no pertenecen a
     Evo Runtime.
-- **Sources**: US-001, UC-001
-- **Technical Mapping**: Client application crate
+- **Fuentes**: US-001, UC-001
+- **Mapeo Técnico**: Client application crate
 
 ### Start
 
-- **Category**: Provided Functional Action / Use Case
-- **Definition**: Única acción funcional proporcionada por Evo Runtime que
+- **Categoría**: Provided Functional Action / Use Case
+- **Definición**: Única acción funcional proporcionada por Evo Runtime que
   recibe la acción Run de una Evo Application, la invoca y retorna su Result.
-- **Relationships**:
+- **Relaciones**:
   - Recibe una función `Run`.
   - Permanece activa mientras `Run` esté activo.
   - Produce un `Result` final.
-- **Invariants / Distinctions**:
+- **Invariantes / Distinciones**:
   - `Start != Run`
   - `Start` es responsabilidad exclusiva de Evo Runtime.
   - Múltiples llamadas a Start son independientes entre sí.
-- **Sources**: US-001, UC-001
-- **Technical Mapping**: `definitions/use_cases/start.rs` (`pub type Start = fn(...) -> Result;`)
+- **Fuentes**: US-001, UC-001
+- **Mapeo Técnico**: `definitions/use_cases/start.rs` (`pub type Start = fn(...) -> Result;`)
 
 ### Run
 
-- **Category**: Consumed Functional Action / Requester
-- **Definition**: Acción ejecutable proporcionada por una Evo Application que
+- **Categoría**: Consumed Functional Action / Requester
+- **Definición**: Acción ejecutable proporcionada por una Evo Application que
   Evo Runtime invoca para iniciar y mantener la aplicación en ejecución.
-- **Relationships**:
+- **Relaciones**:
   - Entregada a `Start`.
   - Invocada por Evo Runtime.
   - Concluye entregando un `Result`.
-- **Invariants / Distinctions**:
+- **Invariantes / Distinciones**:
   - `Run != Start`
   - `Run` es responsabilidad de la Evo Application.
   - La conclusión de `Run` determina la finalización de `Start`.
-- **Sources**: US-001, UC-001
-- **Technical Mapping**: `definitions/requesters/run_request.rs` (`pub type Request = fn() -> Result;`)
+- **Fuentes**: US-001, UC-001
+- **Mapeo Técnico**: `definitions/requesters/run_request.rs` (`pub type Request = fn() -> Result;`)
 
 ### Result
 
-- **Category**: Outcome Concept
-- **Definition**: Outcome final producido al concluir la ejecución de Run y
+- **Categoría**: Outcome Concept
+- **Definición**: Outcome final producido al concluir la ejecución de Run y
   retornado por Start hacia el Host.
-- **Relationships**:
+- **Relaciones**:
   - Producido por la acción `Run`.
   - Retornado por la acción `Start`.
   - Entregado al `Host`.
-- **Invariants / Distinctions**:
+- **Invariantes / Distinciones**:
   - `Result != Failure` (Failure es la expresión de un resultado fallido dentro
     del modelo de Result).
   - La semántica y tipos de Result pertenecen a `evo-values`.
-- **Sources**: US-001, UC-001
-- **Technical Mapping**: `evo-values`
+- **Fuentes**: US-001, UC-001
+- **Mapeo Técnico**: `evo-values`
 
 ### Failure
 
-- **Category**: Outcome Concept
-- **Definition**: Outcome que indica que la ejecución de la aplicación no pudo
+- **Categoría**: Outcome Concept
+- **Definición**: Outcome que indica que la ejecución de la aplicación no pudo
   completarse exitosamente.
-- **Relationships**:
+- **Relaciones**:
   - Puede ser expresado como el resultado fallido dentro de `Result`.
-- **Invariants / Distinctions**:
+- **Invariantes / Distinciones**:
   - `Failure != Result`
   - La semántica y tipos de Failure pertenecen a `evo-values`.
-- **Sources**: US-001, UC-001
-- **Technical Mapping**: `evo-values`
+- **Fuentes**: US-001, UC-001
+- **Mapeo Técnico**: `evo-values`
 
 ---
 
-## 2. Canonical Distinctions
+## 2. Distinciones Canónicas
 
 - `Start != Run`: Start es la responsabilidad provista por Evo Runtime; Run es
   la acción provista por la Evo Application.
@@ -133,14 +133,14 @@ terms**.
 
 ---
 
-## 3. Scope Boundaries
+## 3. Límites de Alcance
 
 Los siguientes conceptos pertenecen a otras capas o componentes del ecosistema
 Evo y **no** forman parte del Data Dictionary de Evo Runtime Model A:
 
-- *No Context / No Execution entity*: El Runtime no mantiene almacenamiento de
+- *Sin Context / Sin entidad Execution*: El Runtime no mantiene almacenamiento de
   contexto ni entidades de ejecución en Model A.
-- *No Providers / No Capabilities / No Contracts*: La gestión de providers y
+- *Sin Providers / Sin Capabilities / Sin Contracts*: La gestión de providers y
   capacidades ocurre fuera del Runtime.
-- *No Engine selection / No Value transport*: La selección de engines y el flujo
+- *Sin selección de Engines / Sin transporte de Value*: La selección de engines y el flujo
   de datos ocurren directamente entre la aplicación y sus componentes.
