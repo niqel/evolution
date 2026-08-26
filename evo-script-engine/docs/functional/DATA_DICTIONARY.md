@@ -1,23 +1,23 @@
-# Evo-Script Engine v0 — Functional Data Dictionary
+# Evo-Script Engine v0 — Data Dictionary Funcional
 
 Status: FUNCTIONAL CLOSED
 
-This document consolidates the canonical architectural and functional vocabulary
-for `evo-script-engine` v0, derived from closed User Stories US-001 through
-US-003 and the Evo-Script Language Specification v0.
+Este documento consolida el vocabulario arquitectónico y funcional canónico
+para `evo-script-engine` v0, derivado de las User Stories cerradas US-001 a
+US-003 y de la Evo-Script Language Specification v0.
 
 ---
 
-## 1. Purpose and Scope
+## 1. Propósito y Alcance
 
-The purpose of this Data Dictionary is to formally define the canonical data
-concepts, roles, and boundaries utilized by `evo-script-engine` v0.
+El propósito de este Data Dictionary es definir formalmente los conceptos de datos
+canónicos, roles y fronteras utilizados por `evo-script-engine` v0.
 
-The Evo-Script Engine provides three distinct public functional operations:
+El Evo-Script Engine proporciona tres operaciones funcionales públicas distintas:
 
 ```text
 1. Compile
-   Source Text ──► Compiled Program (on successful compilation)
+   Source Text ──► Compiled Program (en compilación exitosa)
 
 2. Execute Compiled
    Compiled Program + Invocation Values (0..N) ──► Result
@@ -26,9 +26,9 @@ The Evo-Script Engine provides three distinct public functional operations:
    Source Text + Invocation Values (0..N) ──► Result
 ```
 
-This document establishes functional definitions and constraints. It deliberately
-does **not** define concrete Rust structs, enums, traits, generics, memory
-layouts, or binary formats.
+Este documento establece definiciones y restricciones funcionales.
+Deliberadamente **no** define structs, enums, traits, genéricos, layouts de
+memoria ni formatos binarios concretos de Rust.
 
 ---
 
@@ -36,107 +36,112 @@ layouts, or binary formats.
 
 ### Source Text
 
-- **Category**: Boundary Input Data
-- **Definition**: The complete textual representation of exactly one Evo-Script
-  v0 Program supplied to the Evo-Script Engine.
-- **Characteristics**:
-  - Represents a complete, self-contained Evo-Script Program.
-  - When persisted externally as a source file artifact, Evo-Script v0 uses the
-    canonical file extension `.efn`.
-  - The Engine receives the raw textual content, **not** a physical file or path.
-  - `Source Text != File Path` (the Engine does not perform path resolution or
-    filesystem I/O).
-  - `Source Text != AST / Token Stream` (the Consumer supplies raw source text).
-  - `Source Text != Compiled Program` (Source Text is uncompiled source code).
-  - `Source Text != Individual Function` (it contains the entire program unit).
-  - The Consumer is solely responsible for reading or obtaining the text from
-    external storage before invoking the Engine.
-- **Cardinality**:
-  - Exactly 1 `Source Text` per `Compile` invocation.
-  - Exactly 1 `Source Text` per `Execute Source` invocation.
-- **Sources**: US-001, US-003, `EVO_SCRIPT_SPECIFICATION_v0.md`
+- **Categoría**: Boundary Input Data
+- **Definición**: La representación textual completa de exactamente un
+  Evo-Script Program v0 suministrado al Evo-Script Engine.
+- **Características**:
+  - Representa un Evo-Script Program completo y autocontenido.
+  - Cuando se persiste externamente como artefacto de archivo fuente, Evo-Script
+    v0 utiliza la extensión de archivo canónica `.efn`.
+  - El Engine recibe el contenido textual plano, **no** un archivo físico o ruta.
+  - `Source Text != File Path` (el Engine no realiza resolución de rutas ni I/O
+    de sistema de archivos).
+  - `Source Text != AST / Token Stream` (el Consumer suministra texto plano sin
+    preprocesar).
+  - `Source Text != Compiled Program` (Source Text es código fuente sin
+    compilar).
+  - `Source Text != Individual Function` (contiene la unidad completa del
+    programa).
+  - El Consumer es el único responsable de leer u obtener el texto desde el
+    almacenamiento externo antes de invocar el Engine.
+- **Cardinalidad**:
+  - Exactamente 1 `Source Text` por invocación de `Compile`.
+  - Exactamente 1 `Source Text` por invocación de `Execute Source`.
+- **Fuentes**: US-001, US-003, `EVO_SCRIPT_SPECIFICATION_v0.md`
 
 ### Compiled Program
 
-- **Category**: Boundary Data (Output of Compile / Input of Execute Compiled)
-- **Definition**: The Engine-produced executable representation of an
-  Evo-Script Program that has been successfully processed according to
-  Evo-Script Language Specification v0 and is suitable for later execution by the
-  Evo-Script Engine.
-- **Characteristics**:
-  - `Compiled Program != Source Text` (represents an already processed and
-    validated compilation artifact).
-  - Produced solely as the successful outcome of `Compile`.
-  - Can be supplied subsequently as input to `Execute Compiled`.
-  - Reusable across multiple independent `Execute Compiled` invocations.
-  - Persistence, caching, and storage belong to the Consumer or external
-    components; the Engine does not manage physical storage or program
-    registries in v0.
-  - Its internal technical representation remains **open** (e.g. bytecode, IR,
-    validated AST, or binary stream are technical candidates deferred to
-    technical design).
-  - No file extension is assigned to Compiled Program in v0.
-- **Source Location Guarantee**:
-  - A `Compiled Program` must preserve sufficient relationship to the original
-    `Source Text` so that, when a program-originated execution failure occurs,
-    the Evo-Script Engine can identify the corresponding source line during
+- **Categoría**: Boundary Data (Output de Compile / Input de Execute Compiled)
+- **Definición**: La representación ejecutable producida por el Engine de un
+  Evo-Script Program que ha sido procesado exitosamente conforme a la
+  Evo-Script Language Specification v0 y es adecuada para su posterior ejecución
+  por el Evo-Script Engine.
+- **Características**:
+  - `Compiled Program != Source Text` (representa un artefacto de compilación ya
+    procesado y validado).
+  - Producido únicamente como resultado exitoso de `Compile`.
+  - Puede suministrarse posteriormente como input a `Execute Compiled`.
+  - Reutilizable a lo largo de múltiples invocaciones independientes de
     `Execute Compiled`.
-- **Cardinality**:
-  - Produced on successful `Compile` invocations (0..1 per compilation).
-  - Exactly 1 `Compiled Program` per `Execute Compiled` invocation.
-- **Sources**: US-001, US-002
+  - La persistencia, caché y almacenamiento pertenecen al Consumer o a
+    componentes externos; el Engine no administra almacenamiento físico ni
+    registros de programas en v0.
+  - Su representación técnica interna permanece **abierta** (por ejemplo,
+    bytecode, IR, AST validado o flujo binario son candidatos técnicos
+    diferidos al diseño técnico).
+  - No se asigna ninguna extensión de archivo a Compiled Program en v0.
+- **Garantía de Ubicación Fuente (Source Location Guarantee)**:
+  - Un `Compiled Program` debe preservar suficiente relación con el `Source Text`
+    original para que, cuando ocurra un fallo de ejecución originado en el
+    programa, el Evo-Script Engine pueda identificar la línea fuente
+    correspondiente durante `Execute Compiled`.
+- **Cardinalidad**:
+  - Producido en invocaciones exitosas de `Compile` (0..1 por compilación).
+  - Exactamente 1 `Compiled Program` por invocación de `Execute Compiled`.
+- **Fuentes**: US-001, US-002
 
 ### Invocation Values
 
-- **Category**: Boundary Input Data
-- **Definition**: The ordered Values supplied by the Consumer for the parameters
-  declared by the program's single Public Function.
-- **Characteristics**:
-  - Cardinality: `0..N` Values.
-  - A Public Function with zero parameters requires zero Invocation Values.
-  - A Public Function with $N$ parameters requires exactly $N$ Invocation Values.
-  - Mapping to parameters is strictly positional:
+- **Categoría**: Boundary Input Data
+- **Definición**: Los Values ordenados suministrados por el Consumer para los
+  parámetros declarados por la única Public Function del programa.
+- **Características**:
+  - Cardinalidad: `0..N` Values.
+  - Una Public Function con cero parámetros requiere cero Invocation Values.
+  - Una Public Function con $N$ parámetros requiere exactamente $N$ Invocation
+    Values.
+  - El mapeo a parámetros es estrictamente posicional:
     ```text
     InvocationValue[0]     ──► Parameter[0]
     InvocationValue[1]     ──► Parameter[1]
     ...
     InvocationValue[N - 1] ──► Parameter[N - 1]
     ```
-  - The order of Invocation Values corresponds directly to the declaration order
-    of parameters in the Public Function signature.
-  - Each Invocation Value must be semantically compatible with its corresponding
-    parameter type (including native types, struct types, and enum types defined
-    by the program).
-  - The Engine performs no implicit conversions or coercions.
-  - Used by `Execute Compiled` and `Execute Source`.
-  - **Not** used by `Compile`.
-  - `Invocation Values != Command-Line Strings` (represents structured data
-    values, not raw terminal arguments).
-- **Sources**: US-002, US-003, `EVO_SCRIPT_SPECIFICATION_v0.md`
+  - El orden de los Invocation Values corresponde directamente al orden de
+    declaración de los parámetros en la firma de la Public Function.
+  - Cada Invocation Value debe ser semánticamente compatible con su tipo de
+    parámetro correspondiente (incluyendo tipos nativos, structs y enums
+    definidos por el programa).
+  - El Engine no realiza conversiones ni coerciones implícitas.
+  - Utilizado por `Execute Compiled` y `Execute Source`.
+  - **No** utilizado por `Compile`.
+  - `Invocation Values != Command-Line Strings` (representa valores de datos
+    estructurados, no argumentos de texto plano de terminal).
+- **Fuentes**: US-002, US-003, `EVO_SCRIPT_SPECIFICATION_v0.md`
 
 ### Result
 
-- **Category**: Boundary Output Data
-- **Definition**: The functional outcome of an execution operation performed by
-  the Evo-Script Engine.
-- **Characteristics**:
-  - Represents the completed outcome of `Execute Source` or `Execute Compiled`.
-  - **Not** assigned as the outcome of `Compile` in this functional phase.
-  - Conceptual structure:
+- **Categoría**: Boundary Output Data
+- **Definición**: El outcome funcional de una operación de ejecución realizada
+  por el Evo-Script Engine.
+- **Características**:
+  - Representa el outcome completado de `Execute Source` o `Execute Compiled`.
+  - **No** asignado como outcome de `Compile` en esta fase funcional.
+  - Estructura conceptual:
     ```text
     Result
-    ├── success ──► preserves produced Value
-    └── failure ──► represents Failure
+    ├── success ──► preserva el Value producido
+    └── failure ──► expresa Failure
     ```
   - `Result != Value`
   - `Result != Failure`
-  - Aligned with the shared outcome model of `evo-values`.
-  - Does not assume concrete Rust generics (`Result<T, E>`) or
+  - Alineado con el modelo compartido de outcomes de `evo-values`.
+  - No asume genéricos de Rust concretos (`Result<T, E>`) ni
     `std::result::Result`.
-- **Cardinality**:
-  - Exactly 1 `Result` per completed `Execute Source` invocation.
-  - Exactly 1 `Result` per completed `Execute Compiled` invocation.
-- **Sources**: US-002, US-003
+- **Cardinalidad**:
+  - Exactamente 1 `Result` por invocación completada de `Execute Source`.
+  - Exactamente 1 `Result` por invocación completada de `Execute Compiled`.
+- **Fuentes**: US-002, US-003
 
 ---
 
@@ -144,51 +149,54 @@ layouts, or binary formats.
 
 ### Value
 
-- **Category**: Shared Data Concept
-- **Definition**: The shared Evo data concept used to transport semantic values
-  between the Consumer, function parameters, and execution outcomes.
-- **Characteristics**:
-  - Belongs conceptually to the shared `evo-values` data model.
-  - `Invocation Values` contains `0..N` Values.
-  - A successful `Result` preserves the `Value` produced by the Public Function.
-  - Concrete value types supported are defined by the Evo-Script Language
-    Specification v0 (primitives, structs, enums).
-  - This Data Dictionary does not redefine the complete internal semantics or
-    memory layout of Value.
-  - Does not introduce Rust ownership, lifetimes, or smart pointer semantics.
-- **Sources**: US-002, US-003, `evo-values`, `EVO_SCRIPT_SPECIFICATION_v0.md`
+- **Categoría**: Shared Data Concept
+- **Definición**: El concepto de datos compartido de Evo utilizado para
+  transportar valores semánticos entre el Consumer, los parámetros de función y
+  los outcomes de ejecución.
+- **Características**:
+  - Pertenece conceptualmente al modelo de datos compartido `evo-values`.
+  - `Invocation Values` contiene `0..N` Values.
+  - Un `Result` exitoso preserva el `Value` producido por la Public Function.
+  - Los tipos de valores concretos soportados están definidos por la
+    Evo-Script Language Specification v0 (primitivos, structs, enums).
+  - Este Data Dictionary no redefine la semántica interna completa ni el layout
+    de memoria de Value.
+  - No introduce semántica de ownership, lifetimes o punteros inteligentes de
+    Rust.
+- **Fuentes**: US-002, US-003, `evo-values`, `EVO_SCRIPT_SPECIFICATION_v0.md`
 
 ### Failure
 
-- **Category**: Shared Outcome Concept
-- **Definition**: The minimal functional diagnostic describing why Evo-Script
-  processing or execution did not complete successfully.
-- **Characteristics**:
-  - Single shared concept across the Engine; no separate `Error`,
-    `CompileError`, or `ExecutionError` concepts.
-  - Minimal v0 data elements:
+- **Categoría**: Shared Outcome Concept
+- **Definición**: El diagnóstico funcional mínimo que describe por qué el
+  procesamiento o ejecución de Evo-Script no concluyó exitosamente.
+- **Características**:
+  - Concepto compartido único en todo el Engine; sin conceptos separados de
+    `Error`, `CompileError` o `ExecutionError`.
+  - Elementos de datos mínimos en v0:
     ```text
     Failure
     ├── description: exactly 1
-    └── source line: 0..1 (1-based line number in Source Text, if applicable)
+    └── source line: 0..1 (número de línea 1-based en Source Text, si aplica)
     ```
-  - **Description**: Textual explanation of the failure (always present).
-  - **Source Line**: 1-based line index (`line 1` = first line of Source Text)
-    associated with the failure when a source location exists.
-  - **Presence of Source Line**:
-    - *Required* for lexical, syntactic, semantic, and program-originated
-      runtime evaluation failures.
-    - *Absent* for boundary invocation failures that do not correspond to an
-      internal program line (e.g. arity mismatch or boundary type
-      incompatibility). No artificial lines (such as line 0) are generated.
-  - **Relationship to Compile**: Failed compilation produces a Failure
-    diagnostic (the technical wrapper or return mechanism for Compile remains
-    open).
-  - **Relationship to Execution**: A failed `Result` from `Execute Source` or
-    `Execute Compiled` expresses a Failure.
-  - **Excluded in v0**: Does not mandate columns, error codes, categories,
-    severities, stack traces, spans, or byte offsets.
-- **Sources**: US-001, US-002, US-003
+  - **Description**: Explicación textual del fallo (siempre presente).
+  - **Source Line**: Índice de línea 1-based (`line 1` = primera línea de
+    Source Text) asociado al fallo cuando existe una ubicación fuente.
+  - **Presencia de Source Line**:
+    - *Requerida* para fallos léxicos, sintácticos, semánticos y de evaluación
+      en runtime originados en el programa.
+    - *Ausente* para fallos de frontera de invocación que no corresponden a una
+      línea interna del programa (por ejemplo, desajuste de aridad o
+      incompatibilidad de tipos en la frontera). No se generan líneas
+      artificiales (como línea 0).
+  - **Relación con Compile**: Una compilación fallida produce un diagnóstico
+    Failure (el wrapper técnico o mecanismo de retorno para Compile permanece
+    abierto).
+  - **Relación con Ejecución**: Un `Result` fallido de `Execute Source` o
+    `Execute Compiled` expresa un Failure.
+  - **Excluido en v0**: No exige columnas, códigos de error, categorías,
+    severidades, stack traces, spans ni byte offsets.
+- **Fuentes**: US-001, US-002, US-003
 
 ---
 
@@ -196,90 +204,94 @@ layouts, or binary formats.
 
 ### Evo-Script Program
 
-- **Category**: Language Domain Concept
-- **Definition**: The complete, self-contained program unit defined by
-  Evo-Script Language Specification v0.
-- **Characteristics**:
-  - Contained entirely within a single source file (`.efn`).
-  - Represented textually by `Source Text`.
-  - Represented executably by a `Compiled Program` following successful
-    compilation.
-  - Declares exactly 1 Public Function (`public fn`).
-  - May declare `0..N` private functions, structs, and enums local to the file.
-  - Does not represent a technical Rust struct.
-- **Sources**: US-001, US-002, US-003, `EVO_SCRIPT_SPECIFICATION_v0.md`
+- **Categoría**: Language Domain Concept
+- **Definición**: La unidad de programa completa y autocontenida definida por
+  la Evo-Script Language Specification v0.
+- **Características**:
+  - Contenida enteramente dentro de un único archivo fuente (`.efn`).
+  - Representada textualmente por `Source Text`.
+  - Representada ejecutablemente por un `Compiled Program` tras una compilación
+    exitosa.
+  - Declara exactamente 1 Public Function (`public fn`).
+  - Puede declarar `0..N` funciones privadas, structs y enums locales al
+    archivo.
+  - No representa un struct técnico de Rust.
+- **Fuentes**: US-001, US-002, US-003, `EVO_SCRIPT_SPECIFICATION_v0.md`
 
 ### Public Function
 
-- **Category**: Language Domain Concept
-- **Definition**: The single public entry function declared by an Evo-Script
-  Program v0 (`public fn`) and executed during execution operations.
-- **Characteristics**:
-  - Exactly 1 per Evo-Script Program v0.
-  - Declares `0..N` Parameters.
-  - Receives Invocation Values via strict positional binding.
-  - Evaluates expressions and produces a Value according to Evo-Script v0.
-  - `Public Function != main` (does not imply OS process entry point).
-  - `Public Function != Runtime startup / Run` (independent of Evo Runtime).
-- **Sources**: US-001, US-002, US-003, `EVO_SCRIPT_SPECIFICATION_v0.md`
+- **Categoría**: Language Domain Concept
+- **Definición**: La única función pública de entrada declarada por un
+  Evo-Script Program v0 (`public fn`) y ejecutada durante las operaciones de
+  ejecución.
+- **Características**:
+  - Exactamente 1 por Evo-Script Program v0.
+  - Declara `0..N` Parameters.
+  - Recibe Invocation Values mediante binding posicional estricto.
+  - Evalúa expresiones y produce un Value conforme a Evo-Script v0.
+  - `Public Function != main` (no implica punto de entrada de proceso del SO).
+  - `Public Function != Runtime startup / Run` (independiente de Evo Runtime).
+- **Fuentes**: US-001, US-002, US-003, `EVO_SCRIPT_SPECIFICATION_v0.md`
 
 ### Parameter
 
-- **Category**: Language Domain Concept
-- **Definition**: A typed formal parameter declared in the signature of the
-  Public Function.
-- **Characteristics**:
-  - Cardinality: `0..N` per Public Function.
-  - Has a declared position and a declared type according to Evo-Script v0.
-  - Receives exactly one Invocation Value matching its declaration index during
-    a valid execution.
-  - In v0, parameters are immutable bindings; there are no named arguments,
-    default values, optional parameters, variadic parameters, or reference/mutable
-    modifiers.
-- **Sources**: US-001, US-002, US-003, `EVO_SCRIPT_SPECIFICATION_v0.md`
+- **Categoría**: Language Domain Concept
+- **Definición**: Un parámetro formal tipado declarado en la firma de la Public
+  Function.
+- **Características**:
+  - Cardinalidad: `0..N` por Public Function.
+  - Posee una posición declarada y un tipo declarado conforme a Evo-Script v0.
+  - Recibe exactamente un Invocation Value correspondiente a su índice de
+    declaración durante una ejecución válida.
+  - En v0, los parámetros son bindings inmutables; no hay argumentos nombrados,
+    valores por defecto, parámetros opcionales, parámetros variádicos ni
+    modificadores de referencia/mutabilidad.
+- **Fuentes**: US-001, US-002, US-003, `EVO_SCRIPT_SPECIFICATION_v0.md`
 
 ---
 
-## 5. Roles and Components
+## 5. Roles y Componentes
 
 ### Consumer
 
-- **Category**: External Functional Role
-- **Definition**: The external caller or system component that invokes the
-  public capabilities of the Evo-Script Engine.
-- **Responsibilities**:
-  - Supplies `Source Text` to `Compile` or `Execute Source`.
-  - Supplies `Compiled Program` to `Execute Compiled`.
-  - Supplies `Invocation Values` to `Execute Source` or `Execute Compiled`.
-  - Receives a `Compiled Program` upon successful `Compile`.
-  - Receives a `Result` upon completion of `Execute Source` or `Execute Compiled`.
-  - Manages external file reading, program persistence, or caching if desired.
-- **Invariants / Distinctions**:
-  - `Consumer` is a functional role (e.g. CLI, runner, test suite, or host
-    application) and is not a technical data structure.
-- **Sources**: US-001, US-002, US-003
+- **Categoría**: External Functional Role
+- **Definición**: El invocador externo o componente del sistema que utiliza las
+  capacidades públicas del Evo-Script Engine.
+- **Responsabilidades**:
+  - Suministra `Source Text` a `Compile` o `Execute Source`.
+  - Suministra `Compiled Program` a `Execute Compiled`.
+  - Suministra `Invocation Values` a `Execute Source` o `Execute Compiled`.
+  - Recibe un `Compiled Program` tras un `Compile` exitoso.
+  - Recibe un `Result` tras completar `Execute Source` o `Execute Compiled`.
+  - Administra la lectura externa de archivos, persistencia o caché de
+    programas si lo requiere.
+- **Invariantes / Distinciones**:
+  - `Consumer` es un rol funcional (por ejemplo, CLI, runner, test suite o
+    aplicación anfitriona) y no es una estructura de datos técnica.
+- **Fuentes**: US-001, US-002, US-003
 
 ### Evo-Script Engine
 
-- **Category**: Core Engine / Component
-- **Definition**: The platform component that implements the compilation and
-  execution rules of Evo-Script Language Specification v0.
-- **Public Capabilities**:
+- **Categoría**: Core Engine / Component
+- **Definición**: El componente de la plataforma que implementa las reglas de
+  compilación y ejecución de la Evo-Script Language Specification v0.
+- **Capacidades Públicas**:
   1. **`Compile`**: `Source Text` $\longrightarrow$ `Compiled Program`
   2. **`Execute Source`**: `Source Text` $+$ `Invocation Values` $\longrightarrow$ `Result`
   3. **`Execute Compiled`**: `Compiled Program` $+$ `Invocation Values` $\longrightarrow$ `Result`
-- **Invariants / Distinctions**:
-  - `Evo-Script Engine != Evo Runtime` (does not coordinate applications,
-    manage providers, or handle Runtime Start/Run).
-  - Does not manage terminal I/O, UI, filesystem discovery, or side-effects in
-    v0.
-- **Sources**: US-001, US-002, US-003, `EVO_SCRIPT_SPECIFICATION_v0.md`
+- **Invariantes / Distinciones**:
+  - `Evo-Script Engine != Evo Runtime` (no coordina aplicaciones, no administra
+    providers ni maneja Runtime Start/Run).
+  - No administra I/O de terminal, UI, descubrimiento de sistema de archivos ni
+    efectos laterales en v0.
+- **Fuentes**: US-001, US-002, US-003, `EVO_SCRIPT_SPECIFICATION_v0.md`
 
 ---
 
-## 6. Canonical Relationships
+## 6. Relaciones Canónicas
 
-The canonical relationships across vocabulary terms are summarized below:
+Las relaciones canónicas a través de los términos del vocabulario se resumen a
+continuación:
 
 ```text
 Source Text
