@@ -2,5 +2,5 @@
 
 Status: TECHNICAL DESIGN — NOT STARTED
 
-This directory will contain technical sequence diagrams and interaction flow
-specifications for `evo-script-engine`.
+Este directorio contendrá diagramas de secuencias técnicos y especificaciones de
+flujos de interacción para `evo-script-engine`.
