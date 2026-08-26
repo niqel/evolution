@@ -1,15 +1,16 @@
-# Evo Runtime Model A — Functional User Stories
+# Evo Runtime Model A — User Stories Funcionales
 
 Status: FUNCTIONAL CLOSED
 
-This directory contains the canonical functional User Story for Evo Runtime
+Este directorio contiene la User Story funcional canónica para Evo Runtime
 Model A.
 
-In Model A, Evo Runtime has a single, minimal responsibility: starting an Evo
-Application by invoking its provided Run action and returning the final Result.
+En Model A, Evo Runtime tiene una responsabilidad única y mínima: iniciar una
+Evo Application invocando su acción Run proporcionada y retornando el Result
+final.
 
-## Catalog
+## Catálogo
 
-| ID | Title |
+| ID | Título |
 | --- | --- |
 | [US-001](US-001-start-application.md) | Iniciar una Aplicación Evo (Start an Evo Application) |
