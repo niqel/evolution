@@ -1,41 +1,42 @@
-# Evo Runtime — Model A Boundary Map
+# Evo Runtime — Mapa de Frontera de Model A
 
 Status: TECHNICAL MODEL CLOSED — IMPLEMENTATION DEFERRED
 
-This document illustrates the minimal architectural boundary of Evo Runtime
+Este documento ilustra la frontera arquitectónica mínima de Evo Runtime
 Model A.
 
 ---
 
-## 1. Minimal Boundary Architecture
+## 1. Arquitectura de Frontera Mínima
 
-In Model A, Evo Runtime defines a strictly minimal execution interface:
-- **1 Use Case**: `Start` (provided by `evo-runtime`)
-- **1 Requester**: `Run` (consumed from the `Evo Application`)
-- **1 Outcome**: `Result` (defined by `evo-values`)
+En Model A, Evo Runtime define una interfaz de ejecución estrictamente mínima:
+- **1 Use Case**: `Start` (proporcionado por `evo-runtime`)
+- **1 Requester**: `Run` (consumido desde la `Evo Application`)
+- **1 Outcome**: `Result` (definido por `evo-values`)
 
 ---
 
-## 2. Visual Boundary Map
+## 2. Mapa Visual de Frontera
 
 ![Evo Runtime Boundary Map](RUNTIME_BOUNDARY_MAP.svg)
 
 ---
 
-## 3. Flow of Execution
+## 3. Flujo de Ejecución
 
-1. **Host Invocation**: The external caller invokes `Start`, supplying the
-   application's executable `Run` requester function pointer (`Start(run)`).
-2. **Runtime Execution**: Evo Runtime invokes `run()` and remains active on the
-   call stack.
-3. **Application Autonomy**: The application executes its internal logic directly
-   with its own libraries, engines, and providers.
-4. **Completion**: When `run()` finishes, it returns `Result`.
-5. **Outcome Delivery**: `Start` returns the `Result` directly to the Host.
+1. **Invocación del Host**: El caller externo invoca `Start`, suministrando el
+   function pointer del requester `Run` ejecutable de la aplicación
+   (`Start(run)`).
+2. **Ejecución del Runtime**: Evo Runtime invoca `run()` y permanece activo en
+   el call stack.
+3. **Autonomía de la Aplicación**: La aplicación ejecuta su lógica interna
+   directamente con sus propias bibliotecas, engines y providers.
+4. **Finalización**: Cuando `run()` termina, retorna `Result`.
+5. **Entrega de Outcome**: `Start` retorna el `Result` directamente al Host.
 
 ---
 
-## 4. Technical Signatures
+## 4. Firmas Técnicas
 
 ```rust
 // definitions/requesters/run_request.rs
@@ -47,7 +48,7 @@ pub type Start = fn(run_request::Request) -> Result;
 
 ---
 
-## References
+## Referencias
 
 - [DEFINITION_NAMING_CONVENTIONS.md](../DEFINITION_NAMING_CONVENTIONS.md)
 - [EVO_RUNTIME_SPECIFICATION_v0.md](../../EVO_RUNTIME_SPECIFICATION_v0.md)
