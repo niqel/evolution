@@ -2,5 +2,5 @@
 
 Status: TECHNICAL DESIGN — NOT STARTED
 
-This directory will contain technical structure diagrams and module organization
-specifications for `evo-script-engine`.
+Este directorio contendrá diagramas de estructura técnicos y especificaciones de
+organización modular para `evo-script-engine`.
