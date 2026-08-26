@@ -11,11 +11,11 @@ y del Data Dictionary funcionalmente cerrado.
 
 | Use Case | Descripción | Estado |
 | --- | --- | --- |
-| [UC-001](UC-001-compile-evo-script-source.md) | Compilar Source Text de Evo-Script | FUNCTIONAL CLOSED |
-| UC-002 | Execute Compiled | PENDIENTE |
+| [UC-001](UC-001-compile-evo-script-source.md) | Compile Evo-Script Source | FUNCTIONAL CLOSED |
+| [UC-002](UC-002-execute-compiled-evo-script-program.md) | Execute Compiled Evo-Script Program | FUNCTIONAL CLOSED |
 | UC-003 | Execute Source | PENDIENTE |
 
 > [!NOTE]
-> `UC-001` se encuentra formalmente cerrado. `UC-002` y `UC-003` corresponden a
-> las operaciones `Execute Compiled` y `Execute Source`, y serán abordados en
-> pasos posteriores.
+> `UC-001` y `UC-002` se encuentran formalmente cerrados (`FUNCTIONAL CLOSED`).
+> `UC-003` corresponde a la operación `Execute Source`, y será abordado en pasos
+> posteriores.
