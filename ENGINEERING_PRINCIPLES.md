@@ -145,9 +145,9 @@ El componente que posee los datos debe materializar cualquier vista prestada der
 ```text
 owner
   │
-  ├─ materialize View<'a>
+  ├─ materializa View<'a>
   ├─ request(view)
-  └─ borrow ends
+  └─ termina borrow
 ```
 
 > El Requester viaja hasta el materializador.
@@ -177,10 +177,10 @@ La palabra *capability* puede describir conceptualmente una operación disponibl
 El Provider implementa la operación técnica concreta y posee, cuando corresponde, el recurso o estado externo.
 
 ```text
-semantic Contract
+Contract semántico
        ▲
-       │ compatible function
-technical Provider
+       │ función compatible
+Provider técnico
 ```
 
 Los detalles técnicos del Provider no deben filtrarse hacia el Use Case.
@@ -193,7 +193,7 @@ Un Resolver existe cuando una operación cruza una frontera técnica externa.
 
 Puede invocar el Contract, adaptar datos técnicos, traducir Error técnico → Error semántico, transportar un Requester hacia el Provider y entregar el resultado semántico final mediante Requester.
 
-> Result does not imply Resolver.
+> Result no implica Resolver.
 
 ---
 
@@ -351,10 +351,10 @@ Una operación semántica puede conocer el tipo de un Contract requerido, pero n
 ```text
 Use Case
    │
-   └── Contract type
+   └── tipo de Contract
 
 Provider
-   └── compatible implementation
+   └── implementación compatible
 ```
 
 ---
@@ -425,19 +425,19 @@ Una pieza debe revisarse si:
 
 ```text
 Use Case
-   defines the complete operation
+   define la operación completa
        │
        ▼
 Agent
-   orchestrates exactly that operation
+   orquesta exactamente esa operación
        │
        ├──► Collaborator ───► Requester
        │
        └──► Resolver ─► Contract ─► Provider
                        │             │
-                       │             └─ materialized response/progress
+                       │             └─ respuesta materializada/progreso
                        │
-                       └─ semantic result ─► Requester
+                       └─ resultado semántico ─► Requester
 ```
 
 > Definir explícitamente la operación, mantener ownership donde pertenece, transportar la capacidad de responder y crear solo las abstracciones que representan una diferencia real.
