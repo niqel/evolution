@@ -2,30 +2,30 @@
 
 Status: FUNCTIONAL CLOSED
 
-This directory contains the canonical functional User Stories for
+Este directorio contiene las User Stories funcionales canónicas para
 `evo-script-engine` v0.
 
-In version v0, the public functional responsibilities of the Evo-Script Engine
-are completely defined by **exactly three User Stories**:
+En la versión v0, las responsabilidades funcionales públicas del Evo-Script Engine
+están completamente definidas por **exactamente tres User Stories**:
 
-1. **US-001 (Compile)**: Compiling complete Evo-Script source text into a
-   Compiled Program.
-2. **US-002 (Execute Compiled)**: Executing a Compiled Program with Invocation
-   Values to produce a Result.
-3. **US-003 (Execute Source)**: Executing complete Evo-Script source text
-   directly with Invocation Values to produce a Result.
+1. **US-001 (Compile)**: Compilar el Source Text completo de un programa
+   Evo-Script en un Compiled Program.
+2. **US-002 (Execute Compiled)**: Ejecutar un Compiled Program con Invocation
+   Values para producir un Result.
+3. **US-003 (Execute Source)**: Ejecutar directamente el Source Text completo de
+   un programa Evo-Script con Invocation Values para producir un Result.
 
-There are no additional functional User Stories in v0.
+No existen User Stories funcionales adicionales en v0.
 
 ---
 
-## Conceptual Execution Relationship
+## Relación Conceptual de Ejecución
 
-The functional relationships across compilation and execution operations are
-structured as follows:
+Las relaciones funcionales a través de las operaciones de compilación y ejecución
+se estructuran de la siguiente manera:
 
 ```text
-                     Complete Source Text
+                     Source Text completo
                      /                  \
                     /                    \
                    ▼                      ▼
@@ -42,27 +42,28 @@ structured as follows:
                  Result
 ```
 
-### Key Functional Distinctions
-- **Compile and Execute Source are distinct operations**: `Compile` produces a
-  `Compiled Program` without executing; `Execute Source` executes source text
-  directly and returns a `Result`.
-- **Compile does not automatically execute**: Compilation outputs a compiled
-  unit for later execution.
-- **Execute Source does not require a prior Compile call**: The Consumer passes
-  source text directly without managing intermediate compilation artifacts.
-- **Execute Compiled operates on a Compiled Program**: It evaluates an
-  already-compiled program unit and does not accept raw source text.
-- **Execute Source operates on Source Text**: It evaluates source text directly
-  and does not accept a Compiled Program.
-- **Retention and Re-execution**: A `Compiled Program` produced by `Compile` can
-  be retained externally by the Consumer and executed multiple times through
-  `Execute Compiled`.
+### Distinciones Funcionales Clave
+- **Compile y Execute Source son operaciones distintas**: `Compile` produce un
+  `Compiled Program` sin ejecutar; `Execute Source` ejecuta el Source Text
+  directamente y produce un `Result`.
+- **Compile no ejecuta automáticamente**: La compilación genera una unidad
+  compilada para su ejecución posterior.
+- **Execute Source no requiere una llamada previa a Compile**: El Consumer
+  proporciona el Source Text directamente sin necesidad de gestionar artefactos
+  intermedios de compilación.
+- **Execute Compiled opera sobre un Compiled Program**: Evalúa una unidad de
+  programa ya compilada y no recibe Source Text.
+- **Execute Source opera sobre Source Text**: Evalúa Source Text directamente y
+  no recibe un Compiled Program.
+- **Retención y Reejecución**: Un `Compiled Program` producido por `Compile` puede
+  ser conservado externamente por el Consumer y ejecutarse múltiples veces a
+  través de `Execute Compiled`.
 
 ---
 
-## Catalog
+## Catálogo
 
-| ID | Title | Status |
+| ID | Título | Estado |
 | --- | --- | --- |
 | [US-001](US-001-compile-evo-script-source.md) | Compile Evo-Script Source | FUNCTIONAL CLOSED |
 | [US-002](US-002-execute-compiled-evo-script-program.md) | Execute Compiled Evo-Script Program | FUNCTIONAL CLOSED |

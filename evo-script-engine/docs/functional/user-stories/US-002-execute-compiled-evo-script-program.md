@@ -2,32 +2,28 @@
 
 Status: FUNCTIONAL CLOSED
 
-## Story
+## Historia
 
 ```text
-As a Consumer,
-I want to provide a Compiled Program and the Invocation Values
-required by its public function to the Evo-Script Engine,
-so that the compiled program is executed and I receive its Result.
+Como Consumer,
+quiero proporcionar un Compiled Program y los Invocation Values
+requeridos por su Public Function al Evo-Script Engine,
+para que el programa compilado sea ejecutado y reciba su Result.
 ```
-
-*(Como un Consumer, quiero proporcionar un Compiled Program y los Invocation
-Values requeridos por su función pública al Evo-Script Engine, para que el
-programa compilado sea ejecutado y yo reciba su Result).*
 
 ---
 
-## Context
+## Contexto
 
-The Evo-Script Engine is the component responsible for compiling and executing
-Evo-Script programs.
+El Evo-Script Engine es el componente responsable de compilar y ejecutar
+programas Evo-Script.
 
-Under **US-002 (Execute)**, the Consumer provides a previously compiled
-**Compiled Program** and the ordered **Invocation Values** (0..N) required by its
-single public function.
+Bajo **US-002 (Execute)**, el Consumer proporciona un **Compiled Program**
+previamente compilado y los **Invocation Values** ordenados (0..N) requeridos por
+su única Public Function.
 
-Execute does **not** accept source text and does **not** perform compilation. It
-evaluates the compiled program directly and returns the execution `Result`.
+Execute **no** acepta Source Text y **no** realiza compilación. Evalúa el
+programa compilado directamente y retorna el `Result` de ejecución.
 
 ```text
 Consumer
@@ -39,11 +35,11 @@ Consumer
 ┌────────────────────────────────────────┐
 │ Evo-Script Engine                      │
 │                                        │
-│  Binds Invocation Values to parameters │
-│  Executes single public function       │
+│  Enlaza Invocation Values a parámetros │
+│  Ejecuta la única Public Function      │
 └──────────────────┬─────────────────────┘
                    │
-                   │ execution outcome
+                   │ outcome de ejecución
                    ▼
                  Result
 ```
@@ -52,45 +48,46 @@ Consumer
 
 ## Invocation Values
 
-Invocation Values are the ordered Values supplied by the Consumer to satisfy the
-parameters declared by the program's single public function.
+Los Invocation Values son los Values ordenados proporcionados por el Consumer para
+satisfacer los parámetros declarados por la única Public Function del programa.
 
-### Rules of Invocation Values
+### Reglas de Invocation Values
 
-1. **Cardinality**: Invocation Values contains zero or more Values (`0..N`).
-2. **Zero Parameters**: A public function without parameters requires zero
+1. **Cardinalidad**: Invocation Values contiene cero o más Values (`0..N`).
+2. **Cero Parámetros**: Una Public Function sin parámetros requiere cero
    Invocation Values.
-3. **Exact Arity**: A public function with $N$ parameters requires exactly $N$
-   Invocation Values.
-4. **Strict Positional Mapping**: Mapping from Invocation Values to parameters
-   is strictly positional:
+3. **Aridad Exacta**: Una Public Function con $N$ parámetros requiere exactamente
+   $N$ Invocation Values.
+4. **Mapeo Posicional Estricto**: El mapeo de Invocation Values a parámetros es
+   estrictamente posicional:
    ```text
    InvocationValue[0]     ──► Parameter[0]
    InvocationValue[1]     ──► Parameter[1]
    ...
    InvocationValue[N - 1] ──► Parameter[N - 1]
    ```
-5. **Declaration Order**: The order of Invocation Values corresponds directly to
-   the declaration order of parameters in the public function signature.
-6. **Semantic Compatibility**: Each Invocation Value must be semantically
-   compatible with the parameter type declared by the public function
-   (including native types, struct types, and enum types defined in the
-   program).
-7. **No Implicit Conversions**: The Engine performs no implicit conversions or
-   coercions to adapt an incompatible Value to a parameter type.
-8. **Arity Mismatch**: An Invocation Value count that does not match the
-   parameter count results in a failed Result.
-9. **Type Incompatibility**: An Invocation Value incompatible with its
-   corresponding parameter type results in a failed Result.
-10. **Failure Independence**: Specific Failure categories, error codes, and
-    variants are not defined at this functional level.
-11. **Technical Representation**: Concrete Rust representations of Invocation
-    Values, collections, slices, or type handles remain deferred to technical
-    design.
+5. **Orden de Declaración**: El orden de los Invocation Values corresponde
+   directamente al orden de declaración de los parámetros en la firma de la
+   Public Function.
+6. **Compatibilidad Semántica**: Cada Invocation Value debe ser semánticamente
+   compatible con el tipo de parámetro declarado por la Public Function
+   (incluyendo tipos nativos, structs y enums definidos en el programa).
+7. **Sin Conversiones Implícitas**: El Engine no realiza conversiones ni
+   coerciones implícitas para adaptar un Value incompatible a un tipo de
+   parámetro.
+8. **Desajuste de Aridad**: Una cantidad de Invocation Values que no coincida con
+   la cantidad de parámetros produce un Result fallido.
+9. **Incompatibilidad de Tipo**: Un Invocation Value incompatible con su tipo de
+   parámetro correspondiente produce un Result fallido.
+10. **Independencia de Failure**: Las categorías específicas de Failure, códigos
+    de error y variantes no se definen en este nivel funcional.
+11. **Representación Técnica**: Las representaciones técnicas concretas en Rust
+    para Invocation Values, colecciones, slices o handles de tipo permanecen
+    diferidas al diseño técnico.
 
-### Conceptual Example
+### Ejemplo Conceptual
 
-Given an Evo-Script public function:
+Dada una Public Function en Evo-Script:
 
 ```text
 public fn sum(int left, int right) -> int
@@ -99,71 +96,77 @@ public fn sum(int left, int right) -> int
 }
 ```
 
-The Consumer supplies:
-- Compiled Program containing `sum`
+El Consumer proporciona:
+- Compiled Program que contiene `sum`
 - Invocation Values: `[10, 20]`
 
-Positional binding:
-- `InvocationValue[0]` (`10`) $\rightarrow$ bound to parameter `left`
-- `InvocationValue[1]` (`20`) $\rightarrow$ bound to parameter `right`
+Binding posicional:
+- `InvocationValue[0]` (`10`) $\rightarrow$ enlazado al parámetro `left`
+- `InvocationValue[1]` (`20`) $\rightarrow$ enlazado al parámetro `right`
 
 ---
 
-## Acceptance Criteria
+## Criterios de Aceptación
 
-1. The Consumer can provide a valid Compiled Program to the Evo-Script Engine.
-2. The Consumer may provide zero or more Invocation Values.
-3. Execute does not receive source text and does not perform source compilation.
-4. The Engine determines the parameters declared by the public function of the
+1. El Consumer puede proporcionar un Compiled Program válido al Evo-Script
+   Engine.
+2. El Consumer puede proporcionar cero o más Invocation Values.
+3. Execute no recibe Source Text y no realiza compilación de código fuente.
+4. El Engine determina los parámetros declarados por la Public Function del
    Compiled Program.
-5. Invocation Values are matched to parameters strictly by position.
-6. Invocation Value count must equal public-function parameter count ($N$).
-7. Each Invocation Value must be semantically compatible with its corresponding
-    parameter type.
-8. No implicit conversion is performed by the Engine to repair incompatible
-    Invocation Values.
-9. Zero-parameter public functions require zero Invocation Values.
-10. Arity mismatch results in a failed Result.
-11. Type incompatibility results in a failed Result.
-12. The Engine executes the public function according to Evo-Script v0 semantics.
-13. Successful execution preserves the Value produced by the public function
-    in the successful Result.
-14. Failed execution produces a failed Result rather than being silently treated
-    as success.
-15. The Consumer does not need to know the Engine's internal VM, interpreter, or
-    evaluator architecture.
-16. Once Result is returned to the Consumer, that Execute invocation is complete.
-17. No explicit Engine session object or execution-context object is required at
-    the functional boundary.
+5. Los Invocation Values se emparejan con los parámetros estrictamente por
+   posición.
+6. La cantidad de Invocation Values debe ser igual a la cantidad de parámetros de
+   la Public Function ($N$).
+7. Cada Invocation Value debe ser semánticamente compatible con su correspondiente
+   tipo de parámetro.
+8. El Engine no realiza conversiones implícitas para reparar Invocation Values
+    incompatibles.
+9. Las Public Functions de cero parámetros requieren cero Invocation Values.
+10. Un desajuste de aridad produce un Result fallido.
+11. Una incompatibilidad de tipo produce un Result fallido.
+12. El Engine ejecuta la Public Function conforme a la semántica de Evo-Script
+    v0.
+13. Una ejecución exitosa preserva el Value producido por la Public Function en
+    el Result exitoso.
+14. Una ejecución fallida produce un Result fallido en lugar de tratarse
+    silenciosamente como éxito.
+15. El Consumer no necesita conocer la arquitectura interna de la VM, intérprete
+    o evaluador del Engine.
+16. Una vez que se retorna el Result al Consumer, esa invocación de Execute
+    concluye.
+17. No se requiere ningún objeto explícito de sesión o de contexto de ejecución
+    del Engine en la frontera funcional.
 
 ---
 
-## Execution Outcome Concept (Result)
+## Concepto de Outcome de Ejecución (Result)
 
-The functional outcome of executing a compiled program is represented
-conceptually as `Result`:
-- **Successful Outcome**: Preserves the program's produced `Value`.
-- **Failed Outcome**: Represents execution failure (e.g. arity mismatch, type
-  incompatibility, runtime evaluation error).
+El outcome funcional de ejecutar un programa compilado se representa
+conceptualmente como `Result`:
+- **Outcome Exitoso**: Preserva el `Value` producido por el programa.
+- **Outcome Fallido**: Representa una falla de ejecución (por ejemplo, desajuste
+  de aridad, incompatibilidad de tipo, error de evaluación en runtime).
 
 > [!NOTE]
-> `Result` is a functional outcome concept aligned with the shared Evo model
-> (`Result != Value`, `Result != Failure`).
-> Concrete Rust representations, type parameters, generics (`Result<T, E>`),
-> error structures, and enum variants are deliberately **not** decided in this
-> User Story.
+> `Result` es un concepto de outcome funcional alineado con el modelo compartido
+> de Evo (`Result != Value`, `Result != Failure`).
+> Las representaciones concretas en Rust, parámetros de tipo, genéricos
+> (`Result<T, E>`), estructuras de error y variantes de enum deliberadamente
+> **no** se deciden en esta User Story.
 
 ---
 
-## Non-Responsibilities and Out of Scope
+## No Responsabilidades y Fuera de Alcance
 
-For the scope of US-002 and Evo-Script Engine v0:
-- Compiling or parsing Evo-Script source text (handled by US-001).
-- Loading Compiled Programs from physical storage or filesystems.
-- Terminal interaction, formatting, or UI presentation.
-- Starting, stopping, or managing Evo Runtime application lifecycles.
-- Query parsing or execution semantics belonging to EvoQ.
-- Internal execution engine architecture decisions (e.g. stack VM, register VM,
-  or tree-walk interpreter).
-- External side-effects, console output, `print`, stdout, filesystem I/O,
-  Requesters, Providers, or intermediate callbacks during execution.
+Para el alcance de US-002 y Evo-Script Engine v0:
+- Compilación o parseo de Source Text de Evo-Script (cubierto por US-001).
+- Carga de Compiled Programs desde almacenamiento físico o sistemas de archivos.
+- Interacción con la terminal, formateo o presentación de UI.
+- Inicio, detención o gestión del ciclo de vida de aplicaciones de Evo Runtime.
+- Parseo de consultas o semántica de ejecución pertenecientes a EvoQ.
+- Decisiones de arquitectura interna del motor de ejecución (por ejemplo, stack
+  VM, register VM o intérprete tree-walk).
+- Efectos laterales externos, salida a consola (`print`), stdout, I/O de sistema
+  de archivos, Requesters, Providers o callbacks intermedios durante la
+  ejecución.

@@ -2,140 +2,132 @@
 
 Status: FUNCTIONAL CLOSED
 
-## Story
+## Historia
 
 ```text
-As a Consumer,
-I want to provide the complete source text of an Evo-Script program
-to the Evo-Script Engine,
-so that the source is compiled according to Evo-Script Language
-Specification v0 and I receive a Compiled Program.
+Como Consumer,
+quiero proporcionar el Source Text completo de un programa Evo-Script
+al Evo-Script Engine,
+para que el Source Text sea compilado conforme a
+Evo-Script Language Specification v0 y reciba un Compiled Program.
 ```
-
-*(Como un Consumer, quiero proporcionar el texto fuente completo de un programa
-Evo-Script al Evo-Script Engine, para que el código fuente sea compilado según la
-Evo-Script Language Specification v0 y yo reciba un Compiled Program).*
 
 ---
 
-## Context
+## Contexto
 
-The Evo-Script Engine is the component responsible for compiling and executing
-Evo-Script programs.
+El Evo-Script Engine es el componente responsable de compilar y ejecutar
+programas Evo-Script.
 
-In Evo-Script v0, a complete program is contained within a single `.efn` source
-file and declares exactly one public function (`public fn`), along with optional
-private functions, structs, and enums local to that file.
+En Evo-Script v0, un programa completo está contenido dentro de un único archivo
+fuente `.efn` y declara exactamente una función pública (`public fn`), junto con
+funciones privadas, structs y enums opcionales locales a ese archivo.
 
-Under **US-001 (Compile)**, the Consumer provides the **complete source text** of
-the program directly to the Engine. The Engine processes and validates the
-source text according to the language specification and produces a **Compiled
-Program** ready for future execution.
+Bajo **US-001 (Compile)**, el Consumer proporciona el **Source Text completo** del
+programa directamente al Engine. El Engine procesa y valida el Source Text
+conforme a la especificación del lenguaje y produce un **Compiled Program** listo
+para su ejecución futura.
 
 ```text
 Consumer
    │
-   │ complete Evo-Script source text
+   │ Source Text completo de Evo-Script
    ▼
 ┌────────────────────────────────────────┐
 │ Evo-Script Engine                      │
 │                                        │
-│  Processes & validates source text     │
-│  Compiles according to v0 spec         │
+│  Procesa y valida Source Text          │
+│  Compila según especificación v0       │
 └──────────────────┬─────────────────────┘
                    │
-                   │ successful compilation
+                   │ compilación exitosa
                    ▼
             Compiled Program
 ```
 
-### Boundary Input Distinctions
-- **Source Text != File Path**: The Engine does not perform file I/O or path
-  resolution; reading the physical `.efn` file is the responsibility of the
-  Consumer or an external loader.
-- **Source Text != AST / Token Stream**: The Consumer passes raw text, not an
-  intermediate or pre-parsed syntax tree.
-- **Source Text != Individual Function**: The input is the complete,
-  self-contained source text of the program unit.
+### Distinciones de Input en la Frontera
+- **Source Text != File Path**: El Engine no realiza I/O de archivos ni
+  resolución de rutas; la lectura del archivo físico `.efn` es responsabilidad
+  del Consumer o de un cargador externo.
+- **Source Text != AST / Token Stream**: El Consumer entrega texto plano, no un
+  árbol sintáctico intermedio o preprocesado.
+- **Source Text != Individual Function**: El input es el Source Text completo y
+  autocontenido de la unidad de programa.
 
 ---
 
-## Compiled Program Concept
+## Concepto de Compiled Program
 
-A **Compiled Program** is the Engine-produced representation of an Evo-Script
-program that has been successfully processed according to the Evo-Script
-Language Specification v0 and is suitable for later execution by the Evo-Script
-Engine.
+Un **Compiled Program** es la representación ejecutable producida por el Engine de
+un programa Evo-Script que ha sido procesado exitosamente conforme a la
+Evo-Script Language Specification v0 y es adecuado para su posterior ejecución por
+el Evo-Script Engine.
 
-### Conceptual Characteristics
-- **Compiled Program != Source Text**: It represents an already processed,
-  validated compilation output.
-- **Format Open**: The internal technical representation of a Compiled Program
-  is not frozen at this functional stage (e.g. bytecode, IR, validated AST, or
-  binary format remain open technical candidates).
-- **No Persistence in Engine**: The Engine produces the Compiled Program and
-  returns it to the Consumer. Persisting, caching, or writing the Compiled
-  Program to storage is the responsibility of the Consumer or external
-  components.
+### Características Conceptuales
+- **Compiled Program != Source Text**: Representa un artefacto de compilación ya
+  procesado y validado.
+- **Formato Abierto**: La representación técnica interna de un Compiled Program
+  no está congelada en esta fase funcional (por ejemplo, bytecode, IR, AST
+  validado o formato binario permanecen como candidatos técnicos abiertos).
+- **Sin Persistencia en el Engine**: El Engine produce el Compiled Program y lo
+  entrega al Consumer. Persistir, cachear o escribir el Compiled Program en
+  almacenamiento es responsabilidad del Consumer o de componentes externos.
 
 ---
 
-## Functional Rules of Compile
+## Reglas Funcionales de Compile
 
-1. **Complete Unit**: The Consumer provides the complete source text of one
-   Evo-Script v0 program.
-2. **Specification Conformance**: The Engine compiles the source according to
+1. **Unidad Completa**: El Consumer proporciona el Source Text completo de un
+   programa Evo-Script v0.
+2. **Conformidad con la Especificación**: El Engine compila el código conforme a
    [`evo-script/EVO_SCRIPT_SPECIFICATION_v0.md`](../../../../evo-script/EVO_SCRIPT_SPECIFICATION_v0.md).
-3. **Outcome on Success**: Successful compilation produces a valid Compiled
+3. **Outcome en Éxito**: Una compilación exitosa produce un Compiled Program
+   válido.
+4. **Outcome en Error**: Si el Source Text viola las reglas léxicas, sintácticas
+   o semánticas de Evo-Script v0, Compile falla y no produce un Compiled
    Program.
-4. **Outcome on Error**: If the source text violates lexical, syntactic, or
-   semantic rules of Evo-Script v0, Compile fails and does not produce a
-   Compiled Program.
-5. **No Execution**: Compile does not execute the public function or evaluate
-   expressions.
-6. **No Invocation Values**: Compile does not accept or require Invocation
-   Values.
-7. **No File Persistence**: Compile does not write files to disk or manage
-   storage.
+5. **Sin Ejecución**: Compile no ejecuta la Public Function ni evalúa
+   expresiones.
+6. **Sin Invocation Values**: Compile no acepta ni requiere Invocation Values.
+7. **Sin Persistencia de Archivos**: Compile no escribe archivos en disco ni
+   administra almacenamiento.
 
 ---
 
-## Acceptance Criteria
+## Criterios de Aceptación
 
-1. The Consumer can provide the complete source text of one Evo-Script v0
-   program to the Evo-Script Engine.
-2. The Engine treats that source text as one complete Evo-Script program.
-3. The Engine processes and compiles the program according to:
+1. El Consumer puede proporcionar el Source Text completo de un programa
+   Evo-Script v0 al Evo-Script Engine.
+2. El Engine trata dicho Source Text como un programa Evo-Script completo.
+3. El Engine procesa y compila el programa conforme a:
    [`evo-script/EVO_SCRIPT_SPECIFICATION_v0.md`](../../../../evo-script/EVO_SCRIPT_SPECIFICATION_v0.md).
-4. Successful compilation produces a Compiled Program representing the compiled
-   unit.
-5. If the source text contains lexical, syntactic, or semantic errors according
-   to Evo-Script v0, the compilation fails and does not produce a valid Compiled
-   Program.
-6. The Consumer does not need to parse or preprocess the source text before
-   providing it to the Engine.
-7. The Consumer does not need to know the Engine's internal compiler pipeline,
-   AST, or intermediate representations.
-8. Compile does not execute the public function or evaluate program
-   expressions.
-9. Compile does not accept or require Invocation Values.
-10. Compile does not persist, write to disk, or store the resulting Compiled
-    Program.
-11. The Compile invocation completes after either successful production of a
-    Compiled Program or failed compilation.
+4. Una compilación exitosa produce un Compiled Program que representa la unidad
+   compilada.
+5. Si el Source Text contiene errores léxicos, sintácticos o semánticos según
+   Evo-Script v0, la compilación falla y no produce un Compiled Program válido.
+6. El Consumer no necesita parsear ni preprocesar el Source Text antes de
+   proporcionarlo al Engine.
+7. El Consumer no necesita conocer la estructura interna del compilador del
+   Engine, su AST ni sus representaciones intermedias.
+8. Compile no ejecuta la Public Function ni evalúa expresiones del programa.
+9. Compile no acepta ni requiere Invocation Values.
+10. Compile no persiste, no escribe en disco ni almacena el Compiled Program
+    resultante.
+11. La invocación Compile se completa tras la producción exitosa de un Compiled
+    Program o tras una compilación fallida.
 
 ---
 
-## Non-Responsibilities and Out of Scope
+## No Responsabilidades y Fuera de Alcance
 
-For the scope of US-001:
-- Reading `.efn` files from the filesystem or resolving file paths.
-- Executing the compiled program or evaluating runtime expressions (handled by
-  US-002).
-- Accepting or binding Invocation Values.
-- Persisting, caching, or serializing Compiled Programs to storage.
-- Terminal interaction, formatting, or UI presentation.
-- Starting, stopping, or managing Evo Runtime application lifecycles.
-- Query parsing or execution semantics belonging to EvoQ.
-- Internal compiler architecture decisions (e.g. separate lexer/parser/AST
-  crates or modules).
+Para el alcance de US-001:
+- Lectura de archivos `.efn` del sistema de archivos o resolución de rutas.
+- Ejecución del programa compilado o evaluación de expresiones en runtime
+  (cubierto por US-002).
+- Aceptación o binding de Invocation Values.
+- Persistencia, almacenamiento en caché o serialización de Compiled Programs.
+- Interacción con la terminal, formateo o presentación de UI.
+- Inicio, detención o gestión del ciclo de vida de aplicaciones de Evo Runtime.
+- Parseo de consultas o semántica de ejecución pertenecientes a EvoQ.
+- Decisiones de arquitectura interna del compilador (por ejemplo, crates o
+  módulos separados para lexer, parser o AST).
