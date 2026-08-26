@@ -29,4 +29,5 @@ canonical design sequence:
 ## Directory Organization
 
 - [`user-stories/`](user-stories/README.md): Candidate and closed functional User Stories.
+- [`DATA_DICTIONARY.md`](DATA_DICTIONARY.md): Canonical functional vocabulary for evo-script-engine v0 (*FUNCTIONAL CLOSED*).
 - [`use-cases/`](use-cases/README.md): Candidate and closed functional Use Cases (*Not Started*).
