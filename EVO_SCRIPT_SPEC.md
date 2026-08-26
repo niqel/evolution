@@ -39,14 +39,14 @@ filter size equals(85)
 
 ### Explicación Paso por Paso del Ejemplo Canónico:
 
-1. **`scope ../documents>`**: Establece `../documents` como el contexto de trabajo activo (*current working context*).
+1. **`scope ../documents>`**: Establece `../documents` como el contexto de trabajo activo (*contexto de trabajo actual*).
 2. **`filter ...`**: Aplica un filtro lazy que requiere que `size` sea igual a `85` **Y** que simultáneamente se cumpla la agrupación entre paréntesis: que `modified` esté entre las fechas `date_start` y `date_end`, **O** que `name` contenga el texto `"report"`.
 3. **`select ...`**: Proyecta los campos `name`, `size` y `modified` para cada registro.
 4. **`new full-name(...)`**: Declara explícitamente un nuevo campo calculado llamado `full-name`.
 5. **`name |> to-value`**: Extrae el valor escalar del campo `name`.
 6. **`"Melendez Villarreal " |> append(...)`**: Pasa como entrada implícita la cadena `"Melendez Villarreal "` a la transformación `append`, la cual concatena el escalar extraído de `name`.
 7. **`|> take(5)`**: Limita el flujo de forma lazy a los primeros 5 elementos.
-8. **`|> iter`**: Emite e itera los registros transformados elemento a elemento (*item by item*).
+8. **`|> iter`**: Emite e itera los registros transformados elemento a elemento (*elemento a elemento*).
 9. **`|> print`**: Consume cada elemento emitido e imprime su contenido.
 
 ---
@@ -282,12 +282,12 @@ new nombre-campo(expresión)
 
 ### A. Contexto Activo (`Scope`)
 
-La instrucción `scope ../documents>` establece el contexto de trabajo activo (*current working context*).
+La instrucción `scope ../documents>` establece el contexto de trabajo activo (*contexto de trabajo actual*).
 
 ```text
 scope
   ↓
-current working context
+contexto de trabajo actual
 ```
 
 * `Scope` pertenece al entorno persistente de ejecución y no está restringido al sistema de archivos.
@@ -306,7 +306,7 @@ size |> to-value
 
 ### D. Iteración (`iter`) y Consumidor (`print`)
 
-* **`iter`**: Emite e itera elementos uno a uno (*item by item*). No realiza presentación gráfica ni materialización.
+* **`iter`**: Emite e itera elementos uno a uno (*elemento a elemento*). No realiza presentación gráfica ni materialización.
 * **`print`**: Consumidor final independiente. Puede consumir elementos de `iter` o escalares directos (`print "Gustavo"`).
 
 ---
@@ -316,29 +316,29 @@ size |> to-value
 ```text
                    Evo-Script
 ────────────────────────────────────────
-language semantics
-syntax
-types
-operators (+ - * / %)
-predicates (equals, between, contains)
-logical connectors (and, or, grouping)
-expressions
+semántica del lenguaje
+sintaxis
+tipos
+operadores (+ - * / %)
+predicados (equals, between, contains)
+conectores lógicos (and, or, agrupación)
+expresiones
 filter / select / new
 to-value / append / take / range
 pipes (|>)
-lazy iteration semantics (iter)
+semántica de iteración lazy (iter)
 
                      │
-                     │ uses capabilities
+                     │ utiliza capabilities
                      ▼
 
                   Evo-Shell
 ────────────────────────────────────────
-system capabilities
+capabilities del sistema
 scope
 filesystem
 terminal
-process
+procesos
 network
 copy / move / rename / delete / trash
 etc.
