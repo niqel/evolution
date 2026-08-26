@@ -1,21 +1,22 @@
-# Evo Runtime Model A — Functional Use Cases
+# Evo Runtime Model A — Use Cases Funcionales
 
 Status: FUNCTIONAL CLOSED
 
-This directory contains the canonical functional Use Case for Evo Runtime
+Este directorio contiene el Use Case funcional canónico para Evo Runtime
 Model A.
 
-In Model A, Evo Runtime provides exactly one functional action: starting an Evo
-Application by invoking its provided Run action and returning the final Result.
+En Model A, Evo Runtime proporciona exactamente una acción funcional: iniciar
+una Evo Application invocando su acción Run proporcionada y retornando el
+Result final.
 
-## Catalog
+## Catálogo
 
-| ID | Action |
+| ID | Acción |
 | --- | --- |
 | [UC-001](UC-001-start-evo-application.md) | Start Evo Application |
 
-## Traceability Matrix
+## Matriz de Trazabilidad
 
-| User Story | Use Case Coverage |
+| User Story | Cobertura de Use Case |
 | --- | --- |
 | [US-001](../user-stories/US-001-start-application.md) | [UC-001](UC-001-start-evo-application.md) |
