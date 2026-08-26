@@ -23,12 +23,12 @@ Estas dimensiones no deben confundirse. Una relación de ejecución no implica n
 
 ```text
                     evo-runtime
-                 execution host
-                       │
-                    app.evo
-                       │
-                       ▼
-                  evo-script
+                  execution host
+                        │
+                     app.evo
+                        │
+                        ▼
+                   evo-script
         ┌─────────────────────────────┐
         │ language                    │
         │ syntax / tokenization       │
@@ -42,10 +42,10 @@ Estas dimensiones no deben confundirse. Una relación de ejecución no implica n
         │ pipes (|>)                  │
         │ lazy iteration semantics    │
         └─────────────────────────────┘
-                       │
-              uses environment operations
-                       ▼
-                   evo-shell
+                        │
+         utiliza operaciones del entorno
+                        ▼
+                    evo-shell
         ┌─────────────────────────────┐
         │ scope                       │
         │ filesystem                  │
@@ -55,12 +55,12 @@ Estas dimensiones no deben confundirse. Una relación de ejecución no implica n
         │ network                     │
         │ system environment          │
         └─────────────────────────────┘
-                       │
-                       ▼
-                   Providers
-                       │
-                       ▼
-                       OS
+                        │
+                        ▼
+                    Providers
+                        │
+                        ▼
+                        OS
 ```
 
 `evo-runtime` aloja el contexto de ejecución; no absorbe las responsabilidades de `evo-script`, `evo-shell` ni de los Providers.
@@ -72,13 +72,13 @@ Estas dimensiones no deben confundirse. Una relación de ejecución no implica n
 Evolution utiliza una instalación compartida del runtime con ejecuciones aisladas por aplicación.
 
 ```text
-               shared evo-runtime installation
-                         │
+       instalación compartida de evo-runtime
+                          │
                   host / supervisor
-                         │
+                          │
           ┌──────────────┼──────────────┐
           ▼              ▼              ▼
-     execution A     execution B     execution C
+     ejecución A    ejecución B    ejecución C
           │              │              │
       shell.evo       music.evo       ui.evo
 ```
@@ -127,7 +127,7 @@ OS / launcher
 evo-runtime
      │
      ▼
-isolated application execution
+ejecución aislada de aplicación
      │
      ▼
    app.evo
@@ -142,17 +142,17 @@ La UI, CLI o una interfaz para agentes de IA son **superficies de interacción**
                       │
                  music.evo
                       │
-               evo-script logic
+               lógica de evo-script
                  /         \
                 /           \
               UI          CLI / AI
                 \           /
                  \         /
                   ▼       ▼
-                same semantic operation
+              misma operación semántica
 ```
 
-> Visual interaction is a surface; functional behavior remains scriptable.
+> La interacción visual es una superficie; el comportamiento funcional permanece scriptable.
 
 ---
 
@@ -362,7 +362,7 @@ Un Resolver existe únicamente cuando hay una **frontera técnica externa**.
 
 Su responsabilidad es invocar el Contract, adaptar la llamada técnica si es necesario, traducir errores técnicos a errores semánticos, transportar Requesters hacia el materializador y entregar mediante Requester el resultado semántico cuando corresponda.
 
-> Result does not imply Resolver.
+> Result no implica Resolver.
 
 Los Resolvers no necesitan un Error intermedio propio cuando únicamente traducen `Contract::Error → UseCase::Error`.
 
@@ -375,7 +375,7 @@ Un Provider posee o controla infraestructura externa concreta y expone funciones
 ```text
 Contract definition
        ▲
-       │ compatible function
+       │ función compatible
 Provider implementation
 ```
 
@@ -409,14 +409,14 @@ Use Case(target, Request, Contract)
        Provider
           │
           ▼
-   technical Result
+    Result técnico
           │
           ▼
        Resolver
           │
   Contract Error → Use Case Error
           │
-          └────────────► Requester(semantic Result)
+          └────────────► Requester(Result semántico)
 ```
 
 ---
@@ -425,20 +425,20 @@ Use Case(target, Request, Contract)
 
 ```text
 respond_scope Use Case
-        │
-        ▼
+         │
+         ▼
 scope_responder Agent
-        │
-        ▼
+         │
+         ▼
 scope_resolver
-        │
-        ▼
+         │
+         ▼
 provide_scope Contract
-        │
-        ▼
+         │
+         ▼
 Provider
-   ├─ materializa Scope<'a>
-   └─ request(scope) ─────────► consumer
+    ├─ materializa Scope<'a>
+    └─ request(scope) ─────────► consumer
 ```
 
 El Provider conserva ownership de los datos de los cuales se forma la vista prestada.
@@ -492,12 +492,12 @@ Copy / Move Use Case
      Provider
        ├────► TransferProgress Requester (0..N veces)
        │
-       └────► technical Result
+       └────► Result técnico
                     │
                     ▼
                  Resolver
                     │
-                    └────► final Requester (1 vez)
+                    └────► Requester final (1 vez)
 ```
 
 Copy y Move comparten únicamente el concepto de progreso. Conservan separados Use Cases, Contracts, Errors, Agents, Resolvers y Requesters finales.
@@ -520,17 +520,17 @@ Resolver / Collaborator
 
 ```text
 DATOS / RESPUESTA
-materializer / boundary
+materializador / frontera
        │
-       ├─ borrowed view
-       ├─ semantic Result
-       └─ progress event
+       ├─ vista prestada
+       ├─ Result semántico
+       └─ evento de progreso
                │
                ▼
             Requester
                │
                ▼
-          final consumer
+        consumidor final
 ```
 
 ---
@@ -647,10 +647,10 @@ Para cambios pequeños se prefieren tests filtrados del flujo afectado, acompañ
 evo-apps
    │
    ▼
-repository / store
+repositorio / catálogo
    │
    ▼
-download .evo package
+descarga de paquete .evo
    │
    ▼
 evo-runtime
@@ -662,41 +662,41 @@ evo-runtime
 
 ```text
 evo-runtime
-    host / lifecycle / isolation / composition
+    host / lifecycle / aislamiento / composición
 
         ↓
 
 evo-script
-    language semantics
+    semántica del lenguaje
 
         ↓
 
 evo-shell
-    semantic environment operations
+    operaciones semánticas del entorno
 
         ↓
 
 Providers
-    physical / technical realization
+    realización física / técnica
 ```
 
 Dentro de `evo-shell`:
 
 ```text
 Use Case
-    defines complete operation signature
+    define la firma completa de la operación
         │
         ▼
 Agent
-    exact compile-time implementation
+    implementación exacta en tiempo de compilación
         │
         ├─────────────► Collaborator ─────► Requester
         │
         └─────────────► Resolver ─► Contract ─► Provider
                                   │             │
-                                  │             └─ borrowed/progress response
+                                  │             └─ respuesta prestada/de progreso
                                   │
-                                  └─ translated final result ─► Requester
+                                  └─ resultado final traducido ─► Requester
 ```
 
 > La firma define la operación, el Agent la coordina, el materializador conserva ownership y el Requester lleva la respuesta directamente al consumidor.
