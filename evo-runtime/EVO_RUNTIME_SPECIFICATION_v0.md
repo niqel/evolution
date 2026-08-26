@@ -1,169 +1,170 @@
-# Evo Runtime Specification v0
+# Especificación de Evo Runtime v0
 
 Status: MODEL A CLOSED
 
-## 1. Purpose
+## 1. Propósito
 
-Evo Runtime Model A defines the minimal platform boundary for starting an Evo
-Application. In Model A, the Runtime has a single, minimal responsibility:
-initiating execution by invoking the `Run` action provided by an Evo Application,
-maintaining the invocation active while the application runs, and delivering the
-final `Result` to the caller.
+Evo Runtime Model A define la frontera mínima de plataforma para iniciar una
+Evo Application. En Model A, el Runtime tiene una responsabilidad única y mínima:
+iniciar la ejecución invocando la acción `Run` proporcionada por una Evo
+Application, mantener la invocación activa mientras la aplicación se ejecuta, y
+entregar el `Result` final al caller.
 
 ---
 
-## 2. Runtime Boundary
+## 2. Frontera del Runtime
 
-The architectural boundary of Evo Runtime Model A is defined by:
-- Exactly **one Use Case** provided by the Runtime (`Start`).
-- Exactly **one Requester** consumed from the application (`Run`).
-- Exactly **one outcome type** (`Result`) defined by `evo-values`.
+La frontera arquitectónica de Evo Runtime Model A está definida por:
+- Exactamente **un Use Case** proporcionado por el Runtime (`Start`).
+- Exactamente **un Requester** consumido desde la aplicación (`Run`).
+- Exactamente **un tipo de outcome** (`Result`) definido por `evo-values`.
 
 ```text
 Caller / Host
      │
-     │ calls Start(Run)
+     │ llama Start(Run)
      ▼
 ┌───────────────────────────────┐
 │ Evo Runtime                   │
 │                               │
 │  Use Case: Start              │
 │       │                       │
-│       │ calls run()           │
+│       │ llama run()           │
 │       ▼                       │
 │  Requester: Run               │
 └───────┬───────────────────────┘
         │
         ▼
-Evo Application (active)
+Evo Application (activa)
         │
-        │ returns Result
+        │ retorna Result
         ▼
    Result (evo-values)
 ```
 
 ---
 
-## 3. Start Use Case
+## 3. Use Case Start
 
-- **Category**: Use Case (Provided by `evo-runtime`)
-- **Definition**: `definitions/use_cases/start.rs`
-- **Function Pointer Type**: `pub type Start = fn(run_request::Request) -> Result;`
-- **Semantics**:
-  1. Receives the `Run` requester function pointer from the caller.
-  2. Invokes `run()`.
-  3. Remains active on the call stack for the duration of `run()`.
-  4. Returns the `Result` produced by `run()` directly to the caller.
-  5. Does not require explicit `stop()`, `close()`, or `finalize()` operations;
-     termination of `run()` naturally concludes `start()`.
+- **Categoría**: Use Case (Proporcionado por `evo-runtime`)
+- **Definición**: `definitions/use_cases/start.rs`
+- **Tipo Function Pointer**: `pub type Start = fn(run_request::Request) -> Result;`
+- **Semántica**:
+  1. Recibe el function pointer del requester `Run` desde el caller.
+  2. Invoca `run()`.
+  3. Permanece activo en el call stack durante la duración de `run()`.
+  4. Retorna el `Result` producido por `run()` directamente al caller.
+  5. No requiere operaciones explícitas de `stop()`, `close()` o `finalize()`; la
+     terminación de `run()` concluye naturalmente `start()`.
 
 ---
 
-## 4. Run Requester
+## 4. Requester Run
 
-- **Category**: Requester (Consumed by `evo-runtime` from the Evo Application)
-- **Definition**: `definitions/requesters/run_request.rs`
-- **Function Pointer Type**: `pub type Request = fn() -> Result;`
-- **Semantics**:
-  1. Represents the entry point action that the application provides to the
+- **Categoría**: Requester (Consumido por `evo-runtime` desde la Evo Application)
+- **Definición**: `definitions/requesters/run_request.rs`
+- **Tipo Function Pointer**: `pub type Request = fn() -> Result;`
+- **Semántica**:
+  1. Representa la acción de punto de entrada que la aplicación proporciona al
      Runtime.
-  2. Encapsulates the application's entire execution lifecycle.
-  3. Returns `Result` upon completion.
+  2. Encapsula el ciclo de vida completo de ejecución de la aplicación.
+  3. Retorna `Result` al completarse.
 
 ---
 
 ## 5. Result
 
-- `Result` is the canonical outcome type representing the conclusion of an
-  execution (success or failure).
-- Defined and owned by `evo-values`.
-- From the perspective of Evo Runtime, `Result` is a concrete outcome type;
-  no generics are exposed across the Runtime boundary.
-- `Result != Failure`: a failed outcome is expressed through the failure branch
-  of `Result`.
+- `Result` es el tipo de outcome canónico que representa la conclusión de una
+  ejecución (éxito o fallo).
+- Definido y propiedad de `evo-values`.
+- Desde la perspectiva de Evo Runtime, `Result` es un tipo de outcome concreto;
+  no se exponen genéricos a través de la frontera del Runtime.
+- `Result != Failure`: un outcome fallido se expresa a través de la rama de
+  fallo de `Result`.
 
 ---
 
-## 6. Independent Start Invocations
+## 6. Invocaciones Independientes de Start
 
-Evo Runtime supports multiple concurrent or sequential Start invocations:
+Evo Runtime soporta múltiples invocaciones concurrentes o secuenciales de Start:
 
 ```text
 Start(run_app_1)  ──►  App 1  ──►  Result 1
 Start(run_app_2)  ──►  App 2  ──►  Result 2
 ```
 
-- Each invocation of `Start` is isolated and independent.
-- Failure of one application does not affect another application.
-- Evo Runtime does not share state across invocations.
+- Cada invocación de `Start` es aislada e independiente.
+- El fallo de una aplicación no afecta a otra aplicación.
+- Evo Runtime no comparte estado a través de las invocaciones.
 
 ---
 
-## 7. Runtime Non-Responsibilities
+## 7. No Responsabilidades del Runtime
 
-Evo Runtime Model A deliberately excludes all internal coordination
-mechanisms:
-- **No Context struct**: The Runtime does not maintain execution context or
-  session state.
-- **No Execution entity**: The execution lifecycle is represented solely by the
-  active call stack of `Start(run)`.
-- **No Engine resolution**: The Runtime does not discover, load, or select
-  engines (e.g. EvoS, EvoQ).
-- **No Provider / Contract management**: Providers and capabilities are not
-  managed by the Runtime.
-- **No Value transport**: Data flow between operations occurs directly inside
-  the application.
-- **No Operation resolution**: The Runtime does not resolve dependencies or
-  symbols.
+Evo Runtime Model A excluye deliberadamente todos los mecanismos internos de
+coordinación:
+- **Sin struct Context**: El Runtime no mantiene contexto de ejecución ni
+  estado de sesión.
+- **Sin entidad Execution**: El ciclo de vida de ejecución está representado
+  únicamente por el call stack activo de `Start(run)`.
+- **Sin resolución de Engines**: El Runtime no descubre, no carga ni selecciona
+  engines (por ejemplo, EvoS, EvoQ).
+- **Sin gestión de Provider / Contract**: Los providers y capabilities no son
+  administrados por el Runtime.
+- **Sin transporte de Value**: El flujo de datos entre operaciones ocurre
+  directamente dentro de la aplicación.
+- **Sin resolución de operaciones**: El Runtime no resuelve dependencias ni
+  símbolos.
 
 ---
 
-## 8. Engines and Applications
+## 8. Engines y Aplicaciones
 
-Once `Start` invokes `run()`, the Evo Application executes its domain logic
-directly with its own dependencies, libraries, and engines:
+Una vez que `Start` invoca `run()`, la Evo Application ejecuta su lógica de
+dominio directamente con sus propias dependencias, bibliotecas y engines:
 
 ```text
 Evo Application
   ├── Parsers / Lexers
   ├── Evo-Script Engine (EvoS)
   ├── Query Engine (EvoQ)
-  └── External Providers / Libraries
+  └── Providers Externos / Bibliotecas
 ```
 
-Evo Runtime does not act as an intermediary, service locator, or message bus for
-these internal interactions.
+Evo Runtime no actúa como intermediario, service locator ni message bus para
+estas interacciones internas.
 
 ---
 
-## 9. Future Compiled Engine Extension
+## 9. Futura Extensión de Engines Compilados
 
-Future extension architectures may support installing and loading compiled
-engines dynamically without recompiling the product.
+Arquitecturas de extensión futuras podrían soportar la instalación y carga
+dinámica de engines compilados sin recompilar el producto.
 
-This future capability:
-- Remains completely outside the scope of Model A.
-- Does not introduce engine registries or dynamic loaders into `evo-runtime`.
-- Will be defined in a separate technical extension specification.
+Esta capacidad futura:
+- Permanece completamente fuera del alcance de Model A.
+- No introduce registros de engines ni cargadores dinámicos en `evo-runtime`.
+- Se definirá en una especificación técnica de extensión separada.
 
 ---
 
-## 10. Technical Mapping
+## 10. Mapeo Técnico
 
-| Concept | Architectural Role | Technical Definition File | Technical Type |
+| Concepto | Rol Arquitectónico | Archivo de Definición Técnica | Tipo Técnico |
 | --- | --- | --- | --- |
 | **Start** | Use Case | `definitions/use_cases/start.rs` | `pub type Start = fn(run_request::Request) -> Result;` |
 | **Run** | Requester | `definitions/requesters/run_request.rs` | `pub type Request = fn() -> Result;` |
-| **Starter** | Agent (future) | `agents/starter/start.rs` | `pub fn start(run: run_request::Request) -> Result` |
-| **Result** | Outcome Type | `evo-values` | Outcome type from `evo-values` |
+| **Starter** | Agent (futuro) | `agents/starter/start.rs` | `pub fn start(run: run_request::Request) -> Result` |
+| **Result** | Tipo de Outcome | `evo-values` | Tipo de outcome desde `evo-values` |
 
 ---
 
-## 11. Closed Invariants
+## 11. Invariantes Cerrados
 
 1. `Start != Run`
 2. `Result != Failure`
-3. `Start(run)` receives the function pointer `run`, not the evaluated result.
-4. Evo Runtime provides exactly 1 Use Case (`Start`) and consumes exactly 1
-   Requester (`Run`).
-5. Evo Runtime has no Context, no Execution entity, and no Providers in Model A.
+3. `Start(run)` recibe el function pointer `run`, no el resultado evaluado.
+4. Evo Runtime proporciona exactamente 1 Use Case (`Start`) y consume
+   exactamente 1 Requester (`Run`).
+5. Evo Runtime no tiene Context, no tiene entidad Execution y no tiene
+   Providers en Model A.
