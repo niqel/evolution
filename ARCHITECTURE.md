@@ -10,7 +10,7 @@ La arquitectura actual es deliberadamente orientada a funciones: los Use Cases d
 
 Evolution distingue formalmente dos dimensiones diferentes:
 
-1. **Topología de ejecución**: quién aloja, mantiene el ciclo de vida y ejecuta una aplicación.
+1. **Topología de ejecución**: quién inicia, aloja y entrega el outcome de una aplicación.
 2. **Dependencias de código / crates**: qué proyecto conoce a cuál durante la compilación.
 
 Estas dimensiones no deben confundirse. Una relación de ejecución no implica necesariamente una dependencia directa de código, y una dependencia de crate no implica IPC, red ni un servicio externo.
@@ -19,140 +19,130 @@ Estas dimensiones no deben confundirse. Una relación de ejecución no implica n
 
 ## 2. Topología de Ejecución
 
-`evo-runtime` es el **Execution Host** de las aplicaciones Evolution.
+`evo-runtime` es el **Execution Host** mínimo de las aplicaciones Evolution.
+
+Bajo **Evo Runtime Model A**, el Runtime tiene una responsabilidad única y acotada: iniciar la aplicación mediante la acción `Run` suministrada por el Host, mantener la invocación activa y retornar el `Result` final.
 
 ```text
+                    Host / Caller
+                         │
+                         │ Start(Run)
+                         ▼
                     evo-runtime
-                  execution host
-                        │
-                     app.evo
-                        │
-                        ▼
-                   evo-script
-        ┌─────────────────────────────┐
-        │ language                    │
-        │ syntax / tokenization       │
-        │ parser                      │
-        │ types                       │
-        │ expressions                 │
-        │ operators                   │
-        │ predicates                  │
-        │ filter / select / new       │
-        │ to-value / append / take    │
-        │ pipes (|>)                  │
-        │ lazy iteration semantics    │
-        └─────────────────────────────┘
-                        │
-         utiliza operaciones del entorno
-                        ▼
-                    evo-shell
-        ┌─────────────────────────────┐
-        │ scope                       │
-        │ filesystem                  │
-        │ copy / move / rename        │
-        │ create / delete / trash     │
-        │ terminal / processes        │
-        │ network                     │
-        │ system environment          │
-        └─────────────────────────────┘
-                        │
-                        ▼
-                    Providers
-                        │
-                        ▼
-                        OS
+                         │
+                         │ invoca Run()
+                         ▼
+                  Evo Application
+                         │
+        ┌────────────────┼────────────────┐
+        ▼                ▼                ▼
+     engines          parsers         libraries
+        │
+        ├── Evo-Script Engine (EvoS)
+        ├── Query Engine (EvoQ)
+        ├── evo-shell
+        └── Providers
+                         │
+                         │ retorna Result
+                         ▼
+                    evo-runtime
+                         │
+                         │ retorna Result
+                         ▼
+                    Host / Caller
 ```
 
-`evo-runtime` aloja el contexto de ejecución; no absorbe las responsabilidades de `evo-script`, `evo-shell` ni de los Providers.
+`evo-runtime` no actúa como intermediario ni resuelve los componentes internos de la `Evo Application`. La aplicación administra directamente sus dependencias, engines y librerías.
 
 ---
 
-## 3. Instalación Compartida y Aislamiento por Aplicación
+## 3. Invocaciones Independientes y Aislamiento por Aplicación
 
-Evolution utiliza una instalación compartida del runtime con ejecuciones aisladas por aplicación.
+Evolution permite múltiples invocaciones independientes de `Start`:
 
 ```text
-       instalación compartida de evo-runtime
-                          │
-                  host / supervisor
-                          │
-          ┌──────────────┼──────────────┐
-          ▼              ▼              ▼
-     ejecución A    ejecución B    ejecución C
-          │              │              │
-      shell.evo       music.evo       ui.evo
+Host / Caller
+  ├── Start(Run_A) ──► Application A (activa) ──► Result A
+  ├── Start(Run_B) ──► Application B (activa) ──► Result B
+  └── Start(Run_C) ──► Application C (activa) ──► Result C
 ```
 
 Principios:
 
-- existe una implementación compartida de `evo-runtime`;
-- cada aplicación mantiene su propio contexto de ejecución;
-- compartir runtime no implica compartir estado de aplicación;
-- la forma física del host/supervisor podrá evolucionar sin alterar las fronteras semánticas descritas aquí.
+- cada invocación de `Start` es aislada e independiente;
+- el fallo de una aplicación no afecta a otra aplicación;
+- `evo-runtime` no comparte estado entre invocaciones;
+- no existe ningún `Context` global ni entidad de seguimiento `Execution` en `evo-runtime`;
+- el mecanismo físico de ejecución (hilos, tareas asíncronas o procesos) permanece abierto y no se fija en este nivel.
 
 ---
 
 ## 4. Responsabilidades de `evo-runtime`
 
-`evo-runtime` es responsable de:
+Bajo **Evo Runtime Model A**, `evo-runtime` tiene una frontera estrictamente mínima:
 
-- iniciar una aplicación o script `.evo`;
-- crear y mantener su contexto de ejecución;
-- gestionar lifecycle y aislamiento;
-- componer las operaciones requeridas por la aplicación;
-- resolver las implementaciones de infraestructura disponibles;
-- finalizar y liberar el contexto al terminar la aplicación.
+- proporciona exactamente un Use Case: `Start` (`pub type Start = fn(run_request::Request) -> Result;`);
+- consume exactamente un Requester: `Run` (`pub type Request = fn() -> Result;`);
+- recibe el function pointer `Run` desde el Host/Caller;
+- invoca `run()`;
+- permanece activo en el call stack durante la ejecución de la aplicación;
+- retorna el `Result` producido por `run()` directamente al Host/Caller.
 
-### Principio No-God-Runtime
+La terminación de `run()` concluye naturalmente la llamada a `Start`, sin requerir operaciones explícitas de detención o finalización.
+
+### Principio No-God-Runtime (Invariantes de Model A)
 
 `evo-runtime` NO:
 
-- define la gramática de `evo-script`;
-- parsea expresiones de lenguaje;
-- implementa las operaciones semánticas de `evo-shell`;
-- implementa directamente filesystem, red, procesos o terminal;
-- contiene lógica funcional propia de una aplicación;
-- reemplaza a los Providers.
+- mantiene un struct `Context`, `Session` ni estado de sesión;
+- posee una entidad `Execution` (el ciclo de vida está representado únicamente por el call stack activo de `Start(run)`);
+- descubre, selecciona ni carga engines (como Evo-Script Engine o EvoQ);
+- administra Providers, Contracts ni capabilities;
+- compone operaciones internas de la aplicación ni resuelve dependencias;
+- transporta `Values` entre operaciones internas;
+- define gramáticas ni parsea expresiones de lenguajes;
+- interpreta scripts ni procesa archivos de código fuente;
+- invoca operaciones de compilación o ejecución de scripts (`Compile`, `Execute Source`, `Execute Compiled`);
+- actúa como service locator ni message bus.
 
 ---
 
-## 5. Modelo de Aplicaciones `.evo`
+## 5. Modelo de Aplicaciones Evo
 
-Un archivo `.evo` representa código interpretado por `evo-script` dentro de un contexto mantenido por `evo-runtime`.
+Una **Evo Application** encapsula la lógica de ejecución y proporciona un punto de entrada ejecutable compatible (`Run`) a `evo-runtime`.
 
 ```text
-OS / launcher
+Host / Launcher
      │
+     │ Start(Run)
      ▼
 evo-runtime
      │
+     │ invoca Run()
      ▼
-ejecución aislada de aplicación
+Evo Application (activa)
      │
-     ▼
-   app.evo
+     ├── lógica de negocio y flujos
+     ├── interacción con engines (Evo-Script, EvoQ)
+     └── interacción con operaciones de entorno (evo-shell)
 ```
 
-Una aplicación puede ser desde un único script hasta un paquete con varios scripts y recursos.
-
-La UI, CLI o una interfaz para agentes de IA son **superficies de interacción**. No deben duplicar la lógica funcional de la aplicación.
+La UI, CLI o una interfaz para agentes de IA son **superficies de interacción**. No duplican la lógica funcional de la aplicación.
 
 ```text
-                 evo-runtime
-                      │
-                 music.evo
-                      │
-               lógica de evo-script
-                 /         \
-                /           \
-              UI          CLI / AI
-                \           /
-                 \         /
-                  ▼       ▼
-              misma operación semántica
+                 Evo Application
+                       │
+                 lógica de dominio
+                  /         \
+                 /           \
+               UI          CLI / AI
+                 \           /
+                  \         /
+                   ▼       ▼
+               misma operación semántica
 ```
 
-> La interacción visual es una superficie; el comportamiento funcional permanece scriptable.
+> La interacción visual es una superficie; el comportamiento funcional permanece scriptable y estructurado.
 
 ---
 
@@ -586,19 +576,21 @@ About es el único flujo para `ShellInformation`.
 ## 20. Dependencias de Código y Crates
 
 ```text
-evo-shell-cli ─────┐
-                   │
-evo-ui ────────────┼──► evo-runtime
-                   │
-future frontend ───┘
-
-evo-runtime ─────────► evo-script
-evo-runtime ─────────► evo-shell public API
+Host / Caller ──────────► evo-runtime (Use Case: Start)
+                               │
+                               ▼
+Evo Application ────────► evo-runtime (definitions/requesters: Run)
+      │
+      ├───► evo-values (Result)
+      ├───► evo-script-engine (opcional / según aplicación)
+      ├───► evo-query (opcional / según aplicación)
+      └───► evo-shell (operaciones semánticas de entorno)
 ```
 
 Prohibiciones:
 
-- `evo-runtime → frontends`;
+- `evo-runtime → frontends / aplicaciones concretas`;
+- `evo-runtime → evo-script-engine / engines de dominio`;
 - `evo-shell → evo-script`;
 - `evo-shell → evo-runtime`.
 
@@ -650,10 +642,10 @@ evo-apps
 repositorio / catálogo
    │
    ▼
-descarga de paquete .evo
+paquete de aplicación
    │
    ▼
-evo-runtime
+Host / Launcher ──► Start(Run) ──► evo-runtime
 ```
 
 ---
@@ -661,23 +653,19 @@ evo-runtime
 ## 25. Síntesis
 
 ```text
+Host / Caller
+    │ Start(Run)
+    ▼
 evo-runtime
-    host / lifecycle / aislamiento / composición
-
-        ↓
-
-evo-script
-    semántica del lenguaje
-
-        ↓
-
-evo-shell
-    operaciones semánticas del entorno
-
-        ↓
-
-Providers
-    realización física / técnica
+    inicia la ejecución invocando Run() y entrega Result
+        │
+        ▼
+Evo Application
+    gestiona directamente sus componentes:
+        ├── Evo-Script Engine
+        ├── Query Engine
+        ├── evo-shell
+        └── Providers / Librerías
 ```
 
 Dentro de `evo-shell`:
