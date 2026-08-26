@@ -2,5 +2,5 @@
 
 Status: TECHNICAL DESIGN — NOT STARTED
 
-This directory will contain technical interface definitions, function pointer
-declarations, and boundary maps for `evo-script-engine`.
+Este directorio contendrá definiciones de interfaces técnicas, declaraciones de
+function pointers y mapas de frontera para `evo-script-engine`.
