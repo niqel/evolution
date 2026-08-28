@@ -36,8 +36,8 @@ El diseño de `evo-script-engine` sigue esta secuencia canónica:
 | Step | Artifact | Status |
 | --- | --- | --- |
 | 1 | [Purpose](PURPOSE.md) | FUNCTIONAL CLOSED |
-| 2 | Public Capabilities | NEXT |
-| 3 | [User Stories](user-stories/README.md) | EXISTING — TO BE REVALIDATED |
+| 2 | [Public Capabilities](CAPABILITIES.md) | FUNCTIONAL CLOSED |
+| 3 | [User Stories](user-stories/README.md) | NEXT — EXISTING MATERIAL TO REVALIDATE |
 | 4 | [Functional Data Dictionary](DATA_DICTIONARY.md) | EXISTING — TO BE REVALIDATED |
 | 5 | [Functional Use Cases](use-cases/README.md) | EXISTING — TO BE REVALIDATED |
 | 6–10 | Technical artifacts | PENDING |
@@ -60,4 +60,4 @@ evo-script-engine/
     └── technical/
 ```
 
-`CAPABILITIES.md` corresponde al siguiente paso y se crea cuando Public Capabilities sea discutido y cerrado.
+El siguiente paso de diseño es **User Stories**. Las User Stories existentes deben revisarse contra `PURPOSE.md` y `CAPABILITIES.md` antes de conservarse, modificarse o reemplazarse.
