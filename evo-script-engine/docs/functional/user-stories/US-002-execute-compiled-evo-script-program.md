@@ -1,29 +1,26 @@
 # US-002 — Execute Compiled Evo-Script Program
 
-Status: FUNCTIONAL CLOSED
+Status: REVALIDATED — FUNCTIONAL CLOSED
 
 ## Historia
 
 ```text
 Como Consumer,
 quiero proporcionar un Compiled Program y los Invocation Values
-requeridos por su Public Function al Evo-Script Engine,
-para que el programa compilado sea ejecutado y reciba su Result.
+requeridos para su ejecución al Evo-Script Engine,
+para ejecutar el programa compilado conforme a Evo-Script
+y obtener su Result.
 ```
 
 ---
 
 ## Contexto
 
-El Evo-Script Engine es el componente responsable de compilar y ejecutar
-programas Evo-Script.
+El Evo-Script Engine ejecuta programas Evo-Script previamente compilados.
 
-Bajo **US-002 (Execute)**, el Consumer proporciona un **Compiled Program**
-previamente compilado y los **Invocation Values** ordenados (0..N) requeridos por
-su única Public Function.
+Bajo **US-002 (Execute Compiled)**, el Consumer proporciona un **Compiled Program** y los **Invocation Values** ordenados (`0..N`) requeridos para la invocación definida por la semántica vigente de Evo-Script.
 
-Execute **no** acepta Source Text y **no** realiza compilación. Evalúa el
-programa compilado directamente y retorna el `Result` de ejecución.
+`Execute Compiled` no acepta Source Text y no realiza compilación. Ejecuta el bytecode contenido por el Compiled Program y produce un `Result`.
 
 ```text
 Consumer
@@ -36,54 +33,45 @@ Consumer
 │ Evo-Script Engine                      │
 │                                        │
 │  Enlaza Invocation Values a parámetros │
-│  Ejecuta la única Public Function      │
+│  Ejecuta el bytecode                   │
+│  Mantiene estado local de ejecución    │
+│  Resuelve capacidades externas         │
+│  mediante bindings explícitos          │
 └──────────────────┬─────────────────────┘
                    │
-                   │ outcome de ejecución
                    ▼
                  Result
 ```
+
+La cantidad y selección de Public Functions pertenecen a la especificación de Evo-Script y no son definidas por esta User Story. Mientras la especificación vigente determine un único entry point público, la ejecución es inequívoca. Si en el futuro Evo-Script permitiera múltiples Public Functions seleccionables externamente, las Public Capabilities de ejecución deberán reabrirse para definir cómo seleccionar el entry point.
 
 ---
 
 ## Invocation Values
 
-Los Invocation Values son los Values ordenados proporcionados por el Consumer para
-satisfacer los parámetros declarados por la única Public Function del programa.
+Los Invocation Values son Values ordenados proporcionados por el Consumer para satisfacer los parámetros de la Public Function determinada conforme a la semántica vigente de Evo-Script.
 
 ### Reglas de Invocation Values
 
 1. **Cardinalidad**: Invocation Values contiene cero o más Values (`0..N`).
-2. **Cero Parámetros**: Una Public Function sin parámetros requiere cero
-   Invocation Values.
-3. **Aridad Exacta**: Una Public Function con $N$ parámetros requiere exactamente
-   $N$ Invocation Values.
-4. **Mapeo Posicional Estricto**: El mapeo de Invocation Values a parámetros es
-   estrictamente posicional:
+2. **Cero Parámetros**: Una Public Function sin parámetros requiere cero Invocation Values.
+3. **Aridad Exacta**: Una Public Function con `N` parámetros requiere exactamente `N` Invocation Values.
+4. **Mapeo Posicional Estricto**: El mapeo de Invocation Values a parámetros es estrictamente posicional:
+
    ```text
    InvocationValue[0]     ──► Parameter[0]
    InvocationValue[1]     ──► Parameter[1]
    ...
    InvocationValue[N - 1] ──► Parameter[N - 1]
    ```
-5. **Orden de Declaración**: El orden de los Invocation Values corresponde
-   directamente al orden de declaración de los parámetros en la firma de la
-   Public Function.
-6. **Compatibilidad Semántica**: Cada Invocation Value debe ser semánticamente
-   compatible con el tipo de parámetro declarado por la Public Function
-   (incluyendo tipos nativos, structs y enums definidos en el programa).
-7. **Sin Conversiones Implícitas**: El Engine no realiza conversiones ni
-   coerciones implícitas para adaptar un Value incompatible a un tipo de
-   parámetro.
-8. **Desajuste de Aridad**: Una cantidad de Invocation Values que no coincida con
-   la cantidad de parámetros produce un Result fallido.
-9. **Incompatibilidad de Tipo**: Un Invocation Value incompatible con su tipo de
-   parámetro correspondiente produce un Result fallido.
-10. **Independencia de Failure**: Las categorías específicas de Failure, códigos
-    de error y variantes no se definen en este nivel funcional.
-11. **Representación Técnica**: Las representaciones técnicas concretas en Rust
-    para Invocation Values, colecciones, slices o handles de tipo permanecen
-    diferidas al diseño técnico.
+
+5. **Orden de Declaración**: El orden de los Invocation Values corresponde directamente al orden de declaración de los parámetros en la firma de la Public Function.
+6. **Compatibilidad Semántica**: Cada Invocation Value debe ser semánticamente compatible con el tipo del parámetro correspondiente.
+7. **Sin Conversiones Implícitas**: El Engine no realiza coerciones implícitas para reparar un Value incompatible.
+8. **Desajuste de Aridad**: Una cantidad incorrecta de Invocation Values produce un Result fallido.
+9. **Incompatibilidad de Tipo**: Un Invocation Value incompatible con su parámetro produce un Result fallido.
+10. **Failure Diferido**: Las categorías concretas de Failure, códigos y variantes se definen posteriormente en el Functional Data Dictionary y el diseño técnico.
+11. **Representación Técnica Diferida**: La representación Rust concreta de Invocation Values se define en el diseño técnico.
 
 ### Ejemplo Conceptual
 
@@ -97,76 +85,130 @@ public fn sum(int left, int right) -> int
 ```
 
 El Consumer proporciona:
-- Compiled Program que contiene `sum`
-- Invocation Values: `[10, 20]`
+
+- Compiled Program que contiene el entry point correspondiente;
+- Invocation Values: `[10, 20]`.
 
 Binding posicional:
-- `InvocationValue[0]` (`10`) $\rightarrow$ enlazado al parámetro `left`
-- `InvocationValue[1]` (`20`) $\rightarrow$ enlazado al parámetro `right`
+
+- `InvocationValue[0]` (`10`) → `left`;
+- `InvocationValue[1]` (`20`) → `right`.
+
+---
+
+## Execution State
+
+Cada invocación de `Execute Compiled` mantiene su propio estado local de ejecución.
+
+### Reglas de estado
+
+1. Una ejecución no comparte implícitamente su estado local con otra ejecución.
+2. Una ejecución `.efn` inicia sin heredar implícitamente el Active Scope de una terminal, UI, API u otra ejecución.
+3. El programa puede establecer o cambiar su Active Scope conforme a la semántica de Evo-Script.
+4. Pipeline Data y Active Scope son canales semánticos distintos.
+5. Cambiar el Active Scope no destruye ni reemplaza automáticamente el Pipeline Data.
+6. Finalizada la invocación, su estado local de ejecución deja de pertenecer a esa operación.
+7. El Consumer no necesita proporcionar un objeto genérico de sesión, Context o Service Locator en la frontera funcional.
+
+Conceptualmente:
+
+```text
+Compiled Program
+      │
+      ├── Execute(values A) ──► Execution State A ──► Result A
+      ├── Execute(values B) ──► Execution State B ──► Result B
+      └── Execute(values C) ──► Execution State C ──► Result C
+```
+
+---
+
+## External Symbols and Capabilities
+
+Un Compiled Program puede contener External Symbols conservados durante `Compile`.
+
+Cuando la ejecución alcanza una operación que requiere una capacidad externa:
+
+```text
+External Symbol
+      │
+      ▼
+explicit application binding
+      │
+      ├── capacidad disponible ──► continuar ejecución
+      └── capacidad ausente ─────► Result fallido
+```
+
+### Reglas funcionales
+
+1. Los External Symbols se resuelven durante la ejecución, no mediante descubrimiento oculto durante Compile.
+2. Las capacidades externas requeridas deben haber sido suministradas explícitamente por la composición de la aplicación.
+3. El Engine no conoce ni descubre Providers concretos.
+4. El Engine no mantiene registries globales de Providers o capacidades.
+5. La ausencia de una capacidad externa requerida produce un Result fallido.
+6. El mecanismo técnico exacto de binding, Requesters, Contracts y Providers se define posteriormente en el diseño técnico.
 
 ---
 
 ## Criterios de Aceptación
 
-1. El Consumer puede proporcionar un Compiled Program válido al Evo-Script
-   Engine.
+1. El Consumer puede proporcionar un Compiled Program válido al Evo-Script Engine.
 2. El Consumer puede proporcionar cero o más Invocation Values.
-3. Execute no recibe Source Text y no realiza compilación de código fuente.
-4. El Engine determina los parámetros declarados por la Public Function del
-   Compiled Program.
-5. Los Invocation Values se emparejan con los parámetros estrictamente por
-   posición.
-6. La cantidad de Invocation Values debe ser igual a la cantidad de parámetros de
-   la Public Function ($N$).
-7. Cada Invocation Value debe ser semánticamente compatible con su correspondiente
-   tipo de parámetro.
-8. El Engine no realiza conversiones implícitas para reparar Invocation Values
-    incompatibles.
-9. Las Public Functions de cero parámetros requieren cero Invocation Values.
-10. Un desajuste de aridad produce un Result fallido.
-11. Una incompatibilidad de tipo produce un Result fallido.
-12. El Engine ejecuta la Public Function conforme a la semántica de Evo-Script
-    v0.
-13. Una ejecución exitosa preserva el Value producido por la Public Function en
-    el Result exitoso.
-14. Una ejecución fallida produce un Result fallido en lugar de tratarse
-    silenciosamente como éxito.
-15. El Consumer no necesita conocer la arquitectura interna de la VM, intérprete
-    o evaluador del Engine.
-16. Una vez que se retorna el Result al Consumer, esa invocación de Execute
-    concluye.
-17. No se requiere ningún objeto explícito de sesión o de contexto de ejecución
-    del Engine en la frontera funcional.
+3. Execute Compiled no recibe Source Text.
+4. Execute Compiled no realiza compilación de código fuente.
+5. El Engine ejecuta el bytecode contenido por el Compiled Program.
+6. Los Invocation Values se emparejan con los parámetros estrictamente por posición.
+7. La cantidad de Invocation Values debe coincidir exactamente con la cantidad de parámetros requeridos.
+8. Cada Invocation Value debe ser semánticamente compatible con su parámetro correspondiente.
+9. El Engine no realiza conversiones implícitas para reparar incompatibilidades.
+10. Las Public Functions de cero parámetros requieren cero Invocation Values.
+11. Un desajuste de aridad produce un Result fallido.
+12. Una incompatibilidad de tipo produce un Result fallido.
+13. Cada ejecución mantiene estado local independiente.
+14. La ejecución inicia sin heredar implícitamente un Active Scope externo.
+15. Pipeline Data y Active Scope permanecen semánticamente separados.
+16. Si el programa requiere una capacidad externa disponible mediante binding explícito, el Engine puede utilizarla durante la ejecución.
+17. Si una capacidad externa requerida no está disponible, la ejecución produce un Result fallido.
+18. El Engine no descubre ni selecciona Providers concretos mediante mecanismos ocultos.
+19. Una ejecución exitosa preserva el Value producido por el programa en el Result exitoso.
+20. Una ejecución fallida produce un Result fallido en lugar de tratarse silenciosamente como éxito.
+21. El mismo Compiled Program puede ejecutarse múltiples veces con distintos Invocation Values.
+22. Una ejecución no contamina el estado local de otra ejecución.
+23. Cuando se retorna el Result al Consumer, esa invocación de Execute Compiled concluye.
 
 ---
 
 ## Concepto de Outcome de Ejecución (Result)
 
-El outcome funcional de ejecutar un programa compilado se representa
-conceptualmente como `Result`:
-- **Outcome Exitoso**: Preserva el `Value` producido por el programa.
-- **Outcome Fallido**: Representa una falla de ejecución (por ejemplo, desajuste
-  de aridad, incompatibilidad de tipo, error de evaluación en runtime).
+El outcome funcional de ejecutar un programa compilado se representa conceptualmente como `Result`:
 
-> [!NOTE]
-> `Result` es un concepto de outcome funcional alineado con el modelo compartido
-> de Evo (`Result != Value`, `Result != Failure`).
-> Las representaciones concretas en Rust, parámetros de tipo, genéricos
-> (`Result<T, E>`), estructuras de error y variantes de enum deliberadamente
-> **no** se deciden en esta User Story.
+- **Outcome Exitoso**: preserva el `Value` producido por el programa.
+- **Outcome Fallido**: representa una falla de ejecución, como desajuste de aridad, incompatibilidad de tipo, falla de evaluación o capacidad externa requerida no disponible.
+
+`Result` es un concepto funcional compartido de Evo y no debe confundirse con `Value` ni con `Failure`.
+
+La representación técnica concreta de `Result`, `Failure` y sus variantes se define posteriormente.
 
 ---
 
 ## No Responsabilidades y Fuera de Alcance
 
-Para el alcance de US-002 y Evo-Script Engine v0:
-- Compilación o parseo de Source Text de Evo-Script (cubierto por US-001).
-- Carga de Compiled Programs desde almacenamiento físico o sistemas de archivos.
-- Interacción con la terminal, formateo o presentación de UI.
-- Inicio, detención o gestión del ciclo de vida de aplicaciones de Evo Runtime.
-- Parseo de consultas o semántica de ejecución pertenecientes a EvoQ.
-- Decisiones de arquitectura interna del motor de ejecución (por ejemplo, stack
-  VM, register VM o intérprete tree-walk).
-- Efectos laterales externos, salida a consola (`print`), stdout, I/O de sistema
-  de archivos, Requesters, Providers o callbacks intermedios durante la
-  ejecución.
+Para el alcance de US-002:
+
+- compilación o parseo de Source Text de Evo-Script, cubierto por US-001;
+- carga de Compiled Programs desde almacenamiento físico o filesystem;
+- persistencia del estado de ejecución después de concluir la invocación;
+- interacción con terminal, stdout, UI o protocolos de presentación;
+- gestión del ciclo de vida de una Evo Application;
+- implementación de filesystem, database, network u otros Providers;
+- descubrimiento dinámico u oculto de Providers;
+- definición de la semántica de EvoQ;
+- definición de la arquitectura interna concreta de la VM, por ejemplo Stack VM o Register VM;
+- definición técnica de Requesters, Contracts, Resolvers, Collaborators o Tools.
+
+---
+
+## Revalidation
+
+Esta User Story fue revalidada contra el Purpose y las Public Capabilities cerradas de `evo-script-engine`, además de las decisiones arquitectónicas actuales sobre bytecode, External Symbols, bindings explícitos, Active Scope y separación entre Pipeline Data y Active Scope.
+
+US-002 se considera `REVALIDATED — FUNCTIONAL CLOSED`.
