@@ -1,33 +1,63 @@
-# Evo-Script Engine — Documentación Funcional
+# Evo-Script Engine — Functional Documentation
 
-Status: FUNCTIONAL DESIGN — NOT CLOSED
+Status: FUNCTIONAL DESIGN — IN PROGRESS
 
 Este directorio contiene la documentación de diseño funcional para el componente
 `evo-script-engine`.
 
-## Secuencia de Diseño Arquitectónico
+La documentación se desarrolla y se cierra por niveles. Cada nivel cerrado se
+convierte en autoridad para el nivel siguiente.
 
-El desarrollo formal y la especificación de `evo-script-engine` sigue esta
-secuencia de diseño canónica:
+Los nombres estructurales de artefactos y etapas se expresan en inglés. El
+contenido explicativo y normativo de los documentos se redacta en español.
 
-1. **User Stories**: Captura de objetivos funcionales desde la perspectiva de los Consumers.
-2. **Data Dictionary**: Consolidación del vocabulario funcional canónico.
-3. **Use Cases**: Derivación de acciones funcionales discretas individuales.
-4. **Functional Coverage**: Verificación de trazabilidad completa desde historias a use cases.
-5. **Functional Model Closed**: Cierre formal del modelo funcional.
-6. **Technical Interfaces**: Definición de function pointers de frontera y puntos de entrada.
-7. **Technical Data Model**: Definición de representaciones técnicas y ownership.
-8. **Sequence Diagrams**: Documentación de flujos de interacción en runtime.
-9. **Structure Diagrams**: Documentación de relaciones modulares y de componentes.
-10. **Technical Mapping**: Mapeo de definiciones a archivos y tipos concretos.
-11. **Technical Model Closed**: Cierre formal del diseño técnico.
-12. **Evo-Script Engine Specification v0**: Documento de especificación normativa.
-13. **Rust Implementation**: Código concreto del crate y verificación automatizada.
+## Canonical Design Sequence
 
----
+El diseño de `evo-script-engine` sigue esta secuencia canónica:
 
-## Organización del Directorio
+1. **Purpose** — definición definitiva de la responsabilidad del componente.
+2. **Public Capabilities** — capacidades públicas que ofrece el componente.
+3. **User Stories** — objetivos funcionales desde la perspectiva de los Consumers.
+4. **Functional Data Dictionary** — vocabulario funcional canónico.
+5. **Functional Use Cases** — acciones funcionales discretas derivadas de las User Stories.
 
-- [`user-stories/`](user-stories/README.md): User Stories funcionales candidatas y cerradas (*FUNCTIONAL CLOSED*).
-- [`DATA_DICTIONARY.md`](DATA_DICTIONARY.md): Vocabulario funcional canónico para evo-script-engine v0 (*FUNCTIONAL CLOSED*).
-- [`use-cases/`](use-cases/README.md): Use Cases funcionales candidatos y cerrados (*FUNCTIONAL DESIGN — IN PROGRESS*).
+```text
+──────────── FUNCTIONAL CLOSED ────────────
+```
+
+6. **Technical Design** — arquitectura técnica interna necesaria para cumplir el modelo funcional.
+7. **Rust Signatures** — function pointers, tipos, ownership y lifetimes concretos.
+8. **Participants** — Agents, Requesters, Collaborators, Resolvers, Contracts y Tools requeridos por las firmas.
+9. **D2 Sequence Diagrams** — flujos técnicos derivados directamente de las firmas cerradas.
+10. **Implementation Tasks** — lista de trabajo ejecutable para AGY/Codex.
+
+## Current Progress
+
+| Step | Artifact | Status |
+| --- | --- | --- |
+| 1 | [Purpose](PURPOSE.md) | FUNCTIONAL CLOSED |
+| 2 | Public Capabilities | NEXT |
+| 3 | [User Stories](user-stories/README.md) | EXISTING — TO BE REVALIDATED |
+| 4 | [Functional Data Dictionary](DATA_DICTIONARY.md) | EXISTING — TO BE REVALIDATED |
+| 5 | [Functional Use Cases](use-cases/README.md) | EXISTING — TO BE REVALIDATED |
+| 6–10 | Technical artifacts | PENDING |
+
+Los artefactos funcionales existentes de etapas posteriores se conservan como
+evidencia y trabajo previo, pero deben ser revalidados bajo la arquitectura
+canónica actual antes de considerarse autoridad para el nuevo cierre funcional.
+
+## Directory Organization
+
+```text
+evo-script-engine/
+└── docs/
+    ├── functional/
+    │   ├── PURPOSE.md
+    │   ├── CAPABILITIES.md
+    │   ├── user-stories/
+    │   ├── DATA_DICTIONARY.md
+    │   └── use-cases/
+    └── technical/
+```
+
+`CAPABILITIES.md` corresponde al siguiente paso y se crea cuando Public Capabilities sea discutido y cerrado.
