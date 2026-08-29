@@ -37,15 +37,15 @@ La existencia futura de un Agent, Collaborator u otro Participant no se decide e
 | ID | Canonical Name | Estado |
 | --- | --- | --- |
 | [UC-001](UC-001-compile.md) | Compile | REVALIDATED — FUNCTIONAL CLOSED |
-| [UC-002](UC-002-execute-compiled-evo-script-program.md) | Execute Compiled | EXISTING — TO BE REVALIDATED |
+| [UC-002](UC-002-execute-compiled.md) | Execute Compiled | REVALIDATED — FUNCTIONAL CLOSED |
 | UC-003 | Execute Source | PENDING / TO BE DEFINED OR REVALIDATED |
 
 ## Current Progress
 
 ```text
 UC-001 — Compile             ✅ REVALIDATED / CLOSED
-UC-002 — Execute Compiled    ← NEXT
-UC-003 — Execute Source      PENDING
+UC-002 — Execute Compiled    ✅ REVALIDATED / CLOSED
+UC-003 — Execute Source      ← NEXT
 ```
 
 Los nombres canónicos de v0 deben corresponder a las Public Capabilities ya cerradas:
