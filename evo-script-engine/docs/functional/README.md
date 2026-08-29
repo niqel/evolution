@@ -1,6 +1,6 @@
 # Evo-Script Engine — Functional Documentation
 
-Status: FUNCTIONAL DESIGN — IN PROGRESS
+Status: FUNCTIONAL CLOSED
 
 Este directorio contiene la documentación de diseño funcional para el componente
 `evo-script-engine`.
@@ -39,16 +39,55 @@ El diseño de `evo-script-engine` sigue esta secuencia canónica:
 | 2 | [Public Capabilities](CAPABILITIES.md) | FUNCTIONAL CLOSED |
 | 3 | [User Stories](user-stories/README.md) | REVALIDATED — FUNCTIONAL CLOSED |
 | 4 | [Functional Data Dictionary](DATA_DICTIONARY.md) | REVALIDATED — FUNCTIONAL CLOSED |
-| 5 | [Functional Use Cases](use-cases/README.md) | NEXT — EXISTING MATERIAL TO REVALIDATE |
-| 6–10 | Technical artifacts | PENDING |
+| 5 | [Functional Use Cases](use-cases/README.md) | FUNCTIONAL CLOSED |
+| 6 | Technical Design | NEXT |
+| 7–10 | Remaining Technical Artifacts | PENDING |
 
-Los artefactos funcionales cerrados de etapas anteriores son autoridad para la etapa siguiente. El material existente de Functional Use Cases se conserva como evidencia previa, pero debe revalidarse contra Purpose, Public Capabilities, User Stories y Functional Data Dictionary antes de considerarse parte del nuevo cierre funcional.
+Todos los artefactos funcionales de `evo-script-engine` v0 están cerrados y constituyen autoridad para el diseño técnico.
 
 ## Functional Data Dictionary Rule
 
 Todo dato o concepto necesario para expresar una User Story o Functional Use Case debe estar definido previamente en el Functional Data Dictionary.
 
 El diccionario funcional debe permitir que posteriormente el Technical Lead determine representaciones técnicas y Rust Signatures sin reinventar el significado de los datos. No define todavía structs, enums, ownership, lifetimes ni participantes técnicos.
+
+## Closed Functional Model
+
+```text
+Purpose
+   ✅
+Public Capabilities
+   ✅
+User Stories
+   ✅
+Functional Data Dictionary
+   ✅
+Functional Use Cases
+   ✅
+
+──────────── FUNCTIONAL CLOSED ────────────
+
+Technical Design
+   ← NEXT
+```
+
+Los tres Functional Use Cases canónicos son:
+
+```text
+Compile
+Execute Compiled
+Execute Source
+```
+
+con la relación:
+
+```text
+Execute Source
+    ≡
+Compile + Execute Compiled
+```
+
+bajo las mismas entradas y capacidades externas disponibles.
 
 ## Directory Organization
 
@@ -64,4 +103,4 @@ evo-script-engine/
     └── technical/
 ```
 
-El siguiente paso de diseño es **Functional Use Cases**.
+El siguiente nivel de trabajo es **Technical Design**. A partir de este punto, el diseño técnico debe derivarse del modelo funcional cerrado y no redefinir retrospectivamente su semántica.
