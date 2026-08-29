@@ -26,10 +26,15 @@ El diseño de `evo-script-engine` sigue esta secuencia canónica:
 ```
 
 6. **Technical Design** — arquitectura técnica interna necesaria para cumplir el modelo funcional.
-7. **Rust Signatures** — function pointers, tipos, ownership y lifetimes concretos.
-8. **Participants** — Agents, Requesters, Collaborators, Resolvers, Contracts y Tools requeridos por las firmas.
-9. **D2 Sequence Diagrams** — flujos técnicos derivados directamente de las firmas cerradas.
-10. **Implementation Tasks** — lista de trabajo ejecutable para AGY/Codex.
+7. **Technical Data Model** — representación concreta de structs, enums, artifacts, borrowed views, ownership, lifetimes y datos internos necesarios.
+8. **Technical Data Diagram** — vista D2 de tipos y relaciones del Technical Data Model.
+9. **Rust Signatures** — function pointers, tipos, ownership y lifetimes concretos de las operaciones arquitectónicas.
+10. **Participants** — Agents, Requesters, Collaborators, Resolvers, Contracts y Tools requeridos por las firmas.
+11. **Module Signature Diagram** — vista D2 de módulos Rust como identidades arquitectónicas, sus firmas y relaciones.
+12. **D2 Sequence Diagrams** — flujos técnicos derivados directamente de las firmas cerradas.
+13. **Implementation Tasks** — lista de trabajo ejecutable para AGY/Codex.
+
+La metodología técnica completa se define en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../../TECHNICAL_DESIGN_METHODOLOGY.md).
 
 ## Current Progress
 
@@ -41,7 +46,7 @@ El diseño de `evo-script-engine` sigue esta secuencia canónica:
 | 4 | [Functional Data Dictionary](DATA_DICTIONARY.md) | REVALIDATED — FUNCTIONAL CLOSED |
 | 5 | [Functional Use Cases](use-cases/README.md) | FUNCTIONAL CLOSED |
 | 6 | Technical Design | NEXT |
-| 7–10 | Remaining Technical Artifacts | PENDING |
+| 7–13 | Remaining Technical Artifacts | PENDING |
 
 Todos los artefactos funcionales de `evo-script-engine` v0 están cerrados y constituyen autoridad para el diseño técnico.
 
@@ -50,6 +55,12 @@ Todos los artefactos funcionales de `evo-script-engine` v0 están cerrados y con
 Todo dato o concepto necesario para expresar una User Story o Functional Use Case debe estar definido previamente en el Functional Data Dictionary.
 
 El diccionario funcional debe permitir que posteriormente el Technical Lead determine representaciones técnicas y Rust Signatures sin reinventar el significado de los datos. No define todavía structs, enums, ownership, lifetimes ni participantes técnicos.
+
+## Technical Data Model Rule
+
+Toda estructura, enum, artifact o dato interno necesario para expresar una Rust Signature o implementar un Participant debe estar definido previamente en el Technical Data Model.
+
+Los diagramas técnicos no sustituyen esta definición: son vistas derivadas del diseño cerrado.
 
 ## Closed Functional Model
 
@@ -101,6 +112,10 @@ evo-script-engine/
     │   ├── DATA_DICTIONARY.md
     │   └── use-cases/
     └── technical/
+        ├── data-model/
+        ├── signatures/
+        ├── module-signatures/
+        └── sequences/
 ```
 
 El siguiente nivel de trabajo es **Technical Design**. A partir de este punto, el diseño técnico debe derivarse del modelo funcional cerrado y no redefinir retrospectivamente su semántica.
