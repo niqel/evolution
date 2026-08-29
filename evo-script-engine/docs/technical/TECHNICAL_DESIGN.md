@@ -298,6 +298,49 @@ Invariantes:
 - los Requesters continúan viajando hasta el owner/materializador cuando el dato permanece borrowed;
 - esta decisión no prescribe `Vec`, arena, heap, `Box`, `Arc`, `Rc` ni otro mecanismo concreto de almacenamiento.
 
+### TD-009 — VM dirigida por Evo-Script e implementada en Rust
+
+Status: CLOSED
+
+La Stack VM y su bytecode se diseñan a partir de la semántica ejecutable de `Evo-Script`. Rust constituye el lenguaje de implementación y determina las decisiones técnicas necesarias para expresar esa semántica de forma segura y eficiente, pero las construcciones propias de Rust no se convierten automáticamente en conceptos del bytecode ni de la VM.
+
+Regla canónica:
+
+```text
+Evo-Script
+    define QUÉ debe ejecutarse
+
+Rust
+    define CÓMO se implementa
+```
+
+Flujo de autoridad:
+
+```text
+Evo-Script semantics
+        ↓
+Semantic Program
+        ↓
+Bytecode Compiler
+        ↓
+Evo Bytecode
+        ↓
+Stack VM
+        ↓
+Rust implementation
+```
+
+Invariantes:
+
+- la semántica de `Evo-Script` determina las capacidades necesarias de la VM;
+- `Semantic Program` representa el significado ya resuelto que será reducido a bytecode;
+- el bytecode representa mecanismos ejecutables necesarios para `Evo-Script`, no una reproducción de las construcciones de Rust;
+- ownership, borrowing, lifetimes y representación de memoria pertenecen a la implementación Rust del Engine y no se exponen automáticamente como semántica de `Evo-Script`;
+- una construcción sintáctica de `Evo-Script` no requiere un opcode dedicado cuando puede reducirse correctamente a operaciones de VM más fundamentales;
+- `Pipeline`, `when`, `let` u otras construcciones pueden compilarse a mecanismos como load, store, call, compare, branch y return cuando su semántica quede preservada;
+- la VM debe ser específica de `Evo-Script` en las capacidades que necesita ejecutar y pequeña en sus mecanismos computacionales;
+- no se introducen capacidades de VM únicamente porque Rust posea una construcción equivalente o más compleja.
+
 ## 3. Technical Design Closure
 
 Las decisiones estructurales necesarias para comenzar el Technical Data Model de `evo-script-engine` v0 están cerradas.
@@ -312,6 +355,7 @@ Owned Constant Pool                       ✅ CLOSED
 Shared Operand Stack + frame windows      ✅ CLOSED
 Shared Frame Region                       ✅ CLOSED
 External Value ownership                  ✅ CLOSED
+Evo-Script-driven VM                      ✅ CLOSED
 
 Technical Design                          ✅ CLOSED
 Technical Data Model                      ← NEXT
