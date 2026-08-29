@@ -48,6 +48,26 @@ Outcome / Diagnostic Data
 
 Este orden no implica que todos los conceptos requieran un tipo independiente. Cada identidad debe justificarse por una necesidad real del diseño.
 
+## Current Progress
+
+```text
+Lexical Data
+├── Token structural rules       ✅ CLOSED
+├── Token Kind                   ← IN ANALYSIS
+├── EOF policy                   PENDING
+└── whitespace/comments policy   PENDING
+
+AST Data                         PENDING
+Semantic Program Data            PENDING
+Compiled Program / Bytecode Data PENDING
+VM Execution Data                PENDING
+Outcome / Diagnostic Data        PENDING
+```
+
+Documentos del bloque actual:
+
+- [`LEXICAL_DATA.md`](./LEXICAL_DATA.md) — reglas estructurales cerradas de `Token`, `Lexeme`, `Source Span` y `Token Sequence`.
+
 ## Technical Data Diagram
 
 El Technical Data Diagram es una vista D2 derivada del modelo.
