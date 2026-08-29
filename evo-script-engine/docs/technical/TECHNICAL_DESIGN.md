@@ -1,6 +1,6 @@
 # Evo-Script Engine — Technical Design
 
-Status: TECHNICAL DESIGN — IN PROGRESS
+Status: TECHNICAL DESIGN — CLOSED
 
 Este documento registra las decisiones estructurales de Technical Design para `evo-script-engine` v0.
 
@@ -237,25 +237,70 @@ Invariantes:
 - esta decisión no prescribe `Vec<Value>` ni otra colección genérica específica;
 - el Bytecode Compiler puede calcular o preservar información como `parameter_count`, `local_count` y `max_operand_depth` cuando el Technical Data Model demuestre que es necesaria.
 
-## 3. Required Open Decisions Before Technical Data Model Closure
-
 ### TD-008 — Ownership de Values producidos por External Capabilities
 
-Status: OPEN — NEXT
+Status: CLOSED
 
-Debe definirse cómo una ejecución conserva un `Value` producido por una External Capability cuando dicho valor necesita sobrevivir a la invocación inmediata del Provider.
+Los resultados producidos por una `External Capability` utilizan borrowing mientras el dato sea consumido dentro del lifetime válido de su materializador.
 
-La decisión debe respetar:
+Cuando la semántica de ejecución exige que un resultado sobreviva a la invocación inmediata de la `External Capability`, el backing data debe transferir ownership hacia almacenamiento perteneciente a la ejecución. Desde ese momento la ejecución se convierte en owner y materializador de las vistas `Value` borrowed posteriores.
 
-- `Value` pertenece semánticamente a `evo-values`;
-- Materialization Ownership;
-- borrowing antes que ownership artificial;
-- Requesters viajan al owner/materializer cuando un dato prestado no puede escapar de su lifetime;
-- Pipeline Data puede necesitar permanecer disponible para operaciones posteriores.
+Regla canónica:
 
-No se asumirá que todo resultado externo puede almacenarse arbitrariamente como borrowed `Value` después de retornar del Provider.
+```text
+borrow mientras alcance
 
-## 4. Current Technical Design State
+ownership cuando deba sobrevivir
+```
+
+Flujo borrowed:
+
+```text
+Provider / materializer
+        │
+        ├── owns data
+        ├── materializa Value<'a>
+        └── Requester(Value<'a>)
+                │
+                ▼
+          consumo inmediato
+                │
+                ▼
+          termina el borrow
+```
+
+Flujo con transferencia real de ownership:
+
+```text
+Provider
+   │
+   │ transfer ownership
+   ▼
+VM Execution
+   │
+   ├── owns backing data
+   └── materializa Value<'execution>
+            │
+            ▼
+      uso posterior por VM
+```
+
+Invariantes:
+
+- un `Value` borrowed producido por una External Capability nunca puede escapar del lifetime de su materializador;
+- no se crea ownership artificial cuando el dato solo necesita observación inmediata;
+- cuando el dato debe sobrevivir a la invocación externa, existe una necesidad real de ownership y la transferencia queda justificada;
+- `VM Execution` es el owner natural del backing data externo cuyo lifetime debe extenderse durante la ejecución;
+- después de una transferencia de ownership, la ejecución es responsable de materializar futuras vistas borrowed sobre ese dato;
+- `Call Frame`, `Shared Frame Region` y `Shared Value Storage` no se convierten automáticamente en owners del backing data externo;
+- una vista `Value` y su representación owned de respaldo son conceptos técnicos distintos;
+- la representación Rust concreta del almacenamiento owned y de la relación entre owned backing data y `Value<'a>` se define en el Technical Data Model;
+- los Requesters continúan viajando hasta el owner/materializador cuando el dato permanece borrowed;
+- esta decisión no prescribe `Vec`, arena, heap, `Box`, `Arc`, `Rc` ni otro mecanismo concreto de almacenamiento.
+
+## 3. Technical Design Closure
+
+Las decisiones estructurales necesarias para comenzar el Technical Data Model de `evo-script-engine` v0 están cerradas.
 
 ```text
 Stack VM                                  ✅ CLOSED
@@ -266,15 +311,17 @@ Compiled Program architectural shape      ✅ CLOSED
 Owned Constant Pool                       ✅ CLOSED
 Shared Operand Stack + frame windows      ✅ CLOSED
 Shared Frame Region                       ✅ CLOSED
+External Value ownership                  ✅ CLOSED
 
-External Value ownership                  ← NEXT
-
-Technical Data Model                      BLOCKED until TD-008 closes
+Technical Design                          ✅ CLOSED
+Technical Data Model                      ← NEXT
 ```
 
-## 5. Boundary Toward Technical Data Model
+Reabrir una de estas decisiones requiere identificar explícitamente qué nueva necesidad técnica o funcional invalida el diseño cerrado.
 
-Una vez cerrada TD-008, el Technical Data Model podrá definir de forma concreta los datos demostrados por el diseño, incluyendo cuando corresponda:
+## 4. Boundary Toward Technical Data Model
+
+El Technical Data Model puede ahora definir de forma concreta los datos demostrados por el diseño, incluyendo cuando corresponda:
 
 ```text
 Token
@@ -296,6 +343,7 @@ Shared Value Storage / VM State
 Parameter Slots
 Local Slots
 Operand Window
+Owned external backing data
 Source Mapping
 Failure representations
 ```
