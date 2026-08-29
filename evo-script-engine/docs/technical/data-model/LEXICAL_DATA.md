@@ -1,6 +1,6 @@
 # Evo-Script Engine — Lexical Data
 
-Status: TOKEN KIND — CLOSED
+Status: SOURCE SPAN + LEXEME — CLOSED
 
 Este documento define las decisiones del primer bloque del Technical Data Model de `evo-script-engine`: los datos producidos por el Lexer y consumidos por el Parser.
 
@@ -59,8 +59,6 @@ Token
 
 `Source Span` identifica el rango ocupado por el token dentro del `Source Text`.
 
-La representación Rust concreta se define posteriormente dentro del Technical Data Model.
-
 ### LD-003 — Lexeme es una borrowed view del Source Text
 
 Status: CLOSED
@@ -100,17 +98,9 @@ Source Span
 └── end
 ```
 
-La representación fundamental no duplica obligatoriamente `line` y `column` dentro de cada Token.
+La representación fundamental no duplica `line` y `column` dentro de cada Token.
 
-La información de línea y columna puede derivarse posteriormente para diagnóstico a partir del `Source Text` y del `Source Span`.
-
-Invariantes:
-
-- `Source Span` representa un rango, no solamente un punto;
-- sus límites deben permitir identificar inequívocamente la región textual reconocida;
-- cuando el span materializa una vista textual UTF-8, sus límites deben corresponder a fronteras válidas del texto;
-- el tipo numérico concreto de `start` y `end` se define posteriormente;
-- `Source Span` y `Source Location` no se consideran automáticamente el mismo concepto técnico: el primero representa un rango; el segundo puede representar una ubicación concreta de diagnóstico cuando sea necesario.
+La información de línea y columna se deriva posteriormente para diagnóstico a partir del `Source Text` y del `Source Span`.
 
 ### LD-005 — Lexer no materializa evo-values::Value
 
@@ -135,19 +125,6 @@ Value::Unsigned(123)
 ```
 
 La interpretación sintáctica y semántica pertenece a etapas posteriores.
-
-Esto mantiene la separación:
-
-```text
-Lexer
-    reconoce forma textual
-
-Parser
-    construye estructura
-
-Semantic Analyzer
-    resuelve significado
-```
 
 ### LD-006 — Token Sequence contiene 0..N Tokens sin prescribir colección Rust
 
@@ -361,6 +338,101 @@ unrecognized / malformed form
 
 `Lexical Failure` y sus datos de diagnóstico se definirán en el bloque correspondiente de Outcome / Diagnostic Data.
 
+### LD-010 — Source Span utiliza byte offsets half-open
+
+Status: CLOSED
+
+`Source Span` es un dato técnico con identidad propia que representa una región del `Source Text` mediante dos offsets de bytes desde el inicio del contenido UTF-8.
+
+Representación Rust cerrada:
+
+```rust
+pub struct SourceSpan {
+    pub start: usize,
+    pub end: usize,
+}
+```
+
+La convención de rango es **half-open**:
+
+```text
+[start, end)
+```
+
+`start` está incluido y `end` está excluido.
+
+Esta representación se alinea directamente con el slicing natural de `str` en Rust:
+
+```rust
+&source[start..end]
+```
+
+Invariantes:
+
+- `start <= end`;
+- ambos offsets se expresan en bytes desde el inicio del mismo `Source Text`;
+- ambos límites deben estar dentro de la longitud del `Source Text` al que se aplican;
+- cuando el span delimita texto UTF-8, `start` y `end` deben corresponder a fronteras UTF-8 válidas;
+- un `Token` normal ocupa al menos un byte, por lo que para Tokens se cumple `start < end`;
+- `Source Span` no contiene ni posee una referencia al `Source Text`;
+- `Source Span` almacena `start` y `end`, no `start` y `length`;
+- `line` y `column` no forman parte de su representación fundamental y se derivan cuando un diagnóstico los necesita;
+- `Source Span` puede reutilizarse posteriormente en AST, Semantic Program, Source Mapping y diagnostics cuando exista una región del source que deba preservarse;
+- se utiliza `usize` porque los offsets son internos al proceso de compilación y se relacionan directamente con longitudes y slices Rust; no se introduce una limitación artificial `u32` sin una necesidad demostrada.
+
+### LD-011 — Lexeme se representa como borrowed `&str` y no sustituye a Source Span
+
+Status: CLOSED
+
+`Lexeme` y `Source Span` describen dos propiedades diferentes de la misma unidad lexical:
+
+```text
+Lexeme
+    = qué texto fue reconocido
+
+Source Span
+    = dónde fue reconocido
+```
+
+La representación Rust de `Lexeme` es una vista prestada directa sobre el `Source Text`:
+
+```rust
+&'source str
+```
+
+No se introduce un `struct Lexeme` ni ownership textual independiente porque `&str` expresa completamente la vista requerida.
+
+Para cada `Token` debe cumplirse conceptualmente:
+
+```text
+Token.lexeme
+==
+&SourceText[Token.span.start .. Token.span.end]
+```
+
+Invariantes:
+
+- `Lexeme` borrows del `Source Text` original;
+- `Lexeme` no copia ni decodifica el contenido;
+- el lexema conserva exactamente la forma textual reconocida, incluidos delimitadores y escapes cuando forman parte del token;
+- un `StringLiteral` conserva en su lexema las comillas y secuencias de escape escritas en source; el Lexer no las convierte todavía al valor semántico final;
+- un `FloatingLiteral` conserva su representación original, incluida notación científica cuando corresponda;
+- mantener simultáneamente `Lexeme` y `Source Span` no se considera duplicación semántica: uno expone contenido y el otro ubicación;
+- conservar `Lexeme` evita que el Parser necesite una dependencia adicional hacia `Source Text` únicamente para recuperar el texto de un Token;
+- `Source Span` permanece independiente de `Lexeme` y puede representar regiones mayores que un Token en etapas posteriores.
+
+Regla canónica:
+
+```text
+Lexeme
+    !=
+Source Span
+
+content
+    !=
+location
+```
+
 ## 3. Closed Token Kind Inventory
 
 ```text
@@ -429,29 +501,37 @@ Total: **51 variantes**.
 
 ```text
 Source Text
-    │ owns textual content
+    │ owns UTF-8 text
     │
-    ├── Lexeme       <<borrowed view>>
-    └── Source Span  <<range value>>
-             │
-             ▼
-           Token
-             ├── Token Kind <<enum: 51 variants>>
-             ├── Lexeme
-             └── Source Span
-             │
-             ▼
-       Token Sequence
-             └── Token 0..N
+    ├──────────────┐
+    │              │
+    │ borrows      │ locates
+    ▼              ▼
+Lexeme          Source Span
+&'source str    <<struct>>
+                ├── start: usize
+                └── end: usize
+                    [start, end)
+    │              │
+    └──────┬───────┘
+           ▼
+         Token
+         ├── Token Kind <<enum: 51 variants>>
+         ├── Lexeme
+         └── Source Span
+           │
+           ▼
+     Token Sequence
+           └── Token 0..N
 ```
 
-Identidades estructurales demostradas y cerradas hasta este punto:
+Identidades y representaciones cerradas hasta este punto:
 
 - `Token Kind` — enum de clasificación lexical con 51 variantes;
-- `Lexeme` — borrowed textual view;
-- `Source Span` — rango técnico del source;
-- `Token` — unidad lexical reconocida;
-- `Token Sequence` — output lexical 0..N.
+- `Lexeme` — borrowed `&'source str` sobre `Source Text`;
+- `Source Span` — `struct` con `start: usize` y `end: usize`, expresados como byte offsets `[start, end)`;
+- `Token` — unidad lexical reconocida; representación Rust completa pendiente;
+- `Token Sequence` — output lexical 0..N; representación física pendiente.
 
 ## 5. Specification Observation
 
@@ -464,6 +544,12 @@ Esta observación no cambia el inventario de `Token Kind`; debe resolverse expl�
 
 ## 6. Next Technical Data Decision
 
-`Token Kind` queda cerrado.
+```text
+Token Kind              ✅ CLOSED
+Source Span             ✅ CLOSED
+Lexeme representation   ✅ CLOSED
+Token                    ← NEXT
+Token Sequence           PENDING
+```
 
-La siguiente decisión del bloque lexical debe concretar la representación técnica de los datos ya demostrados, comenzando por `Source Span` y su relación exacta con `Lexeme` y `Source Text`, sin reabrir la clasificación lexical salvo que cambie la especificación Evo-Script v0.1.
+La siguiente decisión del bloque lexical debe concretar `Token` como estructura Rust completa a partir de las identidades ya cerradas, sin reabrir `Token Kind`, `Source Span` o `Lexeme` salvo que aparezca una contradicción técnica demostrable.
