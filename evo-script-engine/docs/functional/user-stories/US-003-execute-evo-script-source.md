@@ -1,30 +1,25 @@
 # US-003 — Execute Evo-Script Source
 
-Status: FUNCTIONAL CLOSED
+Status: REVALIDATED — FUNCTIONAL CLOSED
 
 ## Historia
 
 ```text
 Como Consumer,
 quiero proporcionar el Source Text completo de un programa Evo-Script
-y los Invocation Values requeridos por su Public Function
+y los Invocation Values requeridos para su ejecución
 al Evo-Script Engine,
-para que el programa fuente sea ejecutado conforme a
-Evo-Script Language Specification v0 y reciba su Result.
+para ejecutar el programa conforme a Evo-Script
+y obtener su Result.
 ```
 
 ---
 
 ## Contexto
 
-El Evo-Script Engine es el componente responsable de compilar y ejecutar
-programas Evo-Script.
+El Evo-Script Engine es el componente responsable de compilar y ejecutar programas Evo-Script.
 
-Bajo **US-003 (Execute Source)**, el Consumer proporciona el **Source Text
-completo** de un programa Evo-Script y los **Invocation Values** ordenados
-(0..N) directamente al Engine, ejecutando el programa en una única operación
-pública sin requerir un paso previo separado de Compile ni la gestión externa de
-un Compiled Program.
+Bajo **US-003 (Execute Source)**, el Consumer proporciona el **Source Text completo** de un programa Evo-Script y los **Invocation Values** ordenados (`0..N`) directamente al Engine. El Consumer solicita compilación y ejecución como una sola operación pública y no necesita invocar previamente `Compile` ni administrar externamente un `Compiled Program`.
 
 ```text
 Consumer
@@ -36,97 +31,84 @@ Consumer
 ┌────────────────────────────────────────┐
 │ Evo-Script Engine                      │
 │                                        │
-│  Execute Source (especificación v0)    │
-│  Enlaza Invocation Values a parámetros │
-│  Ejecuta la única Public Function      │
+│  Compile semantics                     │
+│           ↓                            │
+│  Compiled Program (bytecode)           │
+│           ↓                            │
+│  Execute Compiled semantics            │
 └──────────────────┬─────────────────────┘
                    │
-                   │ outcome de ejecución
                    ▼
                  Result
 ```
 
-### Distinciones de Input en la Frontera
-- **Source Text != File Path**: El Engine no realiza I/O de archivos ni
-  resolución de rutas; la lectura del archivo físico `.efn` es responsabilidad
-  del Consumer o de un cargador externo.
-- **Source Text != AST / Token Stream**: El Consumer entrega texto plano, no un
-  árbol sintáctico abstracto o flujo de tokens preprocesado.
-- **Source Text != Individual Function**: El input es el Source Text completo y
-  autocontenido de la unidad de programa.
-- **Source Text != Compiled Program**: El Consumer proporciona código fuente;
-  Execute Source no requiere ni espera un artefacto previamente compilado.
-- **Invocation Values != Command-Line Strings**: El Engine recibe Values
-  estructurados, no cadenas de texto de terminal que requieran parseo implícito.
-- **Sin Compile Previo Requerido**: El Consumer no está obligado a llamar a
-  Compile ni a gestionar representaciones intermedias antes de invocar Execute
-  Source.
+`Execute Source` es funcionalmente una operación compuesta. Su comportamiento debe ser semánticamente equivalente a compilar el mismo `Source Text` mediante `Compile` y ejecutar posteriormente el `Compiled Program` resultante mediante `Execute Compiled`, bajo los mismos `Invocation Values` y las mismas capacidades externas disponibles.
+
+---
+
+## Distinciones de Input en la Frontera
+
+- **Source Text != File Path**: el Engine no realiza I/O de archivos ni resolución de rutas; la lectura de un archivo físico `.efn` pertenece al Consumer o a una capacidad externa responsable de ello.
+- **Source Text != AST / Token Stream**: el Consumer entrega texto fuente, no representaciones técnicas internas del compilador.
+- **Source Text != Individual Function**: el input representa la unidad completa de programa definida por la especificación vigente de Evo-Script.
+- **Source Text != Compiled Program**: el Consumer proporciona código fuente; `Execute Source` no exige un artefacto previamente compilado.
+- **Invocation Values != Command-Line Strings**: el Engine recibe `Values` estructurados; interpretar argumentos de terminal pertenece a la superficie que consume el Engine.
+- **Sin Compile previo requerido**: el Consumer no está obligado a invocar públicamente `Compile` antes de `Execute Source`.
 
 ---
 
 ## Semántica Funcional de Execute Source
 
-1. **Ejecución Directa**: Execute Source acepta Source Text e Invocation Values,
-   procesa el programa conforme a
-   [`evo-script/EVO_SCRIPT_SPECIFICATION_v0.md`](../../../../evo-script/EVO_SCRIPT_SPECIFICATION_v0.md),
-   ejecuta su única Public Function y retorna `Result`.
-2. **Manejo de Source Inválido**: Si el Source Text viola las reglas léxicas,
-   sintácticas o semánticas de Evo-Script v0, Execute Source produce un `Result`
-   fallido sin ejecutar la Public Function.
-3. **Sin Retorno de Compiled Program**: Execute Source no retorna un Compiled
-   Program como parte de su contrato funcional público; su único outcome público
-   es `Result`.
-4. **Sin Persistencia ni Caché**: Execute Source no guarda, no registra, no
-   persiste ni cachea un Compiled Program como responsabilidad funcional pública.
-5. **Estrategia Interna Abierta**: La estrategia de implementación interna de
-   Execute Source (por ejemplo, interpretación directa tree-walk, compilación a
-   bytecode temporal o evaluación de representaciones intermedias) permanece
-   intencionalmente abierta y no está restringida por esta User Story.
+1. **Operación Compuesta**: `Execute Source` acepta `Source Text` e `Invocation Values`, aplica las mismas reglas funcionales de compilación definidas para `Compile` y, si la compilación tiene éxito, aplica las mismas reglas funcionales de ejecución definidas para `Execute Compiled`.
+2. **Compilación a Bytecode**: el programa debe producir una representación ejecutable basada en bytecode antes de iniciar su ejecución.
+3. **Source Inválido**: si el `Source Text` viola reglas léxicas, sintácticas o semánticas pertenecientes a Evo-Script, `Execute Source` produce un `Result` fallido y no inicia la ejecución del programa.
+4. **Sin Retorno de Compiled Program**: el `Compiled Program` producido durante la operación no forma parte del outcome público de `Execute Source`.
+5. **Sin Persistencia ni Caché Implícita**: el Engine no persiste, registra ni cachea el `Compiled Program` producido como responsabilidad funcional propia.
+6. **Equivalencia Semántica**: para el mismo `Source Text`, los mismos `Invocation Values` y las mismas capacidades externas disponibles, `Execute Source` debe comportarse de manera semánticamente equivalente a `Compile` seguido de `Execute Compiled`.
+
+Conceptualmente:
+
+```text
+Execute Source(source, values)
+
+        ≡
+
+Execute Compiled(
+    Compile(source),
+    values
+)
+```
+
+La equivalencia anterior expresa semántica funcional. No obliga todavía a una composición concreta de funciones Rust ni a que la implementación invoque literalmente las Public Capabilities entre sí.
 
 ---
 
 ## Invocation Values
 
-Los Invocation Values son los Values ordenados proporcionados por el Consumer para
-satisfacer los parámetros declarados por la única Public Function del programa.
+Los `Invocation Values` son los `Values` ordenados proporcionados por el Consumer para satisfacer los parámetros de la `Public Function` determinada conforme a la semántica vigente de Evo-Script.
 
 ### Reglas de Invocation Values
 
-1. **Cardinalidad**: Invocation Values contiene cero o más Values (`0..N`).
-2. **Cero Parámetros**: Una Public Function sin parámetros requiere cero
-   Invocation Values.
-3. **Aridad Exacta**: Una Public Function con $N$ parámetros requiere exactamente
-   $N$ Invocation Values.
-4. **Mapeo Posicional Estricto**: El mapeo de Invocation Values a parámetros es
-   estrictamente posicional:
-   ```text
-   InvocationValue[0]     ──► Parameter[0]
-   InvocationValue[1]     ──► Parameter[1]
-   ...
-   InvocationValue[N - 1] ──► Parameter[N - 1]
-   ```
-5. **Orden de Declaración**: El orden de los Invocation Values corresponde
-   directamente al orden de declaración de los parámetros en la firma de la
-   Public Function.
-6. **Compatibilidad Semántica**: Cada Invocation Value debe ser semánticamente
-   compatible con el tipo de parámetro declarado por la Public Function
-   (incluyendo tipos nativos, structs y enums definidos en el programa).
-7. **Sin Conversiones Implícitas**: El Engine no realiza conversiones ni
-   coerciones implícitas para adaptar un Value incompatible a un tipo de
-   parámetro.
-8. **Desajuste de Aridad**: Una cantidad de Invocation Values que no coincida con
-   la cantidad de parámetros produce un Result fallido.
-9. **Incompatibilidad de Tipo**: Un Invocation Value incompatible con su tipo de
-   parámetro correspondiente produce un Result fallido.
-10. **Independencia de Failure**: Las categorías específicas de Failure, códigos
-    de error y variantes no se definen en este nivel funcional.
-11. **Representación Técnica**: Las representaciones técnicas concretas en Rust
-    para Invocation Values, colecciones, slices o handles de tipo permanecen
-    diferidas al diseño técnico.
+1. **Cardinalidad**: `Invocation Values` contiene cero o más `Values` (`0..N`).
+2. **Cero Parámetros**: una `Public Function` sin parámetros requiere cero `Invocation Values`.
+3. **Aridad Exacta**: una `Public Function` con `N` parámetros requiere exactamente `N Invocation Values`.
+4. **Mapeo Posicional Estricto**:
+
+```text
+InvocationValue[0]     ──► Parameter[0]
+InvocationValue[1]     ──► Parameter[1]
+...
+InvocationValue[N - 1] ──► Parameter[N - 1]
+```
+
+5. **Orden de Declaración**: el orden de los `Invocation Values` corresponde al orden de declaración de los parámetros.
+6. **Compatibilidad Semántica**: cada `Invocation Value` debe ser semánticamente compatible con el tipo de su parámetro correspondiente.
+7. **Sin Conversiones Implícitas**: el Engine no realiza coerciones implícitas para reparar incompatibilidades.
+8. **Desajuste de Aridad**: produce un `Result` fallido.
+9. **Incompatibilidad de Tipo**: produce un `Result` fallido.
+10. **Representación Técnica Diferida**: la representación Rust concreta de `Invocation Values`, slices, ownership o borrowing pertenece al Technical Design.
 
 ### Ejemplo Conceptual
-
-Dada una Public Function en Evo-Script:
 
 ```text
 public fn sum(int left, int right) -> int
@@ -136,89 +118,176 @@ public fn sum(int left, int right) -> int
 ```
 
 El Consumer proporciona:
-- Source Text que contiene `sum`
-- Invocation Values: `[10, 20]`
+
+```text
+Source Text
+Invocation Values: [10, 20]
+```
 
 Binding posicional:
-- `InvocationValue[0]` (`10`) $\rightarrow$ enlazado al parámetro `left`
-- `InvocationValue[1]` (`20`) $\rightarrow$ enlazado al parámetro `right`
+
+```text
+InvocationValue[0] (10) ──► left
+InvocationValue[1] (20) ──► right
+```
+
+La cantidad y selección de `Public Functions` disponibles en una unidad de programa pertenecen a la especificación de Evo-Script y no son definidas por esta User Story.
+
+---
+
+## Compilation Failure y Execution Failure
+
+`Execute Source` puede fallar antes o después de producir internamente un `Compiled Program`.
+
+```text
+Source Text
+    │
+    ▼
+Compilation
+    │
+    ├── Failure ─────────► Result fallido
+    │
+    ▼
+Compiled Program
+    │
+    ▼
+Execution
+    │
+    ├── Failure ─────────► Result fallido
+    │
+    ▼
+Result exitoso
+```
+
+Hacia el Consumer existe un único outcome funcional público: `Result`.
+
+Las categorías, códigos y representaciones concretas de `Compilation Failure` y `Execution Failure` deben definirse posteriormente en el Functional Data Dictionary y, cuando corresponda, en el Technical Data Model.
+
+---
+
+## External Symbols y Capacidades Externas
+
+La fase de compilación puede conservar `External Symbols` sin resolver dentro del `Compiled Program`.
+
+La resolución de esos símbolos ocurre durante la ejecución y únicamente mediante capacidades o bindings explícitamente suministrados por la composición de la aplicación.
+
+```text
+Source Text
+    │
+    ▼
+Compile semantics
+    │
+    └── External Symbol
+            │
+            ▼
+      Execute semantics
+            │
+            ▼
+   explicit application binding
+            │
+      ┌─────┴─────┐
+      ▼           ▼
+ disponible    no disponible
+      │           │
+    invoke     Result fallido
+```
+
+Reglas:
+
+- la ausencia de un Provider concreto durante compilación no invalida por sí misma el `Source Text`;
+- la ausencia durante ejecución de una capacidad externa requerida produce un `Result` fallido;
+- el Engine no descubre Providers;
+- el Engine no posee Providers concretos;
+- el Engine no utiliza registries globales, Service Locator, reflection ni mecanismos equivalentes de descubrimiento oculto;
+- las dependencias requeridas por la ejecución deberán hacerse explícitas posteriormente en el diseño técnico y en las Rust Signatures.
+
+---
+
+## Active Scope y Estado Local de Ejecución
+
+Cada invocación de `Execute Source` mantiene únicamente el estado local requerido por esa ejecución.
+
+Una ejecución comienza sin heredar implícitamente un `Active Scope` de otra ejecución, de una sesión de terminal o de una superficie de presentación.
+
+```text
+Execute Source
+      │
+      ▼
+Local Execution State
+      │
+      ├── Pipeline Data
+      └── Active Scope = none inicialmente
+```
+
+Si el programa ejecutado utiliza semántica de Scope definida por Evo-Script, puede establecer o cambiar su `Active Scope` durante la ejecución.
+
+`Pipeline Data` y `Active Scope` son canales semánticos distintos. Cambiar el `Active Scope` no destruye ni reemplaza automáticamente los datos que fluyen por el pipeline.
+
+Al concluir `Execute Source`, su estado local termina. El Engine no mantiene una sesión implícita persistente entre invocaciones.
 
 ---
 
 ## Criterios de Aceptación
 
-1. El Consumer puede proporcionar el Source Text completo de un programa
-   Evo-Script v0 al Evo-Script Engine.
-2. El Consumer puede proporcionar cero o más Invocation Values.
-3. El Consumer no está obligado a invocar Compile ni a obtener un Compiled
-   Program antes de invocar Execute Source.
-4. El Engine trata el Source Text como un programa Evo-Script completo y lo
-   procesa conforme a:
-   [`evo-script/EVO_SCRIPT_SPECIFICATION_v0.md`](../../../../evo-script/EVO_SCRIPT_SPECIFICATION_v0.md).
-5. Si el Source Text viola las reglas léxicas, sintácticas o semánticas de
-   Evo-Script v0, Execute Source produce un Result fallido sin ejecutar la
-   Public Function.
-6. El Engine determina los parámetros declarados por la Public Function.
-7. Los Invocation Values se emparejan con los parámetros estrictamente por
-   posición.
-8. La cantidad de Invocation Values debe ser igual a la cantidad de parámetros de
-   la Public Function ($N$).
-9. Cada Invocation Value debe ser semánticamente compatible con su correspondiente
-   tipo de parámetro.
-10. El Engine no realiza conversiones implícitas para reparar Invocation Values
-    incompatibles.
-11. Las Public Functions de cero parámetros requieren cero Invocation Values.
-12. Un desajuste de aridad produce un Result fallido.
-13. Una incompatibilidad de tipo produce un Result fallido.
-14. El Engine ejecuta la Public Function conforme a la semántica de Evo-Script
-    v0.
-15. Una ejecución exitosa preserva el Value producido por la Public Function en
-    el Result exitoso.
-16. Un procesamiento o ejecución fallida produce un Result fallido en lugar de
-    tratarse silenciosamente como éxito.
-17. Execute Source no retorna un Compiled Program como parte de su contrato
-    público.
-18. Execute Source no persiste, no escribe en disco ni cachea un Compiled
-    Program como responsabilidad funcional pública.
-19. El Consumer no necesita conocer la arquitectura interna de procesamiento,
-    AST, VM o intérprete del Engine.
-20. Una vez que se retorna el Result al Consumer, esa invocación de Execute
-    Source concluye.
-21. No se requiere ningún objeto explícito de sesión o de contexto de ejecución
-    del Engine en la frontera funcional.
+1. El Consumer puede proporcionar el `Source Text` completo de un programa Evo-Script al Engine.
+2. El Consumer puede proporcionar cero o más `Invocation Values`.
+3. El Consumer no necesita invocar `Compile` previamente.
+4. El Engine procesa el `Source Text` conforme a la especificación vigente de Evo-Script.
+5. El programa se compila a bytecode antes de su ejecución.
+6. Un error léxico, sintáctico o semántico de Evo-Script produce un `Result` fallido sin iniciar la ejecución.
+7. `Execute Source` no retorna públicamente el `Compiled Program` producido durante la operación.
+8. `Execute Source` no persiste ni cachea ese `Compiled Program` como responsabilidad propia.
+9. Los `Invocation Values` se enlazan posicionalmente con los parámetros definidos por la `Public Function` determinada conforme a Evo-Script.
+10. La aridad debe coincidir exactamente.
+11. Cada `Invocation Value` debe ser semánticamente compatible con su parámetro correspondiente.
+12. El Engine no realiza coerciones implícitas para reparar incompatibilidades.
+13. Un desajuste de aridad produce un `Result` fallido.
+14. Una incompatibilidad de tipo produce un `Result` fallido.
+15. Cada invocación mantiene estado local independiente.
+16. Cada invocación comienza sin heredar implícitamente un `Active Scope` externo.
+17. `Pipeline Data` y `Active Scope` permanecen semánticamente separados.
+18. Los `External Symbols` requeridos se resuelven durante ejecución mediante bindings explícitos.
+19. La ausencia de una capacidad externa requerida produce un `Result` fallido.
+20. El Engine no descubre ni conoce Providers concretos como parte de su modelo funcional.
+21. Una ejecución exitosa preserva el `Value` producido mediante un `Result` exitoso.
+22. Una falla de compilación o de ejecución produce un `Result` fallido.
+23. `Execute Source` no realiza filesystem I/O, presentación de terminal, UI ni serialización HTTP como responsabilidad propia.
+24. Al concluir la invocación no queda una sesión o contexto implícito persistente dentro del Engine.
+25. Bajo las mismas entradas y capacidades externas, `Execute Source` debe ser semánticamente equivalente a `Compile` seguido de `Execute Compiled`.
 
 ---
 
-## Concepto de Outcome de Ejecución (Result)
+## Concepto de Outcome de Ejecución — Result
 
-El outcome funcional de ejecutar código fuente directamente se representa
-conceptualmente como `Result`:
-- **Outcome Exitoso**: Preserva el `Value` producido por el programa.
-- **Outcome Fallido**: Representa una falla de ejecución (por ejemplo, error
-  léxico/sintáctico, error semántico, desajuste de aridad, incompatibilidad de
-  tipo o error de evaluación en runtime).
+El outcome funcional de `Execute Source` es `Result`:
 
-> [!NOTE]
-> `Result` es un concepto de outcome funcional alineado con el modelo compartido
-> de Evo (`Result != Value`, `Result != Failure`).
-> Las representaciones concretas en Rust, parámetros de tipo, genéricos
-> (`Result<T, E>`), estructuras de error y variantes de enum deliberadamente
-> **no** se deciden en esta User Story.
+- **Outcome Exitoso**: preserva el `Value` producido por el programa.
+- **Outcome Fallido**: representa una falla ocurrida durante compilación o ejecución.
+
+`Result != Value` y `Result != Failure`.
+
+Las representaciones concretas en Rust, parámetros de tipo, estructuras o variantes pertenecen al Functional Data Dictionary y al Technical Design correspondiente; no se deciden en esta User Story.
 
 ---
 
 ## No Responsabilidades y Fuera de Alcance
 
-Para el alcance de US-003 y Evo-Script Engine v0:
-- Lectura de archivos `.efn` del sistema de archivos o resolución de rutas.
-- Producir o retornar un Compiled Program (cubierto por US-001).
-- Persistencia, almacenamiento en caché o serialización de artefactos
-  compilados.
-- Interacción con la terminal, formateo o presentación de UI.
-- Inicio, detención o gestión del ciclo de vida de aplicaciones de Evo Runtime.
-- Parseo de consultas o semántica de ejecución pertenecientes a EvoQ.
-- Decisiones de arquitectura interna del motor de ejecución (por ejemplo,
-  intérprete AST vs VM de bytecode temporal).
-- Efectos laterales externos, salida a consola (`print`), stdout, I/O de sistema
-  de archivos, Requesters, Providers o callbacks intermedios durante la
-  ejecución.
+Para el alcance de US-003:
+
+- leer archivos `.efn` desde filesystem o resolver rutas físicas;
+- devolver un `Compiled Program` como outcome público;
+- persistir, serializar o cachear artefactos compilados como responsabilidad propia;
+- interpretar command-line strings;
+- imprimir en terminal o stdout;
+- construir UI;
+- serializar HTTP/JSON como responsabilidad propia;
+- administrar el ciclo de vida de una Evo Application;
+- descubrir Providers o capacidades mediante registries ocultos;
+- definir la semántica de EvoQ, Scope u otras capacidades externas;
+- definir todavía la arquitectura concreta de la VM, stack frames, opcodes, AST, lexer, parser u otras representaciones técnicas internas.
+
+## Closure
+
+Esta User Story ha sido revalidada contra el `Purpose`, las `Public Capabilities` y la arquitectura superior vigente de Evolution.
+
+**US-003 queda `REVALIDATED — FUNCTIONAL CLOSED`.**
