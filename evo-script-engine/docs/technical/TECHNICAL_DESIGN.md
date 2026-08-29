@@ -152,28 +152,50 @@ Invariantes:
 - el bytecode puede referenciar constantes mediante identidades/índices técnicos cuya representación se definirá en el Technical Data Model;
 - durante ejecución pueden materializarse vistas sobre datos owned por el `Compiled Program` cuando sus lifetimes lo permitan.
 
+### TD-006 — Shared Operand Stack con ventanas lógicas por Call Frame
+
+Status: CLOSED
+
+La Stack VM utiliza conceptualmente un único **Shared Operand Stack** perteneciente a la ejecución. Cada `Call Frame` delimita su región lógica mediante un `stack_base`.
+
+```text
+VM Execution
+│
+├── Shared Operand Stack
+│
+└── Call Frames
+      ├── Frame A → stack_base A
+      ├── Frame B → stack_base B
+      └── Frame C → stack_base C
+```
+
+La decisión es arquitectónica y no prescribe una representación Rust concreta del almacenamiento.
+
+En particular:
+
+```text
+Shared Operand Stack != Vec<Value>
+```
+
+`Vec`, arrays, slices, buffers propios, almacenamiento preasignado u otras representaciones se evaluarán únicamente en el Technical Data Model si son necesarias. No se introduce una colección genérica por costumbre.
+
+Invariantes:
+
+- existe un único almacenamiento lógico de operandos por ejecución;
+- cada `Call Frame` posee una ventana lógica delimitada por su `stack_base`;
+- una instrucción del frame activo no puede consumir operandos situados por debajo de su `stack_base`;
+- los argumentos y resultados de llamadas pueden utilizar el mismo almacenamiento lógico sin requerir un operand stack independiente por frame;
+- `Call Frame` no posee su propio contenedor de operandos;
+- `Pipeline Data` continúa siendo un concepto semántico distinto del Shared Operand Stack;
+- la representación física del almacenamiento queda diferida al Technical Data Model.
+
 ## 3. Required Open Decisions Before Technical Data Model Closure
 
 Los siguientes puntos forman parte del plan técnico acordado y deben resolverse antes de cerrar el Technical Data Model.
 
-### TD-006 — Operand Stack y Call Frames
-
-Status: OPEN — NEXT
-
-Debe decidirse entre, al menos:
-
-```text
-A) un Operand Stack compartido por la ejecución,
-   con Call Frames que delimitan su región/base
-
-B) un Operand Stack independiente por Call Frame
-```
-
-La decisión afecta directamente `VM State`, `Call Frame`, function calls, return values y ownership temporal de `Value`.
-
 ### TD-007 — Parameters / Locals vs Operand Stack
 
-Status: OPEN
+Status: OPEN — NEXT
 
 Debe definirse dónde viven los Parameters y los bindings locales de una función respecto al operand stack.
 
@@ -216,9 +238,9 @@ Semantic Program as only semantic IR      ✅ CLOSED
 Internal Function resolution at compile   ✅ CLOSED
 Compiled Program architectural shape      ✅ CLOSED
 Owned Constant Pool                       ✅ CLOSED
+Shared Operand Stack + frame windows      ✅ CLOSED
 
-Operand Stack / Call Frame model          ← NEXT
-Parameters / Locals model                 PENDING
+Parameters / Locals model                 ← NEXT
 External Value ownership                  PENDING
 
 Technical Data Model                      BLOCKED until above decisions close
@@ -226,7 +248,7 @@ Technical Data Model                      BLOCKED until above decisions close
 
 ## 5. Boundary Toward Technical Data Model
 
-Una vez cerradas TD-006, TD-007 y TD-008, el Technical Data Model podrá definir de forma concreta los datos demostrados por el diseño, incluyendo cuando corresponda:
+Una vez cerradas TD-007 y TD-008, el Technical Data Model podrá definir de forma concreta los datos demostrados por el diseño, incluyendo cuando corresponda:
 
 ```text
 Token
@@ -244,7 +266,7 @@ Instruction
 Opcode
 Instruction Pointer
 Call Frame
-Operand Stack / VM State
+Shared Operand Stack / VM State
 Parameter / Local slots
 Source Mapping
 Failure representations
