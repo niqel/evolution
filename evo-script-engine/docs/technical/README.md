@@ -1,16 +1,101 @@
-# Evo-Script Engine — Documentación Técnica
+# Evo-Script Engine — Technical Documentation
 
-Status: TECHNICAL DESIGN — NOT STARTED
+Status: TECHNICAL DESIGN — NEXT
 
-Este directorio contendrá la arquitectura técnica, interfaces, modelos de datos,
-secuencias y diseño estructural para `evo-script-engine`.
+Este directorio contiene la documentación técnica de `evo-script-engine`.
 
-El diseño técnico comenzará una vez que la fase funcional (User Stories, Data
-Dictionary, Use Cases y Functional Coverage) esté formalmente cerrada.
+La fase funcional ya se encuentra cerrada. A partir de este punto, todo diseño técnico debe derivarse de los Functional Use Cases y del Functional Data Dictionary sin redefinir retrospectivamente su semántica.
 
-## Subdirectorios
+La metodología técnica canónica de Evolution se encuentra en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../../TECHNICAL_DESIGN_METHODOLOGY.md).
 
-- [`interfaces/`](interfaces/README.md): Definiciones de frontera y puntos de entrada (*Not Started*).
-- [`data-model/`](data-model/README.md): Tipos de datos y component ownership (*Not Started*).
-- [`sequences/`](sequences/README.md): Flujos de interacción en runtime (*Not Started*).
-- [`structures/`](structures/README.md): Relaciones modulares y de componentes (*Not Started*).
+## Canonical Technical Sequence
+
+```text
+Technical Design
+   ↓
+Technical Data Model
+   ↓
+Technical Data Diagram
+   ↓
+Rust Signatures
+   ↓
+Participants
+   ↓
+Module Signature Diagram
+   ↓
+D2 Sequence Diagrams
+   ↓
+Implementation Tasks
+```
+
+## Technical Views
+
+Evolution utiliza tres vistas técnicas complementarias:
+
+| Vista | Propósito |
+| --- | --- |
+| Technical Data Diagram | Representar structs, enums, artifacts, borrowed views y sus relaciones. |
+| Module Signature Diagram | Representar módulos Rust como identidades arquitectónicas, sus firmas y relaciones. |
+| D2 Sequence Diagram | Representar el orden de colaboración entre firmas durante una operación. |
+
+No se utiliza UML Class Diagram como modelo primario. En Evolution el comportamiento pertenece a módulos y funciones; los datos pertenecen a tipos concretos.
+
+## Module Identity Rule
+
+Cuando un archivo Rust representa una responsabilidad arquitectónica:
+
+```text
+archivo.rs
+    = módulo
+    = identidad arquitectónica
+```
+
+No se crea una `struct` artificial únicamente para dar identidad a una responsabilidad sin estado.
+
+Ejemplo:
+
+```text
+definitions/use_cases/compile.rs
+    └── Compile
+
+agents/compiler.rs
+    ├── compile(...)
+    └── COMPILE: compile::Compile = compile
+```
+
+## Directory Organization
+
+```text
+technical/
+├── README.md
+├── data-model/
+│   └── Technical Data Model + Technical Data Diagrams
+├── signatures/
+│   └── Rust Signatures
+├── module-signatures/
+│   └── Module Signature Diagrams
+└── sequences/
+    └── D2 Sequence Diagrams
+```
+
+## Traceability Rules
+
+1. Todo dato usado por una Rust Signature debe existir previamente en el Technical Data Model.
+2. Toda identidad del Module Signature Diagram debe corresponder a un módulo Rust real previsto.
+3. Toda interacción del D2 Sequence Diagram debe corresponder a una firma explícita o llamada técnica definida.
+4. Los diagramas se derivan del diseño cerrado; no son dibujos independientes del código.
+5. Si firma, módulo y diagrama divergen, el diseño no puede considerarse cerrado.
+
+## Current Progress
+
+```text
+Functional Design         ✅ CLOSED
+Technical Design          ← NEXT
+Technical Data Model      PENDING
+Technical Data Diagram    PENDING
+Rust Signatures           PENDING
+Participants              PENDING
+Module Signature Diagram  PENDING
+D2 Sequence Diagrams      PENDING
+Implementation Tasks      PENDING
+```
