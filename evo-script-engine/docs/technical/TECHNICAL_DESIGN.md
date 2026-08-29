@@ -189,33 +189,59 @@ Invariantes:
 - `Pipeline Data` continúa siendo un concepto semántico distinto del Shared Operand Stack;
 - la representación física del almacenamiento queda diferida al Technical Data Model.
 
-## 3. Required Open Decisions Before Technical Data Model Closure
+### TD-007 — Shared Frame Region para Parameters, Locals y Operands
 
-Los siguientes puntos forman parte del plan técnico acordado y deben resolverse antes de cerrar el Technical Data Model.
+Status: CLOSED
 
-### TD-007 — Parameters / Locals vs Operand Stack
+Cada `Call Frame` posee lógicamente una **Shared Frame Region** compuesta por slots estables para Parameters y Locals, seguidos por una región temporal de operands.
 
-Status: OPEN — NEXT
+```text
+Shared Value Storage
 
-Debe definirse dónde viven los Parameters y los bindings locales de una función respecto al operand stack.
+┌──────────────────────────────┐
+│ Frame B Operand Window       │
+├──────────────────────────────┤ ← B.operand_base
+│ Frame B Local Slots          │
+│ Frame B Parameter Slots      │
+├──────────────────────────────┤ ← B.frame_base
+│ Frame A Operand Window       │
+├──────────────────────────────┤ ← A.operand_base
+│ Frame A Local Slots          │
+│ Frame A Parameter Slots      │
+├──────────────────────────────┤ ← A.frame_base
+│ initial execution values     │
+└──────────────────────────────┘
+```
 
-Hipótesis a evaluar:
+Separación obligatoria:
 
 ```text
 Parameters / Locals
-    → slots estables del Call Frame
+    = stable frame slots
 
-Operand Stack
-    → valores temporales de evaluación,
-      argumentos de llamada,
-      resultados intermedios y pipeline values
+Operands
+    = temporary evaluation region
 ```
 
-Esta hipótesis no queda cerrada hasta revisar el modelo de Call Frame.
+Aunque ambas regiones puedan compartir físicamente el mismo almacenamiento de `Value`, no son semánticamente equivalentes.
+
+Invariantes:
+
+- cada `Call Frame` delimita una `Shared Frame Region` propia dentro del almacenamiento de Values de la ejecución;
+- los Parameter Slots y Local Slots son estables durante la vida del frame;
+- el Operand Window contiene únicamente valores temporales de evaluación, argumentos de llamadas, resultados intermedios y materialización técnica de Pipeline Data cuando corresponda;
+- Parameters, Locals y Operands conservan identidades lógicas distintas aunque compartan backing storage;
+- los argumentos de una llamada pueden convertirse en Parameter Slots del callee sin requerir un almacenamiento independiente por frame;
+- al retornar o abandonar un frame, su región completa puede liberarse/truncarse lógicamente desde `frame_base`;
+- la representación Rust concreta de `Shared Value Storage`, `frame_base`, `operand_base` y slots se define posteriormente en el Technical Data Model;
+- esta decisión no prescribe `Vec<Value>` ni otra colección genérica específica;
+- el Bytecode Compiler puede calcular o preservar información como `parameter_count`, `local_count` y `max_operand_depth` cuando el Technical Data Model demuestre que es necesaria.
+
+## 3. Required Open Decisions Before Technical Data Model Closure
 
 ### TD-008 — Ownership de Values producidos por External Capabilities
 
-Status: OPEN
+Status: OPEN — NEXT
 
 Debe definirse cómo una ejecución conserva un `Value` producido por una External Capability cuando dicho valor necesita sobrevivir a la invocación inmediata del Provider.
 
@@ -239,16 +265,16 @@ Internal Function resolution at compile   ✅ CLOSED
 Compiled Program architectural shape      ✅ CLOSED
 Owned Constant Pool                       ✅ CLOSED
 Shared Operand Stack + frame windows      ✅ CLOSED
+Shared Frame Region                       ✅ CLOSED
 
-Parameters / Locals model                 ← NEXT
-External Value ownership                  PENDING
+External Value ownership                  ← NEXT
 
-Technical Data Model                      BLOCKED until above decisions close
+Technical Data Model                      BLOCKED until TD-008 closes
 ```
 
 ## 5. Boundary Toward Technical Data Model
 
-Una vez cerradas TD-007 y TD-008, el Technical Data Model podrá definir de forma concreta los datos demostrados por el diseño, incluyendo cuando corresponda:
+Una vez cerrada TD-008, el Technical Data Model podrá definir de forma concreta los datos demostrados por el diseño, incluyendo cuando corresponda:
 
 ```text
 Token
@@ -266,8 +292,10 @@ Instruction
 Opcode
 Instruction Pointer
 Call Frame
-Shared Operand Stack / VM State
-Parameter / Local slots
+Shared Value Storage / VM State
+Parameter Slots
+Local Slots
+Operand Window
 Source Mapping
 Failure representations
 ```
