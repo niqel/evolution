@@ -1,12 +1,14 @@
 # Evo-Script Engine — Technical Documentation
 
-Status: TECHNICAL DESIGN — NEXT
+Status: TECHNICAL DESIGN — IN PROGRESS
 
 Este directorio contiene la documentación técnica de `evo-script-engine`.
 
 La fase funcional ya se encuentra cerrada. A partir de este punto, todo diseño técnico debe derivarse de los Functional Use Cases y del Functional Data Dictionary sin redefinir retrospectivamente su semántica.
 
 La metodología técnica canónica de Evolution se encuentra en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../../TECHNICAL_DESIGN_METHODOLOGY.md).
+
+Las decisiones estructurales vigentes del componente se registran en [`TECHNICAL_DESIGN.md`](TECHNICAL_DESIGN.md).
 
 ## Canonical Technical Sequence
 
@@ -68,6 +70,7 @@ agents/compiler.rs
 ```text
 technical/
 ├── README.md
+├── TECHNICAL_DESIGN.md
 ├── data-model/
 │   └── Technical Data Model + Technical Data Diagrams
 ├── signatures/
@@ -90,8 +93,8 @@ technical/
 
 ```text
 Functional Design         ✅ CLOSED
-Technical Design          ← NEXT
-Technical Data Model      PENDING
+Technical Design          ← IN PROGRESS
+Technical Data Model      BLOCKED BY OPEN TECHNICAL DECISIONS
 Technical Data Diagram    PENDING
 Rust Signatures           PENDING
 Participants              PENDING
@@ -99,3 +102,7 @@ Module Signature Diagram  PENDING
 D2 Sequence Diagrams      PENDING
 Implementation Tasks      PENDING
 ```
+
+Las decisiones ya cerradas incluyen Stack VM, Semantic Program como identidad técnica y única IR semántica de v0, resolución de funciones internas durante compilación, forma arquitectónica de Compiled Program y Constant Pool owned.
+
+Las siguientes decisiones abiertas son el modelo Operand Stack / Call Frame, Parameters / Locals y ownership de Values provenientes de External Capabilities.
