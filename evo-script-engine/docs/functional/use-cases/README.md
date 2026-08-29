@@ -1,8 +1,8 @@
 # Evo-Script Engine — Functional Use Cases
 
-Status: FUNCTIONAL DESIGN — IN PROGRESS
+Status: FUNCTIONAL CLOSED
 
-Este directorio contiene los Functional Use Cases de `evo-script-engine` v0.
+Este directorio contiene los Functional Use Cases canónicos de `evo-script-engine` v0.
 
 Los Use Cases se derivan formalmente de las User Stories y del Functional Data Dictionary ya cerrados. A partir de esta etapa, cada Use Case fija un nombre semántico canónico que debe conservarse al derivar el diseño técnico y las Rust Signatures.
 
@@ -38,17 +38,17 @@ La existencia futura de un Agent, Collaborator u otro Participant no se decide e
 | --- | --- | --- |
 | [UC-001](UC-001-compile.md) | Compile | REVALIDATED — FUNCTIONAL CLOSED |
 | [UC-002](UC-002-execute-compiled.md) | Execute Compiled | REVALIDATED — FUNCTIONAL CLOSED |
-| UC-003 | Execute Source | PENDING / TO BE DEFINED OR REVALIDATED |
+| [UC-003](UC-003-execute-source.md) | Execute Source | FUNCTIONAL CLOSED |
 
-## Current Progress
+## Closed Functional Set
 
 ```text
-UC-001 — Compile             ✅ REVALIDATED / CLOSED
-UC-002 — Execute Compiled    ✅ REVALIDATED / CLOSED
-UC-003 — Execute Source      ← NEXT
+UC-001 — Compile             ✅ FUNCTIONAL CLOSED
+UC-002 — Execute Compiled    ✅ FUNCTIONAL CLOSED
+UC-003 — Execute Source      ✅ FUNCTIONAL CLOSED
 ```
 
-Los nombres canónicos de v0 deben corresponder a las Public Capabilities ya cerradas:
+Los nombres canónicos de v0 corresponden exactamente a las Public Capabilities cerradas:
 
 ```text
 Compile
@@ -56,4 +56,42 @@ Execute Compiled
 Execute Source
 ```
 
-Los títulos descriptivos anteriores como `Compile Evo-Script Source` o `Execute Compiled Evo-Script Program` pueden conservarse únicamente como explicación histórica, pero no como nombres arquitectónicos de los Use Cases.
+Los títulos descriptivos anteriores como `Compile Evo-Script Source` o `Execute Compiled Evo-Script Program` no son nombres arquitectónicos canónicos.
+
+## Cross-Use-Case Relationship
+
+```text
+Compile
+Source Text
+    │
+    ▼
+Compiled Program
+
+Execute Compiled
+Compiled Program + Invocation Values
+    │
+    ▼
+Result
+
+Execute Source
+Source Text + Invocation Values
+    │
+    ▼
+Result
+```
+
+La relación funcional central es:
+
+```text
+Execute Source
+    ≡
+Compile + Execute Compiled
+```
+
+bajo el mismo `Source Text`, los mismos `Invocation Values` y las mismas `External Capabilities` disponibles.
+
+## Closure
+
+Con `UC-001`, `UC-002` y `UC-003` cerrados, la etapa **Functional Use Cases** de `evo-script-engine` v0 queda `FUNCTIONAL CLOSED`.
+
+Nuevas capacidades públicas o cambios en estos Use Cases requieren reabrir explícitamente el cierre funcional correspondiente.
