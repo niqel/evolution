@@ -53,9 +53,11 @@ Este orden no implica que todos los conceptos requieran un tipo independiente. C
 ```text
 Lexical Data
 ├── Token structural rules       ✅ CLOSED
-├── Token Kind                   ← IN ANALYSIS
-├── EOF policy                   PENDING
-└── whitespace/comments policy   PENDING
+├── Token Kind                   ✅ CLOSED
+├── Source Span                  ✅ CLOSED
+├── Lexeme representation        ✅ CLOSED
+├── Token                        ✅ CLOSED
+└── Token Sequence               ← IN ANALYSIS
 
 AST Data                         PENDING
 Semantic Program Data            PENDING
@@ -66,7 +68,8 @@ Outcome / Diagnostic Data        PENDING
 
 Documentos del bloque actual:
 
-- [`LEXICAL_DATA.md`](./LEXICAL_DATA.md) — reglas estructurales cerradas de `Token`, `Lexeme`, `Source Span` y `Token Sequence`.
+- [`LEXICAL_DATA.md`](./LEXICAL_DATA.md) — reglas estructurales, `Token Kind`, `Source Span` y `Lexeme`.
+- [`TOKEN.md`](./TOKEN.md) — representación Rust e invariantes cerrados de `Token<'source>`.
 
 ## Technical Data Diagram
 
