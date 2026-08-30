@@ -1,36 +1,27 @@
 # Evo-Script Engine — Compiled Scalar Equality
 
-Status: CLOSED
+Status: CLOSED — REVALIDATED
 
 Este documento cierra las instructions escalares no numéricas requeridas por Evo-Script v0 para boolean negation/equality y string equality.
 
-La autoridad deriva de:
-
-- `evo-script/EVO_SCRIPT_SPECIFICATION_v0.1.md`, secciones de operators/comparisons;
-- `SEMANTIC_EXPRESSIONS.md`;
-- `COMPILED_NUMERIC_INSTRUCTIONS.md`;
-- `COMPILED_CONTROL_FLOW.md`.
+La autoridad deriva de `evo-script/EVO_SCRIPT_SPECIFICATION_v0.1.md`, `SEMANTIC_EXPRESSIONS.md`, `COMPILED_NUMERIC_INSTRUCTIONS.md` y `COMPILED_CONTROL_FLOW.md`.
 
 ## 1. Equality families
 
-Evo-Script define equality semántica sobre varias familias:
+Estado vigente:
 
 ```text
-numeric     ✅ closed in COMPILED_NUMERIC_INSTRUCTIONS.md
-bool        ← this document
-string      ← this document
-struct      PENDING Composite Layout
-
-enum        PENDING Composite Layout
-
+numeric     ✅ CLOSED in COMPILED_NUMERIC_INSTRUCTIONS.md
+bool        ✅ CLOSED here
+string      ✅ CLOSED here
+struct      ✅ CLOSED in COMPILED_STRUCTURAL_EQUALITY.md
+enum        ✅ CLOSED in COMPILED_STRUCTURAL_EQUALITY.md
 dynamic     ❌ prohibited by language
 ```
 
-Este documento no adelanta structural equality.
+Este documento posee únicamente la familia scalar bool/string; no duplica el mecanismo structural posterior.
 
 ## 2. Boolean negation
-
-Unary logical `!` se representa mediante:
 
 ```rust
 Instruction::NotBoolean
@@ -49,40 +40,24 @@ true  → false
 false → true
 ```
 
-Bytecode Compiler solo produce `NotBoolean` para operandos semanticamente `bool`.
-
 No existe runtime type dispatch.
 
-`NotBoolean` es distinto de short-circuit `&&` / `||`: negation evalúa exactamente un operand y no requiere branching.
+`NotBoolean` es distinto de `&&` / `||`, que requieren branching de short-circuit.
 
 ## 3. Boolean equality
-
-Representación:
 
 ```rust
 Instruction::EqualBoolean
 Instruction::NotEqualBoolean
 ```
 
-Stack effect común:
+Stack effect:
 
 ```text
 2 bool → 1 bool
 ```
 
-Contrato:
-
-```text
-before
-... left(bool) right(bool)
-
-after
-... result(bool)
-```
-
-La VM consume `right`, luego `left`, y produce el resultado lógico correspondiente.
-
-No se introduce ordering boolean:
+No existen ordering instructions booleanas:
 
 ```text
 LessBoolean
@@ -91,11 +66,7 @@ GreaterBoolean
 GreaterEqualBoolean
 ```
 
-porque Evo-Script no define orden relacional sobre `bool`.
-
 ## 4. String equality
-
-Representación:
 
 ```rust
 Instruction::EqualString
@@ -108,15 +79,15 @@ Stack effect:
 2 string → 1 bool
 ```
 
-La igualdad de `string` compara contenido textual UTF-8 completo.
+La igualdad compara contenido textual UTF-8 completo.
 
 Invariantes:
 
 1. no compara addresses;
 2. no compara ownership identity;
-3. borrowed y owned backing representations que materialicen el mismo contenido deben producir equality semántica;
+3. borrowed y owned backing con el mismo contenido son iguales;
 4. no depende de locale, culture o collation ambiental;
-5. la VM no realiza ordering lexicográfico mediante estos operators.
+5. no existe ordering lexicográfico mediante operadores.
 
 No existen:
 
@@ -127,63 +98,52 @@ GreaterString
 GreaterEqualString
 ```
 
-porque Evo-Script v0.1 no define ordering operators sobre `string`.
+## 5. Why explicit `NotEqual*` remains
 
-## 5. Why `NotEqual*` remains explicit
-
-Aunque `!=` podría lowered conceptualmente a:
+Aunque `!=` podría reducirse conceptualmente a:
 
 ```text
 Equal*
 NotBoolean
 ```
 
-v0 conserva instructions explícitas:
+v0 conserva variants explícitas:
 
 ```text
 NotEqualNumeric
 NotEqualBoolean
 NotEqualString
+NotEqualComposite
 ```
 
-por simetría con el modelo semántico cerrado y para evitar introducir instrucciones adicionales en una comparación simple cuando el backend puede ejecutarla directamente.
-
-Esto no impide que una optimización futura reescriba internamente una forma equivalente si preserva semántica.
+Esto mantiene simetría con el modelo semántico y evita una Instruction adicional en el camino directo.
 
 ## 6. Dynamic equality remains absent
 
-No se introducen:
+No existen:
 
 ```text
 EqualDynamic
 NotEqualDynamic
 ```
 
-porque Evo-Script prohíbe comparación directa sobre `dynamic`.
+Evo-Script requiere conversión explícita a un tipo concreto antes de comparar `dynamic`.
 
-El programa debe convertir explícitamente a un tipo concreto antes de comparar.
+Además, `COMPOSITE_EQUALITY_COMPARABILITY_v0.1.md` cierra que un composite que contiene `dynamic` directa o transitivamente tampoco adquiere igualdad escondida.
 
-## 7. Structural equality remains pending
+## 7. Structural equality boundary
 
-Este cierre no define todavía:
-
-```text
-EqualStruct
-EqualEnum
-StructuralEqual
-RuntimeTypeEquality
-```
-
-La especificación exige igualdad estructural para `struct` y `enum`, pero la estrategia física depende de Composite Layout:
+Struct/Enum equality ya está cerrada en `COMPILED_STRUCTURAL_EQUALITY.md` mediante:
 
 ```text
-field representation
-field position
-runtime enum discriminant
-payload representation
+EqualityRule
+CompositeEqualityPlan
+EnumEqualityPayloadPlan
+EqualComposite
+NotEqualComposite
 ```
 
-Después de cerrar Composite Layout se decidirá si Bytecode Compiler expande structural equality hacia instrucciones más básicas o si se justifica una instruction compuesta.
+Este documento no redefine ese mecanismo.
 
 ## 8. Closure
 
@@ -196,8 +156,8 @@ EqualString                   ✅ CLOSED
 NotEqualString                ✅ CLOSED
 string equality by UTF-8 data ✅ CLOSED
 string ordering               ❌ EXCLUDED
-numeric equality              ✅ already CLOSED
+numeric equality              ✅ CLOSED elsewhere
 dynamic equality              ❌ language-prohibited
-struct equality               PENDING Composite Layout
-enum equality                 PENDING Composite Layout
+struct equality               ✅ CLOSED elsewhere
+enum equality                 ✅ CLOSED elsewhere
 ```
