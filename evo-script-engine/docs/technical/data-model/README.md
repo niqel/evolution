@@ -77,7 +77,8 @@ AST Data                         ← IN ANALYSIS
 ├── Program / imports / decls    ✅ CLOSED
 ├── local type definitions       ✅ CLOSED
 ├── functions / body             ✅ CLOSED
-└── expressions / recursion       ← IN ANALYSIS
+├── expression representation    ✅ CLOSED — typed nested tree
+└── exact expression inventory    ← IN ANALYSIS
 
 Semantic Program Data            PENDING
 Compiled Program / Bytecode Data PENDING
@@ -98,6 +99,7 @@ AST Data:
 - [`AST_DATA.md`](./AST_DATA.md) — frontera sintáctica, Host exclusion, `this`, Pipeline y decisiones base del AST.
 - [`AST_TYPE_DEFINITIONS.md`](./AST_TYPE_DEFINITIONS.md) — `StructDefinition`, `FieldDefinition`, `EnumDefinition`, `EnumVariant` y cardinalidades cerradas.
 - [`AST_FUNCTION_DEFINITIONS.md`](./AST_FUNCTION_DEFINITIONS.md) — `FunctionDefinition`, `Parameter`, `FunctionBody`, `BodyStatement`, `LetBinding` y `return` parser-only.
+- [`AST_EXPRESSION_REPRESENTATION.md`](./AST_EXPRESSION_REPRESENTATION.md) — typed nested tree, `Box<Expression>` solo para recursión directa, `Vec` para colecciones y exclusión de ExpressionId/AST Arena en v0.
 
 ## Technical Data Diagram
 
