@@ -1,6 +1,6 @@
 # Evo-Script Engine — Purpose
 
-Status: FUNCTIONAL CLOSED
+Status: FUNCTIONAL CLOSED — REVALIDATED AFTER EFN HOST BOUNDARY
 
 ## Purpose
 
@@ -10,20 +10,18 @@ Su propósito es implementar la especificación definida por `evo-script`: recib
 
 Cuando un programa requiere capacidades externas, el Engine las utiliza únicamente mediante capacidades y bindings explícitamente suministrados. El Engine no conoce, descubre ni selecciona Providers concretos por mecanismos ocultos.
 
-En términos arquitectónicos:
+La frontera `.efn` / Host se rige por `evo-script/EFN_HOST_BOUNDARY_v0.1.md`.
 
 ```text
 evo-script
-    │
-    │ especifica el lenguaje
+    │ specifies language
     ▼
 evo-script-engine
-    │
-    ├── análisis léxico
+    ├── lexical analysis
     ├── parsing
-    ├── análisis semántico
-    ├── compilación a bytecode
-    └── ejecución del bytecode
+    ├── semantic analysis
+    ├── bytecode compilation
+    └── bytecode execution
             │
             ▼
           Result
@@ -31,84 +29,119 @@ evo-script-engine
 
 ## Responsibilities
 
-Dentro de su propósito, `evo-script-engine` es responsable de:
+`evo-script-engine` es responsable de:
 
-- implementar las reglas léxicas definidas por `evo-script`;
-- implementar las reglas sintácticas definidas por `evo-script`;
-- implementar las reglas semánticas definidas por `evo-script`;
-- compilar un programa Evo-Script válido a bytecode;
+- implementar las reglas léxicas, sintácticas y semánticas vigentes de Evo-Script;
+- compilar un programa válido a bytecode;
 - ejecutar bytecode de Evo-Script;
-- enlazar los Invocation Values con los parámetros de la Public Function correspondiente;
-- mantener únicamente el estado local necesario para evaluar una ejecución de Evo-Script;
-- mantener el Active Scope local cuando la semántica de la ejecución lo requiera;
-- solicitar capacidades externas mediante bindings explícitos suministrados por la composición de la aplicación;
-- producir los outcomes públicos definidos posteriormente por las Public Capabilities del Engine.
+- enlazar `Invocation Values` con los Parameters de la Public Function correspondiente;
+- mantener únicamente el estado local necesario para evaluar una invocación;
+- mantener `Pipeline Data` y demás estado de evaluación requerido por el programa;
+- solicitar capacidades externas únicamente mediante bindings explícitos suministrados por la composición de la aplicación;
+- producir los outcomes públicos de sus Public Capabilities.
 
-El Engine puede utilizar representaciones internas como tokens, AST u otras estructuras intermedias cuando sean necesarias para implementar la compilación. Estas representaciones no sustituyen al bytecode como representación ejecutable del Compiled Program.
+El Engine puede utilizar Tokens, AST, Semantic Program y otras representaciones temporales de compilación cuando estén justificadas. Estas representaciones no sustituyen al bytecode como representación ejecutable del `Compiled Program`.
+
+## `.efn` / Host Boundary
+
+Una ejecución `.efn` no es una Interactive Session.
+
+```text
+Host / Consumer
+    │ Invocation Values + explicit capability bindings
+    ▼
+evo-script-engine
+    │ executes reusable .efn
+    ▼
+Result
+    │
+    ▼
+Host / Consumer decides presentation or use
+```
+
+Invariantes:
+
+- el Engine no recibe, hereda, crea ni mantiene `Active Scope` para ejecutar `.efn`;
+- `Scope` y `Active Scope` pertenecen al Host/Shell interactivo cuando dicho Host necesita contexto persistente entre comandos;
+- el estado interactivo del Host no cruza implícitamente la frontera de ejecución;
+- `use` no forma parte de la gramática `.efn` vigente;
+- la navegación ambiental de Scope no forma parte de la ejecución `.efn`;
+- un `.efn` utiliza capacidades semánticas explícitas y puede utilizar varias durante una misma función sin seleccionar un Provider activo;
+- el Consumer puede ser CLI, UI, API u otro Host sin cambiar la semántica del `.efn`.
 
 ## Non-Responsibilities
 
 `evo-script-engine` no es responsable de:
 
 - definir retrospectivamente la semántica de Evo-Script;
-- leer archivos `.efn` desde filesystem;
-- resolver rutas físicas;
-- escribir o persistir archivos;
+- leer archivos `.efn` desde filesystem ni resolver sus rutas físicas;
+- escribir o persistir archivos como responsabilidad del Engine;
 - imprimir en terminal o stdout;
 - construir interfaces gráficas;
-- serializar respuestas HTTP o JSON como responsabilidad propia;
+- serializar respuestas HTTP/JSON como responsabilidad propia;
+- mantener prompts, sesiones interactivas o `Active Scope` de un Host;
 - administrar el ciclo de vida de una Evo Application;
 - descubrir Providers;
 - mantener registries globales de Providers o capacidades;
 - utilizar Service Locator, reflection o mecanismos equivalentes de descubrimiento oculto;
 - poseer Providers concretos;
 - implementar filesystem, database, network u otras infraestructuras externas;
-- convertir una capacidad externa en parte implícita del lenguaje.
+- convertir una capacidad externa o una superficie Consumer en dependencia implícita del lenguaje.
 
 ## Architectural Position
 
-La relación normativa entre `evo-script` y `evo-script-engine` es:
-
 ```text
 evo-script
-    define QUÉ significa el lenguaje
+    defines WHAT the language means
 
-                ↓
+        ↓
 
 evo-script-engine
-    hace QUE ese lenguaje funcione
+    makes that language operational
 ```
 
-La relación con capacidades externas es:
+Relación con capacidades externas:
 
 ```text
 Evo-Script Engine
-        │
-        │ capacidad explícitamente suministrada
+        │ explicit capability requirement
         ▼
-Application Binding / Requester
+Application Binding
         │
         ▼
-Standard Capability o Provider Extension
+Standard Capability / Provider Extension
         │
         ▼
 Provider
 ```
 
-El Engine puede ejecutar operaciones que dependen de capacidades externas, pero no implementa esas capacidades ni conoce al Provider concreto que las resuelve.
+Relación con Consumers:
+
+```text
+             reusable .efn Result
+                    │
+        ┌───────────┼───────────┐
+        ▼           ▼           ▼
+     evo-cli      evo-ui      evo-api
+        │           │           │
+     present      render      respond
+```
+
+El Engine ejecuta la operación y entrega su `Result`; la presentación o reacción específica pertenece al Consumer y a su composición arquitectónica.
 
 ## Invariants
 
 - `evo-script` es la autoridad normativa del lenguaje; `evo-script-engine` es su implementación operativa.
-- El Compiled Program de Evo-Script utiliza bytecode como representación ejecutable.
+- El `Compiled Program` utiliza bytecode como representación ejecutable.
 - El Engine no descubre dependencias ni Providers.
-- Toda capacidad externa requerida por una ejecución debe llegar mediante bindings explícitos.
-- El bytecode puede conservar símbolos externos, pero nunca direcciones físicas de function pointers de una aplicación o Provider.
-- Una ejecución `.efn` mantiene su propio estado de evaluación y su propio Active Scope local cuando corresponda.
-- El Engine no convierte presentación, infraestructura o Providers en semántica del lenguaje.
+- Toda capacidad externa requerida debe llegar mediante bindings explícitos.
+- El bytecode puede conservar `External Symbols`, pero nunca direcciones físicas de function pointers de una aplicación o Provider.
+- Cada ejecución `.efn` mantiene únicamente su propio estado local de evaluación; no mantiene `Active Scope`.
+- `Pipeline Data` pertenece a la evaluación del programa y no representa estado de Host.
+- El Engine no convierte presentación, infraestructura, Provider concreto o sesión interactiva en semántica implícita del `.efn`.
 
 ## Closure
 
-Este Purpose se considera `FUNCTIONAL CLOSED`.
+Este Purpose queda `FUNCTIONAL CLOSED` bajo la nueva frontera `.efn` / Host.
 
-Los siguientes niveles de diseño no pueden ampliar la responsabilidad de `evo-script-engine` fuera de este propósito sin reabrir explícitamente esta decisión arquitectónica.
+Reintroducir `Active Scope`, `use` o estado interactivo de Host dentro de `.efn` requiere reabrir explícitamente esta decisión arquitectónica y `evo-script/EFN_HOST_BOUNDARY_v0.1.md`.
