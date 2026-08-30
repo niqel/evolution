@@ -1,25 +1,18 @@
 # Evo-Script Engine — Compiled Control Flow
 
-Status: CLOSED
+Status: CLOSED — REVALIDATED
 
 Este documento cierra las identities y reglas de bytecode para control flow, short-circuit boolean evaluation, discard y return de `evo-script-engine` v0.
 
-La autoridad deriva de:
-
-- `TECHNICAL_DESIGN.md`;
-- `COMPILED_PROGRAM_DATA.md`;
-- `COMPILED_STORAGE_DATA.md`;
-- `COMPILED_NUMERIC_INSTRUCTIONS.md`;
-- `SEMANTIC_EXPRESSIONS.md`;
-- `evo-script/EVO_SCRIPT_SPECIFICATION_v0.1.md`.
+La autoridad deriva de `TECHNICAL_DESIGN.md`, `COMPILED_PROGRAM_DATA.md`, `COMPILED_STORAGE_DATA.md`, `COMPILED_NUMERIC_INSTRUCTIONS.md`, `SEMANTIC_EXPRESSIONS.md` y la especificación Evo-Script v0.1.
 
 ## 1. Instruction representation
 
 `Instruction` es un enum tipado. Cada variant expresa el opcode conceptual junto con exactamente los operands persistentes que necesita.
 
-No se introduce un `Opcode` separado acompañado por operands genéricos, porque permitiría combinaciones técnicamente representables pero inválidas.
+No se introduce `Opcode + generic operands`.
 
-Forma parcial acumulativa:
+La familia base visible en este documento es:
 
 ```rust
 enum Instruction {
@@ -35,31 +28,19 @@ enum Instruction {
 
     Return,
 
-    // calls, numeric, conversions, composite data, etc.
+    // otras familias cerradas en sus documentos especializados
 }
 ```
 
-El enum completo se cierra cuando terminen todas las familias del Instruction Set.
+`Load*`, `StoreLocal`, `Call` y `CallExternal` están cerrados en `COMPILED_CORE_CALL_INSTRUCTIONS.md`. Numeric, conversions, composite y equality families están cerradas en sus documentos correspondientes. El enum completo se consolida en el Exact Compiled Inventory.
 
 ## 2. InstructionIndex
-
-Representación:
 
 ```rust
 struct InstructionIndex(usize);
 ```
 
 `InstructionIndex` identifica una posición persistente dentro del bytecode de una única `CompiledFunction`.
-
-Namespace:
-
-```text
-CompiledFunction
-└── instructions
-    └── InstructionIndex namespace
-```
-
-Regla:
 
 ```text
 InstructionIndex(n)
@@ -68,40 +49,34 @@ InstructionIndex(n)
 
 Invariantes:
 
-1. es local a una `CompiledFunction`;
-2. todo branch target referencia una instruction válida de esa misma función;
-3. no es un byte offset;
-4. no es una address física;
+1. local a una `CompiledFunction`;
+2. todo branch target referencia una Instruction válida de esa misma función;
+3. no es byte offset;
+4. no es physical address;
 5. no es `InstructionPointer`.
-
-Separación canónica:
 
 ```text
 InstructionIndex
-    = persistent position in CompiledFunction bytecode
+    = persistent bytecode position
 
 InstructionPointer
     = mutable VM Execution state
 ```
 
-`InstructionPointer` pertenece a VM Execution Data.
-
 ## 3. Absolute branch targets
 
-v0 utiliza targets absolutos dentro de `CompiledFunction.instructions`:
+v0 usa:
 
 ```rust
 Jump(InstructionIndex)
 JumpIfFalse(InstructionIndex)
 ```
 
-No se utilizan relative byte offsets en el Technical Data Model v0.
+No usa relative byte offsets.
 
-La elección simplifica generation, patching, validation, inspection y diagnostics mientras `CompiledProgram` continúe siendo una estructura Rust persistente y no un formato binario serializado.
+Bytecode Compiler puede utilizar labels temporales durante emission y resolverlos finalmente a `InstructionIndex`. Esos labels son Compilation Working State y no sobreviven.
 
-Bytecode Compiler puede utilizar labels temporales durante emission y resolverlos finalmente a `InstructionIndex`; dichos labels pertenecen a Compilation Working State y no sobreviven dentro de `CompiledProgram`.
-
-No existe `Label` como instruction runtime.
+No existe `Label` runtime.
 
 ## 4. Jump
 
@@ -109,33 +84,24 @@ No existe `Label` como instruction runtime.
 Instruction::Jump(InstructionIndex)
 ```
 
+Stack effect:
+
+```text
+0 → 0
+```
+
 Semántica:
 
 ```text
-operand stack effect: 0 → 0
 next instruction := target
 ```
 
-`Jump` no inspecciona ni modifica Values.
-
-En lowering de Evo-Script v0, los jumps generados por `&&`, `||` y `when` representan control flow derivado de expresiones finitas; no se introduce sintaxis de loop ni un loop opcode.
+Los jumps de v0 derivan de `&&`, `||` y `when`; no existe sintaxis de loop ni loop opcode.
 
 ## 5. JumpIfFalse
 
 ```rust
 Instruction::JumpIfFalse(InstructionIndex)
-```
-
-Stack contract:
-
-```text
-before
-... condition(bool)
-
-JumpIfFalse(target)
-
-after
-...
 ```
 
 Stack effect:
@@ -151,20 +117,18 @@ condition == false
     → next instruction := target
 
 condition == true
-    → continue with following instruction
+    → continue
 ```
 
-La condición se consume en ambos casos.
+La condición se consume siempre.
 
-Bytecode Compiler solo produce `JumpIfFalse` después de semantic validation de una expresión `bool`; la VM no realiza type inference.
-
-No se introduce `JumpIfTrue` en v0 porque `Jump` + `JumpIfFalse` expresan completamente las necesidades actuales.
+No existe `JumpIfTrue` porque `Jump + JumpIfFalse` cubren las necesidades de v0.
 
 ## 6. Short-circuit `&&`
 
-`&&` no posee eager binary instruction.
+No existe eager `AndBoolean`.
 
-Lowering canónico conceptual:
+Lowering conceptual:
 
 ```text
 evaluate left
@@ -179,22 +143,15 @@ LoadConstant(false)
 end:
 ```
 
-El resultado deja exactamente un `bool` sobre el Operand Window.
+Resultado: exactamente un bool.
 
-Consecuencias:
-
-1. `left` se evalúa primero;
-2. `right` se evalúa únicamente si `left == true`;
-3. si `left` produce `EvaluationError`, `right` no se evalúa;
-4. no existe `AndBoolean` eager.
-
-`false` se materializa mediante el Constant Pool (`Constant::Boolean(false)`) y `LoadConstant`; no se introduce `PushFalse` mientras no exista una necesidad independiente.
+`right` solo se evalúa cuando `left == true`.
 
 ## 7. Short-circuit `||`
 
-`||` tampoco posee eager binary instruction.
+No existe eager `OrBoolean`.
 
-Lowering canónico conceptual:
+Lowering conceptual:
 
 ```text
 evaluate left
@@ -209,14 +166,9 @@ evaluate right
 end:
 ```
 
-El resultado deja exactamente un `bool` sobre el Operand Window.
+Resultado: exactamente un bool.
 
-Consecuencias:
-
-1. `left` se evalúa primero;
-2. `right` se evalúa únicamente si `left == false`;
-3. si `left` produce `EvaluationError`, `right` no se evalúa;
-4. no existe `OrBoolean` eager.
+`right` solo se evalúa cuando `left == false`.
 
 ## 8. Discard
 
@@ -230,18 +182,14 @@ Stack effect:
 1 → 0
 ```
 
-`Discard` elimina el Value superior del Operand Window.
-
-Su responsabilidad principal es cerrar correctamente un `Operation Statement` cuyo resultado normal no se utiliza.
-
-Ejemplo conceptual:
+Uso principal: cerrar un `Operation Statement` cuyo Value normal no se utiliza.
 
 ```text
 CALL / CALL_EXTERNAL
 DISCARD
 ```
 
-Después de un statement correctamente lowered no quedan temporaries semánticamente abandonados en el Operand Window.
+No quedan temporaries semánticamente abandonados después del statement.
 
 ## 9. Return
 
@@ -249,22 +197,17 @@ Después de un statement correctamente lowered no quedan temporaries semánticam
 Instruction::Return
 ```
 
-Toda `CompiledFunction` de Evo-Script v0 retorna exactamente un Value normal cuando la ejecución tiene éxito.
-
-Contrato conceptual:
+Toda `CompiledFunction` retorna exactamente un Value normal en ejecución exitosa.
 
 ```text
-before
 ... result
-
 Return
-
 → result transferred to caller
 ```
 
-Para la `entry_point`, el Value se convierte en el resultado normal exterior de la ejecución.
+Para entry point, el Value se convierte en resultado exterior.
 
-La mecánica física exacta para transferir/reutilizar storage entre caller/callee pertenece a VM Execution Data.
+La transferencia física caller/callee pertenece a `VM Execution Data`.
 
 No existen:
 
@@ -274,8 +217,6 @@ multiple return values
 exception return value
 Result wrapper
 ```
-
-Un `EvaluationError` detiene la evaluación antes de completar `Return` y se propaga por la frontera de ejecución definida por Evo-Script.
 
 ## 10. `when` uses the same branch infrastructure
 
@@ -287,13 +228,19 @@ Match opcode
 Pattern opcode
 ```
 
-Su control flow utilizará `Jump` / `JumpIfFalse` junto con las futuras instructions de enum discriminant/payload inspection.
+Su control flow usa `Jump` / `JumpIfFalse` junto con la familia ya cerrada en `COMPILED_COMPOSITE_INSTRUCTIONS.md`:
+
+```text
+TestVariant
+ExtractEnumAssociated
+ExtractEnumStructured
+```
 
 Por tanto:
 
 ```text
-branch infrastructure for `when` ✅ CLOSED
-specific enum inspection          PENDING Composite Layout / Enum Mechanics
+when branch infrastructure   ✅ CLOSED here
+when enum inspection         ✅ CLOSED in composite instructions
 ```
 
 ## 11. No hidden Host control flow
@@ -309,8 +256,6 @@ Current Provider
 try/catch
 throw
 ```
-
-Control flow del Compiled Program deriva exclusivamente de la semántica reusable del `.efn`.
 
 ## 12. Closure
 
@@ -328,6 +273,7 @@ And/Or eager instructions                  ❌ EXCLUDED
 Discard                                    ✅ CLOSED
 Return                                     ✅ CLOSED
 when branch infrastructure                 ✅ CLOSED
-when enum inspection                       PENDING Composite Layout
+when enum inspection                       ✅ CLOSED elsewhere
 InstructionPointer separation              ✅ CLOSED
+Core Load / Store + Calls                  ✅ CLOSED elsewhere
 ```
