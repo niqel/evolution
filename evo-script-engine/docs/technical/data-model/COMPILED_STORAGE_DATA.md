@@ -1,10 +1,10 @@
 # Evo-Script Engine — Compiled Storage Data
 
-Status: CLOSED
+Status: CLOSED — REVALIDATED AFTER FINAL AUDIT
 
-Este documento cierra las identidades físicas mínimas de storage persistente de `Compiled Program / Bytecode Data` antes de definir el Instruction Set de `evo-script-engine` v0.
+Este documento cierra las identidades físicas mínimas de storage persistente de `Compiled Program / Bytecode Data` de `evo-script-engine` v0.
 
-La autoridad deriva de `COMPILED_PROGRAM_DATA.md` y `TECHNICAL_DESIGN.md`, especialmente TD-005 y TD-007.
+La autoridad deriva de `COMPILED_PROGRAM_DATA.md`, `TECHNICAL_DESIGN.md` y de la auditoría final que cerró la familia `Core Load / Store + Calls`.
 
 ## 1. ParameterSlot
 
@@ -36,7 +36,7 @@ Invariantes:
 2. No es un índice absoluto dentro del Shared Value Storage.
 3. Solo existen slots para Value Parameters físicos.
 4. Signature Dependency Parameters fueron erased durante Bytecode lowering y no poseen `ParameterSlot`.
-5. Parameters son inmutables desde la semántica de Evo-Script; no se define `StoreParameter` como necesidad del lenguaje v0.
+5. Parameters son inmutables desde la semántica de Evo-Script; no se define `StoreParameter` en v0.
 
 ## 2. LocalSlot
 
@@ -127,11 +127,12 @@ Generic FrameSlot
 
 ## 5. ExternalSymbol
 
-Representación cerrada:
+Representación cerrada y corregida por la auditoría final:
 
 ```rust
 struct ExternalSymbol {
     symbol: SignatureSymbol,
+    parameter_count: usize,
 }
 ```
 
@@ -143,31 +144,58 @@ CompiledProgram.external_symbols[n]
 
 `SignatureSymbol` conserva la identidad contractual canónica `module::signature` y es owned por el `CompiledProgram` a través de `ExternalSymbol`.
 
+`parameter_count` expresa la aridad física de Value Parameters requerida por `CallExternal(ExternalSymbolId)`.
+
+Se calcula desde la `SemanticSignature` origen:
+
+```text
+SemanticSignatureParameter::Value(...)
+    → counts 1
+
+SemanticSignatureParameter::SignatureDependency(...)
+    → counts 0
+    → erased from physical calling convention
+```
+
 No contiene:
 
 ```text
 Provider
 runtime function pointer
 runtime binding
-.root path
+root path
 implementation .efn path
 Current Provider
+parameter TypeId list
+result TypeId
 ```
 
 La resolución hacia una implementación concreta ocurre únicamente mediante explicit Application Bindings durante ejecución/composición.
 
-No se duplica metadata semántica de parámetros o resultado dentro de `ExternalSymbol` mientras la VM no demuestre una necesidad propia de runtime validation.
+`parameter_count` no es metadata semántica redundante: es mecanismo ejecutable mínimo para conocer cuántos operand Values consume una external call sin repetir la aridad en cada call site.
 
-## 6. Constant
+## 6. Constant — canonical physical representation
 
 `Constant` representa datos persistentes ya materializables por la VM. No reutiliza `SemanticLiteral`, porque Semantic Program conserva significado mientras Constant Pool conserva representación ejecutable owned.
+
+La auditoría final eliminó las variantes redundantes `Int(i32)` y `Float(f64)` porque el Compiled Program ya había cerrado la canonicalización física:
+
+```text
+NativeType::Int
+NativeType::Int32
+    → NumericKind::Int32
+
+NativeType::Float
+NativeType::Float64
+    → NumericKind::Float64
+```
+
+La misma canonicalización aplica al Constant Pool.
 
 Representación cerrada:
 
 ```rust
 enum Constant {
-    Int(i32),
-    Float(f64),
     Boolean(bool),
     String(String),
 
@@ -189,6 +217,24 @@ enum Constant {
     Dynamic(DynamicConstant),
 }
 ```
+
+Lowering canónico:
+
+```text
+semantic int literal / value constant
+    → Constant::Int32
+
+semantic int32 literal / value constant
+    → Constant::Int32
+
+semantic float literal / value constant
+    → Constant::Float64
+
+semantic float64 literal / value constant
+    → Constant::Float64
+```
+
+Esto no convierte `int` e `int32`, ni `float` y `float64`, en aliases semánticos. La distinción ya cumplió su responsabilidad antes del producto compilado; ambos pares comparten mecanismo físico.
 
 `Constant` no conserva `TypeId`; la variant física expresa la representación necesaria para ejecución.
 
@@ -267,7 +313,30 @@ Constant interning/deduplication es una optimización permitida del Bytecode Com
 
 Por tanto dos `ConstantId` distintos pueden referenciar valores iguales sin invalidar el programa compilado.
 
-## 10. Closure
+## 10. Core storage Instructions boundary
+
+Las Instructions que consumen estas identities se cierran en `COMPILED_CORE_CALL_INSTRUCTIONS.md`:
+
+```text
+LoadConstant(ConstantId)
+LoadParameter(ParameterSlot)
+LoadLocal(LocalSlot)
+StoreLocal(LocalSlot)
+Call(FunctionId)
+CallExternal(ExternalSymbolId)
+```
+
+Separación:
+
+```text
+Compiled Storage Data
+    = persistent identities / data
+
+Core / Call Instructions
+    = executable operations over those identities
+```
+
+## 11. Closure
 
 ```text
 ParameterSlot                         ✅ CLOSED
@@ -275,15 +344,18 @@ LocalSlot                             ✅ CLOSED
 Parameter / Local logical separation ✅ CLOSED
 operand_base derivation               ✅ CLOSED
 BindingId → Slot mapping temporary    ✅ CLOSED
-ExternalSymbol                        ✅ CLOSED
-Constant                              ✅ CLOSED
+ExternalSymbol                        ✅ CLOSED — corrected
+ExternalSymbol.parameter_count        ✅ CLOSED
+Signature Dependency physical erasure ✅ CLOSED
+Constant                              ✅ CLOSED — canonicalized
+Int/Int32 constant duplication        ❌ REMOVED
+Float/Float64 constant duplication    ❌ REMOVED
 DynamicConstant                       ✅ CLOSED
 arbitrary integer binary magnitude    ✅ CLOSED
 signed-min literal lowering           ✅ CLOSED
 Constant Pool ownership policy        ✅ CLOSED
 constant interning optional           ✅ CLOSED
 
-Instruction / Instruction Set         ← NEXT
-SourceMap                             PENDING
-Compiled Program exact inventory      PENDING
+Core Load / Store + Calls             ✅ CLOSED in COMPILED_CORE_CALL_INSTRUCTIONS.md
+Compiled Program exact inventory      ← NEXT after final audit corrections
 ```
