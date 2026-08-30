@@ -342,7 +342,7 @@ AndBoolean
 OrBoolean
 ```
 
-`when` reutilizará la misma branch infrastructure; la inspección específica de enum permanece pendiente de Composite Layout.
+`when` reutiliza esta misma branch infrastructure junto con `TestVariant` y las extraction instructions cerradas en CD-019.
 
 ## CD-016 — Conversion Instructions
 
@@ -411,8 +411,8 @@ General equality queda parcialmente cerrada:
 numeric     ✅ CLOSED
 bool        ✅ CLOSED
 string      ✅ CLOSED
-struct      PENDING Composite Layout
-enum        PENDING Composite Layout
+struct      PENDING Structural Equality
+enum        PENDING Structural Equality
 dynamic     ❌ prohibited by language
 ```
 
@@ -470,7 +470,103 @@ La representación física final usa canonical owner ordering. Sin embargo, Byte
 
 Structural equality puede apoyarse después en este layout sin reintroducir `TypeId`.
 
-## CD-019 — Current closure
+## CD-019 — Struct / Enum Instructions
+
+Status: CLOSED — CORRECTED FINAL DESIGN
+
+Cerrado en `COMPILED_COMPOSITE_INSTRUCTIONS.md`.
+
+Instructions:
+
+```rust
+ConstructStruct {
+    field_order: Vec<FieldIndex>,
+}
+
+GetField(FieldIndex)
+
+ConstructEnumSimple(
+    VariantDiscriminant,
+)
+
+ConstructEnumAssociated(
+    VariantDiscriminant,
+)
+
+ConstructEnumStructured {
+    variant: VariantDiscriminant,
+    field_order: Vec<FieldIndex>,
+}
+
+TestVariant(
+    VariantDiscriminant,
+)
+
+ExtractEnumAssociated
+
+ExtractEnumStructured {
+    fields: Vec<FieldIndex>,
+}
+```
+
+Stack contracts:
+
+```text
+ConstructStruct(N)            N → 1
+GetField                      1 → 1
+
+ConstructEnumSimple           0 → 1
+ConstructEnumAssociated       1 → 1
+ConstructEnumStructured(N)    N → 1
+
+TestVariant                   1 → 2
+ExtractEnumAssociated         1 → 1
+ExtractEnumStructured(N)      1 → N
+```
+
+### Construction ordering
+
+`ConstructStruct` y `ConstructEnumStructured` preservan source evaluation order mediante `field_order` y producen canonical storage ordering.
+
+Para N fields:
+
+```text
+field_order.len() == N
+field_order = permutation of all valid FieldIndex values
+```
+
+No se permite duplicated, missing u out-of-range `FieldIndex` en un Compiled Program válido.
+
+### `when` lowering
+
+`TestVariant` conserva temporalmente el Enum y produce un `bool` para `JumpIfFalse`, de modo que una branch que no coincide pueda dejar el subject disponible para la siguiente prueba.
+
+Una vez confirmada la variant, payload extraction consume el Enum:
+
+```text
+ExtractEnumAssociated
+    Enum → payload
+
+ExtractEnumStructured { fields }
+    Enum → N payload field Values
+```
+
+La revisión final rechazó explícitamente:
+
+```text
+GetEnumAssociated : 1 → 2
+GetEnumField       : 1 → 2
+```
+
+porque preservar simultáneamente el Enum owner y Values interiores extraídos podría forzar cloning, interior borrowing o aliasing antes de que `VM Execution Data` justifique una representación concreta.
+
+Regla canónica:
+
+> Después de confirmar la variante correcta, enum payload extraction consume el composite; el Instruction Set no exige por diseño aliasing entre owner y payload Values.
+
+No existen runtime `When`, `Match`, Pattern object, `TypeId`, `StructLayout` o `EnumLayout` para ejecutar estas operaciones.
+
+## CD-020 — Current closure
 
 ```text
 Compiled Program responsibility          ✅ CLOSED
@@ -502,9 +598,11 @@ String equality                          ✅ CLOSED
 FieldIndex                               ✅ CLOSED
 VariantDiscriminant                      ✅ CLOSED
 Composite Layout                         ✅ CLOSED
+Struct / Enum Instructions               ✅ CLOSED — corrected
+when composite lowering                  ✅ CLOSED
+owner/payload aliasing not required      ✅ CLOSED
 
-Struct / Enum Instructions               ← NEXT
-Struct / Enum equality                   PENDING
+Struct / Enum Structural Equality        ← NEXT
 SourceMap                                PENDING
 Compiled Program exact inventory         PENDING
 ```
