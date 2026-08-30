@@ -368,6 +368,61 @@ Host State
 VM Execution State
 ```
 
+### TD-012 — Earliest Responsible Failure
+
+Status: CLOSED
+
+Cada fase del compiler debe rechazar una invalidez en la primera fase que disponga de toda la información necesaria y sea responsable de la regla violada.
+
+Regla canónica:
+
+```text
+first phase with sufficient information
++ responsibility for the rule
+        ↓
+     Failure
+```
+
+No se crean Tokens, AST, Semantic Program u otros working artifacts deliberadamente inválidos para trasladar una falla a una fase posterior.
+
+Separación:
+
+```text
+Lexer
+    → lexical form validity
+
+Parser
+    → syntactic / structural validity
+
+Semantic Analyzer
+    → resolved meaning validity
+
+Bytecode Compiler
+    → translation invariants from valid Semantic Program
+```
+
+Invariantes:
+
+- Lexer falla ante una forma léxica inválida tan pronto como puede confirmarla;
+- Parser falla ante una estructura sintáctica inválida sin producir AST exitoso;
+- Parser valida invariantes estructurales completas del `.efn` cuando no requieren resolución semántica;
+- en v0, la existencia de exactamente una `public fn` es una invariante estructural validada por Parser;
+- un `.efn` vacío, con cero Public Functions o con más de una Public Function no produce AST exitoso;
+- Semantic Analyzer no recibe AST sintácticamente inválido;
+- Semantic Analyzer conserva la responsabilidad de identity resolution, type resolution, duplicate semantic identities, graph validation y Signature resolution;
+- una fase anterior no absorbe una regla de una fase posterior solo porque técnicamente pudiera inspeccionar texto suficiente para intentar resolverla;
+- cada Failure debe conservar información diagnóstica suficiente para localizar la construcción responsable cuando corresponda.
+
+Resultado:
+
+```text
+Parser success
+    ⇒ structurally valid AST
+
+Semantic Analyzer success
+    ⇒ semantically valid Semantic Program
+```
+
 ## 3. Technical Design Closure
 
 ```text
@@ -383,6 +438,7 @@ External Value ownership                  ✅ CLOSED
 Evo-Script-driven VM                      ✅ CLOSED
 Compilation Working State policy          ✅ CLOSED
 `.efn` / Host State separation            ✅ CLOSED
+Earliest Responsible Failure              ✅ CLOSED
 
 Technical Design                          ✅ CLOSED
 Technical Data Model                      ← IN PROGRESS
