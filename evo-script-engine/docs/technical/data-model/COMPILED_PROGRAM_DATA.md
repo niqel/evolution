@@ -308,7 +308,115 @@ Cross-family dynamic arithmetic no realiza coercion implícita y produce `Dynami
 
 No existen Dynamic comparison instructions.
 
-## CD-015 — Current closure
+## CD-015 — Control Flow and short-circuit
+
+Status: CLOSED
+
+Cerrado en `COMPILED_CONTROL_FLOW.md`.
+
+Identidad:
+
+```rust
+struct InstructionIndex(usize);
+```
+
+Instructions base:
+
+```text
+Jump(InstructionIndex)
+JumpIfFalse(InstructionIndex)
+Discard
+Return
+```
+
+`Instruction` se representa como typed enum; no se introduce un `Opcode` separado con generic operands.
+
+Branches usan absolute `InstructionIndex` local a `CompiledFunction`.
+
+`JumpIfFalse` consume un `bool` y `&&` / `||` se reducen a branching real de short-circuit.
+
+No existen eager instructions:
+
+```text
+AndBoolean
+OrBoolean
+```
+
+`when` reutilizará la misma branch infrastructure; la inspección específica de enum permanece pendiente de Composite Layout.
+
+## CD-016 — Conversion Instructions
+
+Status: CLOSED
+
+Cerrado en `COMPILED_CONVERSIONS.md`.
+
+Instructions:
+
+```rust
+ConvertNumeric {
+    source: NumericKind,
+    target: NumericKind,
+}
+
+ConvertDynamic(NumericKind)
+NumericToString(NumericKind)
+DynamicToString
+```
+
+Reglas:
+
+```text
+fixed numeric → fixed numeric
+    exact representation or ConversionError
+
+dynamic → fixed numeric
+    exact representation or ConversionError
+
+fixed numeric → string
+    NumericToString
+
+dynamic → string
+    DynamicToString
+```
+
+`LiftDynamic` continúa siendo mecanismo técnico fixed → dynamic para arithmetic context; Evo-Script v0.1 no define `to_dynamic`.
+
+No se introducen implicit conversions ni string → numeric parsing.
+
+El Technical Data Model no amplía silenciosamente `to_string` a bool/struct/enum mientras la especificación v0.1 no lo declare explícitamente.
+
+## CD-017 — Scalar Boolean / String Equality
+
+Status: CLOSED
+
+Cerrado en `COMPILED_SCALAR_EQUALITY.md`.
+
+Instructions:
+
+```text
+NotBoolean
+EqualBoolean
+NotEqualBoolean
+EqualString
+NotEqualString
+```
+
+`bool` y `string` no poseen ordering operators en Evo-Script v0.1.
+
+String equality compara contenido textual UTF-8, no address ni ownership identity.
+
+General equality queda parcialmente cerrada:
+
+```text
+numeric     ✅ CLOSED
+bool        ✅ CLOSED
+string      ✅ CLOSED
+struct      PENDING Composite Layout
+enum        PENDING Composite Layout
+dynamic     ❌ prohibited by language
+```
+
+## CD-018 — Current closure
 
 ```text
 Compiled Program responsibility          ✅ CLOSED
@@ -330,10 +438,17 @@ Fixed numeric comparisons                ✅ CLOSED
 LiftDynamic                              ✅ CLOSED
 Dynamic arithmetic                       ✅ CLOSED
 DynamicNumericTypeError boundary         ✅ CLOSED
+Instruction typed-enum representation    ✅ CLOSED
+InstructionIndex                         ✅ CLOSED
+Control Flow / short-circuit             ✅ CLOSED
+Discard / Return                         ✅ CLOSED
+Conversion Instructions                  ✅ CLOSED
+Boolean equality / negation              ✅ CLOSED
+String equality                          ✅ CLOSED
 
-Instruction representation / control flow ← NEXT
-Conversion Instructions                  PENDING
-Composite Value Instructions             PENDING
+Composite Layout                         ← NEXT
+Struct / Enum Instructions               PENDING
+Struct / Enum equality                   PENDING
 SourceMap                                PENDING
 Compiled Program exact inventory         PENDING
 ```
