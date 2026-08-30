@@ -76,7 +76,8 @@ AST Data                         ← IN ANALYSIS
 ├── foundational syntax data     ✅ CLOSED
 ├── Program / imports / decls    ✅ CLOSED
 ├── local type definitions       ✅ CLOSED
-└── exact remaining inventory     ← IN ANALYSIS
+├── functions / body             ✅ CLOSED
+└── expressions / recursion       ← IN ANALYSIS
 
 Semantic Program Data            PENDING
 Compiled Program / Bytecode Data PENDING
@@ -96,6 +97,7 @@ AST Data:
 
 - [`AST_DATA.md`](./AST_DATA.md) — frontera sintáctica, Host exclusion, `this`, Pipeline y decisiones base del AST.
 - [`AST_TYPE_DEFINITIONS.md`](./AST_TYPE_DEFINITIONS.md) — `StructDefinition`, `FieldDefinition`, `EnumDefinition`, `EnumVariant` y cardinalidades cerradas.
+- [`AST_FUNCTION_DEFINITIONS.md`](./AST_FUNCTION_DEFINITIONS.md) — `FunctionDefinition`, `Parameter`, `FunctionBody`, `BodyStatement`, `LetBinding` y `return` parser-only.
 
 ## Technical Data Diagram
 
