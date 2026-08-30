@@ -341,9 +341,57 @@ Invariantes:
 - la VM debe ser específica de `Evo-Script` en las capacidades que necesita ejecutar y pequeña en sus mecanismos computacionales;
 - no se introducen capacidades de VM únicamente porque Rust posea una construcción equivalente o más compleja.
 
+### TD-010 — Compilation Working State es temporal y no redefine Runtime Materialization
+
+Status: CLOSED
+
+La compilación es un proceso finito cuyo producto persistente es `Compiled Program`. Las representaciones intermedias necesarias para producirlo pertenecen al **Compilation Working State** y pueden utilizar ownership, colecciones dinámicas y allocation cuando representan naturalmente el trabajo del compiler y simplifican de manera significativa la corrección, validación, inspección o mantenibilidad.
+
+Regla canónica:
+
+```text
+Compilation Working State
+    = temporal
+
+Compiled Program
+    = producto persistente de Compile
+```
+
+La existencia de materialización temporal durante compilación no autoriza materializaciones equivalentes durante ejecución. Compilation y Runtime poseen lifetimes, frecuencias y responsabilidades diferentes.
+
+```text
+Compile
+├── Source Text
+├── Tokens                 temporary
+├── AST                    temporary
+├── Semantic Program       temporary
+├── compiler indexes       temporary when not part of product
+└── Compiled Program       persistent product
+
+Runtime
+└── aplica sus propias reglas de ownership / borrowing / materialization
+```
+
+Invariantes:
+
+- `Vec`, `Box`, allocation u otras representaciones owned no están prohibidas por principio dentro del Compilation Working State;
+- tampoco se introducen automáticamente por costumbre: cada representación debe expresar una necesidad real del dato o simplificar de forma demostrable el compiler;
+- un contenedor temporal no se convierte en identidad arquitectónica únicamente porque facilite el transporte entre módulos;
+- no se crean DTOs, entities, wrappers ni copias completas del programa solo para imitar capas;
+- `Token Sequence`, `AST` y `Semantic Program` pueden materializarse como working state cuando su existencia simplifica la corrección del pipeline;
+- el lifetime del working state termina cuando deja de ser necesario para producir el siguiente estado requerido o el `Compiled Program`;
+- al finalizar exitosamente `Compile`, `Tokens`, `AST`, `Semantic Program` y demás working state no forman parte del `Compiled Program` salvo la información que haya sido transformada explícitamente en datos persistentes del producto;
+- el uso de colecciones temporales durante compilación no modifica TD-006, TD-007 ni TD-008, que regulan datos y almacenamiento de ejecución;
+- durante Runtime continúa aplicando `borrow mientras alcance; ownership cuando deba sobrevivir` y la prohibición de materialización artificial sin lifetime o responsabilidad real;
+- optimizaciones que eliminen materializaciones temporales son permitidas posteriormente si conservan la misma semántica y no introducen complejidad arquitectónica desproporcionada.
+
+Regla de revisión:
+
+> En Compilation se optimiza primero por corrección, claridad y determinismo; en Runtime se revisa además el costo recurrente de cada materialización durante la vida de la aplicación.
+
 ## 3. Technical Design Closure
 
-Las decisiones estructurales necesarias para comenzar el Technical Data Model de `evo-script-engine` v0 están cerradas.
+Las decisiones estructurales necesarias para continuar el Technical Data Model de `evo-script-engine` v0 están cerradas.
 
 ```text
 Stack VM                                  ✅ CLOSED
@@ -356,9 +404,10 @@ Shared Operand Stack + frame windows      ✅ CLOSED
 Shared Frame Region                       ✅ CLOSED
 External Value ownership                  ✅ CLOSED
 Evo-Script-driven VM                      ✅ CLOSED
+Compilation Working State policy          ✅ CLOSED
 
 Technical Design                          ✅ CLOSED
-Technical Data Model                      ← NEXT
+Technical Data Model                      ← IN PROGRESS
 ```
 
 Reabrir una de estas decisiones requiere identificar explícitamente qué nueva necesidad técnica o funcional invalida el diseño cerrado.
@@ -370,6 +419,7 @@ El Technical Data Model puede ahora definir de forma concreta los datos demostra
 ```text
 Token
 Token Kind
+Token Sequence
 AST
 AST Nodes
 Semantic Program
