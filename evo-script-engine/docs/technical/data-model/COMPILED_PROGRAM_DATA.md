@@ -405,14 +405,14 @@ NotEqualString
 
 String equality compara contenido textual UTF-8, no address ni ownership identity.
 
-General equality queda parcialmente cerrada:
+General equality queda cerrada por familias:
 
 ```text
 numeric     ✅ CLOSED
 bool        ✅ CLOSED
 string      ✅ CLOSED
-struct      PENDING Structural Equality
-enum        PENDING Structural Equality
+struct      ✅ CLOSED in Structural Equality
+enum        ✅ CLOSED in Structural Equality
 dynamic     ❌ prohibited by language
 ```
 
@@ -467,8 +467,6 @@ field / variant names at runtime
 ```
 
 La representación física final usa canonical owner ordering. Sin embargo, Bytecode Compiler debe preservar source evaluation order durante composite construction aunque dicho orden difiera del canonical storage order.
-
-Structural equality puede apoyarse después en este layout sin reintroducir `TypeId`.
 
 ## CD-019 — Struct / Enum Instructions
 
@@ -566,7 +564,88 @@ Regla canónica:
 
 No existen runtime `When`, `Match`, Pattern object, `TypeId`, `StructLayout` o `EnumLayout` para ejecutar estas operaciones.
 
-## CD-020 — Current closure
+## CD-020 — Structural Equality
+
+Status: CLOSED
+
+La regla normativa está cerrada en `evo-script/COMPOSITE_EQUALITY_COMPARABILITY_v0.1.md` y el mecanismo compilado en `COMPILED_STRUCTURAL_EQUALITY.md`.
+
+### EqualityComparable
+
+Semantic Analyzer decide estáticamente:
+
+```text
+fixed numeric  → comparable
+bool           → comparable
+string         → comparable
+dynamic        → NOT comparable
+
+Struct
+    → comparable iff all fields are comparable
+
+Enum
+    → comparable iff all variant payloads are comparable
+```
+
+La propiedad es transitiva sobre el Type Dependency DAG.
+
+Un composite que contenga `dynamic` directa o transitivamente no admite `==` / `!=` y produce `ComparisonTypeError` durante Semantic Analysis.
+
+No existe igualdad dinámica escondida dentro de Structural Equality.
+
+### Compiled plan
+
+Representaciones cerradas:
+
+```rust
+enum EqualityRule {
+    Numeric(NumericKind),
+    Boolean,
+    String,
+    Composite(CompositeEqualityPlan),
+}
+
+enum CompositeEqualityPlan {
+    Struct {
+        fields: Vec<EqualityRule>,
+    },
+
+    Enum {
+        variants: Vec<EnumEqualityPayloadPlan>,
+    },
+}
+
+enum EnumEqualityPayloadPlan {
+    Simple,
+    Associated(EqualityRule),
+    Structured {
+        fields: Vec<EqualityRule>,
+    },
+}
+```
+
+No existe `EqualityRule::Dynamic`.
+
+Instructions:
+
+```rust
+EqualComposite(CompositeEqualityPlan)
+NotEqualComposite(CompositeEqualityPlan)
+```
+
+Stack effect:
+
+```text
+2 composite Values → 1 bool
+```
+
+El plan se almacena directamente en la instruction en v0. No se introducen `EqualityPlanId`, Equality Plan Table, runtime `TypeId`, reflection metadata ni `EqualValue` genérico.
+
+Struct equality compara fields en canonical order y puede terminar en el primer field desigual. Enum equality compara primero discriminants; si coinciden aplica el payload plan correspondiente.
+
+Una Structural Equality compilada es total y no produce runtime `ComparisonTypeError`, `DynamicNumericTypeError` ni `ConversionError`.
+
+## CD-021 — Current closure
 
 ```text
 Compiled Program responsibility          ✅ CLOSED
@@ -601,8 +680,10 @@ Composite Layout                         ✅ CLOSED
 Struct / Enum Instructions               ✅ CLOSED — corrected
 when composite lowering                  ✅ CLOSED
 owner/payload aliasing not required      ✅ CLOSED
+EqualityComparable                       ✅ CLOSED
+Struct / Enum Structural Equality        ✅ CLOSED
+no hidden dynamic equality               ✅ CLOSED
 
-Struct / Enum Structural Equality        ← NEXT
-SourceMap                                PENDING
+SourceMap                                ← NEXT
 Compiled Program exact inventory         PENDING
 ```
