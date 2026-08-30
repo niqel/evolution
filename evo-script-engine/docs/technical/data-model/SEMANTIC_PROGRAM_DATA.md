@@ -1,6 +1,6 @@
 # Evo-Script Engine — Semantic Program Data
 
-Status: SEMANTIC PROGRAM DATA — IN ANALYSIS
+Status: SEMANTIC PROGRAM DATA — CLOSED
 
 Este documento define las reglas base e identidades de `Semantic Program Data` de `evo-script-engine` v0.
 
@@ -18,7 +18,11 @@ Bytecode Compiler
 Compiled Program
 ```
 
-Las estructuras owner cerradas se detallan en `SEMANTIC_PROGRAM_STRUCTURE.md` y el significado ejecutable interno de las funciones en `SEMANTIC_EXPRESSIONS.md`.
+Documentos especializados:
+
+- `SEMANTIC_PROGRAM_STRUCTURE.md` — owner structures y root.
+- `SEMANTIC_EXPRESSIONS.md` — function body y significado ejecutable.
+- `SEMANTIC_PROGRAM_INVENTORY.md` — segunda revisión, inventario exacto y cierre.
 
 ## SD-001 — Semantic Program representa significado resuelto
 
@@ -33,12 +37,12 @@ Regla canónica:
 Consecuencias:
 
 1. `Semantic Program` no es AST decorado.
-2. Imports cumplen su responsabilidad durante semantic resolution y no sobreviven como `SemanticImport` por defecto.
-3. Names pueden conservarse como diagnostic/debug metadata cuando se demuestre necesario, pero nunca como mecanismo de identity resolution dentro de Bytecode Compiler.
-4. Semantic Program contiene todo el significado necesario para compilar sin volver a consultar AST ni reconstruir scope/name resolution.
-5. Semantic identities no son VM storage identities.
-6. `ParameterSlot`, `LocalSlot`, operand layout y otras identidades físicas pertenecen a Bytecode / VM Data.
-7. External capabilities continúan separadas de Internal Functions conforme a TD-003 y TD-011.
+2. Imports cumplen su responsabilidad durante resolution y no sobreviven como `SemanticImport`.
+3. Local names/aliases no son mecanismo de identity resolution en Bytecode Compiler.
+4. La identidad contractual externa `module::signature` sí sobrevive mediante `SignatureSymbol` porque debe materializarse como External Symbol persistente.
+5. Semantic Program contiene todo el significado necesario para compilar sin volver al AST.
+6. Semantic identities no son VM storage identities.
+7. External capabilities permanecen separadas de Internal Functions.
 
 ## SD-002 — Base Semantic Identities
 
@@ -50,52 +54,20 @@ struct FunctionId(usize);
 struct BindingId(usize);
 ```
 
-Los tres son newtypes opacos. `usize` es representación interna del Compilation Working State; no constituye ABI, formato persistente ni identificador estable entre compilaciones.
-
-### TypeId
-
-`TypeId` identifica de forma única un tipo resuelto dentro de un `SemanticProgram`.
-
-Su namespace incluye los tipos necesarios para compilar:
+Los tres son newtypes opacos del Compilation Working State. No constituyen ABI ni identidad estable entre compilaciones.
 
 ```text
-Native Type
-Local Struct
-Local Enum
-Imported Type
-Transitively required Type
-```
+TypeId
+    = resolved type identity inside SemanticProgram
 
-No expresa layout físico, tamaño de runtime ni discriminante.
-
-### FunctionId
-
-`FunctionId` identifica una Internal Function resuelta dentro de un `SemanticProgram`.
-
-```text
-AST function name
-    ↓ Semantic Analyzer
 FunctionId
-    ↓ Bytecode Compiler
-compiled CALL target
+    = resolved Internal Function identity inside SemanticProgram
+
+BindingId
+    = resolved Value binding identity inside one SemanticFunction
 ```
 
-No identifica Signature, Provider, physical address ni stable ABI identity.
-
-### BindingId
-
-`BindingId` identifica un Value binding dentro de una única `SemanticFunction`.
-
-Orígenes válidos:
-
-```text
-Value Parameter
-Let Binding
-Associated when extraction
-Structured when extraction
-```
-
-No identifica Signature Dependency ni Parameter/Local Slot.
+`BindingId` puede representar Value Parameter, Let Binding y bindings extraídos por `when`.
 
 ## SD-003 — Secondary Semantic Identities
 
@@ -108,42 +80,19 @@ struct SignatureId(usize);
 struct SignatureBindingId(usize);
 ```
 
-### FieldId
-
-Identifica un field dentro de su owner estructural:
-
 ```text
-Semantic Struct Type
-Structured Enum Variant
-```
+FieldId
+    = field inside structural owner
 
-`FieldId != FieldOffset` y no representa layout físico.
+VariantId
+    = variant inside Semantic Enum
 
-### VariantId
-
-Identifica una variante dentro de un Semantic Enum Type.
-
-`VariantId != runtime discriminant`.
-
-### SignatureId
-
-Identifica una Signature semántica resuelta dentro de `SemanticProgram`.
-
-Representa el contrato/capability definido, no una dependencia local concreta, Provider ni runtime binding.
-
-### SignatureBindingId
-
-Identifica una Signature Dependency concreta dentro de una única `SemanticFunction`.
-
-Dos dependencies distintas pueden referenciar el mismo `SignatureId`.
-
-```text
 SignatureId
-├── SignatureBindingId A
-└── SignatureBindingId B
-```
+    = resolved Signature definition inside SemanticProgram
 
-No es `BindingId`, `ExternalSymbolId` ni Provider binding.
+SignatureBindingId
+    = concrete Signature Dependency inside one SemanticFunction
+```
 
 ## SD-004 — Identity Scope
 
@@ -166,13 +115,9 @@ Semantic Enum
 └── VariantId namespace            local to enum owner
 ```
 
-Los namespaces son conceptualmente independientes aun cuando todos utilicen `usize` internamente.
-
 ## SD-005 — Semantic Identity != Physical Layout
 
 Status: CLOSED
-
-Separación obligatoria:
 
 ```text
 TypeId              != runtime type layout
@@ -190,8 +135,6 @@ Semantic Analyzer resuelve significado. Bytecode Compiler y VM deciden represent
 
 Status: CLOSED
 
-Los IDs identifican por posición dentro de la colección de su owner. No se duplica `id` dentro del elemento.
-
 ```text
 TypeId(n)              → SemanticProgram.types[n]
 FunctionId(n)          → SemanticProgram.functions[n]
@@ -202,13 +145,13 @@ BindingId(n)           → SemanticFunction.bindings[n]
 SignatureBindingId(n)  → SemanticFunction.signature_bindings[n]
 ```
 
-La definición completa de los owners se encuentra en `SEMANTIC_PROGRAM_STRUCTURE.md`.
+No se duplica `id` dentro del elemento referenciado.
 
 ## SD-007 — Semantic owner structures
 
 Status: CLOSED
 
-Quedan cerradas en `SEMANTIC_PROGRAM_STRUCTURE.md`:
+Cerradas en `SEMANTIC_PROGRAM_STRUCTURE.md`:
 
 ```text
 NativeType
@@ -219,9 +162,10 @@ SemanticBinding
 SemanticSignatureBinding
 SemanticParameter
 SemanticSignatureParameter
+SignatureSymbol
 SemanticSignature
-SemanticFunction shell
-SemanticProgram root
+SemanticFunction
+SemanticProgram
 ```
 
 Forma raíz:
@@ -235,55 +179,52 @@ struct SemanticProgram {
 }
 ```
 
-`SemanticFunction` conserva una única lista posicional de `SemanticParameter`, mientras `bindings` y `signature_bindings` son owners separados de sus respectivos namespaces.
-
-## SD-008 — ExternalSymbolId remains outside Semantic Program
+## SD-008 — SignatureSymbol
 
 Status: CLOSED
 
-`ExternalSymbolId` no pertenece a Semantic Program Data v0.
+La segunda revisión confirmó que una Signature externa debe conservar su identidad contractual canónica:
 
-Semantic Program conserva el significado resuelto mediante `SignatureId` y `SignatureBindingId`. Si Bytecode Compiler necesita una identidad compacta para runtime external symbols, la crea dentro de `Compiled Program / Bytecode Data`.
-
-```text
-Semantic Signature meaning
-        ↓ Bytecode Compiler
-Compiled External Symbol
-        ↓
-Runtime explicit binding
+```rust
+struct SignatureSymbol {
+    module: String,
+    name: String,
+}
 ```
 
-No se introduce Provider identity ni Current Provider.
+`SignatureId` continúa siendo la identity usada dentro de Semantic Program. `SignatureSymbol` solo conserva el significado contractual `module::signature` necesario para que Bytecode Compiler produzca External Symbol data.
 
-## SD-009 — Representation Policy
+```text
+local alias / local dependency name
+    → consumed during semantic resolution
+
+canonical module::signature
+    → preserved as SignatureSymbol
+```
+
+`SignatureSymbol` no es `ExternalSymbolId`, Provider identity ni runtime binding.
+
+## SD-009 — ExternalSymbolId remains outside Semantic Program
 
 Status: CLOSED
 
-`usize` queda cerrado para las identities semánticas de v0 porque Semantic Program pertenece al Compilation Working State.
-
-Si una versión futura requiere serialización persistente, ABI estable, incremental cache cross-process u otra vida más larga, esta representación deberá reabrirse explícitamente.
-
-No se introduce en v0:
+`ExternalSymbolId` pertenece, si se demuestra necesario, a `Compiled Program / Bytecode Data`.
 
 ```text
-UUID semantic identities
-String-based semantic identity
-Global BindingId namespace
-Global FieldId namespace
-Global VariantId namespace
-Global SignatureBindingId namespace
-Slot identity inside Semantic Analyzer
-Stable cross-compilation IDs
-ExternalSymbolId in Semantic Program
+SignatureId
+    ↓
+SemanticSignature.symbol
+    ↓ Bytecode Compiler
+Compiled External Symbol
+    ↓
+Runtime explicit binding
 ```
 
 ## SD-010 — Semantic Function Body and Expressions
 
 Status: CLOSED
 
-El significado ejecutable interno de `SemanticFunction` queda cerrado en `SEMANTIC_EXPRESSIONS.md`.
-
-Identidades cerradas:
+Cerradas en `SEMANTIC_EXPRESSIONS.md`:
 
 ```text
 SemanticFunctionBody
@@ -291,9 +232,9 @@ SemanticStatement
 SemanticExpression
 SemanticExpressionKind
 SemanticLiteral
-SemanticCall
 SemanticCallTarget
 SemanticArgument
+SemanticCall
 SemanticFieldValue
 SemanticEnumPayload
 SemanticWhen
@@ -302,32 +243,66 @@ SemanticVariantExtraction
 SemanticFieldBinding
 ```
 
-Reglas centrales:
+Toda `SemanticExpression` conserva:
 
-1. Toda `SemanticExpression` conserva `type_id: TypeId` resuelto y `span: SourceSpan` para Source Mapping.
-2. Literals dejan de ser lexemes y se materializan como `SemanticLiteral`.
-3. Local Value references usan `BindingId`.
-4. Field access usa `FieldId`.
-5. Calls se resuelven como `Internal(FunctionId)`, `DirectSignature(SignatureId)` o `SignatureDependency(SignatureBindingId)`.
-6. Signature Dependencies pueden reenviarse mediante `SemanticArgument::SignatureDependency` sin convertirse en Values de primer orden.
-7. Struct/Enum construction usa `FieldId`, `VariantId` y Semantic Expressions ya validadas.
-8. `when` conserva branching semántico mediante `VariantId` y bindings resueltos; no conserva AST patterns.
-9. Pipeline no sobrevive como identidad semántica: Semantic Analyzer lo reduce a composición de `SemanticCall`.
-10. `return` no reaparece; `SemanticFunctionBody.result` es el resultado final único.
+```rust
+type_id: TypeId
+span: SourceSpan
+```
 
-## SD-011 — Pipeline semantic lowering
+Bytecode Compiler no realiza type inference ni name resolution.
+
+## SD-011 — Language conversions
 
 Status: CLOSED
+
+Las operaciones oficiales `to_tipo` se representan como significado propio del lenguaje:
+
+```rust
+SemanticExpressionKind::Conversion {
+    operand: Box<SemanticExpression>,
+}
+```
+
+La conversión se determina por:
+
+```text
+source = operand.type_id
+target = enclosing SemanticExpression.type_id
+```
+
+No se introduce `BuiltinFunctionId` ni `ConversionKind`.
+
+## SD-012 — Arbitrary integer semantic literals
+
+Status: CLOSED
+
+```rust
+SemanticLiteral::Integer(String)
+```
+
+contiene magnitud decimal canónica ya validada. Esto evita imponer un límite `u128` al Semantic Program y preserva la semántica de `dynamic`, que puede requerir enteros de precisión arbitraria.
+
+Runtime arbitrary-integer storage pertenece a VM / Value Data posterior.
+
+## SD-013 — Pipeline semantic lowering
+
+Status: CLOSED
+
+Pipeline no sobrevive como identity semántica.
 
 ```text
 AST Pipeline
     ↓ Semantic Analyzer
-nested SemanticCall composition
-    ↓ Bytecode Compiler
-normal call lowering
+Semantic Expression Composition
 ```
 
-No existen en Semantic Program v0:
+```text
+ordinary function/signature stage → SemanticCall
+conversion stage                  → Conversion
+```
+
+No existen:
 
 ```text
 SemanticPipeline
@@ -335,62 +310,88 @@ SemanticPipelineStage
 SemanticThis
 ```
 
-Esto evita que Bytecode Compiler deba volver a interpretar la sintaxis especial de Pipeline.
-
-## SD-012 — Source mapping boundary
+## SD-014 — Source mapping boundary
 
 Status: CLOSED
 
-`SemanticExpression.span` conserva ubicación suficiente para que Bytecode Compiler produzca Diagnostic / Source Mapping Data sin volver al AST.
+`SemanticExpression.span` conserva ubicación suficiente para que Bytecode Compiler produzca Source Mapping sin volver al AST.
 
-No se duplica SourceSpan por costumbre en todas las identidades semánticas.
+No se duplican spans por costumbre en todas las estructuras semánticas.
 
-Regla:
+## SD-015 — Second review / Exact inventory
 
-> Semantic Program conserva Source Location cuando es necesaria para traducir significado ejecutable hacia Source Mapping, no para reproducir Concrete Syntax.
+Status: CLOSED
 
-## SD-013 — Next block
+La segunda revisión se registra en `SEMANTIC_PROGRAM_INVENTORY.md`.
 
-Status: IN ANALYSIS
-
-Queda una revisión final antes de cerrar por completo Semantic Program Data:
+Resultado:
 
 ```text
-exact semantic identity inventory
-cardinality consistency
-no unresolved syntax identities
-no missing data required by Bytecode Compiler
-no accidental Compiled/VM identities in Semantic Program
+exact semantic identity inventory         ✅ 33 identities
+AST → Semantic coverage                   ✅
+cardinality consistency                   ✅
+no unresolved local syntax identity       ✅
+Bytecode Compiler sufficiency             ✅
+external Signature symbolic identity      ✅
+conversion coverage                       ✅
+arbitrary integer preservation            ✅
+no Compiled/VM identity leakage           ✅
 ```
 
-Si esta revisión no descubre nuevas responsabilidades, `Semantic Program Data` podrá declararse CLOSED y el Technical Data Model avanzará a `Compiled Program / Bytecode Data`.
+Todos los IDs presentes deben referenciar elementos válidos dentro de su owner namespace; Semantic Analyzer success no produce dangling semantic identities.
 
-## Current Closure
+## SD-016 — Representation Policy
+
+Status: CLOSED
+
+`usize` queda cerrado para IDs semánticos v0 porque Semantic Program pertenece al Compilation Working State.
+
+Si una versión futura requiere serialization persistente, stable ABI o incremental cache cross-process, se reabre explícitamente.
+
+No se introduce en v0:
 
 ```text
-Semantic Program responsibility    ✅ CLOSED
-No name re-resolution              ✅ CLOSED
-TypeId                              ✅ CLOSED
-FunctionId                          ✅ CLOSED
-BindingId                           ✅ CLOSED
-FieldId                             ✅ CLOSED
-VariantId                           ✅ CLOSED
-SignatureId                         ✅ CLOSED
-SignatureBindingId                  ✅ CLOSED
-Identity scopes                     ✅ CLOSED
-Semantic identity != VM layout      ✅ CLOSED
-Owner-index identity rule           ✅ CLOSED
-Semantic owner structures           ✅ CLOSED
-SemanticProgram root                ✅ CLOSED
-ExternalSymbolId excluded here      ✅ CLOSED
-SemanticFunctionBody                ✅ CLOSED
-SemanticStatement                   ✅ CLOSED
-SemanticExpression                  ✅ CLOSED
-Semantic calls / arguments          ✅ CLOSED
-Semantic constructions              ✅ CLOSED
-Semantic `when`                     ✅ CLOSED
-Pipeline semantic lowering          ✅ CLOSED
-SourceSpan propagation              ✅ CLOSED
+UUID semantic identities
+String-based local semantic resolution
+Global BindingId namespace
+Global FieldId namespace
+Global VariantId namespace
+Global SignatureBindingId namespace
+Slot identity inside Semantic Analyzer
+Stable cross-compilation IDs
+ExternalSymbolId in Semantic Program
+SemanticImport
+SemanticPipeline
+BuiltinFunctionId
+ConversionKind
+Provider identity
+runtime binding
+```
 
-Semantic Program exact inventory    ← IN ANALYSIS
+## Closure
+
+```text
+Semantic Program responsibility              ✅ CLOSED
+Semantic identity family                     ✅ CLOSED
+Identity scopes                              ✅ CLOSED
+Owner-index rule                             ✅ CLOSED
+Semantic owner structures                    ✅ CLOSED
+SignatureSymbol                              ✅ CLOSED
+SemanticProgram root                         ✅ CLOSED
+SemanticFunctionBody                         ✅ CLOSED
+SemanticExpression                           ✅ CLOSED
+Semantic calls / arguments                   ✅ CLOSED
+Language conversions                         ✅ CLOSED
+Arbitrary integer semantic preservation      ✅ CLOSED
+Semantic constructions                       ✅ CLOSED
+Semantic `when`                              ✅ CLOSED
+Pipeline semantic lowering                   ✅ CLOSED
+SourceSpan propagation                       ✅ CLOSED
+Exact semantic inventory — 33 identities     ✅ CLOSED
+Second review                                ✅ CLOSED
+
+Semantic Program Data                        ✅ CLOSED
+
+NEXT
+    Compiled Program / Bytecode Data
 ```
