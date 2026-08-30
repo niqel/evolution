@@ -78,8 +78,9 @@ AST Data                         ← IN ANALYSIS
 ├── local type definitions       ✅ CLOSED
 ├── functions / body             ✅ CLOSED
 ├── expression representation    ✅ CLOSED — typed nested tree
-├── expression inventory         ✅ CLOSED — except `when`
-└── `when` model                  ← IN ANALYSIS
+├── expression inventory         ✅ CLOSED
+├── `when` model                  ✅ CLOSED
+└── exact AST inventory review    ← IN ANALYSIS
 
 Semantic Program Data            PENDING
 Compiled Program / Bytecode Data PENDING
@@ -101,7 +102,8 @@ AST Data:
 - [`AST_TYPE_DEFINITIONS.md`](./AST_TYPE_DEFINITIONS.md) — `StructDefinition`, `FieldDefinition`, `EnumDefinition`, `EnumVariant` y cardinalidades cerradas.
 - [`AST_FUNCTION_DEFINITIONS.md`](./AST_FUNCTION_DEFINITIONS.md) — `FunctionDefinition`, `Parameter`, `FunctionBody`, `BodyStatement`, `LetBinding`, `OperationStatement` y `return` parser-only.
 - [`AST_EXPRESSION_REPRESENTATION.md`](./AST_EXPRESSION_REPRESENTATION.md) — typed nested tree, `Box<Expression>` solo para recursión directa, `Vec` para colecciones y exclusión de ExpressionId/AST Arena en v0.
-- [`AST_EXPRESSIONS.md`](./AST_EXPRESSIONS.md) — `Expression`, operators, FunctionCall, FieldInitializer, constructions, Pipeline y forma final de OperationStatement; `when` pendiente por separado.
+- [`AST_EXPRESSIONS.md`](./AST_EXPRESSIONS.md) — `Expression`, operators, FunctionCall, FieldInitializer, constructions, Pipeline, `when` variant y forma final de OperationStatement.
+- [`AST_WHEN.md`](./AST_WHEN.md) — `WhenExpression`, `WhenCorrespondence`, `WhenPattern`, `PatternField` y frontera Parser/Semantic Analyzer para exhaustividad y bindings.
 
 ## Technical Data Diagram
 
