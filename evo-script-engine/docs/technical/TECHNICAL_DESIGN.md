@@ -1,14 +1,12 @@
 # Evo-Script Engine — Technical Design
 
-Status: TECHNICAL DESIGN — CLOSED
+Status: TECHNICAL DESIGN — CLOSED / REVALIDATED
 
 Este documento registra las decisiones estructurales de Technical Design para `evo-script-engine` v0.
 
-El diseño técnico deriva exclusivamente del modelo funcional cerrado y no redefine la semántica de `evo-script` ni de los Functional Use Cases.
+El diseño deriva del modelo funcional cerrado y de la frontera normativa `.efn` / Host definida por `evo-script/EFN_HOST_BOUNDARY_v0.1.md`.
 
 ## 1. Canonical Processing Pipeline
-
-El pipeline técnico canónico de `evo-script-engine` v0 es:
 
 ```text
 Source Text
@@ -34,7 +32,7 @@ Stack VM
 Result
 ```
 
-`Execute Source` reutiliza semánticamente el mismo pipeline de compilación y el mismo pipeline de ejecución; no introduce un intérprete o runtime alternativo.
+`Execute Source` reutiliza semánticamente el mismo pipeline de compilación y ejecución; no introduce intérprete o runtime alternativo.
 
 ## 2. Closed Structural Decisions
 
@@ -44,21 +42,17 @@ Status: CLOSED
 
 `evo-script-engine` v0 utiliza una **Stack-based Bytecode Virtual Machine**.
 
-La elección de Stack VM es una decisión técnica interna y no modifica las Public Capabilities ni los Functional Use Cases.
-
 Invariantes:
 
-- el `Compiled Program` contiene bytecode ejecutable por una Stack VM;
-- el operand stack es un mecanismo técnico de evaluación;
-- `Pipeline Data` no se redefine como sinónimo de operand stack;
-- `Active Scope` permanece como estado semántico separado del mecanismo de operand stack;
-- una futura representación de VM diferente requeriría reabrir Technical Design, no el modelo funcional mientras conserve la misma semántica pública.
+- `Compiled Program` contiene bytecode ejecutable por una Stack VM;
+- Operand Stack es mecanismo técnico de evaluación;
+- `Pipeline Data` no se redefine como sinónimo de Operand Stack;
+- la VM no contiene `Active Scope` ni estado interactivo del Host;
+- una futura representación de VM diferente requiere reabrir Technical Design, no el modelo funcional mientras preserve la misma semántica pública.
 
 ### TD-002 — Semantic Program como identidad técnica propia
 
 Status: CLOSED
-
-`Semantic Program` es una representación técnica con identidad propia situada entre `AST` y `Bytecode Compiler`.
 
 ```text
 AST
@@ -73,18 +67,16 @@ Bytecode Compiler
 Invariantes:
 
 - `AST` representa estructura sintáctica y puede existir aunque el programa sea semánticamente inválido;
-- `Semantic Program` solo existe cuando el análisis semántico concluye exitosamente;
-- `Semantic Program` representa el significado ya resuelto necesario para generar bytecode;
-- `Semantic Program` es la única IR semántica de v0;
-- no se introduce otra IR entre `Semantic Program` y bytecode sin reabrir esta decisión.
+- `Semantic Program` solo existe después de semantic analysis exitoso;
+- representa el significado resuelto necesario para generar bytecode;
+- es la única Semantic IR de v0;
+- no se introduce otra IR entre Semantic Program y bytecode sin reabrir esta decisión.
 
 ### TD-003 — Internal Functions se resuelven durante compilación
 
 Status: CLOSED
 
-Las referencias a funciones internas del mismo Evo-Script Program se resuelven durante compilación hacia una identidad técnica estable dentro del `Compiled Program`.
-
-Conceptualmente:
+Las referencias a funciones internas se resuelven durante compilación hacia una identidad técnica estable dentro del `Compiled Program`.
 
 ```text
 internal function name
@@ -94,27 +86,25 @@ internal function name
    bytecode CALL
 ```
 
-El nombre `FunctionId` expresa la identidad conceptual; su representación Rust concreta se define posteriormente en el Technical Data Model.
+`FunctionId` expresa la identidad conceptual; su representación Rust concreta pertenece al Technical Data Model.
 
 Separación obligatoria:
 
 ```text
 Internal Function
-    → resuelta durante compilación
-    → identidad técnica directa dentro de Compiled Program
+    → resolved at Compile
+    → direct technical identity
 
 External Symbol
-    → permanece simbólico en Compiled Program
-    → se resuelve durante ejecución mediante capacidad explícita
+    → remains symbolic in Compiled Program
+    → resolved during execution through explicit capability binding
 ```
 
-La VM no realiza búsqueda dinámica por nombre para funciones internas ya conocidas por el compiler.
+La VM no realiza búsqueda dinámica por nombre para funciones internas ya resueltas.
 
 ### TD-004 — Forma arquitectónica de Compiled Program
 
 Status: CLOSED
-
-`Compiled Program` contiene conceptualmente, como mínimo:
 
 ```text
 Compiled Program
@@ -125,9 +115,9 @@ Compiled Program
 └── Diagnostic / Source Mapping Data
 ```
 
-La representación concreta, cardinalidades técnicas, ownership y tipos Rust pertenecen al Technical Data Model.
+Cada compiled function conserva la información necesaria para ejecutar su bytecode y participar en llamadas internas.
 
-Cada función compilada conserva la información necesaria para ejecutar su bytecode y participar en llamadas internas.
+El `Compiled Program` no contiene `Active Scope`, Host Session State ni un Current Provider.
 
 ### TD-005 — Constant Pool owned por Compiled Program
 
@@ -147,16 +137,16 @@ Compiled Program
 
 Invariantes:
 
-- un `Compiled Program` válido puede sobrevivir al lifetime del `Source Text` utilizado para producirlo;
-- el bytecode no conserva punteros o referencias prestadas hacia el `Source Text` como almacenamiento permanente de constantes;
-- el bytecode puede referenciar constantes mediante identidades/índices técnicos cuya representación se definirá en el Technical Data Model;
-- durante ejecución pueden materializarse vistas sobre datos owned por el `Compiled Program` cuando sus lifetimes lo permitan.
+- un Compiled Program válido puede sobrevivir al Source Text que lo produjo;
+- bytecode no conserva referencias borrowed al Source Text como almacenamiento permanente;
+- bytecode puede referenciar constants mediante identities/indices técnicos;
+- durante ejecución pueden materializarse borrowed views sobre datos owned por Compiled Program cuando sus lifetimes lo permitan.
 
 ### TD-006 — Shared Operand Stack con ventanas lógicas por Call Frame
 
 Status: CLOSED
 
-La Stack VM utiliza conceptualmente un único **Shared Operand Stack** perteneciente a la ejecución. Cada `Call Frame` delimita su región lógica mediante un `stack_base`.
+La VM utiliza conceptualmente un único `Shared Operand Stack` perteneciente a la ejecución. Cada `Call Frame` delimita su región lógica mediante un lower bound técnico.
 
 ```text
 VM Execution
@@ -164,53 +154,37 @@ VM Execution
 ├── Shared Operand Stack
 │
 └── Call Frames
-      ├── Frame A → stack_base A
-      ├── Frame B → stack_base B
-      └── Frame C → stack_base C
+      ├── Frame A → operand lower bound A
+      ├── Frame B → operand lower bound B
+      └── Frame C → operand lower bound C
 ```
-
-La decisión es arquitectónica y no prescribe una representación Rust concreta del almacenamiento.
-
-En particular:
 
 ```text
 Shared Operand Stack != Vec<Value>
 ```
 
-`Vec`, arrays, slices, buffers propios, almacenamiento preasignado u otras representaciones se evaluarán únicamente en el Technical Data Model si son necesarias. No se introduce una colección genérica por costumbre.
-
 Invariantes:
 
-- existe un único almacenamiento lógico de operandos por ejecución;
-- cada `Call Frame` posee una ventana lógica delimitada por su `stack_base`;
-- una instrucción del frame activo no puede consumir operandos situados por debajo de su `stack_base`;
-- los argumentos y resultados de llamadas pueden utilizar el mismo almacenamiento lógico sin requerir un operand stack independiente por frame;
-- `Call Frame` no posee su propio contenedor de operandos;
-- `Pipeline Data` continúa siendo un concepto semántico distinto del Shared Operand Stack;
-- la representación física del almacenamiento queda diferida al Technical Data Model.
+- existe un único almacenamiento lógico de operands por ejecución;
+- cada Call Frame posee una ventana lógica propia;
+- una instrucción no puede consumir operands situados debajo del lower bound del frame activo;
+- argumentos y resultados pueden utilizar el mismo almacenamiento lógico;
+- Call Frame no posee un container de operands independiente;
+- `Pipeline Data` continúa siendo concepto semántico distinto del Shared Operand Stack;
+- la representación física se decide en Technical Data Model.
 
 ### TD-007 — Shared Frame Region para Parameters, Locals y Operands
 
 Status: CLOSED
 
-Cada `Call Frame` posee lógicamente una **Shared Frame Region** compuesta por slots estables para Parameters y Locals, seguidos por una región temporal de operands.
+Cada `Call Frame` posee lógicamente una `Shared Frame Region` con slots estables de Parameters y Locals seguidos por una región temporal de operands.
 
 ```text
-Shared Value Storage
-
-┌──────────────────────────────┐
-│ Frame B Operand Window       │
-├──────────────────────────────┤ ← B.operand_base
-│ Frame B Local Slots          │
-│ Frame B Parameter Slots      │
-├──────────────────────────────┤ ← B.frame_base
-│ Frame A Operand Window       │
-├──────────────────────────────┤ ← A.operand_base
-│ Frame A Local Slots          │
-│ Frame A Parameter Slots      │
-├──────────────────────────────┤ ← A.frame_base
-│ initial execution values     │
-└──────────────────────────────┘
+frame_base
+    ↓
+[parameters][locals][temporaries...]
+                     ↑
+                 operand_base
 ```
 
 Separación obligatoria:
@@ -223,98 +197,72 @@ Operands
     = temporary evaluation region
 ```
 
-Aunque ambas regiones puedan compartir físicamente el mismo almacenamiento de `Value`, no son semánticamente equivalentes.
-
 Invariantes:
 
-- cada `Call Frame` delimita una `Shared Frame Region` propia dentro del almacenamiento de Values de la ejecución;
-- los Parameter Slots y Local Slots son estables durante la vida del frame;
-- el Operand Window contiene únicamente valores temporales de evaluación, argumentos de llamadas, resultados intermedios y materialización técnica de Pipeline Data cuando corresponda;
-- Parameters, Locals y Operands conservan identidades lógicas distintas aunque compartan backing storage;
-- los argumentos de una llamada pueden convertirse en Parameter Slots del callee sin requerir un almacenamiento independiente por frame;
-- al retornar o abandonar un frame, su región completa puede liberarse/truncarse lógicamente desde `frame_base`;
-- la representación Rust concreta de `Shared Value Storage`, `frame_base`, `operand_base` y slots se define posteriormente en el Technical Data Model;
-- esta decisión no prescribe `Vec<Value>` ni otra colección genérica específica;
-- el Bytecode Compiler puede calcular o preservar información como `parameter_count`, `local_count` y `max_operand_depth` cuando el Technical Data Model demuestre que es necesaria.
+- cada Call Frame delimita una Shared Frame Region dentro del Value storage de ejecución;
+- Parameter Slots y Local Slots permanecen estables durante la vida del frame;
+- Operand Window contiene evaluación temporal, argumentos, resultados intermedios y materialización técnica de Pipeline Data cuando aplique;
+- Parameters, Locals y Operands son identidades lógicas distintas aunque compartan backing storage;
+- argumentos pueden convertirse en Parameter Slots del callee sin almacenamiento per-frame adicional;
+- al retornar, la región completa puede liberarse/truncarse lógicamente desde `frame_base`;
+- representación de storage, bases, slots y capacities pertenece al Technical Data Model;
+- esta decisión no prescribe `Vec<Value>`;
+- Bytecode Compiler puede calcular `parameter_count`, `local_count` y `max_operand_depth` si el Data Model demuestra su necesidad.
 
 ### TD-008 — Ownership de Values producidos por External Capabilities
 
 Status: CLOSED
 
-Los resultados producidos por una `External Capability` utilizan borrowing mientras el dato sea consumido dentro del lifetime válido de su materializador.
-
-Cuando la semántica de ejecución exige que un resultado sobreviva a la invocación inmediata de la `External Capability`, el backing data debe transferir ownership hacia almacenamiento perteneciente a la ejecución. Desde ese momento la ejecución se convierte en owner y materializador de las vistas `Value` borrowed posteriores.
-
 Regla canónica:
 
 ```text
 borrow mientras alcance
-
 ownership cuando deba sobrevivir
 ```
 
-Flujo borrowed:
+Los resultados de External Capabilities utilizan borrowing mientras sean consumidos dentro del lifetime válido de su materializador.
+
+Cuando un resultado debe sobrevivir a la invocación externa inmediata, su backing data debe transferir ownership hacia almacenamiento de la ejecución. Desde ese momento la ejecución es owner y materializador de las futuras views borrowed.
 
 ```text
 Provider / materializer
         │
         ├── owns data
-        ├── materializa Value<'a>
+        ├── materializes Value<'a>
         └── Requester(Value<'a>)
                 │
                 ▼
-          consumo inmediato
-                │
-                ▼
-          termina el borrow
+          immediate consumption
 ```
 
-Flujo con transferencia real de ownership:
+Si debe sobrevivir:
 
 ```text
 Provider
-   │
-   │ transfer ownership
+   │ ownership transfer
    ▼
 VM Execution
    │
    ├── owns backing data
-   └── materializa Value<'execution>
-            │
-            ▼
-      uso posterior por VM
+   └── materializes Value<'execution>
 ```
 
 Invariantes:
 
-- un `Value` borrowed producido por una External Capability nunca puede escapar del lifetime de su materializador;
-- no se crea ownership artificial cuando el dato solo necesita observación inmediata;
-- cuando el dato debe sobrevivir a la invocación externa, existe una necesidad real de ownership y la transferencia queda justificada;
-- `VM Execution` es el owner natural del backing data externo cuyo lifetime debe extenderse durante la ejecución;
-- después de una transferencia de ownership, la ejecución es responsable de materializar futuras vistas borrowed sobre ese dato;
-- `Call Frame`, `Shared Frame Region` y `Shared Value Storage` no se convierten automáticamente en owners del backing data externo;
-- una vista `Value` y su representación owned de respaldo son conceptos técnicos distintos;
-- la representación Rust concreta del almacenamiento owned y de la relación entre owned backing data y `Value<'a>` se define en el Technical Data Model;
-- los Requesters continúan viajando hasta el owner/materializador cuando el dato permanece borrowed;
-- esta decisión no prescribe `Vec`, arena, heap, `Box`, `Arc`, `Rc` ni otro mecanismo concreto de almacenamiento.
+- un borrowed Value externo nunca escapa al lifetime de su materializer;
+- no se crea ownership artificial para observación inmediata;
+- ownership se justifica cuando el dato debe sobrevivir;
+- VM Execution es owner lógico natural del backing data externo que necesita execution lifetime;
+- Call Frame, Shared Frame Region y Shared Value Storage no se convierten automáticamente en owners de ese backing data;
+- Value view y owned backing representation son conceptos técnicos diferentes;
+- Requesters continúan viajando hasta owner/materializer cuando el dato permanece borrowed;
+- esta decisión no prescribe Vec, arena, heap, Box, Arc o Rc.
 
 ### TD-009 — VM dirigida por Evo-Script e implementada en Rust
 
 Status: CLOSED
 
-La Stack VM y su bytecode se diseñan a partir de la semántica ejecutable de `Evo-Script`. Rust constituye el lenguaje de implementación y determina las decisiones técnicas necesarias para expresar esa semántica de forma segura y eficiente, pero las construcciones propias de Rust no se convierten automáticamente en conceptos del bytecode ni de la VM.
-
-Regla canónica:
-
-```text
-Evo-Script
-    define QUÉ debe ejecutarse
-
-Rust
-    define CÓMO se implementa
-```
-
-Flujo de autoridad:
+La VM y su bytecode se diseñan desde la semántica ejecutable de Evo-Script. Rust determina seguridad, ownership, borrowing, memoria y rendimiento de implementación, pero sus construcciones no se convierten automáticamente en conceptos de VM.
 
 ```text
 Evo-Script semantics
@@ -332,32 +280,19 @@ Rust implementation
 
 Invariantes:
 
-- la semántica de `Evo-Script` determina las capacidades necesarias de la VM;
-- `Semantic Program` representa el significado ya resuelto que será reducido a bytecode;
-- el bytecode representa mecanismos ejecutables necesarios para `Evo-Script`, no una reproducción de las construcciones de Rust;
-- ownership, borrowing, lifetimes y representación de memoria pertenecen a la implementación Rust del Engine y no se exponen automáticamente como semántica de `Evo-Script`;
-- una construcción sintáctica de `Evo-Script` no requiere un opcode dedicado cuando puede reducirse correctamente a operaciones de VM más fundamentales;
-- `Pipeline`, `when`, `let` u otras construcciones pueden compilarse a mecanismos como load, store, call, compare, branch y return cuando su semántica quede preservada;
-- la VM debe ser específica de `Evo-Script` en las capacidades que necesita ejecutar y pequeña en sus mecanismos computacionales;
-- no se introducen capacidades de VM únicamente porque Rust posea una construcción equivalente o más compleja.
+- Evo-Script determina las capacidades requeridas de VM;
+- Semantic Program representa significado resuelto;
+- bytecode representa mecanismos ejecutables, no una reproducción de Rust;
+- ownership/borrowing/lifetimes pertenecen a implementación Rust;
+- una construcción sintáctica no requiere opcode propio si puede reducirse correctamente a mecanismos más fundamentales;
+- `Pipeline`, `when`, `let` y demás sintaxis válida `.efn` pueden lowered a load/store/call/compare/branch/return cuando se preserve semántica;
+- no se introducen capacidades de VM únicamente porque Rust posea una construcción equivalente.
 
 ### TD-010 — Compilation Working State es temporal y no redefine Runtime Materialization
 
 Status: CLOSED
 
-La compilación es un proceso finito cuyo producto persistente es `Compiled Program`. Las representaciones intermedias necesarias para producirlo pertenecen al **Compilation Working State** y pueden utilizar ownership, colecciones dinámicas y allocation cuando representan naturalmente el trabajo del compiler y simplifican de manera significativa la corrección, validación, inspección o mantenibilidad.
-
-Regla canónica:
-
-```text
-Compilation Working State
-    = temporal
-
-Compiled Program
-    = producto persistente de Compile
-```
-
-La existencia de materialización temporal durante compilación no autoriza materializaciones equivalentes durante ejecución. Compilation y Runtime poseen lifetimes, frecuencias y responsabilidades diferentes.
+La compilación es un proceso finito cuyo producto persistente es `Compiled Program`. Las representaciones intermedias pertenecen al `Compilation Working State` y pueden utilizar ownership, colecciones dinámicas y allocation cuando representan naturalmente el trabajo del compiler y simplifican corrección, validación, inspección o mantenibilidad.
 
 ```text
 Compile
@@ -365,33 +300,75 @@ Compile
 ├── Tokens                 temporary
 ├── AST                    temporary
 ├── Semantic Program       temporary
-├── compiler indexes       temporary when not part of product
+├── compiler indexes       temporary when not product data
 └── Compiled Program       persistent product
-
-Runtime
-└── aplica sus propias reglas de ownership / borrowing / materialization
 ```
 
 Invariantes:
 
-- `Vec`, `Box`, allocation u otras representaciones owned no están prohibidas por principio dentro del Compilation Working State;
-- tampoco se introducen automáticamente por costumbre: cada representación debe expresar una necesidad real del dato o simplificar de forma demostrable el compiler;
-- un contenedor temporal no se convierte en identidad arquitectónica únicamente porque facilite el transporte entre módulos;
-- no se crean DTOs, entities, wrappers ni copias completas del programa solo para imitar capas;
-- `Token Sequence`, `AST` y `Semantic Program` pueden materializarse como working state cuando su existencia simplifica la corrección del pipeline;
-- el lifetime del working state termina cuando deja de ser necesario para producir el siguiente estado requerido o el `Compiled Program`;
-- al finalizar exitosamente `Compile`, `Tokens`, `AST`, `Semantic Program` y demás working state no forman parte del `Compiled Program` salvo la información que haya sido transformada explícitamente en datos persistentes del producto;
-- el uso de colecciones temporales durante compilación no modifica TD-006, TD-007 ni TD-008, que regulan datos y almacenamiento de ejecución;
-- durante Runtime continúa aplicando `borrow mientras alcance; ownership cuando deba sobrevivir` y la prohibición de materialización artificial sin lifetime o responsabilidad real;
-- optimizaciones que eliminen materializaciones temporales son permitidas posteriormente si conservan la misma semántica y no introducen complejidad arquitectónica desproporcionada.
+- Vec, Box y allocation no están prohibidos por principio en Compilation Working State;
+- tampoco se introducen automáticamente por costumbre;
+- un container temporal no se convierte en identidad arquitectónica solo para imitar transporte por capas;
+- no se crean DTOs, entities, wrappers o copias completas sin responsabilidad real;
+- Token Sequence, AST y Semantic Program pueden materializarse cuando simplifiquen el compiler;
+- working state termina cuando deja de ser necesario;
+- al concluir Compile, working state no forma parte del Compiled Program salvo datos explícitamente transformados en producto persistente;
+- durante Runtime continúa aplicando `borrow mientras alcance; ownership cuando deba sobrevivir` y la prohibición de materialización artificial.
 
 Regla de revisión:
 
-> En Compilation se optimiza primero por corrección, claridad y determinismo; en Runtime se revisa además el costo recurrente de cada materialización durante la vida de la aplicación.
+> En Compilation se optimiza primero por corrección, claridad y determinismo; en Runtime se revisa además el costo recurrente de cada materialización.
+
+### TD-011 — `.efn` no posee Active Scope ni Host Session State
+
+Status: CLOSED
+
+La ejecución de un `.efn` es reusable y Consumer-neutral. La VM no modela la sesión interactiva del Host.
+
+```text
+Host / Consumer
+    │ Invocation Values + explicit capability bindings
+    ▼
+VM Execution
+    ├── function/frame state
+    ├── Values
+    ├── Pipeline Data
+    └── external capability interaction state when required
+
+Host Active Scope
+    ╳ does not cross this boundary implicitly
+```
+
+Invariantes:
+
+- VM State no contiene `Active Scope`;
+- `Compiled Program` no contiene Scope activation metadata;
+- `use` no produce AST, Semantic Program node, bytecode instruction u Opcode para `.efn`;
+- no existe `SET_SCOPE` o mecanismo equivalente en la Evo-Script v0 VM por necesidad de `.efn`;
+- el Engine no consulta Scope del Host para resolver External Symbols;
+- External Symbols se satisfacen únicamente mediante explicit Application Bindings;
+- no existe Current Provider ambiental: diferentes capabilities pueden utilizar diferentes bindings durante una misma ejecución;
+- la semántica histórica de `enter` como mutación de Active Scope no pertenece a `.efn`; un Identifier `enter` puede resolver a una función/capability ordinaria si está definido explícitamente;
+- `Pipeline Data` es composición de datos y no state de Host;
+- `this` es sintaxis contextual de Pipeline; puede desaparecer durante parsing cuando la forma AST preserve completamente la posición del transported value;
+- CLI, UI y API pueden invocar el mismo Compiled Program sin alterar su semántica;
+- presentación o reacción específica al Result permanece fuera de la VM.
+
+Regla canónica:
+
+```text
+Interactive Host State
+    belongs to Host / evo-shell
+
+Reusable `.efn` State
+    belongs to evo-script-engine execution
+
+Host State
+    !=
+VM Execution State
+```
 
 ## 3. Technical Design Closure
-
-Las decisiones estructurales necesarias para continuar el Technical Data Model de `evo-script-engine` v0 están cerradas.
 
 ```text
 Stack VM                                  ✅ CLOSED
@@ -405,25 +382,25 @@ Shared Frame Region                       ✅ CLOSED
 External Value ownership                  ✅ CLOSED
 Evo-Script-driven VM                      ✅ CLOSED
 Compilation Working State policy          ✅ CLOSED
+`.efn` / Host State separation            ✅ CLOSED
 
 Technical Design                          ✅ CLOSED
 Technical Data Model                      ← IN PROGRESS
 ```
 
-Reabrir una de estas decisiones requiere identificar explícitamente qué nueva necesidad técnica o funcional invalida el diseño cerrado.
+Reabrir una decisión requiere identificar explícitamente la necesidad funcional o técnica nueva que invalida el diseño cerrado.
 
 ## 4. Boundary Toward Technical Data Model
 
-El Technical Data Model puede ahora definir de forma concreta los datos demostrados por el diseño, incluyendo cuando corresponda:
+El Technical Data Model puede definir, cuando corresponda:
 
 ```text
 Token
 Token Kind
-Token Sequence
 AST
-AST Nodes
+AST Nodes / supporting syntax data
 Semantic Program
-Semantic nodes / resolved identities
+resolved identities
 FunctionId
 Compiled Program
 Compiled Function
@@ -442,4 +419,15 @@ Source Mapping
 Failure representations
 ```
 
-No se decidirán Participants ni Rust function-pointer signatures antes de que estos datos estén definidos.
+Explícitamente no debe introducir por la frontera `.efn` actual:
+
+```text
+Active Scope
+Host Session State
+Current Provider
+Use Node
+Use Instruction
+SET_SCOPE Opcode
+```
+
+No se decidirán Participants ni Rust function-pointer signatures antes de que los datos necesarios estén definidos.
