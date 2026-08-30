@@ -399,15 +399,6 @@ FunctionCallCycleError
 Signature resolution / satisfaction
 ```
 
-Ejemplo de frontera:
-
-```text
-private fn calculate(int value) -> int { ... }
-private fn calculate(string value) -> string { ... }
-```
-
-Parser conserva ambas Function Definitions porque ambas son sintácticamente válidas. Semantic Analyzer determina posteriormente que ambas colisionan bajo la identidad semántica `Function Identity = function name`.
-
 Parser puede utilizar working state temporal, por ejemplo un contador de Public Functions, sin transportar ese contador al AST.
 
 Invariante resultante:
@@ -420,7 +411,97 @@ Semantic Analyzer success
     ⇒ semantically valid Semantic Program
 ```
 
-## 9. Explicitly Excluded from AST
+## AD-010 — Program, ImportDeclaration y Declaration
+
+Status: CLOSED
+
+El nivel superior de un `.efn` sintácticamente válido separa imports estáticos de declaraciones locales y conserva el orden textual común de las declaraciones.
+
+Representaciones Rust cerradas:
+
+```rust
+struct Program<'source> {
+    imports: Vec<ImportDeclaration<'source>>,
+    declarations: Vec<Declaration<'source>>,
+}
+
+struct ImportDeclaration<'source> {
+    symbol: QualifiedName<'source>,
+    alias: Option<Identifier<'source>>,
+}
+
+enum Declaration<'source> {
+    Struct(StructDefinition<'source>),
+    Enum(EnumDefinition<'source>),
+    Function(FunctionDefinition<'source>),
+}
+```
+
+### Program
+
+`Program` conserva dos secuencias ordenadas:
+
+```text
+Program
+├── Imports 0..N
+└── Declarations 1..N
+```
+
+La colección `declarations` conserva exactamente el orden textual compartido entre Struct Definitions, Enum Definitions y Function Definitions. No se separan prematuramente en colecciones por categoría porque hacerlo destruiría información estructural del Source Text y constituiría una normalización anticipada.
+
+`Program` no conserva:
+
+```text
+entry point index
+public function index
+symbol table
+type table
+function table
+resolved imports
+```
+
+Esos datos son working state o identidades semánticas posteriores.
+
+`Program` no requiere `SourceSpan`: el rango del programa corresponde al Source Text completo y no se duplica como dato AST.
+
+### ImportDeclaration
+
+`ImportDeclaration` representa exclusivamente las dos formas sintácticas v0:
+
+```text
+import qualifier::name;
+import qualifier::name as alias;
+```
+
+`symbol` conserva la forma calificada; `alias` conserva únicamente la presencia textual opcional del nombre local.
+
+No existe `ImportKind` en AST. Parser no decide si el símbolo importado es Struct, Enum, Signature u otra identidad semántica publicada. Esa clasificación pertenece a Semantic Analyzer.
+
+`ImportDeclaration` tampoco requiere `SourceSpan` adicional: los Source Spans de sus Identifiers permiten diagnosticar las identidades relevantes sin conservar punctuation o delimiters ya absorbidos por Parser.
+
+### Declaration
+
+`Declaration` representa exactamente las tres clases de definición top-level permitidas dentro de `.efn` después de imports:
+
+```text
+Struct Definition
+Enum Definition
+Function Definition
+```
+
+`ImportDeclaration` no es variante de `Declaration`. Esta separación expresa directamente la regla gramatical de que los imports ocurren al inicio y evita que el AST pueda representar imports intercalados con definiciones.
+
+Invariantes:
+
+1. `Program.imports` preserva ocurrencias y orden de imports.
+2. `Program.declarations` preserva ocurrencias y orden textual común de definitions.
+3. Parser no deduplica imports ni declarations por nombre.
+4. `Declaration` no contiene categoría `Import`.
+5. No existen declaration maps en AST.
+6. Exactly one Public Function continúa garantizado por AD-009 antes de producir `Program`.
+7. La representación física mediante `Vec` queda cerrada para estas dos secuencias porque expresa orden, duplicados y cardinalidad variable dentro del Compilation Working State.
+
+## 10. Explicitly Excluded from AST
 
 ```text
 FunctionId
@@ -437,15 +518,18 @@ Host Session State
 Use Node / Use Stage
 This Expression
 Parser public-function counter
+ImportKind
+Entry Point Index
+AST Symbol Tables
 ```
 
-## 10. Representation Still Open
+## 11. Representation Still Open
 
 Todavía no se cierra:
 
 - exact Rust enum/struct inventory restante;
 - tree with nested owned nodes vs indexed storage;
-- `Vec`, NodeId u otra representación física;
+- NodeId u otra representación física para recursive Expression data;
 - cardinalidades Rust concretas salvo las ya fijadas por sintaxis;
 - derives;
 - visibility Rust;
@@ -453,7 +537,7 @@ Todavía no se cierra:
 
 TD-010 permite utilizar Vec/Box/allocation dentro del Compilation Working State cuando simplifiquen de forma real la corrección y mantenibilidad.
 
-## 11. Current Closure
+## 12. Current Closure
 
 ```text
 AST syntactic responsibility              ✅ CLOSED
@@ -468,6 +552,9 @@ Visibility                                ✅ CLOSED
 TypedBinding                              ✅ CLOSED
 Earliest Responsible Failure              ✅ CLOSED
 Exactly one Public Function in Parser     ✅ CLOSED
+Program                                   ✅ CLOSED
+ImportDeclaration                         ✅ CLOSED
+Declaration                               ✅ CLOSED
 Exact remaining AST inventory             ← IN ANALYSIS
-Physical AST representation               PENDING
+Recursive AST representation              PENDING
 ```
