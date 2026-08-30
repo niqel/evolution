@@ -1,88 +1,59 @@
 # Evo-Script Engine — Functional Documentation
 
-Status: FUNCTIONAL CLOSED
+Status: FUNCTIONAL CLOSED — REVALIDATED
 
-Este directorio contiene la documentación de diseño funcional para el componente
-`evo-script-engine`.
+Este directorio contiene la documentación funcional de `evo-script-engine`.
 
-La documentación se desarrolla y se cierra por niveles. Cada nivel cerrado se
-convierte en autoridad para el nivel siguiente.
+La documentación se cierra por niveles; cada nivel cerrado se convierte en autoridad para el siguiente. Los nombres estructurales y conceptos técnicos canónicos se expresan en English; las explicaciones, decisiones e invariantes se redactan en español.
 
-Los nombres estructurales de artefactos y etapas se expresan en inglés. El
-contenido explicativo y normativo de los documentos se redacta en español.
+La frontera `.efn` / Host vigente está definida normativamente por `evo-script/EFN_HOST_BOUNDARY_v0.1.md`.
 
 ## Canonical Design Sequence
 
-El diseño de `evo-script-engine` sigue esta secuencia canónica:
-
-1. **Purpose** — definición definitiva de la responsabilidad del componente.
-2. **Public Capabilities** — capacidades públicas que ofrece el componente.
-3. **User Stories** — objetivos funcionales desde la perspectiva de los Consumers.
-4. **Functional Data Dictionary** — vocabulario funcional canónico y datos necesarios para derivar posteriormente las firmas.
-5. **Functional Use Cases** — acciones funcionales discretas derivadas de las User Stories.
-
 ```text
-──────────── FUNCTIONAL CLOSED ────────────
+Purpose
+   ↓
+Public Capabilities
+   ↓
+User Stories
+   ↓
+Functional Data Dictionary
+   ↓
+Functional Use Cases
+   ↓
+FUNCTIONAL CLOSED
+   ↓
+Technical Design
+   ↓
+Technical Data Model
+   ↓
+Technical Data Diagram
+   ↓
+Rust Signatures
+   ↓
+Participants
+   ↓
+Module Signature Diagram
+   ↓
+D2 Sequence Diagrams
+   ↓
+Implementation Tasks
 ```
-
-6. **Technical Design** — arquitectura técnica interna necesaria para cumplir el modelo funcional.
-7. **Technical Data Model** — representación concreta de structs, enums, artifacts, borrowed views, ownership, lifetimes y datos internos necesarios.
-8. **Technical Data Diagram** — vista D2 de tipos y relaciones del Technical Data Model.
-9. **Rust Signatures** — function pointers, tipos, ownership y lifetimes concretos de las operaciones arquitectónicas.
-10. **Participants** — Agents, Requesters, Collaborators, Resolvers, Contracts y Tools requeridos por las firmas.
-11. **Module Signature Diagram** — vista D2 de módulos Rust como identidades arquitectónicas, sus firmas y relaciones.
-12. **D2 Sequence Diagrams** — flujos técnicos derivados directamente de las firmas cerradas.
-13. **Implementation Tasks** — lista de trabajo ejecutable para AGY/Codex.
-
-La metodología técnica completa se define en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../../TECHNICAL_DESIGN_METHODOLOGY.md).
 
 ## Current Progress
 
 | Step | Artifact | Status |
 | --- | --- | --- |
-| 1 | [Purpose](PURPOSE.md) | FUNCTIONAL CLOSED |
-| 2 | [Public Capabilities](CAPABILITIES.md) | FUNCTIONAL CLOSED |
+| 1 | [Purpose](PURPOSE.md) | REVALIDATED — FUNCTIONAL CLOSED |
+| 2 | [Public Capabilities](CAPABILITIES.md) | REVALIDATED — FUNCTIONAL CLOSED |
 | 3 | [User Stories](user-stories/README.md) | REVALIDATED — FUNCTIONAL CLOSED |
 | 4 | [Functional Data Dictionary](DATA_DICTIONARY.md) | REVALIDATED — FUNCTIONAL CLOSED |
-| 5 | [Functional Use Cases](use-cases/README.md) | FUNCTIONAL CLOSED |
-| 6 | Technical Design | NEXT |
-| 7–13 | Remaining Technical Artifacts | PENDING |
+| 5 | [Functional Use Cases](use-cases/README.md) | REVALIDATED — FUNCTIONAL CLOSED |
+| 6 | Technical Design | CLOSED / REVALIDATED |
+| 7 | Technical Data Model | IN PROGRESS — AST Data |
+| 8–13 | Remaining Technical Artifacts | PENDING |
 
-Todos los artefactos funcionales de `evo-script-engine` v0 están cerrados y constituyen autoridad para el diseño técnico.
-
-## Functional Data Dictionary Rule
-
-Todo dato o concepto necesario para expresar una User Story o Functional Use Case debe estar definido previamente en el Functional Data Dictionary.
-
-El diccionario funcional debe permitir que posteriormente el Technical Lead determine representaciones técnicas y Rust Signatures sin reinventar el significado de los datos. No define todavía structs, enums, ownership, lifetimes ni participantes técnicos.
-
-## Technical Data Model Rule
-
-Toda estructura, enum, artifact o dato interno necesario para expresar una Rust Signature o implementar un Participant debe estar definido previamente en el Technical Data Model.
-
-Los diagramas técnicos no sustituyen esta definición: son vistas derivadas del diseño cerrado.
-
-## Closed Functional Model
-
-```text
-Purpose
-   ✅
-Public Capabilities
-   ✅
-User Stories
-   ✅
-Functional Data Dictionary
-   ✅
-Functional Use Cases
-   ✅
-
-──────────── FUNCTIONAL CLOSED ────────────
-
-Technical Design
-   ← NEXT
-```
-
-Los tres Functional Use Cases canónicos son:
+## Closed Public Functional Set
 
 ```text
 Compile
@@ -90,7 +61,7 @@ Execute Compiled
 Execute Source
 ```
 
-con la relación:
+Relación central:
 
 ```text
 Execute Source
@@ -98,7 +69,40 @@ Execute Source
 Compile + Execute Compiled
 ```
 
-bajo las mismas entradas y capacidades externas disponibles.
+bajo las mismas entradas y External Capabilities explícitamente disponibles.
+
+## `.efn` / Host Boundary
+
+Las tres Public Capabilities operan sobre una unidad `.efn` reusable y Consumer-neutral.
+
+```text
+Host / Consumer
+    │ explicit inputs + capability composition
+    ▼
+evo-script-engine
+    │
+    ▼
+Result
+```
+
+Invariantes funcionales revalidados:
+
+- `.efn` no posee `Active Scope`;
+- `.efn` no hereda prompt, Scope o Session State del Consumer;
+- `use` no forma parte de la gramática `.efn` vigente;
+- Pipeline representa data composition;
+- External Symbols se satisfacen mediante bindings explícitos;
+- CLI, UI, API u otro Consumer deciden externamente cómo utilizar/presentar Result.
+
+`Scope` sigue siendo un concepto válido del ecosistema para Hosts interactivos, especialmente Evo-Shell/Evo-CLI; simplemente no forma parte del estado funcional del `.efn`.
+
+## Functional Data Dictionary Rule
+
+> Todo dato o concepto necesario para expresar una User Story o Functional Use Case debe estar definido previamente en el Functional Data Dictionary.
+
+## Technical Data Model Rule
+
+> Toda estructura, enum, artifact o dato interno necesario para expresar una Rust Signature o implementar un Participant debe estar definido previamente en el Technical Data Model.
 
 ## Directory Organization
 
@@ -112,10 +116,11 @@ evo-script-engine/
     │   ├── DATA_DICTIONARY.md
     │   └── use-cases/
     └── technical/
+        ├── TECHNICAL_DESIGN.md
         ├── data-model/
         ├── signatures/
         ├── module-signatures/
         └── sequences/
 ```
 
-El siguiente nivel de trabajo es **Technical Design**. A partir de este punto, el diseño técnico debe derivarse del modelo funcional cerrado y no redefinir retrospectivamente su semántica.
+La fase funcional permanece cerrada. El trabajo actual está en `Technical Data Model → AST Data` y no puede reintroducir retrospectivamente Scope/Host state dentro de `.efn` sin reabrir explícitamente la decisión normativa correspondiente.
