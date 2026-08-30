@@ -106,7 +106,7 @@ Parser conserva la forma `worker`; no decide qué símbolo representa.
 
 Status: CLOSED
 
-La nueva frontera `.efn` / Host elimina cualquier representación de sesión interactiva dentro del AST.
+La frontera `.efn` / Host elimina cualquier representación de sesión interactiva dentro del AST.
 
 Explícitamente no existen en AST `.efn`:
 
@@ -123,42 +123,21 @@ Current Provider Node
 
 La semántica histórica de `enter` como navegación del Active Scope tampoco genera una identidad AST especial. Si `enter` aparece como Identifier de una función/capability explícita, se representa mediante las mismas formas normales de Identifier / Function Call que cualquier otra operación.
 
-Regla canónica:
-
-```text
-Interactive Host State
-    !=
-AST of reusable `.efn`
-```
-
 ## AD-005 — `this` es Parser-only contextual syntax
 
 Status: CLOSED
 
 `this` permanece como Structural Keyword porque participa en la sintaxis de Pipeline, pero no necesita sobrevivir como AST Node o Expression independiente.
 
-Ejemplo conceptual:
-
 ```text
-value
-|> combine(this, other)
-```
-
-Parser valida la posición sintáctica de `this` y produce una forma de Pipeline Stage que ya expresa que el transported Pipeline Data ocupa la posición definida por la gramática.
-
-Conceptualmente:
-
-```text
-Source syntax
-combine(this, other)
+value |> combine(this, other)
         ↓ Parser
 Pipeline Call Stage
 ├── callee: combine
 └── additional argument: other
-
-transported first argument
-    = structural property of the stage
 ```
+
+El transported first argument es una propiedad estructural del Pipeline Stage.
 
 Por tanto no existen:
 
@@ -168,30 +147,17 @@ ThisNode
 ResolvedThisValue
 ```
 
-Invariantes:
-
-1. `this` no es binding local.
-2. `this` no es Parameter.
-3. `this` no es Value.
-4. `this` no representa Scope ni Consumer.
-5. Parser valida sus restricciones de posición conforme a la gramática.
-6. Semantic Analyzer recibe la relación estructural ya expresada por Pipeline Stage y no necesita resolver un símbolo llamado `this`.
-
 ## AD-006 — Pipeline AST representa composición de datos
 
 Status: CLOSED at structural level
 
 Dentro de `.efn`, Pipeline representa composición de Pipeline Data y no navegación de Host state.
 
-Forma conceptual:
-
 ```text
 Pipeline
 ├── Source Expression
 └── Pipeline Stages 1..N
 ```
-
-La `Source Expression` representa la forma sintáctica que inicia el dato de la composición. Cada Pipeline Stage conserva la operación y sus argumentos sintácticos necesarios.
 
 No existe un segundo channel de Active Scope dentro del Pipeline AST.
 
@@ -200,11 +166,8 @@ Reglas:
 - Pipeline preserva el orden textual de stages;
 - Pipeline no contiene Use Stage;
 - Pipeline no contiene Scope transition;
-- `this` puede desaparecer porque su función queda expresada por la estructura del stage;
-- la validez semántica del tipo producido/consumido por cada stage pertenece a Semantic Analyzer;
-- la resolución del callee como local Function o External Symbol pertenece a Semantic Analyzer.
-
-La forma Rust exacta de `Pipeline`, `PipelineStage` y sus variants sigue pendiente.
+- `this` desaparece una vez expresada su función en la estructura del stage;
+- la compatibilidad de tipos y la resolución de callees pertenecen a Semantic Analyzer.
 
 ## AD-007 — Preliminary AST Inventory
 
@@ -243,13 +206,13 @@ Expression
 └── When
 ```
 
-Supporting syntax data candidatos, que no necesariamente son AST Nodes universales:
+Supporting syntax data candidatos:
 
 ```text
 Identifier
 Qualified Name
-Type Reference
 Visibility
+Typed Binding
 Field Definition
 Field Initializer
 Parameter
@@ -265,8 +228,6 @@ Source Span
 
 ### Function Body structural invariant
 
-La forma AST debe representar que una Function Body sintácticamente válida contiene:
-
 ```text
 Body Statements 0..N
 Final Return     exactly 1 and final
@@ -276,21 +237,116 @@ AST puede ser semánticamente inválido, pero no debe representar como válido u
 
 ### Enum Variant structural forms
 
-El AST debe distinguir sintácticamente:
-
 ```text
 Simple Variant
 Associated Variant
 Structured Variant
 ```
 
-sin resolver todavía los Types referenciados.
-
 ### Function Parameter structural forms
 
-El AST debe conservar la diferencia textual entre una Type Reference simple y una forma calificada cuando la gramática la distingue, sin afirmar todavía que la forma calificada resuelve a una Signature.
+AST conserva la diferencia entre Value Parameter y la forma calificada de Signature Dependency Parameter sin resolver todavía la Signature.
 
-## 8. Explicitly Excluded from AST
+## AD-008 — Foundational AST Syntax Identities
+
+Status: CLOSED
+
+Las identidades sintácticas fundamentales del AST v0 son `Identifier`, `QualifiedName`, `Visibility` y `TypedBinding`.
+
+### Identifier
+
+Representación Rust cerrada:
+
+```rust
+struct Identifier<'source> {
+    lexeme: &'source str,
+    span: SourceSpan,
+}
+```
+
+`Identifier` representa una ocurrencia sintáctica concreta de un identificador. Conserva el texto borrowed del Source Text y su ubicación, pero no expresa todavía si el nombre corresponde a Type, Function, Signature, Parameter, Local Binding, Enum Variant u otra identidad semántica.
+
+No se conserva `TokenKind::Identifier` dentro del AST porque Parser ya absorbió esa clasificación léxica.
+
+### QualifiedName
+
+Representación Rust cerrada:
+
+```rust
+struct QualifiedName<'source> {
+    qualifier: Identifier<'source>,
+    name: Identifier<'source>,
+}
+```
+
+Representa exactamente la forma sintáctica v0:
+
+```text
+qualifier::name
+```
+
+No clasifica todavía la relación como Module::Symbol, Enum::Variant u otra identidad resuelta.
+
+No contiene un `SourceSpan` adicional: el rango total se deriva de `qualifier.span.start` hasta `name.span.end`.
+
+La gramática v0 no introduce qualified paths arbitrarios de tres o más segmentos; si una versión futura lo requiere, esta identidad deberá reabrirse.
+
+### Visibility
+
+Representación Rust cerrada:
+
+```rust
+enum Visibility {
+    Public,
+    Private,
+}
+```
+
+La visibilidad es explícita en toda Function Implementation `.efn`; no existe estado `Absent` y no se modela mediante `bool`.
+
+### TypedBinding
+
+Representación Rust cerrada:
+
+```rust
+struct TypedBinding<'source> {
+    type_name: Identifier<'source>,
+    name: Identifier<'source>,
+}
+```
+
+Representa la construcción sintáctica `tipo nombre` cuando dicha forma introduce un Value binding tipado, por ejemplo Value Parameters, Let Bindings y extracciones tipadas de `when`.
+
+`type_name` permanece como Identifier sintáctico. Parser no decide si corresponde a Native Type, local Struct, local Enum o imported shared Type.
+
+No contiene un `SourceSpan` adicional: puede derivarse desde `type_name.span.start` hasta `name.span.end`.
+
+`TypedBinding` no sustituye a `FieldDefinition`: un field de datos y un lexical Value binding mantienen responsabilidades sintácticas distintas aunque ambos usen una forma textual `tipo nombre`.
+
+### Foundational relationship
+
+```text
+Source Text
+    ▲
+    │ borrow
+Identifier<'source>
+├── lexeme
+└── SourceSpan
+
+QualifiedName
+├── qualifier ──► Identifier
+└── name      ──► Identifier
+
+Visibility
+├── Public
+└── Private
+
+TypedBinding
+├── type_name ──► Identifier
+└── name      ──► Identifier
+```
+
+## 9. Explicitly Excluded from AST
 
 ```text
 FunctionId
@@ -308,22 +364,21 @@ Use Node / Use Stage
 This Expression
 ```
 
-## 9. Representation Still Open
+## 10. Representation Still Open
 
 Todavía no se cierra:
 
-- exact Rust enum/struct inventory;
-- `AstNodeKind` exacto, si se necesita;
+- exact Rust enum/struct inventory restante;
 - tree with nested owned nodes vs indexed storage;
 - `Vec`, NodeId u otra representación física;
-- cardinalidades Rust concretas;
+- cardinalidades Rust concretas salvo las ya fijadas por sintaxis;
 - derives;
-- visibility;
+- visibility Rust;
 - Parser / Semantic Analyzer signatures.
 
-TD-010 permite utilizar Vec/Box/allocation dentro del Compilation Working State cuando simplifiquen de forma real la corrección y mantenibilidad; AST Data no debe optimizar estas allocations como dogma antes de decidir la representación más clara.
+TD-010 permite utilizar Vec/Box/allocation dentro del Compilation Working State cuando simplifiquen de forma real la corrección y mantenibilidad.
 
-## 10. Current Closure
+## 11. Current Closure
 
 ```text
 AST syntactic responsibility              ✅ CLOSED
@@ -332,5 +387,10 @@ Parser / Semantic Analyzer boundary       ✅ CLOSED
 No Host Scope / no `use` in AST           ✅ CLOSED
 `this` consumed by Parser                 ✅ CLOSED
 Pipeline = data composition               ✅ CLOSED
-Exact AST inventory / Rust representation ← IN ANALYSIS
+Identifier                                ✅ CLOSED
+QualifiedName                             ✅ CLOSED
+Visibility                                ✅ CLOSED
+TypedBinding                              ✅ CLOSED
+Exact remaining AST inventory             ← IN ANALYSIS
+Physical AST representation               PENDING
 ```
