@@ -101,7 +101,8 @@ Compiled Program / Bytecode Data ← IN ANALYSIS
 ├── FieldIndex                   ✅ CLOSED
 ├── VariantDiscriminant          ✅ CLOSED
 ├── Composite Layout             ✅ CLOSED
-└── Struct / Enum Instructions   ← NEXT
+├── Struct / Enum Instructions   ✅ CLOSED
+└── Structural Equality          ← NEXT
 
 VM Execution Data                PENDING
 Outcome / Diagnostic Data        PENDING
@@ -141,6 +142,7 @@ Compiled Program / Bytecode Data:
 - [`COMPILED_CONVERSIONS.md`](./COMPILED_CONVERSIONS.md) — fixed/dynamic numeric conversions, exact representability, `ConversionError`, `NumericToString` y `DynamicToString`.
 - [`COMPILED_SCALAR_EQUALITY.md`](./COMPILED_SCALAR_EQUALITY.md) — `NotBoolean`, bool equality y string equality; structural equality queda pendiente de Composite Layout.
 - [`COMPILED_COMPOSITE_LAYOUT.md`](./COMPILED_COMPOSITE_LAYOUT.md) — `FieldIndex`, `VariantDiscriminant`, canonical composite ordering, struct/enum conceptual runtime layout y ausencia de runtime type-layout tables en v0.
+- [`COMPILED_COMPOSITE_INSTRUCTIONS.md`](./COMPILED_COMPOSITE_INSTRUCTIONS.md) — construcción/acceso de struct y enum, `TestVariant`, extracción consumidora de payloads, lowering de `when` y corrección para evitar aliasing forzado.
 
 ## Technical Data Diagram
 
