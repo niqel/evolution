@@ -189,7 +189,138 @@ LocalSlot(0)          // ejemplo conceptual, no cerrado aquí
 
 No se adelanta allocation/layout hacia Semantic Program.
 
-## 5. Representation Policy
+## SD-005 — Secondary Semantic Identities
+
+Status: CLOSED
+
+Se cierran las identidades semánticas secundarias:
+
+```rust
+struct FieldId(usize);
+struct VariantId(usize);
+struct SignatureId(usize);
+struct SignatureBindingId(usize);
+```
+
+Los cuatro son newtypes opacos del Compilation Working State y no constituyen ABI ni identidades estables entre compilaciones.
+
+### FieldId
+
+`FieldId` identifica un field resuelto dentro de su owner estructural.
+
+Owners válidos en v0:
+
+```text
+Semantic Struct Type
+Structured Enum Variant
+```
+
+Invariantes:
+
+1. `FieldId` es único únicamente dentro de su owner estructural.
+2. `FieldId` no requiere unicidad global en `SemanticProgram`.
+3. Un field access semánticamente resuelto no depende del nombre textual para compilación.
+4. `FieldId` no expresa offset, slot ni layout físico.
+5. `FieldId != FieldOffset`.
+
+### VariantId
+
+`VariantId` identifica una variante resuelta dentro de un Semantic Enum Type.
+
+Invariantes:
+
+1. `VariantId` es único únicamente dentro de su enum owner.
+2. `VariantId` no requiere unicidad global en `SemanticProgram`.
+3. Enum construction y `when` usan identidad de variante resuelta, no `QualifiedName` textual como mecanismo de compilación.
+4. `VariantId` no expresa discriminante físico de runtime.
+5. `VariantId != runtime discriminant`.
+
+### SignatureId
+
+`SignatureId` identifica una Signature semántica resuelta dentro de `SemanticProgram`.
+
+Invariantes:
+
+1. `SignatureId` es único dentro de `SemanticProgram`.
+2. Representa la definición semántica de una capability/signature, no una dependencia local concreta.
+3. No identifica Provider.
+4. No identifica binding de ejecución.
+5. No es External Symbol identity de Compiled Program.
+
+### SignatureBindingId
+
+`SignatureBindingId` identifica una Signature Dependency concreta dentro de una única `SemanticFunction`.
+
+Ejemplo conceptual:
+
+```text
+workers::search primary_search,
+workers::search fallback_search
+```
+
+puede resolver a:
+
+```text
+SignatureId(3)
+├── SignatureBindingId(0) primary_search
+└── SignatureBindingId(1) fallback_search
+```
+
+Invariantes:
+
+1. `SignatureBindingId` es único dentro de su `SemanticFunction`.
+2. Cada Signature Binding referencia exactamente un `SignatureId` resuelto.
+3. `SignatureBindingId` no es `BindingId`: Signature Dependencies no son Value bindings.
+4. Una external call semántica puede referenciar `SignatureBindingId` sin volver a resolver el nombre local.
+5. Runtime binding y Provider resolution permanecen fuera de Semantic Program.
+
+## SD-006 — Expanded Identity Scope
+
+Status: CLOSED
+
+```text
+SemanticProgram
+├── TypeId namespace            global to program
+├── FunctionId namespace        global to program
+└── SignatureId namespace       global to program
+
+SemanticFunction
+├── BindingId namespace         local to function
+└── SignatureBindingId namespace local to function
+
+Semantic Struct / Structured Variant
+└── FieldId namespace           local to structural owner
+
+Semantic Enum
+└── VariantId namespace         local to enum owner
+```
+
+Los espacios son conceptualmente independientes aun cuando todos utilicen `usize` internamente.
+
+## SD-007 — Semantic identities remain distinct from compiled/runtime identities
+
+Status: CLOSED
+
+Separación obligatoria:
+
+```text
+FieldId
+    != FieldOffset / physical layout
+
+VariantId
+    != runtime discriminant
+
+SignatureId
+    != runtime external binding
+
+SignatureBindingId
+    != ExternalSymbolId
+    != Provider binding
+```
+
+`ExternalSymbolId` no se introduce en Semantic Program Data v0. Si Compiled Program requiere una identidad compacta para símbolos externos, dicha identidad pertenece a `Compiled Program / Bytecode Data` y será creada por Bytecode Compiler a partir del significado semántico ya resuelto.
+
+## 8. Representation Policy
 
 El uso de `usize` se cierra para v0 porque estas identidades pertenecen exclusivamente al Compilation Working State y naturalmente pueden indexar colecciones temporales del Semantic Program.
 
@@ -201,38 +332,49 @@ No se introduce en v0:
 UUID semantic identities
 String-based semantic identity
 Global BindingId namespace
+Global FieldId namespace
+Global VariantId namespace
+Global SignatureBindingId namespace
 Slot identity inside Semantic Analyzer
 Stable cross-compilation IDs
+ExternalSymbolId in Semantic Program
 ```
 
-## 6. Next Identities in Analysis
+## 9. Next Identities in Analysis
 
-Las siguientes identidades todavía requieren análisis antes de cerrarse:
+Las siguientes estructuras requieren ahora análisis:
 
 ```text
-FieldId
-VariantId
-SignatureId
-External Symbol identity
 SemanticType
+SemanticField
+SemanticVariant
+SemanticSignature
 SemanticFunction
 SemanticBinding
+SemanticSignatureBinding
 SemanticExpression
+SemanticProgram root shape
 ```
 
-La siguiente revisión debe determinar si `FieldId`, `VariantId` y `SignatureId` representan identidades semánticas reales independientes o si alguna puede derivarse con seguridad de su owner + posición sin duplicar conceptos.
+La siguiente revisión debe definir primero las estructuras owner de las identidades ya cerradas antes de diseñar el árbol completo de Semantic Expressions.
 
-## 7. Current Closure
+## 10. Current Closure
 
 ```text
-Semantic Program responsibility   ✅ CLOSED
-No name re-resolution             ✅ CLOSED
-TypeId                             ✅ CLOSED
-FunctionId                         ✅ CLOSED
-BindingId                          ✅ CLOSED
-Identity scope                     ✅ CLOSED
-Semantic identity != VM layout     ✅ CLOSED
+Semantic Program responsibility    ✅ CLOSED
+No name re-resolution              ✅ CLOSED
+TypeId                              ✅ CLOSED
+FunctionId                          ✅ CLOSED
+BindingId                           ✅ CLOSED
+FieldId                             ✅ CLOSED
+VariantId                           ✅ CLOSED
+SignatureId                         ✅ CLOSED
+SignatureBindingId                  ✅ CLOSED
+Identity scopes                     ✅ CLOSED
+Semantic identity != VM layout      ✅ CLOSED
+ExternalSymbolId excluded here      ✅ CLOSED
 
-FieldId / VariantId / SignatureId ← IN ANALYSIS
+Semantic owner structures          ← IN ANALYSIS
+Semantic Expression model          PENDING
 Semantic Program inventory         ← IN ANALYSIS
 ```
