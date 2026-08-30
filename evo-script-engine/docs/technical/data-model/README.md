@@ -104,7 +104,8 @@ Compiled Program / Bytecode Data ← IN ANALYSIS
 ├── Struct / Enum Instructions   ✅ CLOSED
 ├── EqualityComparable           ✅ CLOSED
 ├── Structural Equality          ✅ CLOSED
-└── SourceMap                    ← NEXT
+├── SourceMap                    ✅ CLOSED
+└── exact compiled inventory     ← NEXT
 
 VM Execution Data                PENDING
 Outcome / Diagnostic Data        PENDING
@@ -146,6 +147,7 @@ Compiled Program / Bytecode Data:
 - [`COMPILED_COMPOSITE_LAYOUT.md`](./COMPILED_COMPOSITE_LAYOUT.md) — `FieldIndex`, `VariantDiscriminant`, canonical composite ordering, struct/enum conceptual runtime layout y ausencia de runtime type-layout tables en v0.
 - [`COMPILED_COMPOSITE_INSTRUCTIONS.md`](./COMPILED_COMPOSITE_INSTRUCTIONS.md) — construcción/acceso de struct y enum, `TestVariant`, extracción consumidora de payloads, lowering de `when` y corrección para evitar aliasing forzado.
 - [`COMPILED_STRUCTURAL_EQUALITY.md`](./COMPILED_STRUCTURAL_EQUALITY.md) — `EqualityRule`, `CompositeEqualityPlan`, igualdad estructural de struct/enum y prohibición de runtime equality dinámica oculta.
+- [`COMPILED_SOURCE_MAP.md`](./COMPILED_SOURCE_MAP.md) — mapping denso `(FunctionId, InstructionIndex) → SourceSpan`, política de spans, encapsulación y seam para futura extensión multi-source.
 
 Normative language amendment used by compiled equality:
 
