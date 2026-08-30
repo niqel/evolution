@@ -108,7 +108,16 @@ Compiled Program / Bytecode Data ✅ CLOSED
 ├── SourceMap                    ✅ CLOSED
 └── exact compiled inventory     ✅ CLOSED — 18 identities
 
-VM Execution Data                ← NEXT
+VM Execution Data                ← IN ANALYSIS
+├── VmExecution root             ✅ CLOSED
+├── one invocation lifetime      ✅ CLOSED
+├── CompiledProgram relationship ✅ CLOSED
+├── ApplicationBindings relation ✅ CLOSED — exact model pending
+├── Shared Value Storage owner   ✅ CLOSED — representation pending
+├── Call Frames owner            ✅ CLOSED — exact model pending
+├── execution backing owner      ✅ CLOSED — representation pending
+└── Runtime Value Model          ← NEXT
+
 Outcome / Diagnostic Data        PENDING
 ```
 
@@ -152,6 +161,10 @@ Outcome / Diagnostic Data        PENDING
 - [`COMPILED_STRUCTURAL_EQUALITY.md`](./COMPILED_STRUCTURAL_EQUALITY.md) — `EqualityRule`, `CompositeEqualityPlan` y struct/enum structural equality.
 - [`COMPILED_SOURCE_MAP.md`](./COMPILED_SOURCE_MAP.md) — dense `(FunctionId, InstructionIndex) → SourceSpan` mapping y future multi-source seam.
 
+### VM Execution Data
+
+- [`VM_EXECUTION_DATA.md`](./VM_EXECUTION_DATA.md) — autoridad acumulada de VM Execution Data; `VmExecution` root, invocation lifetime, Shared Value Storage owner, Call Frames owner y execution-lifetime backing ownership.
+
 ### Normative language amendments used by compiled model
 
 - [`../../../../evo-script/DYNAMIC_NUMERIC_ARITHMETIC_v0.1.md`](../../../../evo-script/DYNAMIC_NUMERIC_ARITHMETIC_v0.1.md)
@@ -192,7 +205,7 @@ La metodología global se define en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../..
 ## Next Block
 
 ```text
-VM Execution Data ← NEXT
+Runtime Value Model ← NEXT
 ```
 
-Aquí se definirán las identities runtime necesarias para ejecutar el `CompiledProgram` ya cerrado, sin reabrir su semántica salvo que una necesidad técnica concreta lo exija.
+Aquí se definirá qué es un `Value` runtime, cómo representa fixed numeric / bool / string / dynamic / struct / enum y cómo se separan Value views de execution-owned backing data sin introducir ownership o lifetimes accidentales.
