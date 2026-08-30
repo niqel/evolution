@@ -178,8 +178,8 @@ Lowering:
 ```text
 TypeId              → executable mechanism
 BindingId           → ParameterSlot / LocalSlot
-FieldId             → physical field position
-VariantId           → runtime discriminant
+FieldId             → FieldIndex
+VariantId           → VariantDiscriminant
 SignatureId         → ExternalSymbolId
 SignatureBindingId  → erased / ExternalSymbolId
 SemanticLiteral     → ConstantId / compiled constant data
@@ -416,7 +416,61 @@ enum        PENDING Composite Layout
 dynamic     ❌ prohibited by language
 ```
 
-## CD-018 — Current closure
+## CD-018 — Composite Layout
+
+Status: CLOSED
+
+Cerrado en `COMPILED_COMPOSITE_LAYOUT.md`.
+
+Identities físicas:
+
+```rust
+struct FieldIndex(usize);
+struct VariantDiscriminant(usize);
+```
+
+Lowering canónico:
+
+```text
+FieldId(n)   → FieldIndex(n)
+VariantId(n) → VariantDiscriminant(n)
+```
+
+La igualdad numérica de los índices no convierte las identities en el mismo concepto: `FieldId` / `VariantId` pertenecen a Semantic Program; `FieldIndex` / `VariantDiscriminant` pertenecen al mecanismo físico compilado.
+
+Layout conceptual:
+
+```text
+Struct Value
+└── ordered fields
+    ├── FieldIndex(0) → Value
+    └── ...
+
+Enum Value
+├── VariantDiscriminant
+└── Payload
+    ├── Simple
+    ├── Associated(Value)
+    └── Structured(ordered fields)
+```
+
+No se introducen en v0:
+
+```text
+StructLayoutId
+EnumLayoutId
+CompositeTypeId
+RuntimeTypeId
+runtime type lookup table
+reflection metadata
+field / variant names at runtime
+```
+
+La representación física final usa canonical owner ordering. Sin embargo, Bytecode Compiler debe preservar source evaluation order durante composite construction aunque dicho orden difiera del canonical storage order.
+
+Structural equality puede apoyarse después en este layout sin reintroducir `TypeId`.
+
+## CD-019 — Current closure
 
 ```text
 Compiled Program responsibility          ✅ CLOSED
@@ -445,9 +499,11 @@ Discard / Return                         ✅ CLOSED
 Conversion Instructions                  ✅ CLOSED
 Boolean equality / negation              ✅ CLOSED
 String equality                          ✅ CLOSED
+FieldIndex                               ✅ CLOSED
+VariantDiscriminant                      ✅ CLOSED
+Composite Layout                         ✅ CLOSED
 
-Composite Layout                         ← NEXT
-Struct / Enum Instructions               PENDING
+Struct / Enum Instructions               ← NEXT
 Struct / Enum equality                   PENDING
 SourceMap                                PENDING
 Compiled Program exact inventory         PENDING
