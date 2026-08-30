@@ -237,24 +237,132 @@ VmExecution
 
 No se cierra todavía un Rust struct exacto porque los fields concretos dependen de Runtime Value Model, Shared Value Storage y CallFrame.
 
+## VM-010 — RuntimeValue and evo_values::Value<'a> are distinct
+
+Status: CLOSED
+
+Cerrado en `RUNTIME_VALUE_MODEL.md`.
+
+```text
+RuntimeValue
+    = internal stable VM descriptor
+
+evo_values::Value<'a>
+    = borrowed/interchange view
+```
+
+No se obliga a que ambos conceptos compartan la misma Rust representation.
+
+## VM-011 — RuntimeValue is an immutable internal descriptor
+
+Status: CLOSED
+
+`RuntimeValue` representa un Value ejecutable ya materializado sin convertirse automáticamente en owner de todo backing variable/composite.
+
+La arquitectura debe permitir mover/copiar descriptors inmutables sin clonar por costumbre strings, dynamic integer backing o composite contents.
+
+`Copy` / `Clone` concretos permanecen pendientes de la estrategia final de handles.
+
+## VM-012 — Fixed Scalars Inline
+
+Status: CLOSED
+
+Fixed scalar Values viven directamente dentro de `RuntimeValue`:
+
+```text
+Boolean
+Int8 / Int16 / Int32 / Int64 / Int128
+Uint8 / Uint16 / Uint32 / Uint64 / Uint128
+Float32 / Float64
+```
+
+Canonical physical mapping:
+
+```text
+int   / int32   → Int32
+float / float64 → Float64
+```
+
+No se introduce backing indirection obligatoria para fixed scalars.
+
+## VM-013 — Variable / Composite Data Uses Backing Indirection
+
+Status: CLOSED
+
+La categoría incluye al menos:
+
+```text
+String
+Dynamic Integer
+Struct
+Enum
+```
+
+Conceptualmente:
+
+```text
+RuntimeValue
+├── fixed scalar inline
+└── variable/composite
+    └── backing indirection
+```
+
+La identity concreta de esa indirection queda pendiente.
+
+## VM-014 — No Persistent Self-Borrow in Shared Value Storage
+
+Status: CLOSED
+
+`Shared Value Storage` no conserva direct Rust references hacia backing data owned por el mismo `VmExecution` cuando eso produciría una estructura self-referential.
+
+La forma conceptual correcta es:
+
+```text
+VmExecution
+├── owns execution backing
+└── owns Shared Value Storage
+      └── RuntimeValue descriptor
+            └── stable indirection to backing
+```
+
+Borrowed views temporales siguen permitidas al observar/materializar Values; la prohibición aplica al storage persistente de la ejecución.
+
+## Runtime Value Model Authority
+
+Las reglas detalladas se registran en:
+
+- `RUNTIME_VALUE_MODEL.md`
+
+Ese documento conserva las decisiones RV-001..RV-005 y las fronteras todavía abiertas.
+
 ## Current Closure
 
 ```text
-VmExecution responsibility                 ✅ CLOSED
-one invocation per VmExecution             ✅ CLOSED
-CompiledProgram relationship               ✅ CLOSED
-ApplicationBindings relationship           ✅ CLOSED — exact model pending
-one Shared Value Storage root               ✅ CLOSED
-Call Frames root ownership                  ✅ CLOSED
-execution-lifetime backing logical owner    ✅ CLOSED
-root InstructionPointer                     ❌ EXCLUDED
-Host / Active Scope / Current Provider      ❌ EXCLUDED
-Outcome / Diagnostic data                   ❌ SEPARATE PHASE
+VmExecution responsibility                  ✅ CLOSED
+one invocation per VmExecution              ✅ CLOSED
+CompiledProgram relationship                ✅ CLOSED
+ApplicationBindings relationship            ✅ CLOSED — exact model pending
+one Shared Value Storage root                ✅ CLOSED
+Call Frames root ownership                   ✅ CLOSED
+execution-lifetime backing logical owner     ✅ CLOSED
 
-Runtime Value Model                         ← NEXT
-Shared Value Storage exact representation   PENDING
-CallFrame                                   PENDING
-InstructionPointer                          PENDING
-ApplicationBindings exact model             PENDING
-call / return mechanics                     PENDING
+RuntimeValue != evo_values::Value<'a>        ✅ CLOSED
+RuntimeValue immutable internal descriptor   ✅ CLOSED
+fixed scalar inline                          ✅ CLOSED
+variable/composite backing indirection       ✅ CLOSED
+no persistent self-borrow in storage         ✅ CLOSED
+
+root InstructionPointer                      ❌ EXCLUDED
+Host / Active Scope / Current Provider       ❌ EXCLUDED
+Outcome / Diagnostic data                    ❌ SEPARATE PHASE
+
+Backing Identity Strategy                    ← NEXT
+RuntimeValue exact Rust enum                 PENDING
+Dynamic Value exact representation           PENDING
+Struct / Enum backing representation         PENDING
+Shared Value Storage exact representation    PENDING
+CallFrame                                    PENDING
+InstructionPointer                           PENDING
+ApplicationBindings exact model              PENDING
+call / return mechanics                      PENDING
 ```
