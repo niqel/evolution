@@ -178,17 +178,20 @@ Inventario estructural actual:
 ```text
 Program
 │
-├── Import Declaration
-├── Struct Definition
-├── Enum Definition
-└── Function Definition
-       │
-       └── Function Body
-              ├── Body Statements 0..N
-              │      ├── Let Binding
-              │      └── Operation Statement
-              └── Final Return 1
+├── Imports 0..N
+└── Declarations 1..N
+      ├── Struct Definition
+      ├── Enum Definition
+      └── Function Definition
+             │
+             └── Function Body
+                    ├── Body Statements 0..N
+                    │      ├── Let Binding
+                    │      └── Operation Statement
+                    └── Final Return 1
 ```
+
+`Program` solo existe como AST exitoso cuando sus declaraciones contienen exactamente una `Function Definition` con `Visibility::Public`. La validación de esta cardinalidad estructural pertenece a Parser conforme a AD-009.
 
 Expressions candidatas:
 
@@ -346,6 +349,77 @@ TypedBinding
 └── name      ──► Identifier
 ```
 
+## AD-009 — Parser aplica Earliest Responsible Failure a invariantes estructurales de `.efn`
+
+Status: CLOSED
+
+Regla canónica:
+
+> Cada fase del compiler debe rechazar una invalidez en la primera fase que disponga de toda la información necesaria y sea responsable de esa regla. Una invalidez no se transporta artificialmente hacia una fase posterior.
+
+Para `Parser`, esto significa que solo produce `AST` cuando la estructura completa del `.efn` es sintácticamente válida.
+
+Al finalizar el parseo del Program, Parser valida las invariantes estructurales completas que no requieren identity resolution ni type resolution.
+
+En v0, Parser debe detectar directamente al menos:
+
+```text
+malformed declaration
+malformed expression
+invalid import placement
+missing final return
+multiple / non-final return shape
+missing public function
+more than one public function
+```
+
+La cardinalidad estructural de la función pública queda cerrada así:
+
+```text
+Program
+├── Imports 0..N
+└── Declarations 1..N
+      └── exactly one FunctionDefinition
+          with Visibility::Public
+```
+
+Un `.efn` vacío o compuesto solo por imports, structs, enums o private functions no produce AST exitoso: Parser retorna Syntax Failure al confirmar el final del Program sin una Public Function.
+
+Una segunda Public Function también produce Syntax Failure tan pronto como Parser dispone de evidencia suficiente para confirmar la violación estructural.
+
+Esta regla no mueve validaciones semánticas hacia Parser. Continúan perteneciendo a Semantic Analyzer, entre otras:
+
+```text
+DuplicateFunctionError
+UnknownTypeError
+UnknownSymbolError
+argument arity/type compatibility
+RecursiveTypeCycleError
+FunctionCallCycleError
+Signature resolution / satisfaction
+```
+
+Ejemplo de frontera:
+
+```text
+private fn calculate(int value) -> int { ... }
+private fn calculate(string value) -> string { ... }
+```
+
+Parser conserva ambas Function Definitions porque ambas son sintácticamente válidas. Semantic Analyzer determina posteriormente que ambas colisionan bajo la identidad semántica `Function Identity = function name`.
+
+Parser puede utilizar working state temporal, por ejemplo un contador de Public Functions, sin transportar ese contador al AST.
+
+Invariante resultante:
+
+```text
+Parser success
+    ⇒ structurally valid Evo-Script AST
+
+Semantic Analyzer success
+    ⇒ semantically valid Semantic Program
+```
+
 ## 9. Explicitly Excluded from AST
 
 ```text
@@ -362,6 +436,7 @@ Active Scope
 Host Session State
 Use Node / Use Stage
 This Expression
+Parser public-function counter
 ```
 
 ## 10. Representation Still Open
@@ -391,6 +466,8 @@ Identifier                                ✅ CLOSED
 QualifiedName                             ✅ CLOSED
 Visibility                                ✅ CLOSED
 TypedBinding                              ✅ CLOSED
+Earliest Responsible Failure              ✅ CLOSED
+Exactly one Public Function in Parser     ✅ CLOSED
 Exact remaining AST inventory             ← IN ANALYSIS
 Physical AST representation               PENDING
 ```
