@@ -128,7 +128,12 @@ VM Execution Data                ← IN ANALYSIS
 ├── Struct / Enum backing IDs    ✅ CLOSED
 ├── backing ID stability         ✅ CLOSED
 ├── container-independent IDs    ✅ CLOSED
-└── RuntimeValue exact representation ← NEXT
+├── RuntimeValue exact enum      ✅ CLOSED — 17 variants
+├── DynamicValue exact enum      ✅ CLOSED — 3 variants
+├── descriptor Clone + Copy      ✅ CLOSED
+├── runtime equality boundary    ✅ CLOSED
+├── context-relative RuntimeValue ✅ CLOSED
+└── Backing Data Representation  ← NEXT
 
 Outcome / Diagnostic Data        PENDING
 ```
@@ -160,10 +165,10 @@ Outcome / Diagnostic Data        PENDING
 
 ### Compiled Program / Bytecode Data
 
-- [`COMPILED_PROGRAM_DATA.md`](./COMPILED_PROGRAM_DATA.md) — autoridad raíz del producto compilado, ahora CLOSED.
+- [`COMPILED_PROGRAM_DATA.md`](./COMPILED_PROGRAM_DATA.md) — autoridad raíz del producto compilado, CLOSED.
 - [`COMPILED_PROGRAM_INVENTORY.md`](./COMPILED_PROGRAM_INVENTORY.md) — inventario exacto: 18 identities propias, 48 Instruction variants y cobertura Semantic → Compiled.
 - [`COMPILED_STORAGE_DATA.md`](./COMPILED_STORAGE_DATA.md) — `ParameterSlot`, `LocalSlot`, `ExternalSymbol.parameter_count`, Constant Pool canonicalizado y `DynamicConstant`.
-- [`COMPILED_CORE_CALL_INSTRUCTIONS.md`](./COMPILED_CORE_CALL_INSTRUCTIONS.md) — `LoadConstant`, `LoadParameter`, `LoadLocal`, `StoreLocal`, `Call`, `CallExternal` y calling convention física.
+- [`COMPILED_CORE_CALL_INSTRUCTIONS.md`](./COMPILED_CORE_CALL_INSTRUCTIONS.md) — Load/Store, `Call`, `CallExternal` y calling convention física.
 - [`COMPILED_NUMERIC_INSTRUCTIONS.md`](./COMPILED_NUMERIC_INSTRUCTIONS.md) — `NumericKind`, fixed arithmetic/comparison, `LiftDynamic` y dynamic arithmetic.
 - [`COMPILED_CONTROL_FLOW.md`](./COMPILED_CONTROL_FLOW.md) — `InstructionIndex`, branching, short-circuit, `Discard` y `Return`.
 - [`COMPILED_CONVERSIONS.md`](./COMPILED_CONVERSIONS.md) — fixed/dynamic numeric conversions y string conversion.
@@ -171,15 +176,16 @@ Outcome / Diagnostic Data        PENDING
 - [`COMPILED_COMPOSITE_LAYOUT.md`](./COMPILED_COMPOSITE_LAYOUT.md) — `FieldIndex`, `VariantDiscriminant` y canonical composite layout.
 - [`COMPILED_COMPOSITE_INSTRUCTIONS.md`](./COMPILED_COMPOSITE_INSTRUCTIONS.md) — struct/enum construction, access, variant testing, payload extraction y `when` lowering.
 - [`COMPILED_STRUCTURAL_EQUALITY.md`](./COMPILED_STRUCTURAL_EQUALITY.md) — `EqualityRule`, `CompositeEqualityPlan` y struct/enum structural equality.
-- [`COMPILED_SOURCE_MAP.md`](./COMPILED_SOURCE_MAP.md) — dense `(FunctionId, InstructionIndex) → SourceSpan` mapping y future multi-source seam.
+- [`COMPILED_SOURCE_MAP.md`](./COMPILED_SOURCE_MAP.md) — dense `(FunctionId, InstructionIndex) → SourceSpan` mapping.
 
 ### VM Execution Data
 
-- [`VM_EXECUTION_DATA.md`](./VM_EXECUTION_DATA.md) — autoridad acumulada de VM Execution Data; `VmExecution` root y estado de cierre runtime.
-- [`RUNTIME_VALUE_MODEL.md`](./RUNTIME_VALUE_MODEL.md) — frontera `RuntimeValue` / `evo_values::Value<'a>`, descriptor interno, scalars inline y backing indirection.
+- [`VM_EXECUTION_DATA.md`](./VM_EXECUTION_DATA.md) — autoridad acumulada de VM Execution Data.
+- [`RUNTIME_VALUE_MODEL.md`](./RUNTIME_VALUE_MODEL.md) — frontera `RuntimeValue` / `evo_values::Value<'a>`, descriptor interno, scalar/backing policy y exact runtime value family.
 - [`BACKING_IDENTITY_STRATEGY.md`](./BACKING_IDENTITY_STRATEGY.md) — typed backing IDs, referencias `Compiled | Execution`, estabilidad por invocation y separación frente al container físico.
+- [`RUNTIME_VALUE_REPRESENTATION.md`](./RUNTIME_VALUE_REPRESENTATION.md) — exact `RuntimeValue` de 17 variants, `DynamicValue` de 3 variants, copy semantics y execution-context-relative handles.
 
-### Normative language amendments used by compiled model
+### Normative language amendments used by compiled/runtime model
 
 - [`../../../../evo-script/DYNAMIC_NUMERIC_ARITHMETIC_v0.1.md`](../../../../evo-script/DYNAMIC_NUMERIC_ARITHMETIC_v0.1.md)
 - [`../../../../evo-script/COMPOSITE_EQUALITY_COMPARABILITY_v0.1.md`](../../../../evo-script/COMPOSITE_EQUALITY_COMPARABILITY_v0.1.md)
@@ -219,7 +225,7 @@ La metodología global se define en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../..
 ## Next Block
 
 ```text
-RuntimeValue exact representation ← NEXT
+Backing Data Representation ← NEXT
 ```
 
-Aquí se consolidará el enum runtime exacto usando fixed scalars inline y las backing identities ya cerradas; después se cerrará `Dynamic` y las representaciones físicas de String / Dynamic Integer / Struct / Enum backing.
+Aquí se definirá qué contienen físicamente String, Dynamic Integer, Struct y Enum backing, preservando typed stable IDs y sin reabrir `RuntimeValue`.
