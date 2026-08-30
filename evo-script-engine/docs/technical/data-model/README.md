@@ -92,7 +92,11 @@ Semantic Program Data            ← IN ANALYSIS
 ├── SemanticType / variants      ✅ CLOSED
 ├── SemanticSignature            ✅ CLOSED
 ├── SemanticFunction shell       ✅ CLOSED
-└── Semantic body / expressions  ← IN ANALYSIS
+├── Semantic body / expressions  ✅ CLOSED
+├── resolved calls / arguments   ✅ CLOSED
+├── constructions / `when`       ✅ CLOSED
+├── Pipeline semantic lowering   ✅ CLOSED
+└── exact semantic inventory     ← IN ANALYSIS
 
 Compiled Program / Bytecode Data PENDING
 VM Execution Data                PENDING
@@ -119,8 +123,9 @@ AST Data:
 
 Semantic Program Data:
 
-- [`SEMANTIC_PROGRAM_DATA.md`](./SEMANTIC_PROGRAM_DATA.md) — responsabilidad de Semantic Program; `TypeId`, `FunctionId`, `BindingId`, `FieldId`, `VariantId`, `SignatureId`, `SignatureBindingId`; scopes de identidad y separación frente a layout/runtime binding.
+- [`SEMANTIC_PROGRAM_DATA.md`](./SEMANTIC_PROGRAM_DATA.md) — responsabilidad de Semantic Program, semantic identities, scopes, owner-index rule y estado de cierre.
 - [`SEMANTIC_PROGRAM_STRUCTURE.md`](./SEMANTIC_PROGRAM_STRUCTURE.md) — `SemanticProgram`, `NativeType`, `SemanticType`, `SemanticField`, `SemanticVariant`, `SemanticBinding`, Signatures, Semantic Parameters y shell de `SemanticFunction`.
+- [`SEMANTIC_EXPRESSIONS.md`](./SEMANTIC_EXPRESSIONS.md) — `SemanticFunctionBody`, `SemanticStatement`, typed `SemanticExpression`, resolved calls, arguments, constructions, `when`, Pipeline lowering y SourceSpan propagation.
 
 ## Technical Data Diagram
 
