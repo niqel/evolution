@@ -73,7 +73,10 @@ AST Data                         ← IN ANALYSIS
 ├── No Host Scope / no `use`     ✅ CLOSED
 ├── `this` parser-only            ✅ CLOSED
 ├── Pipeline = data composition  ✅ CLOSED
-└── exact AST inventory           ← IN ANALYSIS
+├── foundational syntax data     ✅ CLOSED
+├── Program / imports / decls    ✅ CLOSED
+├── local type definitions       ✅ CLOSED
+└── exact remaining inventory     ← IN ANALYSIS
 
 Semantic Program Data            PENDING
 Compiled Program / Bytecode Data PENDING
@@ -91,7 +94,8 @@ Lexical Data:
 
 AST Data:
 
-- [`AST_DATA.md`](./AST_DATA.md) — frontera sintáctica, Host exclusion, `this` y Pipeline; exact Rust representation aún en análisis.
+- [`AST_DATA.md`](./AST_DATA.md) — frontera sintáctica, Host exclusion, `this`, Pipeline y decisiones base del AST.
+- [`AST_TYPE_DEFINITIONS.md`](./AST_TYPE_DEFINITIONS.md) — `StructDefinition`, `FieldDefinition`, `EnumDefinition`, `EnumVariant` y cardinalidades cerradas.
 
 ## Technical Data Diagram
 
