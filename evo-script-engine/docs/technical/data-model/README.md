@@ -98,7 +98,10 @@ Compiled Program / Bytecode Data ← IN ANALYSIS
 ├── conversions                  ✅ CLOSED
 ├── bool equality / negation     ✅ CLOSED
 ├── string equality              ✅ CLOSED
-└── Composite Layout             ← NEXT
+├── FieldIndex                   ✅ CLOSED
+├── VariantDiscriminant          ✅ CLOSED
+├── Composite Layout             ✅ CLOSED
+└── Struct / Enum Instructions   ← NEXT
 
 VM Execution Data                PENDING
 Outcome / Diagnostic Data        PENDING
@@ -137,6 +140,7 @@ Compiled Program / Bytecode Data:
 - [`COMPILED_CONTROL_FLOW.md`](./COMPILED_CONTROL_FLOW.md) — typed `Instruction`, `InstructionIndex`, absolute branches, `Jump`, `JumpIfFalse`, short-circuit `&&` / `||`, `Discard` y `Return`.
 - [`COMPILED_CONVERSIONS.md`](./COMPILED_CONVERSIONS.md) — fixed/dynamic numeric conversions, exact representability, `ConversionError`, `NumericToString` y `DynamicToString`.
 - [`COMPILED_SCALAR_EQUALITY.md`](./COMPILED_SCALAR_EQUALITY.md) — `NotBoolean`, bool equality y string equality; structural equality queda pendiente de Composite Layout.
+- [`COMPILED_COMPOSITE_LAYOUT.md`](./COMPILED_COMPOSITE_LAYOUT.md) — `FieldIndex`, `VariantDiscriminant`, canonical composite ordering, struct/enum conceptual runtime layout y ausencia de runtime type-layout tables en v0.
 
 ## Technical Data Diagram
 
