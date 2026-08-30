@@ -66,7 +66,7 @@ Lexical Data                     ✅ CLOSED
 ├── Token                        ✅ CLOSED
 └── Token Sequence               ✅ CLOSED
 
-AST Data                         ← IN ANALYSIS
+AST Data                         ✅ CLOSED
 ├── AST syntactic responsibility ✅ CLOSED
 ├── Preserve occurrences         ✅ CLOSED
 ├── Parser/Semantic boundary      ✅ CLOSED
@@ -80,7 +80,7 @@ AST Data                         ← IN ANALYSIS
 ├── expression representation    ✅ CLOSED — typed nested tree
 ├── expression inventory         ✅ CLOSED
 ├── `when` model                  ✅ CLOSED
-└── exact AST inventory review    ← IN ANALYSIS
+└── exact AST inventory           ✅ CLOSED — 31 identities
 
 Semantic Program Data            PENDING
 Compiled Program / Bytecode Data PENDING
@@ -98,12 +98,13 @@ Lexical Data:
 
 AST Data:
 
-- [`AST_DATA.md`](./AST_DATA.md) — frontera sintáctica, Host exclusion, `this`, Pipeline y decisiones base del AST.
+- [`AST_DATA.md`](./AST_DATA.md) — decisiones base de responsabilidad sintáctica, occurrence preservation, Host exclusion, `this`, Pipeline y top-level Program model.
 - [`AST_TYPE_DEFINITIONS.md`](./AST_TYPE_DEFINITIONS.md) — `StructDefinition`, `FieldDefinition`, `EnumDefinition`, `EnumVariant` y cardinalidades cerradas.
 - [`AST_FUNCTION_DEFINITIONS.md`](./AST_FUNCTION_DEFINITIONS.md) — `FunctionDefinition`, `Parameter`, `FunctionBody`, `BodyStatement`, `LetBinding`, `OperationStatement` y `return` parser-only.
 - [`AST_EXPRESSION_REPRESENTATION.md`](./AST_EXPRESSION_REPRESENTATION.md) — typed nested tree, `Box<Expression>` solo para recursión directa, `Vec` para colecciones y exclusión de ExpressionId/AST Arena en v0.
 - [`AST_EXPRESSIONS.md`](./AST_EXPRESSIONS.md) — `Expression`, operators, FunctionCall, FieldInitializer, constructions, Pipeline, `when` variant y forma final de OperationStatement.
 - [`AST_WHEN.md`](./AST_WHEN.md) — `WhenExpression`, `WhenCorrespondence`, `WhenPattern`, `PatternField` y frontera Parser/Semantic Analyzer para exhaustividad y bindings.
+- [`AST_INVENTORY.md`](./AST_INVENTORY.md) — consolidación final del inventario exacto de 31 identidades AST y cierre de `AST Data` v0.
 
 ## Technical Data Diagram
 
