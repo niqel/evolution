@@ -24,30 +24,13 @@ Regla canónica:
 
 `evo_values::Value<'a>` representa una view/interchange value cuyo lifetime puede depender de un materializer externo o de backing data ya owned.
 
-Actualmente `evo-values` conserva una forma histórica como:
-
-```rust
-pub enum Value<'value> {
-    Text(&'value str),
-    Unsigned(u64),
-    Signed(i64),
-    Boolean(bool),
-}
-```
-
-Esa forma no cubre todavía el lenguaje completo de Evo-Script v0 y no debe forzar la representación interna de VM Execution Data.
-
-La futura evolución de `evo-values` se decidirá desde su propia responsabilidad arquitectónica una vez cerrado el Runtime Value Model completo.
+La forma histórica actual de `evo-values` no cubre todavía el lenguaje completo de Evo-Script v0 y no debe forzar la representación interna de VM Execution Data.
 
 ## RV-002 — RuntimeValue is an internal immutable VM descriptor
 
 Status: CLOSED
 
-Regla canónica:
-
 > `RuntimeValue` es un descriptor interno e inmutable que expresa un Value ya materializado para ejecución; no es por sí mismo el owner obligatorio de todo backing data variable o composite.
-
-Consecuencias:
 
 ```text
 RuntimeValue
@@ -59,60 +42,39 @@ RuntimeValue
     != generic heap owner
 ```
 
-El descriptor debe poder participar en Parameters, Locals y Operand Window sin reintroducir name resolution, TypeId o semantic metadata.
-
-La arquitectura debe permitir que copiar/mover un descriptor de un Value inmutable no implique copiar por costumbre todo su backing data.
-
-No se cierra todavía `Copy`, `Clone` ni layout Rust exacto; esos traits dependen de la estrategia final de handles/backing identities.
+El descriptor participa en Parameters, Locals y Operand Window sin reintroducir name resolution, TypeId o semantic metadata.
 
 ## RV-003 — Fixed scalar data is inline
 
 Status: CLOSED
 
-Los fixed scalar Values se almacenan directamente dentro de `RuntimeValue`.
-
-Familias cerradas:
+Los fixed scalar Values se almacenan directamente dentro de `RuntimeValue`:
 
 ```text
 Boolean
-
-Int8
-Int16
-Int32
-Int64
-Int128
-
-Uint8
-Uint16
-Uint32
-Uint64
-Uint128
-
-Float32
-Float64
+Int8 / Int16 / Int32 / Int64 / Int128
+Uint8 / Uint16 / Uint32 / Uint64 / Uint128
+Float32 / Float64
 ```
 
-Canonical physical mapping se conserva:
+Canonical physical mapping:
 
 ```text
 semantic int   → runtime Int32
 semantic int32 → runtime Int32
-
 semantic float   → runtime Float64
 semantic float64 → runtime Float64
 ```
 
-No reaparecen `RuntimeValue::Int` ni `RuntimeValue::Float` como identidades físicas separadas.
-
-No se introduce una indirection/arena obligatoria para fixed scalars mientras el valor pueda vivir directamente en el descriptor.
+No reaparecen `RuntimeValue::Int` ni `RuntimeValue::Float`.
 
 ## RV-004 — Variable/composite data uses backing indirection
 
 Status: CLOSED
 
-Los datos cuyo tamaño o estructura no es apropiado para vivir inline en el descriptor utilizan backing indirection.
+Los datos cuyo tamaño o estructura no es apropiado para vivir inline utilizan backing indirection.
 
-La categoría incluye al menos:
+La categoría incluye:
 
 ```text
 String
@@ -121,37 +83,15 @@ Struct
 Enum
 ```
 
-Conceptualmente:
-
-```text
-RuntimeValue
-├── fixed scalar inline
-└── variable/composite
-    └── backing reference / handle
-```
-
 `CompiledProgram` puede continuar siendo owner de constant backing data, mientras `VmExecution` es owner lógico del backing que deba sobrevivir durante la ejecución.
 
 ## RV-005 — Shared Value Storage must not self-borrow VmExecution backing
 
 Status: CLOSED
 
-Regla canónica:
-
 > `Shared Value Storage` no contiene referencias Rust directas hacia backing data owned por el mismo `VmExecution` cuando eso convertiría la estructura de ejecución en self-referential.
 
-No se cierra una forma como:
-
-```rust
-struct VmExecution<'a> {
-    owned_strings: Vec<String>,
-    values: Vec<RuntimeValue<'a>>, // references into owned_strings
-}
-```
-
-como modelo base.
-
-La relación correcta debe permitir:
+La relación correcta es:
 
 ```text
 VmExecution
@@ -161,9 +101,7 @@ VmExecution
             └── stable indirection to backing
 ```
 
-sin que el storage dependa de referencias internas auto-prestadas del propio root.
-
-Esta regla no prohíbe borrowed views temporales creadas al observar/materializar un RuntimeValue. Prohíbe que el storage persistente de la ejecución dependa estructuralmente de self-borrows.
+Borrowed views temporales siguen permitidas al observar/materializar Values.
 
 ## RV-006 — Typed Backing Identities
 
@@ -180,8 +118,6 @@ struct EnumBackingId(usize);
 
 No existe un `RuntimeBackingId` universal en v0.
 
-Aunque compartan representación `usize`, estas identities no son intercambiables.
-
 ## RV-007 — String Backing Reference
 
 Status: CLOSED
@@ -193,9 +129,7 @@ enum StringBackingRef {
 }
 ```
 
-`Compiled(ConstantId)` reutiliza el Constant Pool ya cerrado y requiere que el constant referenciado sea `Constant::String`.
-
-No existe `CompiledStringId`.
+`Compiled(ConstantId)` requiere `Constant::String`.
 
 ## RV-008 — Dynamic Integer Backing Reference
 
@@ -210,22 +144,16 @@ enum DynamicIntegerBackingRef {
 
 `Compiled(ConstantId)` requiere `Constant::Dynamic(DynamicConstant::Integer { ... })`.
 
-No existe `CompiledDynamicIntegerId`.
-
 ## RV-009 — Struct / Enum Backing Identities
 
 Status: CLOSED
 
-Struct y Enum no poseen composite constants persistentes en el modelo compilado v0; se construyen durante ejecución.
-
-Por tanto utilizan directamente:
+Struct y Enum se construyen durante ejecución en v0 y utilizan directamente:
 
 ```rust
 StructBackingId
 EnumBackingId
 ```
-
-ambos pertenecientes al backing owned por `VmExecution`.
 
 ## RV-010 — Backing ID Stability
 
@@ -240,98 +168,206 @@ allocate ID
     → released with VmExecution
 ```
 
-No se requieren generation counters, GC, reference counting ni per-object liveness tracking en v0.
-
 ## RV-011 — Identity Does Not Prescribe Container
 
 Status: CLOSED
 
 Backing identities no prescriben el container físico.
 
-Permanece abierto si la implementación usa:
+Permanece abierto si la implementación usa `Vec`, arena, slab, segmented storage u otra estrategia compatible.
 
-```text
-Vec
-Arena
-Slab
-Box
-segmented storage
-custom allocator
+## RV-012 — RuntimeValue exact variant inventory
+
+Status: CLOSED
+
+`RuntimeValue` contiene exactamente **17 variants**:
+
+```rust
+#[derive(Clone, Copy)]
+enum RuntimeValue {
+    Boolean(bool),
+
+    Int8(i8),
+    Int16(i16),
+    Int32(i32),
+    Int64(i64),
+    Int128(i128),
+
+    Uint8(u8),
+    Uint16(u16),
+    Uint32(u32),
+    Uint64(u64),
+    Uint128(u128),
+
+    Float32(f32),
+    Float64(f64),
+
+    String(StringBackingRef),
+    Dynamic(DynamicValue),
+    Struct(StructBackingId),
+    Enum(EnumBackingId),
+}
 ```
 
-No se requiere `Rc`, `Arc`, raw pointer ni offset como parte contractual de la identity.
+## RV-013 — No NumericValue intermediate identity
 
-## Current Runtime Value Shape — conceptual only
+Status: CLOSED
 
-Todavía no se cierra el enum Rust exacto, pero la forma contractual es:
+Los fixed numeric kinds son variants directas de `RuntimeValue`.
 
-```text
-RuntimeValue
-│
-├── Boolean                       inline
-│
-├── Fixed Numeric                 inline
-│   ├── Int8 .. Int128
-│   ├── Uint8 .. Uint128
-│   └── Float32 / Float64
-│
-├── String
-│   └── StringBackingRef
-│       ├── Compiled(ConstantId)
-│       └── Execution(StringBackingId)
-│
-├── Dynamic
-│   ├── Integer
-│   │   └── DynamicIntegerBackingRef
-│   │       ├── Compiled(ConstantId)
-│   │       └── Execution(DynamicIntegerBackingId)
-│   ├── Float32                   inline candidate
-│   └── Float64                   inline candidate
-│
-├── Struct
-│   └── StructBackingId
-└── Enum
-    └── EnumBackingId
+No se introduce `NumericValue`, `FixedNumericValue` ni `RuntimeNumeric` como identity intermedia.
+
+`Instruction` ya contiene el `NumericKind` requerido para seleccionar el mecanismo ejecutable.
+
+## RV-014 — Dynamic uses RuntimeValue::Dynamic(DynamicValue)
+
+Status: CLOSED
+
+`dynamic` conserva una única entrada dentro del enum general:
+
+```rust
+RuntimeValue::Dynamic(DynamicValue)
 ```
 
-La forma exacta de `RuntimeValue`, Dynamic Float variants y composite backing data todavía debe cerrarse.
+La familia runtime específica pertenece a `DynamicValue`.
+
+## RV-015 — DynamicValue exact variant inventory
+
+Status: CLOSED
+
+`DynamicValue` posee exactamente **3 variants**:
+
+```rust
+#[derive(Clone, Copy)]
+enum DynamicValue {
+    Integer(DynamicIntegerBackingRef),
+    Float32(f32),
+    Float64(f64),
+}
+```
+
+No existe `DynamicKind`, `RuntimeTypeId` ni type tag separado; el discriminante del propio `DynamicValue` expresa la familia runtime.
+
+## RV-016 — Dynamic Integer uses backing; Dynamic floats stay inline
+
+Status: CLOSED
+
+```text
+Dynamic Integer → DynamicIntegerBackingRef
+Dynamic Float32 → inline f32
+Dynamic Float64 → inline f64
+```
+
+Dynamic Integer necesita backing por precisión arbitraria. Dynamic Float32/Float64 permanecen inline.
+
+## RV-017 — RuntimeValue family is copyable descriptor data
+
+Status: CLOSED
+
+La familia de descriptors/handles runtime es `Clone + Copy` en v0.
+
+Regla canónica:
+
+> Copiar un `RuntimeValue` duplica únicamente el descriptor; nunca duplica el backing referenciado.
+
+Esto permite que `LoadParameter` y `LoadLocal` materialicen el mismo Value lógico en Operand Window sin copiar String, Dynamic Integer, Struct o Enum backing.
+
+## RV-018 — Rust PartialEq/Eq is not language equality mechanism
+
+Status: CLOSED
+
+La igualdad semántica de Evo-Script no se define mediante identity equality de `RuntimeValue` ni de sus backing handles.
+
+Dos backings distintos pueden representar Values semánticamente iguales.
+
+Las operaciones del lenguaje permanecen gobernadas por las instructions de igualdad y por `EqualityRule` / `CompositeEqualityPlan`.
+
+Si una implementación futura añade `PartialEq` / `Eq` por razones internas, esos traits no constituyen la semántica de `==` / `!=` del lenguaje.
+
+## RV-019 — RuntimeValue is execution-context-relative
+
+Status: CLOSED
+
+`RuntimeValue` no es un Value portable independiente del contexto.
+
+```text
+Compiled(ConstantId)
+    → se resuelve contra el CompiledProgram de la VmExecution
+
+Execution(BackingId)
+    → se resuelve contra backing owned por esa VmExecution
+```
+
+> Un `RuntimeValue` que contenga handles runtime no puede escapar de `VmExecution` como resultado autónomo sin materialización o transferencia de ownership apropiada.
+
+La transformación hacia un Outcome Value capaz de sobrevivir a `VmExecution` pertenece a `Outcome / Diagnostic Data`.
+
+## Exact Closed Runtime Value Family
+
+```rust
+#[derive(Clone, Copy)]
+enum DynamicValue {
+    Integer(DynamicIntegerBackingRef),
+    Float32(f32),
+    Float64(f64),
+}
+
+#[derive(Clone, Copy)]
+enum RuntimeValue {
+    Boolean(bool),
+
+    Int8(i8),
+    Int16(i16),
+    Int32(i32),
+    Int64(i64),
+    Int128(i128),
+
+    Uint8(u8),
+    Uint16(u16),
+    Uint32(u32),
+    Uint64(u64),
+    Uint128(u128),
+
+    Float32(f32),
+    Float64(f64),
+
+    String(StringBackingRef),
+    Dynamic(DynamicValue),
+    Struct(StructBackingId),
+    Enum(EnumBackingId),
+}
+```
 
 ## Explicitly Not Closed Yet
 
 ```text
-RuntimeValue exact Rust enum
-Dynamic Value exact representation
 String backing physical representation
 Dynamic Integer backing physical representation
 Struct backing physical representation
 Enum backing physical representation
 Shared Value Storage concrete container
-Copy / Clone traits
-arena / Vec / slab / Box strategy
+arena / Vec / slab strategy
 ```
 
 ## Closure
 
 ```text
-RuntimeValue != evo_values::Value<'a>                  ✅ CLOSED
-RuntimeValue = internal immutable VM descriptor        ✅ CLOSED
-fixed scalar data stored inline                        ✅ CLOSED
-variable/composite data uses backing indirection       ✅ CLOSED
-no persistent self-borrow in Shared Value Storage      ✅ CLOSED
+RuntimeValue / evo_values::Value boundary                ✅ CLOSED
+RuntimeValue immutable descriptor                        ✅ CLOSED
+fixed scalar data inline                                 ✅ CLOSED
+variable/composite backing indirection                    ✅ CLOSED
+no persistent self-borrow                                ✅ CLOSED
+Backing Identity Strategy                                ✅ CLOSED
+RuntimeValue exact representation                        ✅ CLOSED — 17 variants
+DynamicValue exact representation                        ✅ CLOSED — 3 variants
+descriptor family Clone + Copy                           ✅ CLOSED
+Rust handle equality != language equality                ✅ CLOSED
+RuntimeValue execution-context-relative                  ✅ CLOSED
 
-typed backing identities                               ✅ CLOSED
-no universal RuntimeBackingId                          ✅ CLOSED
-String compiled/execution backing reference            ✅ CLOSED
-Dynamic Integer compiled/execution backing reference   ✅ CLOSED
-Struct / Enum execution-owned typed IDs                ✅ CLOSED
-backing IDs stable / non-reused per execution          ✅ CLOSED
-identity independent of physical container             ✅ CLOSED
-
-Backing Identity Strategy                              ✅ CLOSED
-
-RuntimeValue exact representation                      ← NEXT
-Dynamic Value exact representation                     PENDING
-String / Dynamic Integer backing representation        PENDING
-Struct / Enum backing representation                   PENDING
-Shared Value Storage exact representation              PENDING
+Backing Data Representation                              ← NEXT
+Shared Value Storage exact representation                PENDING
+CallFrame                                                 PENDING
+InstructionPointer                                        PENDING
+ApplicationBindings exact model                           PENDING
+call / return mechanics                                   PENDING
 ```
