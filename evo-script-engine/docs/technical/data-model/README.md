@@ -102,7 +102,9 @@ Compiled Program / Bytecode Data ← IN ANALYSIS
 ├── VariantDiscriminant          ✅ CLOSED
 ├── Composite Layout             ✅ CLOSED
 ├── Struct / Enum Instructions   ✅ CLOSED
-└── Structural Equality          ← NEXT
+├── EqualityComparable           ✅ CLOSED
+├── Structural Equality          ✅ CLOSED
+└── SourceMap                    ← NEXT
 
 VM Execution Data                PENDING
 Outcome / Diagnostic Data        PENDING
@@ -140,9 +142,14 @@ Compiled Program / Bytecode Data:
 - [`COMPILED_NUMERIC_INSTRUCTIONS.md`](./COMPILED_NUMERIC_INSTRUCTIONS.md) — `NumericKind`, fixed arithmetic/comparison, `LiftDynamic`, dynamic arithmetic, errores de evaluación y fronteras de lowering.
 - [`COMPILED_CONTROL_FLOW.md`](./COMPILED_CONTROL_FLOW.md) — typed `Instruction`, `InstructionIndex`, absolute branches, `Jump`, `JumpIfFalse`, short-circuit `&&` / `||`, `Discard` y `Return`.
 - [`COMPILED_CONVERSIONS.md`](./COMPILED_CONVERSIONS.md) — fixed/dynamic numeric conversions, exact representability, `ConversionError`, `NumericToString` y `DynamicToString`.
-- [`COMPILED_SCALAR_EQUALITY.md`](./COMPILED_SCALAR_EQUALITY.md) — `NotBoolean`, bool equality y string equality; structural equality queda pendiente de Composite Layout.
+- [`COMPILED_SCALAR_EQUALITY.md`](./COMPILED_SCALAR_EQUALITY.md) — `NotBoolean`, bool equality y string equality.
 - [`COMPILED_COMPOSITE_LAYOUT.md`](./COMPILED_COMPOSITE_LAYOUT.md) — `FieldIndex`, `VariantDiscriminant`, canonical composite ordering, struct/enum conceptual runtime layout y ausencia de runtime type-layout tables en v0.
 - [`COMPILED_COMPOSITE_INSTRUCTIONS.md`](./COMPILED_COMPOSITE_INSTRUCTIONS.md) — construcción/acceso de struct y enum, `TestVariant`, extracción consumidora de payloads, lowering de `when` y corrección para evitar aliasing forzado.
+- [`COMPILED_STRUCTURAL_EQUALITY.md`](./COMPILED_STRUCTURAL_EQUALITY.md) — `EqualityRule`, `CompositeEqualityPlan`, igualdad estructural de struct/enum y prohibición de runtime equality dinámica oculta.
+
+Normative language amendment used by compiled equality:
+
+- [`../../../../evo-script/COMPOSITE_EQUALITY_COMPARABILITY_v0.1.md`](../../../../evo-script/COMPOSITE_EQUALITY_COMPARABILITY_v0.1.md) — propiedad estática `EqualityComparable`; composites que contienen `dynamic` directa o transitivamente no admiten `==` / `!=`.
 
 ## Technical Data Diagram
 
