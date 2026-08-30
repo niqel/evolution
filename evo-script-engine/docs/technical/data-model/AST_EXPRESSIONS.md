@@ -1,8 +1,8 @@
 # Evo-Script Engine — AST Expressions
 
-Status: CLOSED EXCEPT `when`
+Status: CLOSED
 
-Este documento cierra la representación AST de Expressions de Evo-Script v0.1 salvo el modelo interno de `when`, que se define por separado.
+Este documento cierra la representación AST de Expressions de Evo-Script v0.1. El modelo interno de `when` se detalla en `AST_WHEN.md`.
 
 La representación recursiva se rige por `AST_EXPRESSION_REPRESENTATION.md`: typed nested tree, `Box<Expression>` únicamente cuando rompe recursión directa y `Vec<...>` cuando la colección ya aporta indirection.
 
@@ -31,7 +31,7 @@ No existe `ParenthesizedExpression` ni `GroupingExpression`: Parser absorbe grou
 
 ## 2. ExpressionKind
 
-Forma cerrada, con `When` pendiente de payload exacto:
+Forma cerrada:
 
 ```rust
 enum ExpressionKind<'source> {
@@ -60,9 +60,11 @@ enum ExpressionKind<'source> {
     },
     EnumConstruction(EnumConstruction<'source>),
     Pipeline(Pipeline<'source>),
-    When(/* AST_WHEN.md */),
+    When(WhenExpression<'source>),
 }
 ```
+
+`WhenExpression` y sus patterns se definen en `AST_WHEN.md`.
 
 ## 3. LiteralKind
 
@@ -231,7 +233,28 @@ enum OperationStatement<'source> {
 
 No es wrapper sobre `Expression`, porque Evo-Script v0.1 prohíbe Expression Statements generales.
 
-## 13. Explicitly Excluded
+## 13. When
+
+`when` participa como Expression mediante:
+
+```rust
+When(WhenExpression<'source>)
+```
+
+Su modelo cerrado incluye:
+
+```text
+WhenExpression
+WhenCorrespondence
+WhenPattern
+PatternField
+```
+
+Las formas de pattern son exactamente `Simple`, `Associated` y `Structured`. Exhaustividad, resolución de variantes, compatibilidad de payloads y scopes semánticos de bindings pertenecen a Semantic Analyzer.
+
+La definición completa se encuentra en [`AST_WHEN.md`](./AST_WHEN.md).
+
+## 14. Explicitly Excluded
 
 ```text
 ParenthesizedExpression
@@ -246,14 +269,15 @@ ExpressionId
 AST Arena
 Generic AstNode
 Generic NodeId
+General Pattern framework
 ```
 
-## 14. Closure
+## 15. Closure
 
 ```text
 Expression                    ✅ CLOSED
 Expression.span               ✅ CLOSED
-ExpressionKind inventory      ✅ CLOSED — When payload pending
+ExpressionKind inventory      ✅ CLOSED
 LiteralKind                   ✅ CLOSED
 UnaryOperator                 ✅ CLOSED
 BinaryOperator                ✅ CLOSED
@@ -265,5 +289,7 @@ EnumConstruction              ✅ CLOSED
 Pipeline                      ✅ CLOSED
 PipelineStage                 ✅ CLOSED
 OperationStatement payloads   ✅ CLOSED
-When model                    ← IN ANALYSIS
+When model                    ✅ CLOSED
+
+AST Expressions               ✅ CLOSED
 ```
