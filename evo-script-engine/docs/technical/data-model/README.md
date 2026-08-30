@@ -121,7 +121,14 @@ VM Execution Data                ← IN ANALYSIS
 ├── fixed scalars inline         ✅ CLOSED
 ├── variable/composite backing   ✅ CLOSED
 ├── no persistent self-borrow    ✅ CLOSED
-└── Backing Identity Strategy    ← NEXT
+├── typed backing identities     ✅ CLOSED
+├── no universal backing ID      ✅ CLOSED
+├── String backing origin        ✅ CLOSED
+├── Dynamic Integer backing      ✅ CLOSED
+├── Struct / Enum backing IDs    ✅ CLOSED
+├── backing ID stability         ✅ CLOSED
+├── container-independent IDs    ✅ CLOSED
+└── RuntimeValue exact representation ← NEXT
 
 Outcome / Diagnostic Data        PENDING
 ```
@@ -169,7 +176,8 @@ Outcome / Diagnostic Data        PENDING
 ### VM Execution Data
 
 - [`VM_EXECUTION_DATA.md`](./VM_EXECUTION_DATA.md) — autoridad acumulada de VM Execution Data; `VmExecution` root y estado de cierre runtime.
-- [`RUNTIME_VALUE_MODEL.md`](./RUNTIME_VALUE_MODEL.md) — frontera `RuntimeValue` / `evo_values::Value<'a>`, descriptor interno, fixed scalars inline, backing indirection y prohibición de persistent self-borrow.
+- [`RUNTIME_VALUE_MODEL.md`](./RUNTIME_VALUE_MODEL.md) — frontera `RuntimeValue` / `evo_values::Value<'a>`, descriptor interno, scalars inline y backing indirection.
+- [`BACKING_IDENTITY_STRATEGY.md`](./BACKING_IDENTITY_STRATEGY.md) — typed backing IDs, referencias `Compiled | Execution`, estabilidad por invocation y separación frente al container físico.
 
 ### Normative language amendments used by compiled model
 
@@ -211,7 +219,7 @@ La metodología global se define en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../..
 ## Next Block
 
 ```text
-Backing Identity Strategy ← NEXT
+RuntimeValue exact representation ← NEXT
 ```
 
-Aquí se decidirá cómo `RuntimeValue` identifica backing data variable/composite sin referencias self-borrowed: generic handle, typed IDs u otra estrategia físicamente estable y coherente con compiled-backed y execution-backed data.
+Aquí se consolidará el enum runtime exacto usando fixed scalars inline y las backing identities ya cerradas; después se cerrará `Dynamic` y las representaciones físicas de String / Dynamic Integer / Struct / Enum backing.
