@@ -84,7 +84,11 @@ Compiled Program / Bytecode Data ← IN ANALYSIS
 ├── external call convergence    ✅ CLOSED
 ├── CompiledProgram root shell   ✅ CLOSED
 ├── CompiledFunction shell       ✅ CLOSED
-└── physical data / instructions ← IN ANALYSIS
+├── ParameterSlot                ✅ CLOSED
+├── LocalSlot                    ✅ CLOSED
+├── Constant / DynamicConstant   ✅ CLOSED
+├── ExternalSymbol               ✅ CLOSED
+└── Instruction Set              ← IN ANALYSIS
 
 VM Execution Data                PENDING
 Outcome / Diagnostic Data        PENDING
@@ -118,6 +122,7 @@ Semantic Program Data:
 Compiled Program / Bytecode Data:
 
 - [`COMPILED_PROGRAM_DATA.md`](./COMPILED_PROGRAM_DATA.md) — responsabilidad persistente, `FunctionId` preservation, `ConstantId`, `ExternalSymbolId`, Signature Dependency Erasure, raíz `CompiledProgram` y shell `CompiledFunction`.
+- [`COMPILED_STORAGE_DATA.md`](./COMPILED_STORAGE_DATA.md) — `ParameterSlot`, `LocalSlot`, `Constant`, `DynamicConstant`, `ExternalSymbol`, Constant Pool policy y mapping temporal de bindings.
 
 ## Technical Data Diagram
 
