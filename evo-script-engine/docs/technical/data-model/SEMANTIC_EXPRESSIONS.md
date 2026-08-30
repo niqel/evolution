@@ -8,8 +8,6 @@ La autoridad deriva de `SEMANTIC_PROGRAM_DATA.md`, `SEMANTIC_PROGRAM_STRUCTURE.m
 
 ## 1. SemanticExpression
 
-Representación cerrada:
-
 ```rust
 struct SemanticExpression {
     type_id: TypeId,
@@ -20,45 +18,46 @@ struct SemanticExpression {
 
 Invariantes:
 
-1. Toda `SemanticExpression` posee un `TypeId` completamente resuelto.
-2. Bytecode Compiler no realiza type inference ni name resolution sobre Semantic Program.
-3. `span` conserva la ubicación de la expresión fuente para Source Mapping / diagnostics posteriores.
-4. El Semantic Program solo existe después de semantic analysis exitoso; por tanto sus expresiones ya satisfacen las reglas semánticas de tipos, aridad, access, construction y `when`.
+1. Toda `SemanticExpression` posee `TypeId` completamente resuelto.
+2. Bytecode Compiler no realiza type inference ni name resolution.
+3. `span` conserva ubicación para Source Mapping / diagnostics.
+4. Semantic Program solo existe después de semantic analysis exitoso.
 
 ## 2. SemanticLiteral
 
-Representación cerrada:
+Representación cerrada después de revisión:
 
 ```rust
 enum SemanticLiteral {
-    Integer(u128),
+    Integer(String),
     Floating(f64),
     Boolean(bool),
     String(String),
 }
 ```
 
-El `TypeId` de la `SemanticExpression` determina el tipo semántico concreto del literal.
+### Integer
 
-Ejemplo:
+`Integer(String)` contiene la magnitud decimal canónica ya validada por Semantic Analyzer. No es el lexeme fuente sin procesar.
+
+La elección de `String` evita limitar Semantic Program a `u128`, porque Evo-Script `dynamic` admite enteros de precisión arbitraria. La representación física runtime de esos enteros pertenece a VM / Value Data posterior.
 
 ```text
-SemanticLiteral::Integer(10)
+SemanticLiteral::Integer("100")
 +
 SemanticExpression.type_id
-    → int / int8 / int64 / uint32 / ... según resolución semántica
+    → int / int64 / uint128 / dynamic / ... según resolución
 ```
 
-Reglas:
+Un literal negativo continúa representándose mediante `UnaryOperator::Negate` aplicado sobre la magnitud Integer cuando corresponda; no se introduce aquí una representación física signed.
 
-1. El lexeme del AST deja de ser mecanismo de compilación.
-2. String literals se materializan como `String` owned en Semantic Program; escapes y significado textual ya fueron interpretados por Semantic Analyzer.
-3. El Bytecode Compiler puede transferir/copiar los datos persistentes necesarios al Constant Pool del Compiled Program.
-4. Un literal negativo continúa representándose mediante `UnaryOperator::Negate` aplicado sobre una magnitud Integer cuando corresponda; no se introduce una segunda forma signed dentro de `SemanticLiteral`.
+### Floating / Boolean / String
+
+`Floating(f64)` conserva el valor semántico flotante ya validado. `Boolean(bool)` conserva el valor lógico. String literals se materializan como `String` owned; escapes ya fueron interpretados.
+
+Bytecode Compiler puede transformar/copiar estos datos hacia el Constant Pool persistente.
 
 ## 3. SemanticExpressionKind
-
-Representación cerrada:
 
 ```rust
 enum SemanticExpressionKind {
@@ -75,6 +74,10 @@ enum SemanticExpressionKind {
         left: Box<SemanticExpression>,
         operator: BinaryOperator,
         right: Box<SemanticExpression>,
+    },
+
+    Conversion {
+        operand: Box<SemanticExpression>,
     },
 
     FieldAccess {
@@ -109,24 +112,50 @@ Binding(BindingId)
 
 El nombre textual ya cumplió su responsabilidad durante semantic resolution.
 
-`BindingId` se interpreta exclusivamente dentro del namespace de la `SemanticFunction` owner.
-
 ## 5. Unary and Binary Expressions
 
-Se reutilizan las identidades cerradas del AST:
+Se reutilizan `UnaryOperator` y `BinaryOperator` cerrados en AST porque la operación conserva el mismo significado.
 
-```text
-UnaryOperator
-BinaryOperator
-```
+No se crean `SemanticUnaryOperator` ni `SemanticBinaryOperator`.
 
-No se crean `SemanticUnaryOperator` ni `SemanticBinaryOperator` porque la alternativa de operación ya está resuelta y conserva el mismo significado.
+## 6. Conversion
 
-La validez de operandos y el tipo resultante ya fueron comprobados antes de producir Semantic Program.
-
-## 6. FieldAccess
+Las operaciones oficiales `to_tipo` pertenecen a la semántica del lenguaje y no son Internal Functions, External Signatures ni Signature Dependencies.
 
 Representación:
+
+```rust
+Conversion {
+    operand: Box<SemanticExpression>,
+}
+```
+
+La conversión queda completamente determinada por:
+
+```text
+source type = operand.type_id
+target type = enclosing SemanticExpression.type_id
+```
+
+Por tanto no se introduce `ConversionKind`, `BuiltinFunctionId` ni una variant por cada `to_int64`, `to_float32`, etc.
+
+Ejemplo:
+
+```text
+to_int64(value)
+```
+
+```text
+SemanticExpression
+├── type_id = TypeId(int64)
+└── Conversion
+    └── operand
+        └── type_id = TypeId(source)
+```
+
+Semantic Analyzer ya comprobó que la conversión está permitida por Evo-Script. Bytecode/VM decide en runtime si una conversión potencialmente fallable produce `ConversionError`.
+
+## 7. FieldAccess
 
 ```rust
 FieldAccess {
@@ -135,25 +164,11 @@ FieldAccess {
 }
 ```
 
-El owner semántico del field se obtiene a partir del `type_id` del receiver.
+El owner se obtiene del `type_id` del receiver y el tipo resultante del `type_id` de la expresión exterior.
 
-El tipo resultante se obtiene de `SemanticExpression.type_id`.
+No se conserva el nombre textual del field.
 
-No se conserva el nombre textual del field como mecanismo de resolución.
-
-```text
-AST
-worker.name
-    ↓ Semantic Analyzer
-receiver → BindingId(...)
-field    → FieldId(...)
-    ↓
-Semantic FieldAccess
-```
-
-## 7. SemanticCallTarget
-
-Una llamada resuelta posee exactamente uno de tres targets:
+## 8. SemanticCallTarget
 
 ```rust
 enum SemanticCallTarget {
@@ -163,33 +178,15 @@ enum SemanticCallTarget {
 }
 ```
 
-### Internal
-
-Identifica una Function Implementation interna del mismo Semantic Program.
-
-### DirectSignature
-
-Identifica una Signature importada utilizada mediante llamada directa. El nombre o alias textual ya fue resuelto hacia `SignatureId`.
-
-### SignatureDependency
-
-Identifica una Signature Dependency Parameter concreta de la función actual mediante `SignatureBindingId`.
-
-Esta separación conserva:
-
 ```text
 Internal Function
     != Signature Definition
     != local Signature Dependency
 ```
 
-No se introduce Provider ni runtime external binding.
+Conversions no utilizan `SemanticCallTarget`.
 
-## 8. SemanticArgument
-
-Signature Dependencies pueden reenviarse posicionalmente sin convertirse en Values de primer orden.
-
-Representación cerrada:
+## 9. SemanticArgument
 
 ```rust
 enum SemanticArgument {
@@ -198,13 +195,9 @@ enum SemanticArgument {
 }
 ```
 
-La colección de argumentos preserva el orden posicional de la invocación.
+Signature Dependencies pueden reenviarse posicionalmente sin convertirse en Values de primer orden.
 
-No existe Function Value ni closure sintética para transportar una Signature Dependency.
-
-## 9. SemanticCall
-
-Representación cerrada:
+## 10. SemanticCall
 
 ```rust
 struct SemanticCall {
@@ -215,35 +208,30 @@ struct SemanticCall {
 
 Invariantes:
 
-1. `target` ya está completamente resuelto.
-2. `arguments` ya poseen aridad, orden y compatibilidad semántica válidas respecto al target.
-3. Bytecode Compiler no vuelve a consultar nombres, aliases, imports o Signature declarations para decidir el target.
-4. La evaluación izquierda-a-derecha continúa expresada por el orden de `arguments`.
+1. `target` está completamente resuelto.
+2. `arguments` tienen aridad, orden y compatibilidad válidas.
+3. Bytecode Compiler no vuelve a consultar names, aliases o imports.
+4. El orden de `arguments` conserva evaluación izquierda-a-derecha.
 
-## 10. Pipeline semantic lowering
+## 11. Pipeline semantic lowering
 
-Status: CLOSED
+Status: CLOSED / CORRECTED
 
-`Pipeline` es una construcción sintáctica/AST de composición. No sobrevive como identidad propia dentro de Semantic Program.
+`Pipeline` es sintaxis/AST de composición y no sobrevive como identidad propia en Semantic Program.
 
-Ejemplo:
+La regla corregida es:
+
+> Semantic Analyzer reduce Pipeline a **Semantic Expression Composition** ya resuelta.
+
+Stages ordinarios producen `SemanticCall`; stages `to_tipo` producen `Conversion`.
+
+Ejemplo de calls:
 
 ```text
 worker
 |> validate
 |> save
 ```
-
-AST:
-
-```text
-Pipeline
-├── source: worker
-├── validate
-└── save
-```
-
-Semantic Program:
 
 ```text
 Call save
@@ -253,24 +241,30 @@ Call save
             └── Binding worker
 ```
 
-Regla:
+Ejemplo con conversiones:
 
-> Semantic Analyzer resuelve Pipeline stages, valida tipos, inserta el transported value en la posición semántica correspondiente y produce composición de `SemanticCall`.
+```text
+source
+|> to_int64
+|> to_string
+```
+
+```text
+Conversion → string
+└── Conversion → int64
+    └── source expression
+```
 
 Consecuencias:
 
 ```text
 No SemanticPipeline
 No SemanticPipelineStage
-No `this` semantic node
+No SemanticThis
 No Pipeline-specific lowering in Bytecode Compiler
 ```
 
-Bytecode Compiler recibe call composition ya resuelta.
-
-## 11. SemanticFieldValue
-
-Representación cerrada:
+## 12. SemanticFieldValue
 
 ```rust
 struct SemanticFieldValue {
@@ -281,13 +275,7 @@ struct SemanticFieldValue {
 
 Se reutiliza en Struct Construction y Structured Enum Construction.
 
-Los nombres de fields ya fueron resueltos a `FieldId`.
-
-El owner se conoce por el tipo de la construcción y, para enum estructurado, por la variante resuelta.
-
-## 12. Struct Construction
-
-Representación dentro de `SemanticExpressionKind`:
+## 13. Struct Construction
 
 ```rust
 StructConstruction {
@@ -295,15 +283,9 @@ StructConstruction {
 }
 ```
 
-El `TypeId` del `SemanticExpression` identifica el Struct construido.
+El `TypeId` de la `SemanticExpression` identifica el Struct construido. Semantic Analyzer ya validó field completeness, duplicates, existence y types.
 
-No se duplica `TypeId` dentro de la variant.
-
-El Semantic Analyzer ya comprobó fields requeridos, duplicados, existencia y compatibilidad de tipos.
-
-## 13. SemanticEnumPayload
-
-Representación cerrada:
+## 14. SemanticEnumPayload
 
 ```rust
 enum SemanticEnumPayload {
@@ -317,9 +299,7 @@ enum SemanticEnumPayload {
 }
 ```
 
-## 14. Enum Construction
-
-Representación:
+## 15. Enum Construction
 
 ```rust
 EnumConstruction {
@@ -328,17 +308,9 @@ EnumConstruction {
 }
 ```
 
-El `TypeId` del `SemanticExpression` identifica el Enum owner.
+El `TypeId` exterior identifica el Enum owner y `VariantId` la variante resuelta.
 
-`VariantId` identifica la variante dentro de dicho enum.
-
-No sobreviven `QualifiedName`, enum name ni variant name como mecanismo de compilación.
-
-## 15. SemanticWhen
-
-`when` sí sobrevive como significado semántico porque representa selección exhaustiva entre variantes y requiere branching en bytecode.
-
-Representación cerrada:
+## 16. SemanticWhen
 
 ```rust
 struct SemanticWhen {
@@ -347,13 +319,9 @@ struct SemanticWhen {
 }
 ```
 
-La colección `branches` conserva las correspondencias semánticas ya validadas.
+`when` sí sobrevive porque representa branching semántico real.
 
-El `TypeId` del subject identifica el Enum inspeccionado.
-
-## 16. SemanticWhenBranch
-
-Representación cerrada:
+## 17. SemanticWhenBranch
 
 ```rust
 struct SemanticWhenBranch {
@@ -363,20 +331,9 @@ struct SemanticWhenBranch {
 }
 ```
 
-El Semantic Analyzer ya garantizó:
+Semantic Analyzer ya garantizó enum owner, exhaustiveness, no duplicates, result compatibility y extraction correctness.
 
-```text
-subject is Enum
-variant belongs to subject Enum
-exhaustiveness
-no duplicate branch
-result type compatibility
-extraction shape/type correctness
-```
-
-## 17. SemanticVariantExtraction
-
-Representación cerrada:
+## 18. SemanticVariantExtraction
 
 ```rust
 enum SemanticVariantExtraction {
@@ -390,11 +347,9 @@ enum SemanticVariantExtraction {
 }
 ```
 
-No sobreviven AST `WhenPattern`, `TypedBinding`, `PatternField` o textual type names.
+No sobreviven AST `WhenPattern`, `TypedBinding` o `PatternField`.
 
-## 18. SemanticFieldBinding
-
-Representación cerrada:
+## 19. SemanticFieldBinding
 
 ```rust
 struct SemanticFieldBinding {
@@ -403,21 +358,9 @@ struct SemanticFieldBinding {
 }
 ```
 
-Representa el significado resuelto de una extracción estructurada:
+El type del binding vive en `SemanticFunction.bindings[BindingId].type_id`.
 
-```text
-semantic field identity
-    → FieldId
-
-local extracted value
-    → BindingId
-```
-
-El tipo del binding está disponible mediante `SemanticFunction.bindings[BindingId].type_id`.
-
-## 19. SemanticFunctionBody
-
-Representación cerrada:
+## 20. SemanticFunctionBody
 
 ```rust
 struct SemanticFunctionBody {
@@ -426,11 +369,9 @@ struct SemanticFunctionBody {
 }
 ```
 
-`return` no reaparece como nodo semántico. La función posee exactamente un resultado final semánticamente válido.
+`return` no reaparece como nodo semántico.
 
-## 20. SemanticStatement
-
-Representación cerrada:
+## 21. SemanticStatement
 
 ```rust
 enum SemanticStatement {
@@ -443,31 +384,24 @@ enum SemanticStatement {
 }
 ```
 
-### Bind
+`Bind` representa `let` ya resuelto.
 
-Representa un `let` ya resuelto. El type y nombre del binding no se repiten aquí; se obtienen mediante `SemanticFunction.bindings[BindingId]` cuando sea necesario.
+Un `Operation` válido proviene de un Operation Statement sintácticamente válido. Después de semantic lowering, su outer kind puede ser:
 
-### Operation
+```text
+Call
+Conversion
+```
 
-Semantic Analyzer solo produce `Operation` cuando la forma fuente fue un Operation Statement válido.
+No se introduce `SemanticOperationStatement` adicional.
 
-Como Pipeline ya se reduce a composición de calls, la `SemanticExpressionKind` exterior de un Operation válido es `Call`.
+## 22. SourceSpan Policy
 
-No se introduce `SemanticOperationStatement` separado porque no agrega significado adicional después de semantic success.
+`SemanticExpression.span` se conserva para que Bytecode Compiler produzca Source Mapping sin volver al AST.
 
-## 21. SourceSpan Policy
+No se agregan spans completos por costumbre a todas las identidades semánticas.
 
-`SemanticExpression.span` se conserva para que el Bytecode Compiler pueda construir Source Mapping sin volver al AST.
-
-No se agregan SourceSpan completos por costumbre a todas las identidades semánticas. Cuando una ubicación pueda derivarse de una `SemanticExpression` o no sea necesaria para producto persistente, no se duplica.
-
-Regla:
-
-> Semantic Program conserva Source Location cuando es necesaria para traducir significado ejecutable hacia diagnostic/source mapping, no para reproducir Concrete Syntax.
-
-## 22. Semantic reduction from AST
-
-Transformaciones canónicas:
+## 23. Semantic reduction from AST
 
 ```text
 AST Identifier
@@ -476,8 +410,14 @@ AST Identifier
 AST QualifiedName
     → TypeId / VariantId / SignatureId
 
-AST literal lexeme
-    → SemanticLiteral
+AST integer literal lexeme
+    → canonical SemanticLiteral::Integer(String)
+
+AST other literal lexeme
+    → materialized SemanticLiteral
+
+AST to_tipo(...)
+    → Conversion
 
 AST Field name
     → FieldId
@@ -486,7 +426,7 @@ AST Enum variant syntax
     → TypeId + VariantId + SemanticEnumPayload
 
 AST Pipeline
-    → nested SemanticCall
+    → Semantic Expression Composition
 
 AST WhenPattern
     → VariantId + SemanticVariantExtraction
@@ -495,9 +435,7 @@ AST typed extraction
     → BindingId / SemanticFieldBinding
 ```
 
-Semantic Program conserva significado resuelto y elimina syntax-only identities una vez cumplida su responsabilidad.
-
-## 23. Explicitly Excluded
+## 24. Explicitly Excluded
 
 ```text
 SemanticIdentifier
@@ -507,6 +445,8 @@ SemanticPipelineStage
 SemanticWhenPattern
 SemanticTypedBinding
 SemanticFieldName lookup
+BuiltinFunctionId for conversions
+ConversionKind per target name
 Function Value
 Closure generated for Signature Dependency
 Provider identity
@@ -518,21 +458,22 @@ runtime discriminant
 bytecode / Opcode
 ```
 
-## 24. Closure
+## 25. Closure
 
 ```text
 SemanticExpression                  ✅ CLOSED
 SemanticExpression.type_id          ✅ CLOSED
 SemanticExpression.span             ✅ CLOSED
 SemanticExpressionKind              ✅ CLOSED
-SemanticLiteral                     ✅ CLOSED
+SemanticLiteral                     ✅ CLOSED — arbitrary integer safe
+Conversion                          ✅ CLOSED
 Binding reference                   ✅ CLOSED
 Unary / Binary semantic reuse       ✅ CLOSED
 FieldAccess                         ✅ CLOSED
 SemanticCallTarget                  ✅ CLOSED
 SemanticArgument                    ✅ CLOSED
 SemanticCall                        ✅ CLOSED
-Pipeline semantic lowering          ✅ CLOSED
+Pipeline semantic lowering          ✅ CLOSED — expression composition
 SemanticFieldValue                  ✅ CLOSED
 Struct Construction                 ✅ CLOSED
 SemanticEnumPayload                 ✅ CLOSED
@@ -544,6 +485,4 @@ SemanticFieldBinding                ✅ CLOSED
 SemanticFunctionBody                ✅ CLOSED
 SemanticStatement                   ✅ CLOSED
 SourceSpan propagation              ✅ CLOSED
-
-Semantic Program exact inventory    ← NEXT
 ```
