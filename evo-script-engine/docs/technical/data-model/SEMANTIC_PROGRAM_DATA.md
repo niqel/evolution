@@ -18,7 +18,7 @@ Bytecode Compiler
 Compiled Program
 ```
 
-Las estructuras owner cerradas se detallan en `SEMANTIC_PROGRAM_STRUCTURE.md`.
+Las estructuras owner cerradas se detallan en `SEMANTIC_PROGRAM_STRUCTURE.md` y el significado ejecutable interno de las funciones en `SEMANTIC_EXPRESSIONS.md`.
 
 ## SD-001 — Semantic Program representa significado resuelto
 
@@ -151,19 +151,19 @@ Status: CLOSED
 
 ```text
 SemanticProgram
-├── TypeId namespace              global to program
-├── FunctionId namespace          global to program
-└── SignatureId namespace         global to program
+├── TypeId namespace               global to program
+├── FunctionId namespace           global to program
+└── SignatureId namespace          global to program
 
 SemanticFunction
-├── BindingId namespace           local to function
-└── SignatureBindingId namespace  local to function
+├── BindingId namespace            local to function
+└── SignatureBindingId namespace   local to function
 
 Semantic Struct / Structured Variant
-└── FieldId namespace             local to structural owner
+└── FieldId namespace              local to structural owner
 
 Semantic Enum
-└── VariantId namespace           local to enum owner
+└── VariantId namespace            local to enum owner
 ```
 
 Los namespaces son conceptualmente independientes aun cuando todos utilicen `usize` internamente.
@@ -277,26 +277,93 @@ Stable cross-compilation IDs
 ExternalSymbolId in Semantic Program
 ```
 
-## SD-010 — Next block
+## SD-010 — Semantic Function Body and Expressions
 
-Status: IN ANALYSIS
+Status: CLOSED
 
-El shell estructural de Semantic Program ya está cerrado. Falta resolver el significado ejecutable dentro de cada función:
+El significado ejecutable interno de `SemanticFunction` queda cerrado en `SEMANTIC_EXPRESSIONS.md`.
+
+Identidades cerradas:
 
 ```text
 SemanticFunctionBody
 SemanticStatement
 SemanticExpression
-resolved calls
-resolved constructions
-resolved field access
-resolved `when`
-Pipeline lowering
-literal materialization
-SourceSpan propagation for Bytecode Source Mapping
+SemanticExpressionKind
+SemanticLiteral
+SemanticCall
+SemanticCallTarget
+SemanticArgument
+SemanticFieldValue
+SemanticEnumPayload
+SemanticWhen
+SemanticWhenBranch
+SemanticVariantExtraction
+SemanticFieldBinding
 ```
 
-Este bloque debe permitir que Bytecode Compiler traduzca directamente Semantic Program sin name resolution, type inference o semantic validation adicional.
+Reglas centrales:
+
+1. Toda `SemanticExpression` conserva `type_id: TypeId` resuelto y `span: SourceSpan` para Source Mapping.
+2. Literals dejan de ser lexemes y se materializan como `SemanticLiteral`.
+3. Local Value references usan `BindingId`.
+4. Field access usa `FieldId`.
+5. Calls se resuelven como `Internal(FunctionId)`, `DirectSignature(SignatureId)` o `SignatureDependency(SignatureBindingId)`.
+6. Signature Dependencies pueden reenviarse mediante `SemanticArgument::SignatureDependency` sin convertirse en Values de primer orden.
+7. Struct/Enum construction usa `FieldId`, `VariantId` y Semantic Expressions ya validadas.
+8. `when` conserva branching semántico mediante `VariantId` y bindings resueltos; no conserva AST patterns.
+9. Pipeline no sobrevive como identidad semántica: Semantic Analyzer lo reduce a composición de `SemanticCall`.
+10. `return` no reaparece; `SemanticFunctionBody.result` es el resultado final único.
+
+## SD-011 — Pipeline semantic lowering
+
+Status: CLOSED
+
+```text
+AST Pipeline
+    ↓ Semantic Analyzer
+nested SemanticCall composition
+    ↓ Bytecode Compiler
+normal call lowering
+```
+
+No existen en Semantic Program v0:
+
+```text
+SemanticPipeline
+SemanticPipelineStage
+SemanticThis
+```
+
+Esto evita que Bytecode Compiler deba volver a interpretar la sintaxis especial de Pipeline.
+
+## SD-012 — Source mapping boundary
+
+Status: CLOSED
+
+`SemanticExpression.span` conserva ubicación suficiente para que Bytecode Compiler produzca Diagnostic / Source Mapping Data sin volver al AST.
+
+No se duplica SourceSpan por costumbre en todas las identidades semánticas.
+
+Regla:
+
+> Semantic Program conserva Source Location cuando es necesaria para traducir significado ejecutable hacia Source Mapping, no para reproducir Concrete Syntax.
+
+## SD-013 — Next block
+
+Status: IN ANALYSIS
+
+Queda una revisión final antes de cerrar por completo Semantic Program Data:
+
+```text
+exact semantic identity inventory
+cardinality consistency
+no unresolved syntax identities
+no missing data required by Bytecode Compiler
+no accidental Compiled/VM identities in Semantic Program
+```
+
+Si esta revisión no descubre nuevas responsabilidades, `Semantic Program Data` podrá declararse CLOSED y el Technical Data Model avanzará a `Compiled Program / Bytecode Data`.
 
 ## Current Closure
 
@@ -316,8 +383,14 @@ Owner-index identity rule           ✅ CLOSED
 Semantic owner structures           ✅ CLOSED
 SemanticProgram root                ✅ CLOSED
 ExternalSymbolId excluded here      ✅ CLOSED
+SemanticFunctionBody                ✅ CLOSED
+SemanticStatement                   ✅ CLOSED
+SemanticExpression                  ✅ CLOSED
+Semantic calls / arguments          ✅ CLOSED
+Semantic constructions              ✅ CLOSED
+Semantic `when`                     ✅ CLOSED
+Pipeline semantic lowering          ✅ CLOSED
+SourceSpan propagation              ✅ CLOSED
 
-SemanticFunctionBody                ← IN ANALYSIS
-SemanticExpression                  ← IN ANALYSIS
 Semantic Program exact inventory    ← IN ANALYSIS
 ```
