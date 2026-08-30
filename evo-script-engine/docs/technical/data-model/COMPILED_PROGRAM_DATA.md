@@ -1,10 +1,10 @@
 # Evo-Script Engine — Compiled Program / Bytecode Data
 
-Status: COMPILED PROGRAM / BYTECODE DATA — IN ANALYSIS
+Status: COMPILED PROGRAM / BYTECODE DATA — FINAL INVENTORY PENDING
 
-Este documento define el producto persistente producido por Bytecode Compiler y consumido directamente por la Stack VM de `evo-script-engine` v0.
+Este documento es la autoridad acumulada del producto persistente producido por Bytecode Compiler y consumido directamente por la Stack VM de `evo-script-engine` v0.
 
-La autoridad deriva de `TECHNICAL_DESIGN.md`, especialmente TD-003, TD-004, TD-005, TD-007, TD-009, TD-010 y TD-011, de `SEMANTIC_PROGRAM_DATA.md` y de los documentos especializados de este bloque.
+La autoridad deriva de `TECHNICAL_DESIGN.md`, `SEMANTIC_PROGRAM_DATA.md` y los documentos especializados de este bloque.
 
 ```text
 Semantic Program
@@ -18,33 +18,26 @@ Execution Result
 
 Status: CLOSED
 
-Regla canónica:
-
-> `Semantic Program` representa significado resuelto; `Compiled Program` representa el mecanismo ejecutable persistente que la VM consume sin volver al AST ni al Semantic Program.
+> `Semantic Program` representa significado resuelto; `Compiled Program` representa mecanismo ejecutable persistente que la VM consume sin volver al AST ni al Semantic Program.
 
 Consecuencias:
 
-1. `Compiled Program` puede sobrevivir al Source Text y al Compilation Working State.
-2. La VM no realiza name resolution, type inference ni semantic validation.
-3. Semantic identities pueden conservarse solamente cuando siguen siendo una identity técnica útil en el producto compilado.
-4. Semantic information que ya fue lowered a layout, constants, symbols o Instructions no se conserva por costumbre.
-5. No se introducen Active Scope, Host Session State, Current Provider ni provider lookup ambiental.
+1. puede sobrevivir al Source Text y al Compilation Working State;
+2. la VM no realiza name resolution, type inference ni semantic validation;
+3. semantic information que ya fue lowered a mechanism físico no se conserva por costumbre;
+4. no contiene Active Scope, Host Session State, Current Provider ni provider lookup ambiental.
 
 ## CD-002 — FunctionId se preserva
 
 Status: CLOSED
 
-`FunctionId` se reutiliza como identidad de Internal Function desde Semantic Program hacia Compiled Program.
-
 ```text
 SemanticProgram.functions[n]
-    ↓ Bytecode Compiler preserves function identity ordering
+    ↓
 CompiledProgram.functions[n]
 ```
 
-No se introduce `CompiledFunctionId`.
-
-`FunctionId` no es stable ABI identity ni physical function address.
+`FunctionId` se preserva. No existe `CompiledFunctionId`.
 
 ## CD-003 — ConstantId
 
@@ -59,7 +52,7 @@ ConstantId(n)
     → CompiledProgram.constants[n]
 ```
 
-Namespace local al `CompiledProgram`; no es address de memoria ni identity estable entre compilaciones.
+Namespace local al `CompiledProgram`.
 
 ## CD-004 — ExternalSymbolId
 
@@ -74,30 +67,31 @@ ExternalSymbolId(n)
     → CompiledProgram.external_symbols[n]
 ```
 
-No identifica Provider ni runtime binding. Runtime lo resuelve mediante explicit Application Bindings.
+No identifica Provider ni runtime binding.
 
 ## CD-005 — Signature Dependency Erasure
 
 Status: CLOSED
 
-Signature Dependencies no son Values de primer orden y se eliminan como parámetros físicos durante Bytecode lowering.
+Signature Dependencies no son Values de primer orden y se eliminan de la calling convention física.
 
 ```text
 SignatureBindingId
     → semantic dependency meaning
     → no ParameterSlot
+    → no Operand Value
     → ExternalSymbolId when invoked
 ```
 
-No existen `SignatureSlot`, Function Value ni closure artificial para forwarding.
+No existen `SignatureSlot`, Function Value ni closure artificial.
 
-## CD-006 — Signature Dependency Forwarding se resuelve en compilation
+## CD-006 — Signature Dependency Forwarding
 
 Status: CLOSED
 
-`SemanticArgument::SignatureDependency` no genera Value argument físico. Una internal CALL transporta únicamente Value arguments.
+`SemanticArgument::SignatureDependency` no genera argumento Value físico. El forwarding se resuelve durante compilation.
 
-## CD-007 — Direct Signature y Signature Dependency convergen
+## CD-007 — Direct Signature / Signature Dependency convergence
 
 Status: CLOSED
 
@@ -108,7 +102,7 @@ SignatureDependency(SignatureBindingId)
 ExternalSymbolId
 ```
 
-El origen semántico diferente no requiere mecanismo external-call diferente en runtime.
+Ambos usan `CallExternal(ExternalSymbolId)`.
 
 ## CD-008 — CompiledProgram root
 
@@ -132,9 +126,9 @@ external_symbols  0..N
 source_map        exactly 1
 ```
 
-No se introducen wrappers `FunctionTable`, `ConstantPool` o `ExternalSymbolTable` mientras no agreguen responsabilidad propia.
+No se introducen wrappers `FunctionTable`, `ConstantPool` o `ExternalSymbolTable` sin responsabilidad propia.
 
-## CD-009 — CompiledFunction shell
+## CD-009 — CompiledFunction
 
 Status: CLOSED
 
@@ -151,13 +145,13 @@ struct CompiledFunction {
 
 `local_count` cuenta Value bindings estables non-parameter.
 
-`max_operand_depth` expresa la profundidad máxima temporal requerida por la función compilada.
+`max_operand_depth` expresa la profundidad temporal máxima del Operand Window.
 
-## CD-010 — Semantic data lowered away
+## CD-010 — Semantic data lowering boundary
 
 Status: CLOSED
 
-Por defecto no sobreviven dentro de `CompiledFunction`:
+Por defecto no sobreviven:
 
 ```text
 TypeId
@@ -182,39 +176,176 @@ FieldId             → FieldIndex
 VariantId           → VariantDiscriminant
 SignatureId         → ExternalSymbolId
 SignatureBindingId  → erased / ExternalSymbolId
-SemanticLiteral     → ConstantId / compiled constant data
+SemanticLiteral     → Constant
 SemanticExpression  → Instructions
 ```
 
 ## CD-011 — Compiled storage data
 
-Status: CLOSED
+Status: CLOSED — REVALIDATED AFTER FINAL AUDIT
 
-Cerrado en `COMPILED_STORAGE_DATA.md`:
+Cerrado en `COMPILED_STORAGE_DATA.md`.
 
-```text
-ParameterSlot
-LocalSlot
-BindingId → slot compiler mapping
-ExternalSymbol
-Constant
-DynamicConstant
-Constant Pool ownership
+### Slots
+
+```rust
+struct ParameterSlot(usize);
+struct LocalSlot(usize);
 ```
 
-La separación lógica permanece:
-
 ```text
-ParameterSlot != LocalSlot
+parameter absolute
+    = frame_base + ParameterSlot
+
+local absolute
+    = frame_base + parameter_count + LocalSlot
+
+operand_base
+    = frame_base + parameter_count + local_count
 ```
 
-aunque ambos compartan Shared Frame Region durante runtime.
+`ParameterSlot != LocalSlot` aunque compartan backing frame region.
 
-## CD-012 — Numeric execution kind
+### ExternalSymbol — corrected final representation
+
+```rust
+struct ExternalSymbol {
+    symbol: SignatureSymbol,
+    parameter_count: usize,
+}
+```
+
+`parameter_count` cuenta exclusivamente `SemanticSignatureParameter::Value`.
+
+Signature Dependency Parameters cuentan cero y permanecen erased de la calling convention física.
+
+Este dato permite ejecutar `CallExternal(ExternalSymbolId)` sin repetir aridad en cada call site.
+
+### Constant — canonical physical representation
+
+La auditoría final eliminó la duplicación física `Int(i32)` / `Int32(i32)` y `Float(f64)` / `Float64(f64)`.
+
+Representación final:
+
+```rust
+enum Constant {
+    Boolean(bool),
+    String(String),
+
+    Int8(i8),
+    Int16(i16),
+    Int32(i32),
+    Int64(i64),
+    Int128(i128),
+
+    Uint8(u8),
+    Uint16(u16),
+    Uint32(u32),
+    Uint64(u64),
+    Uint128(u128),
+
+    Float32(f32),
+    Float64(f64),
+
+    Dynamic(DynamicConstant),
+}
+```
+
+Canonical lowering:
+
+```text
+semantic int   → Constant::Int32
+semantic int32 → Constant::Int32
+
+semantic float   → Constant::Float64
+semantic float64 → Constant::Float64
+```
+
+Esto expresa mecanismo físico común, no alias semántico.
+
+### DynamicConstant
+
+```rust
+enum DynamicConstant {
+    Integer {
+        negative: bool,
+        magnitude: Vec<u8>,
+    },
+    Float32(f32),
+    Float64(f64),
+}
+```
+
+Integer magnitude es minimal unsigned big-endian; zero = empty magnitude + `negative = false`.
+
+Constant interning es optimización opcional.
+
+## CD-012 — Core Load / Store Instructions
 
 Status: CLOSED
 
-Cerrado en `COMPILED_NUMERIC_INSTRUCTIONS.md`:
+Cerrado en `COMPILED_CORE_CALL_INSTRUCTIONS.md`.
+
+```rust
+Instruction::LoadConstant(ConstantId)
+Instruction::LoadParameter(ParameterSlot)
+Instruction::LoadLocal(LocalSlot)
+Instruction::StoreLocal(LocalSlot)
+```
+
+Stack contracts:
+
+```text
+LoadConstant    0 → 1
+LoadParameter   0 → 1
+LoadLocal       0 → 1
+StoreLocal      1 → 0
+```
+
+`StoreLocal` representa inicialización física de `let` o `when` extraction binding; no representa mutabilidad semántica.
+
+Invariante:
+
+> Todo execution path que alcance `LoadLocal(slot)` ya inicializó ese slot.
+
+No existe `StoreParameter`.
+
+## CD-013 — Internal / External Calls
+
+Status: CLOSED
+
+Cerrado en `COMPILED_CORE_CALL_INSTRUCTIONS.md`.
+
+```rust
+Instruction::Call(FunctionId)
+Instruction::CallExternal(ExternalSymbolId)
+```
+
+Internal call arity:
+
+```text
+CompiledProgram.functions[target].parameter_count
+```
+
+External call arity:
+
+```text
+CompiledProgram.external_symbols[target].parameter_count
+```
+
+Para `N` Value Parameters físicos:
+
+```text
+N argument Values → 1 result Value
+```
+
+La creación de Call Frame y transferencia física de argumentos/result pertenecen a `VM Execution Data`.
+
+## CD-014 — NumericKind
+
+Status: CLOSED
+
+Cerrado en `COMPILED_NUMERIC_INSTRUCTIONS.md`.
 
 ```rust
 enum NumericKind {
@@ -233,8 +364,6 @@ enum NumericKind {
 }
 ```
 
-`NumericKind` expresa mecanismo numérico fijo, no identidad semántica completa.
-
 ```text
 int     → Int32
 int32   → Int32
@@ -244,14 +373,13 @@ float64 → Float64
 dynamic ∉ NumericKind
 ```
 
-## CD-013 — Fixed numeric arithmetic and comparisons
+## CD-015 — Fixed numeric arithmetic and comparisons
 
 Status: CLOSED
 
-Instructions cerradas conceptualmente:
-
-```text
+```rust
 Negate(NumericKind)
+
 Add(NumericKind)
 Subtract(NumericKind)
 Multiply(NumericKind)
@@ -266,7 +394,7 @@ GreaterNumeric(NumericKind)
 GreaterEqualNumeric(NumericKind)
 ```
 
-Fixed arithmetic implementa semántica checked de Evo-Script:
+Arithmetic fixed es checked:
 
 ```text
 no wrapping
@@ -275,13 +403,13 @@ overflow → OverflowError
 divide/remainder by zero → DivisionByZeroError
 ```
 
-`Remainder` solo admite integer `NumericKind`.
+`Remainder` solo acepta integer `NumericKind`.
 
-## CD-014 — Dynamic numeric lifting and arithmetic
+## CD-016 — Dynamic numeric lifting and arithmetic
 
 Status: CLOSED
 
-```text
+```rust
 LiftDynamic(NumericKind)
 DynamicNegate
 DynamicAdd
@@ -291,11 +419,7 @@ DynamicDivide
 DynamicRemainder
 ```
 
-Regla canónica:
-
-> Cuando una arithmetic subtree se evalúa bajo contexto `dynamic`, fixed operands se elevan antes de ejecutar arithmetic; no se calcula primero bajo width fijo.
-
-Dynamic runtime dispatch queda restringido al universo:
+Dynamic runtime families:
 
 ```text
 Dynamic Numeric Value
@@ -304,53 +428,53 @@ Dynamic Numeric Value
 └── Float64
 ```
 
-Cross-family dynamic arithmetic no realiza coercion implícita y produce `DynamicNumericTypeError`, conforme al amendment normativo `evo-script/DYNAMIC_NUMERIC_ARITHMETIC_v0.1.md`.
+Cross-family arithmetic produce `DynamicNumericTypeError`.
 
 No existen Dynamic comparison instructions.
 
-## CD-015 — Control Flow and short-circuit
+## CD-017 — Instruction representation / InstructionIndex
 
 Status: CLOSED
 
-Cerrado en `COMPILED_CONTROL_FLOW.md`.
-
-Identidad:
+`Instruction` es un typed enum; no se introduce `Opcode + generic operands`.
 
 ```rust
 struct InstructionIndex(usize);
 ```
 
-Instructions base:
-
 ```text
+InstructionIndex(n)
+    → CompiledFunction.instructions[n]
+```
+
+`InstructionIndex` es local a una función, no byte offset, address ni `InstructionPointer`.
+
+## CD-018 — Control Flow and short-circuit
+
+Status: CLOSED
+
+Cerrado en `COMPILED_CONTROL_FLOW.md`.
+
+```rust
 Jump(InstructionIndex)
 JumpIfFalse(InstructionIndex)
 Discard
 Return
 ```
 
-`Instruction` se representa como typed enum; no se introduce un `Opcode` separado con generic operands.
+Branches usan absolute `InstructionIndex`.
 
-Branches usan absolute `InstructionIndex` local a `CompiledFunction`.
+`&&` y `||` se reducen a branching real; no existen eager `AndBoolean` / `OrBoolean`.
 
-`JumpIfFalse` consume un `bool` y `&&` / `||` se reducen a branching real de short-circuit.
+`Discard` consume un Value no utilizado.
 
-No existen eager instructions:
+`Return` transfiere exactamente un Value normal al caller / outer result.
 
-```text
-AndBoolean
-OrBoolean
-```
-
-`when` reutiliza esta misma branch infrastructure junto con `TestVariant` y las extraction instructions cerradas en CD-019.
-
-## CD-016 — Conversion Instructions
+## CD-019 — Conversion Instructions
 
 Status: CLOSED
 
 Cerrado en `COMPILED_CONVERSIONS.md`.
-
-Instructions:
 
 ```rust
 ConvertNumeric {
@@ -367,10 +491,10 @@ Reglas:
 
 ```text
 fixed numeric → fixed numeric
-    exact representation or ConversionError
+    exact or ConversionError
 
 dynamic → fixed numeric
-    exact representation or ConversionError
+    exact or ConversionError
 
 fixed numeric → string
     NumericToString
@@ -379,21 +503,13 @@ dynamic → string
     DynamicToString
 ```
 
-`LiftDynamic` continúa siendo mecanismo técnico fixed → dynamic para arithmetic context; Evo-Script v0.1 no define `to_dynamic`.
+No hay implicit conversions ni string → numeric parsing.
 
-No se introducen implicit conversions ni string → numeric parsing.
-
-El Technical Data Model no amplía silenciosamente `to_string` a bool/struct/enum mientras la especificación v0.1 no lo declare explícitamente.
-
-## CD-017 — Scalar Boolean / String Equality
+## CD-020 — Scalar Boolean / String Equality
 
 Status: CLOSED
 
-Cerrado en `COMPILED_SCALAR_EQUALITY.md`.
-
-Instructions:
-
-```text
+```rust
 NotBoolean
 EqualBoolean
 NotEqualBoolean
@@ -401,50 +517,31 @@ EqualString
 NotEqualString
 ```
 
-`bool` y `string` no poseen ordering operators en Evo-Script v0.1.
+Bool y string no poseen ordering operators.
 
-String equality compara contenido textual UTF-8, no address ni ownership identity.
+String equality compara contenido textual UTF-8.
 
-General equality queda cerrada por familias:
-
-```text
-numeric     ✅ CLOSED
-bool        ✅ CLOSED
-string      ✅ CLOSED
-struct      ✅ CLOSED in Structural Equality
-enum        ✅ CLOSED in Structural Equality
-dynamic     ❌ prohibited by language
-```
-
-## CD-018 — Composite Layout
+## CD-021 — Composite Layout
 
 Status: CLOSED
 
 Cerrado en `COMPILED_COMPOSITE_LAYOUT.md`.
-
-Identities físicas:
 
 ```rust
 struct FieldIndex(usize);
 struct VariantDiscriminant(usize);
 ```
 
-Lowering canónico:
-
 ```text
 FieldId(n)   → FieldIndex(n)
 VariantId(n) → VariantDiscriminant(n)
 ```
-
-La igualdad numérica de los índices no convierte las identities en el mismo concepto: `FieldId` / `VariantId` pertenecen a Semantic Program; `FieldIndex` / `VariantDiscriminant` pertenecen al mecanismo físico compilado.
 
 Layout conceptual:
 
 ```text
 Struct Value
 └── ordered fields
-    ├── FieldIndex(0) → Value
-    └── ...
 
 Enum Value
 ├── VariantDiscriminant
@@ -454,27 +551,13 @@ Enum Value
     └── Structured(ordered fields)
 ```
 
-No se introducen en v0:
+No existen `StructLayoutId`, `EnumLayoutId`, `CompositeTypeId`, RuntimeTypeId ni runtime reflection metadata.
 
-```text
-StructLayoutId
-EnumLayoutId
-CompositeTypeId
-RuntimeTypeId
-runtime type lookup table
-reflection metadata
-field / variant names at runtime
-```
-
-La representación física final usa canonical owner ordering. Sin embargo, Bytecode Compiler debe preservar source evaluation order durante composite construction aunque dicho orden difiera del canonical storage order.
-
-## CD-019 — Struct / Enum Instructions
+## CD-022 — Struct / Enum Instructions
 
 Status: CLOSED — CORRECTED FINAL DESIGN
 
 Cerrado en `COMPILED_COMPOSITE_INSTRUCTIONS.md`.
-
-Instructions:
 
 ```rust
 ConstructStruct {
@@ -483,25 +566,16 @@ ConstructStruct {
 
 GetField(FieldIndex)
 
-ConstructEnumSimple(
-    VariantDiscriminant,
-)
-
-ConstructEnumAssociated(
-    VariantDiscriminant,
-)
+ConstructEnumSimple(VariantDiscriminant)
+ConstructEnumAssociated(VariantDiscriminant)
 
 ConstructEnumStructured {
     variant: VariantDiscriminant,
     field_order: Vec<FieldIndex>,
 }
 
-TestVariant(
-    VariantDiscriminant,
-)
-
+TestVariant(VariantDiscriminant)
 ExtractEnumAssociated
-
 ExtractEnumStructured {
     fields: Vec<FieldIndex>,
 }
@@ -512,67 +586,21 @@ Stack contracts:
 ```text
 ConstructStruct(N)            N → 1
 GetField                      1 → 1
-
 ConstructEnumSimple           0 → 1
 ConstructEnumAssociated       1 → 1
 ConstructEnumStructured(N)    N → 1
-
 TestVariant                   1 → 2
 ExtractEnumAssociated         1 → 1
 ExtractEnumStructured(N)      1 → N
 ```
 
-### Construction ordering
+Payload extraction consume el Enum después de confirmar la variant; no obliga a owner/payload aliasing.
 
-`ConstructStruct` y `ConstructEnumStructured` preservan source evaluation order mediante `field_order` y producen canonical storage ordering.
-
-Para N fields:
-
-```text
-field_order.len() == N
-field_order = permutation of all valid FieldIndex values
-```
-
-No se permite duplicated, missing u out-of-range `FieldIndex` en un Compiled Program válido.
-
-### `when` lowering
-
-`TestVariant` conserva temporalmente el Enum y produce un `bool` para `JumpIfFalse`, de modo que una branch que no coincide pueda dejar el subject disponible para la siguiente prueba.
-
-Una vez confirmada la variant, payload extraction consume el Enum:
-
-```text
-ExtractEnumAssociated
-    Enum → payload
-
-ExtractEnumStructured { fields }
-    Enum → N payload field Values
-```
-
-La revisión final rechazó explícitamente:
-
-```text
-GetEnumAssociated : 1 → 2
-GetEnumField       : 1 → 2
-```
-
-porque preservar simultáneamente el Enum owner y Values interiores extraídos podría forzar cloning, interior borrowing o aliasing antes de que `VM Execution Data` justifique una representación concreta.
-
-Regla canónica:
-
-> Después de confirmar la variante correcta, enum payload extraction consume el composite; el Instruction Set no exige por diseño aliasing entre owner y payload Values.
-
-No existen runtime `When`, `Match`, Pattern object, `TypeId`, `StructLayout` o `EnumLayout` para ejecutar estas operaciones.
-
-## CD-020 — Structural Equality
+## CD-023 — Structural Equality
 
 Status: CLOSED
 
-La regla normativa está cerrada en `evo-script/COMPOSITE_EQUALITY_COMPARABILITY_v0.1.md` y el mecanismo compilado en `COMPILED_STRUCTURAL_EQUALITY.md`.
-
-### EqualityComparable
-
-Semantic Analyzer decide estáticamente:
+La regla normativa `EqualityComparable` está cerrada en `evo-script/COMPOSITE_EQUALITY_COMPARABILITY_v0.1.md`.
 
 ```text
 fixed numeric  → comparable
@@ -581,21 +609,15 @@ string         → comparable
 dynamic        → NOT comparable
 
 Struct
-    → comparable iff all fields are comparable
+    → comparable iff all fields comparable
 
 Enum
-    → comparable iff all variant payloads are comparable
+    → comparable iff all variant payloads comparable
 ```
 
-La propiedad es transitiva sobre el Type Dependency DAG.
+Un composite que contiene `dynamic` directa o transitivamente produce `ComparisonTypeError` durante Semantic Analysis al intentar `==` / `!=`.
 
-Un composite que contenga `dynamic` directa o transitivamente no admite `==` / `!=` y produce `ComparisonTypeError` durante Semantic Analysis.
-
-No existe igualdad dinámica escondida dentro de Structural Equality.
-
-### Compiled plan
-
-Representaciones cerradas:
+Compiled plans:
 
 ```rust
 enum EqualityRule {
@@ -609,7 +631,6 @@ enum CompositeEqualityPlan {
     Struct {
         fields: Vec<EqualityRule>,
     },
-
     Enum {
         variants: Vec<EnumEqualityPayloadPlan>,
     },
@@ -624,8 +645,6 @@ enum EnumEqualityPayloadPlan {
 }
 ```
 
-No existe `EqualityRule::Dynamic`.
-
 Instructions:
 
 ```rust
@@ -633,33 +652,19 @@ EqualComposite(CompositeEqualityPlan)
 NotEqualComposite(CompositeEqualityPlan)
 ```
 
-Stack effect:
+No existe `EqualityRule::Dynamic`, `EqualValue` genérico, RuntimeTypeId ni Equality Plan Table.
 
-```text
-2 composite Values → 1 bool
-```
-
-El plan se almacena directamente en la instruction en v0. No se introducen `EqualityPlanId`, Equality Plan Table, runtime `TypeId`, reflection metadata ni `EqualValue` genérico.
-
-Struct equality compara fields en canonical order y puede terminar en el primer field desigual. Enum equality compara primero discriminants; si coinciden aplica el payload plan correspondiente.
-
-Una Structural Equality compilada es total y no produce runtime `ComparisonTypeError`, `DynamicNumericTypeError` ni `ConversionError`.
-
-## CD-021 — SourceMap
+## CD-024 — SourceMap
 
 Status: CLOSED
 
 Cerrado en `COMPILED_SOURCE_MAP.md`.
-
-Representación:
 
 ```rust
 struct SourceMap {
     functions: Vec<Vec<SourceSpan>>,
 }
 ```
-
-Relación canónica:
 
 ```text
 SourceMap.functions[f][i]
@@ -677,79 +682,47 @@ source_map.functions[f].len()
     == compiled_program.functions[f].instructions.len()
 ```
 
-Por tanto cada `(FunctionId, InstructionIndex)` resuelve exactamente un `SourceSpan`, y cada Instruction persistente posee exactamente un source anchor.
+Cada persistent Instruction posee exactamente un source anchor.
 
-La estructura es densa; no se introduce `Option<SourceSpan>`, sparse mapping ni `SourceMapEntry` con coordenadas duplicadas.
+Un `CompiledProgram` usa un único source coordinate space en v0.
 
-### Span policy
+No se introducen `SourceId`, SourcePath, SourceName ni line/column duplicados.
 
-Cada Instruction recibe el `SourceSpan` de la `SemanticExpression` más específica responsable de producirla. Una Instruction técnica generada por el compiler utiliza el span de la construcción semántica responsable más cercana.
+La nested storage shape de SourceMap queda encapsulada para permitir futura evolución a `SourceLocation { source, span }` sin cambiar Instruction, CompiledFunction ni VM execution semantics.
 
-Examples:
+`persistent product != portable serialized bytecode format`.
 
-```text
-Multiply de b * c
-    → span(b * c)
+## CD-025 — Final audit corrections
 
-JumpIfFalse generado por a && b
-    → span(a && b)
+Status: CLOSED
 
-TestVariant / extraction machinery
-    → span(when) cuando no existe uno más específico
-
-Return final
-    → span(result expression)
-```
-
-No se vuelve al AST para resolver ubicaciones.
-
-### Source coordinate space v0
-
-Un `CompiledProgram` utiliza un único source coordinate space. Todos sus `SourceSpan` pertenecen al Source Text que produjo ese programa.
-
-No se introducen en v0:
+La auditoría Semantic Program → Compiled Program detectó y corrigió antes del exact inventory:
 
 ```text
-SourceId
-SourcePath
-SourceName
-SourceLocation
+Core Load / Store formal contracts       ✅ CLOSED
+Call(FunctionId)                         ✅ CLOSED
+CallExternal(ExternalSymbolId)           ✅ CLOSED
+ExternalSymbol.parameter_count           ✅ CLOSED
+Constant physical canonicalization       ✅ CLOSED
 ```
 
-Una futura extensión multi-source puede evolucionar el dato resuelto a:
-
-```rust
-struct SourceLocation {
-    source: SourceId,
-    span: SourceSpan,
-}
-```
-
-sin modificar `Instruction`, `CompiledFunction` ni VM execution semantics.
-
-### Encapsulation boundary
-
-La nested storage shape `Vec<Vec<SourceSpan>>` pertenece exclusivamente al subsistema de Source Mapping. Los consumidores no deben depender de esa forma interna; conceptualmente resuelven:
+Correcciones explícitas:
 
 ```text
-FunctionId + InstructionIndex
-        ↓ Source Mapping boundary
-SourceSpan
+ExternalSymbol { symbol }
+    → ExternalSymbol { symbol, parameter_count }
+
+Constant::Int(i32)     ❌ REMOVED
+Constant::Float(f64)   ❌ REMOVED
+Constant::Int32(i32)   ✅ canonical int/int32 representation
+Constant::Float64(f64) ✅ canonical float/float64 representation
 ```
 
-Esta frontera contiene el impacto de una futura migración multi-source.
+Después de estas correcciones, toda forma de `SemanticExpressionKind` y `SemanticStatement` posee un lowering compilado identificado.
 
-### Lifetime / diagnostics boundary
+Esto todavía debe validarse mediante el **Exact Compiled Inventory** antes de declarar cerrado todo `Compiled Program / Bytecode Data`.
 
-`SourceMap` no borrowea Source Text y no duplica line/column. `SourceSpan` conserva provenance técnica; line, column, snippet y highlight se derivan posteriormente cuando el Host dispone del Source Text.
-
-No existen mappings separados `ConstantId → SourceSpan` o `ExternalSymbolId → SourceSpan`; la ubicación pertenece a cada Instruction occurrence.
-
-### Persistence scope
-
-`CompiledProgram` persistente respecto del Compilation Working State no implica un portable serialized bytecode format. Los `usize` internos no constituyen ABI estable; una futura serialización portable es una responsabilidad separada.
-
-## CD-022 — Current closure
+## CD-026 — Current closure
 
 ```text
 Compiled Program responsibility          ✅ CLOSED
@@ -763,8 +736,12 @@ CompiledProgram root shell               ✅ CLOSED
 CompiledFunction shell                   ✅ CLOSED
 Semantic data lowering boundary          ✅ CLOSED
 ParameterSlot / LocalSlot                ✅ CLOSED
-Constant / DynamicConstant               ✅ CLOSED
-ExternalSymbol                           ✅ CLOSED
+Constant / DynamicConstant               ✅ CLOSED — canonicalized
+ExternalSymbol                           ✅ CLOSED — corrected
+External physical arity                  ✅ CLOSED
+Core Load / Store                        ✅ CLOSED
+Internal Call                            ✅ CLOSED
+External Call                            ✅ CLOSED
 NumericKind                              ✅ CLOSED
 Fixed arithmetic                         ✅ CLOSED
 Fixed numeric comparisons                ✅ CLOSED
@@ -790,6 +767,7 @@ no hidden dynamic equality               ✅ CLOSED
 SourceMap                                ✅ CLOSED
 SourceMap encapsulation boundary         ✅ CLOSED
 future multi-source migration seam       ✅ CLOSED
+Final audit corrections                  ✅ CLOSED
 
 Compiled Program exact inventory         ← NEXT
 ```
