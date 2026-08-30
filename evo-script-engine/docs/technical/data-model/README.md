@@ -86,8 +86,11 @@ Compiled Program / Bytecode Data ← IN ANALYSIS
 ├── CompiledFunction shell       ✅ CLOSED
 ├── ParameterSlot                ✅ CLOSED
 ├── LocalSlot                    ✅ CLOSED
-├── Constant / DynamicConstant   ✅ CLOSED
-├── ExternalSymbol               ✅ CLOSED
+├── Constant / DynamicConstant   ✅ CLOSED — revalidated
+├── ExternalSymbol               ✅ CLOSED — revalidated
+├── External physical arity      ✅ CLOSED
+├── core Load / Store            ✅ CLOSED
+├── internal / external Calls    ✅ CLOSED
 ├── NumericKind                  ✅ CLOSED
 ├── fixed arithmetic/comparison  ✅ CLOSED
 ├── dynamic numeric lifting      ✅ CLOSED
@@ -139,7 +142,8 @@ Semantic Program Data:
 Compiled Program / Bytecode Data:
 
 - [`COMPILED_PROGRAM_DATA.md`](./COMPILED_PROGRAM_DATA.md) — autoridad base y estado acumulado del producto compilado.
-- [`COMPILED_STORAGE_DATA.md`](./COMPILED_STORAGE_DATA.md) — `ParameterSlot`, `LocalSlot`, `Constant`, `DynamicConstant`, `ExternalSymbol`, Constant Pool policy y mapping temporal de bindings.
+- [`COMPILED_STORAGE_DATA.md`](./COMPILED_STORAGE_DATA.md) — `ParameterSlot`, `LocalSlot`, `ExternalSymbol.parameter_count`, Constant Pool canonicalizado, `DynamicConstant` y mapping temporal de bindings.
+- [`COMPILED_CORE_CALL_INSTRUCTIONS.md`](./COMPILED_CORE_CALL_INSTRUCTIONS.md) — `LoadConstant`, `LoadParameter`, `LoadLocal`, `StoreLocal`, `Call`, `CallExternal` y calling convention física.
 - [`COMPILED_NUMERIC_INSTRUCTIONS.md`](./COMPILED_NUMERIC_INSTRUCTIONS.md) — `NumericKind`, fixed arithmetic/comparison, `LiftDynamic`, dynamic arithmetic, errores de evaluación y fronteras de lowering.
 - [`COMPILED_CONTROL_FLOW.md`](./COMPILED_CONTROL_FLOW.md) — typed `Instruction`, `InstructionIndex`, absolute branches, `Jump`, `JumpIfFalse`, short-circuit `&&` / `||`, `Discard` y `Return`.
 - [`COMPILED_CONVERSIONS.md`](./COMPILED_CONVERSIONS.md) — fixed/dynamic numeric conversions, exact representability, `ConversionError`, `NumericToString` y `DynamicToString`.
