@@ -144,19 +144,6 @@ VmExecution
 
 `CallFrame`, Parameter Slots, Local Slots y Shared Value Storage no se convierten automáticamente en owners del backing data.
 
-Este cierre no prescribe:
-
-```text
-Vec
-Arena
-Box
-Rc
-Arc
-internal references
-handles
-indices
-```
-
 La representación física se decide en Runtime Value Model evitando introducir una self-referential structure por accidente.
 
 ## VM-007 — Invocation Lifetime
@@ -241,8 +228,6 @@ No se cierra todavía un Rust struct exacto porque los fields concretos dependen
 
 Status: CLOSED
 
-Cerrado en `RUNTIME_VALUE_MODEL.md`.
-
 ```text
 RuntimeValue
     = internal stable VM descriptor
@@ -260,8 +245,6 @@ Status: CLOSED
 `RuntimeValue` representa un Value ejecutable ya materializado sin convertirse automáticamente en owner de todo backing variable/composite.
 
 La arquitectura debe permitir mover/copiar descriptors inmutables sin clonar por costumbre strings, dynamic integer backing o composite contents.
-
-`Copy` / `Clone` concretos permanecen pendientes de la estrategia final de handles.
 
 ## VM-012 — Fixed Scalars Inline
 
@@ -282,8 +265,6 @@ Canonical physical mapping:
 int   / int32   → Int32
 float / float64 → Float64
 ```
-
-No se introduce backing indirection obligatoria para fixed scalars.
 
 ## VM-013 — Variable / Composite Data Uses Backing Indirection
 
@@ -307,8 +288,6 @@ RuntimeValue
     └── backing indirection
 ```
 
-La identity concreta de esa indirection queda pendiente.
-
 ## VM-014 — No Persistent Self-Borrow in Shared Value Storage
 
 Status: CLOSED
@@ -327,13 +306,54 @@ VmExecution
 
 Borrowed views temporales siguen permitidas al observar/materializar Values; la prohibición aplica al storage persistente de la ejecución.
 
+## VM-015 — Backing Identity Strategy
+
+Status: CLOSED
+
+Cerrado en `BACKING_IDENTITY_STRATEGY.md`.
+
+Typed execution identities:
+
+```rust
+struct StringBackingId(usize);
+struct DynamicIntegerBackingId(usize);
+struct StructBackingId(usize);
+struct EnumBackingId(usize);
+```
+
+No existe `RuntimeBackingId` universal.
+
+String y Dynamic Integer distinguen origen:
+
+```rust
+enum StringBackingRef {
+    Compiled(ConstantId),
+    Execution(StringBackingId),
+}
+
+enum DynamicIntegerBackingRef {
+    Compiled(ConstantId),
+    Execution(DynamicIntegerBackingId),
+}
+```
+
+Struct y Enum utilizan exclusivamente execution-owned typed IDs en v0:
+
+```text
+Struct → StructBackingId
+Enum   → EnumBackingId
+```
+
+Todo backing ID es estable y no se reutiliza durante la vida de la `VmExecution` que lo creó.
+
+La identity no prescribe `Vec`, arena, slab, Box ni allocator concreto.
+
 ## Runtime Value Model Authority
 
 Las reglas detalladas se registran en:
 
 - `RUNTIME_VALUE_MODEL.md`
-
-Ese documento conserva las decisiones RV-001..RV-005 y las fronteras todavía abiertas.
+- `BACKING_IDENTITY_STRATEGY.md`
 
 ## Current Closure
 
@@ -352,13 +372,22 @@ fixed scalar inline                          ✅ CLOSED
 variable/composite backing indirection       ✅ CLOSED
 no persistent self-borrow in storage         ✅ CLOSED
 
+Backing Identity Strategy                    ✅ CLOSED
+typed backing IDs                            ✅ CLOSED
+no universal RuntimeBackingId                ✅ CLOSED
+String compiled/execution backing            ✅ CLOSED
+Dynamic Integer compiled/execution backing   ✅ CLOSED
+Struct / Enum execution-only backing IDs     ✅ CLOSED
+backing ID stability / no reuse              ✅ CLOSED
+container-independent identities             ✅ CLOSED
+
 root InstructionPointer                      ❌ EXCLUDED
 Host / Active Scope / Current Provider       ❌ EXCLUDED
 Outcome / Diagnostic data                    ❌ SEPARATE PHASE
 
-Backing Identity Strategy                    ← NEXT
-RuntimeValue exact Rust enum                 PENDING
+RuntimeValue exact representation            ← NEXT
 Dynamic Value exact representation           PENDING
+String / Dynamic Integer backing data        PENDING
 Struct / Enum backing representation         PENDING
 Shared Value Storage exact representation    PENDING
 CallFrame                                    PENDING
