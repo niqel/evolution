@@ -60,6 +60,10 @@ Lexical Data                     ✅ CLOSED
 └── Token Sequence               ✅ CLOSED
 
 AST Data                         ← IN ANALYSIS
+├── AST structural boundary      ✅ CLOSED
+├── Preserve occurrences         ✅ CLOSED
+└── AST Node inventory           ← IN ANALYSIS
+
 Semantic Program Data            PENDING
 Compiled Program / Bytecode Data PENDING
 VM Execution Data                PENDING
@@ -72,7 +76,9 @@ Documentos del bloque lexical cerrado:
 - [`TOKEN.md`](./TOKEN.md) — representación Rust e invariantes cerrados de `Token<'source>`.
 - [`TOKEN_SEQUENCE.md`](./TOKEN_SEQUENCE.md) — representación temporal de `Token Sequence<'source>` y política de lookahead/materialización.
 
-El bloque actual de análisis es **AST Data**.
+Documento del bloque actual:
+
+- [`AST_DATA.md`](./AST_DATA.md) — frontera sintáctica del AST, preservación de ocurrencias e inventario de nodos en análisis.
 
 ## Technical Data Diagram
 
