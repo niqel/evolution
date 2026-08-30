@@ -8,17 +8,6 @@ Este directorio contiene el Technical Data Model de `evo-script-engine` y sus Te
 
 El Technical Data Model transforma Functional Data Dictionary + Technical Design cerrado en representaciones técnicas concretas.
 
-Aquí se definen, cuando corresponda:
-
-- structs;
-- enums;
-- owned artifacts;
-- borrowed views;
-- semantic aliases;
-- ownership / borrowing / lifetimes;
-- cardinalidades y relaciones;
-- datos internos necesarios por Rust Signatures y Participants.
-
 Regla:
 
 > Toda estructura, enum, artifact o dato interno necesario para expresar una Rust Signature o implementar un Participant debe estar definido previamente en el Technical Data Model.
@@ -41,11 +30,7 @@ VM Execution Data
 Outcome / Diagnostic Data
 ```
 
-El orden no implica que todo concepto necesite tipo independiente. Cada identidad requiere justificación real.
-
 ## `.efn` / Host Boundary
-
-El modelo técnico aplica `evo-script/EFN_HOST_BOUNDARY_v0.1.md` y TD-011:
 
 ```text
 Host Interactive State
@@ -53,52 +38,44 @@ Host Interactive State
 `.efn` Compile / Execution Data
 ```
 
-No se introducirán `Active Scope`, Host Session State, Current Provider, Use Node, Use Instruction ni `SET_SCOPE` dentro del Technical Data Model de `.efn`.
+No se introducen `Active Scope`, Host Session State, Current Provider, Use Node, Use Instruction ni `SET_SCOPE` dentro del Technical Data Model de `.efn`.
 
 ## Current Progress
 
 ```text
 Lexical Data                     ✅ CLOSED
-├── Token structural rules       ✅ CLOSED
 ├── Token Kind                   ✅ CLOSED — 50 variants
 ├── Source Span                  ✅ CLOSED
-├── Lexeme representation        ✅ CLOSED
 ├── Token                        ✅ CLOSED
 └── Token Sequence               ✅ CLOSED
 
 AST Data                         ✅ CLOSED
-├── AST syntactic responsibility ✅ CLOSED
-├── Preserve occurrences         ✅ CLOSED
-├── Parser/Semantic boundary      ✅ CLOSED
-├── No Host Scope / no `use`     ✅ CLOSED
-├── `this` parser-only            ✅ CLOSED
-├── Pipeline = data composition  ✅ CLOSED
-├── foundational syntax data     ✅ CLOSED
-├── Program / imports / decls    ✅ CLOSED
-├── local type definitions       ✅ CLOSED
-├── functions / body             ✅ CLOSED
-├── expression representation    ✅ CLOSED — typed nested tree
-├── expression inventory         ✅ CLOSED
-├── `when` model                  ✅ CLOSED
+├── syntactic responsibility     ✅ CLOSED
+├── Parser/Semantic boundary     ✅ CLOSED
+├── Program / types / functions  ✅ CLOSED
+├── expression representation    ✅ CLOSED
+├── `when`                       ✅ CLOSED
 └── exact AST inventory           ✅ CLOSED — 31 identities
 
-Semantic Program Data            ← IN ANALYSIS
+Semantic Program Data            ✅ CLOSED
 ├── semantic responsibility      ✅ CLOSED
-├── no name re-resolution        ✅ CLOSED
 ├── semantic identity family     ✅ CLOSED
 ├── identity scopes              ✅ CLOSED
-├── no ExternalSymbolId here     ✅ CLOSED
+├── owner-index rule             ✅ CLOSED
 ├── SemanticProgram root         ✅ CLOSED
 ├── SemanticType / variants      ✅ CLOSED
 ├── SemanticSignature            ✅ CLOSED
-├── SemanticFunction shell       ✅ CLOSED
+├── SignatureSymbol              ✅ CLOSED
+├── SemanticFunction             ✅ CLOSED
 ├── Semantic body / expressions  ✅ CLOSED
 ├── resolved calls / arguments   ✅ CLOSED
+├── language conversions         ✅ CLOSED
+├── arbitrary integer literals   ✅ CLOSED
 ├── constructions / `when`       ✅ CLOSED
 ├── Pipeline semantic lowering   ✅ CLOSED
-└── exact semantic inventory     ← IN ANALYSIS
+└── exact semantic inventory     ✅ CLOSED — 33 identities
 
-Compiled Program / Bytecode Data PENDING
+Compiled Program / Bytecode Data ← NEXT
 VM Execution Data                PENDING
 Outcome / Diagnostic Data        PENDING
 ```
@@ -107,25 +84,26 @@ Outcome / Diagnostic Data        PENDING
 
 Lexical Data:
 
-- [`LEXICAL_DATA.md`](./LEXICAL_DATA.md) — lexical identities, Token Kind, Source Span y Lexeme.
-- [`TOKEN.md`](./TOKEN.md) — representación e invariantes de `Token<'source>`.
-- [`TOKEN_SEQUENCE.md`](./TOKEN_SEQUENCE.md) — `Vec<Token<'source>>` temporal bajo Compilation Working State.
+- [`LEXICAL_DATA.md`](./LEXICAL_DATA.md)
+- [`TOKEN.md`](./TOKEN.md)
+- [`TOKEN_SEQUENCE.md`](./TOKEN_SEQUENCE.md)
 
 AST Data:
 
-- [`AST_DATA.md`](./AST_DATA.md) — decisiones base de responsabilidad sintáctica, occurrence preservation, Host exclusion, `this`, Pipeline y top-level Program model.
-- [`AST_TYPE_DEFINITIONS.md`](./AST_TYPE_DEFINITIONS.md) — `StructDefinition`, `FieldDefinition`, `EnumDefinition`, `EnumVariant` y cardinalidades cerradas.
-- [`AST_FUNCTION_DEFINITIONS.md`](./AST_FUNCTION_DEFINITIONS.md) — `FunctionDefinition`, `Parameter`, `FunctionBody`, `BodyStatement`, `LetBinding`, `OperationStatement` y `return` parser-only.
-- [`AST_EXPRESSION_REPRESENTATION.md`](./AST_EXPRESSION_REPRESENTATION.md) — typed nested tree, `Box<Expression>` solo para recursión directa, `Vec` para colecciones y exclusión de ExpressionId/AST Arena en v0.
-- [`AST_EXPRESSIONS.md`](./AST_EXPRESSIONS.md) — `Expression`, operators, FunctionCall, FieldInitializer, constructions, Pipeline, `when` variant y forma final de OperationStatement.
-- [`AST_WHEN.md`](./AST_WHEN.md) — `WhenExpression`, `WhenCorrespondence`, `WhenPattern`, `PatternField` y frontera Parser/Semantic Analyzer para exhaustividad y bindings.
-- [`AST_INVENTORY.md`](./AST_INVENTORY.md) — consolidación final del inventario exacto de 31 identidades AST y cierre de `AST Data` v0.
+- [`AST_DATA.md`](./AST_DATA.md)
+- [`AST_TYPE_DEFINITIONS.md`](./AST_TYPE_DEFINITIONS.md)
+- [`AST_FUNCTION_DEFINITIONS.md`](./AST_FUNCTION_DEFINITIONS.md)
+- [`AST_EXPRESSION_REPRESENTATION.md`](./AST_EXPRESSION_REPRESENTATION.md)
+- [`AST_EXPRESSIONS.md`](./AST_EXPRESSIONS.md)
+- [`AST_WHEN.md`](./AST_WHEN.md)
+- [`AST_INVENTORY.md`](./AST_INVENTORY.md)
 
 Semantic Program Data:
 
-- [`SEMANTIC_PROGRAM_DATA.md`](./SEMANTIC_PROGRAM_DATA.md) — responsabilidad de Semantic Program, semantic identities, scopes, owner-index rule y estado de cierre.
-- [`SEMANTIC_PROGRAM_STRUCTURE.md`](./SEMANTIC_PROGRAM_STRUCTURE.md) — `SemanticProgram`, `NativeType`, `SemanticType`, `SemanticField`, `SemanticVariant`, `SemanticBinding`, Signatures, Semantic Parameters y shell de `SemanticFunction`.
-- [`SEMANTIC_EXPRESSIONS.md`](./SEMANTIC_EXPRESSIONS.md) — `SemanticFunctionBody`, `SemanticStatement`, typed `SemanticExpression`, resolved calls, arguments, constructions, `when`, Pipeline lowering y SourceSpan propagation.
+- [`SEMANTIC_PROGRAM_DATA.md`](./SEMANTIC_PROGRAM_DATA.md) — reglas base y cierre.
+- [`SEMANTIC_PROGRAM_STRUCTURE.md`](./SEMANTIC_PROGRAM_STRUCTURE.md) — owners, `SignatureSymbol`, types, signatures y functions.
+- [`SEMANTIC_EXPRESSIONS.md`](./SEMANTIC_EXPRESSIONS.md) — body, expressions, calls, conversions, constructions, `when`, Pipeline lowering y SourceSpan.
+- [`SEMANTIC_PROGRAM_INVENTORY.md`](./SEMANTIC_PROGRAM_INVENTORY.md) — segunda revisión, cobertura AST → Semantic Program, inventario exacto de 33 identidades y suficiencia para Bytecode Compiler.
 
 ## Technical Data Diagram
 
