@@ -1,12 +1,12 @@
 # Evo-Script Engine — Public Capabilities
 
-Status: FUNCTIONAL CLOSED
+Status: FUNCTIONAL CLOSED — REVALIDATED AFTER EFN HOST BOUNDARY
 
 ## Purpose
 
 Este documento define las capacidades públicas que `evo-script-engine` ofrece a sus Consumers en v0.
 
-Las Public Capabilities representan operaciones completas que tiene sentido solicitar al Engine desde fuera de su implementación. Las responsabilidades internas necesarias para cumplirlas, como análisis léxico, parsing, análisis semántico, generación de bytecode, ejecución de VM, binding de símbolos externos o manejo del Active Scope, no constituyen capacidades públicas independientes.
+Las Public Capabilities representan operaciones completas que tiene sentido solicitar al Engine desde fuera de su implementación. Las responsabilidades internas necesarias para cumplirlas, como lexical analysis, parsing, semantic analysis, bytecode generation, VM execution, external symbol resolution o capability binding, no constituyen Public Capabilities independientes.
 
 `evo-script-engine` v0 expone exactamente tres Public Capabilities:
 
@@ -14,11 +14,13 @@ Las Public Capabilities representan operaciones completas que tiene sentido soli
 2. `Execute Compiled`
 3. `Execute Source`
 
+La frontera `.efn` / Host se rige por `evo-script/EFN_HOST_BOUNDARY_v0.1.md`: ninguna de estas capacidades recibe o mantiene `Active Scope` para una ejecución `.efn`.
+
 ---
 
 ## 1. Compile
 
-`Compile` recibe el Source Text completo de un programa Evo-Script y produce un Compiled Program cuando el Source Text cumple la especificación vigente de `evo-script`.
+`Compile` recibe el `Source Text` completo de un programa Evo-Script y produce un `Compiled Program` cuando el Source Text cumple la especificación vigente de `evo-script`.
 
 ```text
 Source Text
@@ -30,25 +32,26 @@ Source Text
 Compiled Program
 ```
 
-Para producir el Compiled Program, el Engine realiza internamente todo el procesamiento requerido por el lenguaje, incluyendo análisis léxico, parsing, validación semántica y generación de bytecode.
+Para producirlo, el Engine realiza internamente lexical analysis, parsing, semantic validation y bytecode generation.
 
 ### Invariants
 
 - `Compile` recibe Source Text, no una ruta de archivo.
 - `Compile` no realiza filesystem I/O.
-- `Compile` valida el programa conforme a `evo-script`.
-- `Compile` produce bytecode como representación ejecutable del Compiled Program.
-- `Compile` no ejecuta la Public Function del programa.
-- `Compile` no recibe Invocation Values.
+- `Compile` valida el programa conforme a `evo-script` y sus amendments normativos vigentes.
+- `use` no es una construcción válida de `.efn`.
+- `Compile` produce bytecode como representación ejecutable del `Compiled Program`.
+- `Compile` no ejecuta la Public Function.
+- `Compile` no recibe `Invocation Values`.
 - `Compile` no requiere Providers concretos.
-- El Compiled Program puede conservar external symbols todavía no enlazados.
-- El Compiled Program nunca conserva direcciones físicas de function pointers suministrados por una aplicación o Provider.
+- El `Compiled Program` puede conservar `External Symbols` todavía no enlazados.
+- El `Compiled Program` nunca conserva direcciones físicas de function pointers suministrados por una aplicación o Provider.
 
 ---
 
 ## 2. Execute Compiled
 
-`Execute Compiled` recibe un Compiled Program y los Invocation Values requeridos por su Public Function, ejecuta el bytecode y produce un Result.
+`Execute Compiled` recibe un `Compiled Program` y los `Invocation Values` requeridos por su Public Function, ejecuta el bytecode y produce un `Result`.
 
 ```text
 Compiled Program
@@ -62,25 +65,25 @@ Execute Compiled
      Result
 ```
 
-Esta capacidad permite compilar un programa una vez y ejecutar el mismo Compiled Program múltiples veces con diferentes Invocation Values.
+Esta capacidad permite compilar una vez y ejecutar el mismo `Compiled Program` múltiples veces con diferentes `Invocation Values` y composiciones explícitas de capabilities compatibles.
 
 ### Invariants
 
-- `Execute Compiled` recibe un Compiled Program previamente producido por el Engine.
-- `Execute Compiled` no recibe Source Text.
-- `Execute Compiled` no recompila el programa.
-- Los Invocation Values se enlazan con los parámetros de la Public Function conforme a la semántica definida por `evo-script`.
-- Cada invocación mantiene únicamente el estado local necesario para esa ejecución.
-- Cuando la semántica lo requiera, la ejecución mantiene su propio Active Scope local.
-- Si el programa requiere capacidades externas, estas deben ser suministradas mediante bindings explícitos.
-- El Engine no descubre Providers ni capacidades mediante registries ocultos, reflection o Service Locator.
-- El outcome público de la ejecución es Result.
+- recibe un `Compiled Program` previamente producido por el Engine;
+- no recibe `Source Text` y no recompila;
+- los `Invocation Values` se enlazan con Parameters conforme a Evo-Script;
+- cada invocación mantiene únicamente estado local de evaluación;
+- no recibe, hereda, crea ni mantiene `Active Scope` de CLI, UI, API u otro Host;
+- `Pipeline Data` pertenece al programa, no a una sesión interactiva exterior;
+- las capacidades externas requeridas deben ser suministradas mediante bindings explícitos;
+- el Engine no descubre Providers mediante registries ocultos, reflection o Service Locator;
+- el outcome público es `Result`.
 
 ---
 
 ## 3. Execute Source
 
-`Execute Source` recibe Source Text e Invocation Values y ejecuta el programa en una única operación pública, sin exigir al Consumer gestionar explícitamente un Compiled Program.
+`Execute Source` recibe `Source Text` e `Invocation Values` y ejecuta el programa en una única operación pública, sin exigir al Consumer gestionar explícitamente un `Compiled Program`.
 
 ```text
 Source Text
@@ -94,7 +97,7 @@ Execute Source
      Result
 ```
 
-Conceptualmente, `Execute Source` representa la composición de compilación y ejecución:
+Conceptualmente:
 
 ```text
 Source Text
@@ -108,23 +111,22 @@ Execute Compiled
 Result
 ```
 
-Esta composición conceptual no obliga a una estructura técnica específica distinta de las decisiones cerradas posteriormente en Technical Design.
-
 ### Invariants
 
-- `Execute Source` recibe Source Text completo, no una ruta de archivo.
-- `Execute Source` recibe los Invocation Values requeridos por la Public Function.
-- El Consumer no necesita obtener ni administrar un Compiled Program.
-- `Execute Source` no expone públicamente representaciones intermedias de compilación.
-- Si la compilación del Source Text falla, la Public Function no se ejecuta.
-- Si la ejecución requiere capacidades externas, estas deben llegar mediante bindings explícitos.
-- El outcome público de la operación es Result.
+- recibe Source Text completo, no una ruta de archivo;
+- recibe los `Invocation Values` requeridos por la Public Function;
+- el Consumer no necesita obtener ni administrar un `Compiled Program`;
+- no expone representaciones intermedias de compilación;
+- si la compilación falla, la Public Function no se ejecuta;
+- si la ejecución requiere capacidades externas, estas llegan mediante bindings explícitos;
+- no recibe ni hereda `Active Scope` del Consumer;
+- el outcome público es `Result`.
 
 ---
 
-## Public Boundary
+## Consumer Neutrality
 
-La frontera pública completa de `evo-script-engine` v0 es:
+Las Public Capabilities no presuponen una superficie Consumer concreta.
 
 ```text
                          Consumer
@@ -136,17 +138,15 @@ La frontera pública completa de `evo-script-engine` v0 es:
              │              │              │
              ▼              ▼              ▼
       Compiled Program    Result          Result
-
-                    evo-script-engine
 ```
 
-No existen otras Public Capabilities en v0.
+Un Consumer puede ser `evo-cli`, `evo-ui`, `evo-api` u otro componente. El Engine no imprime, renderiza o serializa el `Result` por el Consumer. Esa reacción pertenece a la composición exterior, que posteriormente puede expresarse mediante Requesters, adapters u otros Participants definidos por la arquitectura.
 
 ---
 
 ## Internal Responsibilities Are Not Public Capabilities
 
-Las siguientes responsabilidades pueden existir dentro del Engine, pero no constituyen Public Capabilities independientes:
+Pueden existir internamente, pero no son Public Capabilities independientes:
 
 - lexical analysis;
 - parsing;
@@ -159,16 +159,15 @@ Las siguientes responsabilidades pueden existir dentro del Engine, pero no const
 - external symbol resolution;
 - external capability binding;
 - external capability invocation;
-- Active Scope handling;
 - argument binding.
 
-Estas responsabilidades existen únicamente para implementar `Compile`, `Execute Compiled` y `Execute Source`.
+`Active Scope handling` deja de pertenecer a esta lista para `.efn` porque no forma parte de la ejecución del Engine.
 
 ---
 
 ## External Capabilities
 
-`Compile` permanece independiente de una composición concreta de Providers. Un Compiled Program puede conservar external symbols sin resolver.
+`Compile` permanece independiente de una composición concreta de Providers. Un `Compiled Program` puede conservar External Symbols sin resolver.
 
 ```text
 Source Text
@@ -176,16 +175,16 @@ Source Text
 Compile
     ↓
 Compiled Program
-    └── external symbols
+    └── External Symbols
 ```
 
-La resolución e invocación de capacidades externas ocurre durante ejecución cuando sea necesaria y utiliza exclusivamente bindings explícitamente suministrados por la aplicación.
+La resolución e invocación ocurre durante ejecución mediante bindings explícitos de la aplicación:
 
 ```text
 Execute Compiled / Execute Source
                 │
                 ▼
-         external symbol
+         External Symbol
                 │
                 ▼
      explicit Application Binding
@@ -194,16 +193,16 @@ Execute Compiled / Execute Source
              Provider
 ```
 
-El Engine nunca descubre ni selecciona Providers concretos por mecanismos ocultos.
+No existe un Provider activo ambiental dentro de `.efn`; distintas capabilities pueden ser utilizadas explícitamente durante la misma función.
 
 ---
 
 ## Closure
 
-Las Public Capabilities de `evo-script-engine` v0 quedan `FUNCTIONAL CLOSED` con exactamente estas tres operaciones:
+Las Public Capabilities v0 permanecen cerradas exactamente como:
 
 - `Compile`
 - `Execute Compiled`
 - `Execute Source`
 
-Los niveles posteriores de diseño pueden definir sus User Stories, Data Dictionary, Use Cases, firmas y participantes técnicos, pero no pueden agregar una nueva Public Capability sin reabrir explícitamente este cierre funcional.
+La eliminación de `Active Scope` de `.efn` no agrega ni elimina Public Capabilities. Reintroducir una sesión interactiva o Scope del Host dentro de cualquiera de estas operaciones requiere reabrir explícitamente la frontera funcional.
