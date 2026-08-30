@@ -88,6 +88,10 @@ Compiled Program / Bytecode Data ← IN ANALYSIS
 ├── LocalSlot                    ✅ CLOSED
 ├── Constant / DynamicConstant   ✅ CLOSED
 ├── ExternalSymbol               ✅ CLOSED
+├── NumericKind                  ✅ CLOSED
+├── fixed arithmetic/comparison  ✅ CLOSED
+├── dynamic numeric lifting      ✅ CLOSED
+├── dynamic arithmetic           ✅ CLOSED
 └── Instruction Set              ← IN ANALYSIS
 
 VM Execution Data                PENDING
@@ -123,6 +127,7 @@ Compiled Program / Bytecode Data:
 
 - [`COMPILED_PROGRAM_DATA.md`](./COMPILED_PROGRAM_DATA.md) — responsabilidad persistente, `FunctionId` preservation, `ConstantId`, `ExternalSymbolId`, Signature Dependency Erasure, raíz `CompiledProgram` y shell `CompiledFunction`.
 - [`COMPILED_STORAGE_DATA.md`](./COMPILED_STORAGE_DATA.md) — `ParameterSlot`, `LocalSlot`, `Constant`, `DynamicConstant`, `ExternalSymbol`, Constant Pool policy y mapping temporal de bindings.
+- [`COMPILED_NUMERIC_INSTRUCTIONS.md`](./COMPILED_NUMERIC_INSTRUCTIONS.md) — `NumericKind`, fixed arithmetic/comparison, `LiftDynamic`, dynamic arithmetic, errores de evaluación y fronteras de lowering.
 
 ## Technical Data Diagram
 
