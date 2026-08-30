@@ -116,7 +116,12 @@ VM Execution Data                ← IN ANALYSIS
 ├── Shared Value Storage owner   ✅ CLOSED — representation pending
 ├── Call Frames owner            ✅ CLOSED — exact model pending
 ├── execution backing owner      ✅ CLOSED — representation pending
-└── Runtime Value Model          ← NEXT
+├── RuntimeValue / Value boundary ✅ CLOSED
+├── RuntimeValue descriptor role ✅ CLOSED
+├── fixed scalars inline         ✅ CLOSED
+├── variable/composite backing   ✅ CLOSED
+├── no persistent self-borrow    ✅ CLOSED
+└── Backing Identity Strategy    ← NEXT
 
 Outcome / Diagnostic Data        PENDING
 ```
@@ -163,7 +168,8 @@ Outcome / Diagnostic Data        PENDING
 
 ### VM Execution Data
 
-- [`VM_EXECUTION_DATA.md`](./VM_EXECUTION_DATA.md) — autoridad acumulada de VM Execution Data; `VmExecution` root, invocation lifetime, Shared Value Storage owner, Call Frames owner y execution-lifetime backing ownership.
+- [`VM_EXECUTION_DATA.md`](./VM_EXECUTION_DATA.md) — autoridad acumulada de VM Execution Data; `VmExecution` root y estado de cierre runtime.
+- [`RUNTIME_VALUE_MODEL.md`](./RUNTIME_VALUE_MODEL.md) — frontera `RuntimeValue` / `evo_values::Value<'a>`, descriptor interno, fixed scalars inline, backing indirection y prohibición de persistent self-borrow.
 
 ### Normative language amendments used by compiled model
 
@@ -205,7 +211,7 @@ La metodología global se define en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../..
 ## Next Block
 
 ```text
-Runtime Value Model ← NEXT
+Backing Identity Strategy ← NEXT
 ```
 
-Aquí se definirá qué es un `Value` runtime, cómo representa fixed numeric / bool / string / dynamic / struct / enum y cómo se separan Value views de execution-owned backing data sin introducir ownership o lifetimes accidentales.
+Aquí se decidirá cómo `RuntimeValue` identifica backing data variable/composite sin referencias self-borrowed: generic handle, typed IDs u otra estrategia físicamente estable y coherente con compiled-backed y execution-backed data.
