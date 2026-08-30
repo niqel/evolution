@@ -130,22 +130,6 @@ RuntimeValue
     └── backing reference / handle
 ```
 
-Esto NO cierra todavía una estrategia concreta como:
-
-```text
-Arena
-Vec-owned object table
-Box
-Rc
-Arc
-raw pointer
-stable offset
-generic handle
-typed handle
-```
-
-La decisión siguiente debe establecer cómo se identifica ese backing y quién lo posee en cada caso.
-
 `CompiledProgram` puede continuar siendo owner de constant backing data, mientras `VmExecution` es owner lógico del backing que deba sobrevivir durante la ejecución.
 
 ## RV-005 — Shared Value Storage must not self-borrow VmExecution backing
@@ -181,6 +165,102 @@ sin que el storage dependa de referencias internas auto-prestadas del propio roo
 
 Esta regla no prohíbe borrowed views temporales creadas al observar/materializar un RuntimeValue. Prohíbe que el storage persistente de la ejecución dependa estructuralmente de self-borrows.
 
+## RV-006 — Typed Backing Identities
+
+Status: CLOSED
+
+Cerrado en `BACKING_IDENTITY_STRATEGY.md`.
+
+```rust
+struct StringBackingId(usize);
+struct DynamicIntegerBackingId(usize);
+struct StructBackingId(usize);
+struct EnumBackingId(usize);
+```
+
+No existe un `RuntimeBackingId` universal en v0.
+
+Aunque compartan representación `usize`, estas identities no son intercambiables.
+
+## RV-007 — String Backing Reference
+
+Status: CLOSED
+
+```rust
+enum StringBackingRef {
+    Compiled(ConstantId),
+    Execution(StringBackingId),
+}
+```
+
+`Compiled(ConstantId)` reutiliza el Constant Pool ya cerrado y requiere que el constant referenciado sea `Constant::String`.
+
+No existe `CompiledStringId`.
+
+## RV-008 — Dynamic Integer Backing Reference
+
+Status: CLOSED
+
+```rust
+enum DynamicIntegerBackingRef {
+    Compiled(ConstantId),
+    Execution(DynamicIntegerBackingId),
+}
+```
+
+`Compiled(ConstantId)` requiere `Constant::Dynamic(DynamicConstant::Integer { ... })`.
+
+No existe `CompiledDynamicIntegerId`.
+
+## RV-009 — Struct / Enum Backing Identities
+
+Status: CLOSED
+
+Struct y Enum no poseen composite constants persistentes en el modelo compilado v0; se construyen durante ejecución.
+
+Por tanto utilizan directamente:
+
+```rust
+StructBackingId
+EnumBackingId
+```
+
+ambos pertenecientes al backing owned por `VmExecution`.
+
+## RV-010 — Backing ID Stability
+
+Status: CLOSED
+
+Todo backing ID válido conserva la misma identity durante la vida completa de la `VmExecution` que lo creó y no se reutiliza dentro de esa ejecución.
+
+```text
+allocate ID
+    → stable for VmExecution lifetime
+    → no reuse in v0
+    → released with VmExecution
+```
+
+No se requieren generation counters, GC, reference counting ni per-object liveness tracking en v0.
+
+## RV-011 — Identity Does Not Prescribe Container
+
+Status: CLOSED
+
+Backing identities no prescriben el container físico.
+
+Permanece abierto si la implementación usa:
+
+```text
+Vec
+Arena
+Slab
+Box
+segmented storage
+custom allocator
+```
+
+No se requiere `Rc`, `Arc`, raw pointer ni offset como parte contractual de la identity.
+
 ## Current Runtime Value Shape — conceptual only
 
 Todavía no se cierra el enum Rust exacto, pero la forma contractual es:
@@ -195,29 +275,36 @@ RuntimeValue
 │   ├── Uint8 .. Uint128
 │   └── Float32 / Float64
 │
-├── String                        backing indirection
+├── String
+│   └── StringBackingRef
+│       ├── Compiled(ConstantId)
+│       └── Execution(StringBackingId)
 │
 ├── Dynamic
-│   ├── Integer                   backing indirection
+│   ├── Integer
+│   │   └── DynamicIntegerBackingRef
+│   │       ├── Compiled(ConstantId)
+│   │       └── Execution(DynamicIntegerBackingId)
 │   ├── Float32                   inline candidate
 │   └── Float64                   inline candidate
 │
-├── Struct                        backing indirection
-└── Enum                          backing indirection
+├── Struct
+│   └── StructBackingId
+└── Enum
+    └── EnumBackingId
 ```
 
-La forma exacta de Dynamic Value y composite backing se cerrará después de decidir la estrategia de backing identity.
+La forma exacta de `RuntimeValue`, Dynamic Float variants y composite backing data todavía debe cerrarse.
 
 ## Explicitly Not Closed Yet
 
 ```text
 RuntimeValue exact Rust enum
-RuntimeDataRef / BackingRef exact identity
-compiled-backed vs execution-backed handle representation
-String backing representation
-Dynamic Integer backing representation
-Struct backing representation
-Enum backing representation
+Dynamic Value exact representation
+String backing physical representation
+Dynamic Integer backing physical representation
+Struct backing physical representation
+Enum backing physical representation
 Shared Value Storage concrete container
 Copy / Clone traits
 arena / Vec / slab / Box strategy
@@ -232,9 +319,19 @@ fixed scalar data stored inline                        ✅ CLOSED
 variable/composite data uses backing indirection       ✅ CLOSED
 no persistent self-borrow in Shared Value Storage      ✅ CLOSED
 
-Backing Identity Strategy                              ← NEXT
-RuntimeValue exact Rust enum                           PENDING
+typed backing identities                               ✅ CLOSED
+no universal RuntimeBackingId                          ✅ CLOSED
+String compiled/execution backing reference            ✅ CLOSED
+Dynamic Integer compiled/execution backing reference   ✅ CLOSED
+Struct / Enum execution-owned typed IDs                ✅ CLOSED
+backing IDs stable / non-reused per execution          ✅ CLOSED
+identity independent of physical container             ✅ CLOSED
+
+Backing Identity Strategy                              ✅ CLOSED
+
+RuntimeValue exact representation                      ← NEXT
 Dynamic Value exact representation                     PENDING
+String / Dynamic Integer backing representation        PENDING
 Struct / Enum backing representation                   PENDING
 Shared Value Storage exact representation              PENDING
 ```
