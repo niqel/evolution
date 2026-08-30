@@ -51,25 +51,28 @@ Este orden no implica que todos los conceptos requieran un tipo independiente. C
 ## Current Progress
 
 ```text
-Lexical Data
+Lexical Data                     ✅ CLOSED
 ├── Token structural rules       ✅ CLOSED
 ├── Token Kind                   ✅ CLOSED
 ├── Source Span                  ✅ CLOSED
 ├── Lexeme representation        ✅ CLOSED
 ├── Token                        ✅ CLOSED
-└── Token Sequence               ← IN ANALYSIS
+└── Token Sequence               ✅ CLOSED
 
-AST Data                         PENDING
+AST Data                         ← IN ANALYSIS
 Semantic Program Data            PENDING
 Compiled Program / Bytecode Data PENDING
 VM Execution Data                PENDING
 Outcome / Diagnostic Data        PENDING
 ```
 
-Documentos del bloque actual:
+Documentos del bloque lexical cerrado:
 
 - [`LEXICAL_DATA.md`](./LEXICAL_DATA.md) — reglas estructurales, `Token Kind`, `Source Span` y `Lexeme`.
 - [`TOKEN.md`](./TOKEN.md) — representación Rust e invariantes cerrados de `Token<'source>`.
+- [`TOKEN_SEQUENCE.md`](./TOKEN_SEQUENCE.md) — representación temporal de `Token Sequence<'source>` y política de lookahead/materialización.
+
+El bloque actual de análisis es **AST Data**.
 
 ## Technical Data Diagram
 
