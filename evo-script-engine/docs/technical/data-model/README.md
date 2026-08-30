@@ -2,7 +2,7 @@
 
 Status: TECHNICAL DATA MODEL — IN PROGRESS
 
-Este directorio contiene el Technical Data Model de `evo-script-engine` y sus Technical Data Diagrams en D2.
+Este directorio contiene el Technical Data Model de `evo-script-engine` y sus Technical Data Diagrams.
 
 ## Responsibility
 
@@ -75,27 +75,25 @@ Semantic Program Data            ✅ CLOSED
 ├── Pipeline semantic lowering   ✅ CLOSED
 └── exact semantic inventory     ✅ CLOSED — 33 identities
 
-Compiled Program / Bytecode Data ← IN ANALYSIS
+Compiled Program / Bytecode Data ✅ CLOSED
 ├── compiled responsibility      ✅ CLOSED
 ├── FunctionId preservation      ✅ CLOSED
 ├── ConstantId                   ✅ CLOSED
 ├── ExternalSymbolId             ✅ CLOSED
 ├── Signature Dependency erasure ✅ CLOSED
 ├── external call convergence    ✅ CLOSED
-├── CompiledProgram root shell   ✅ CLOSED
-├── CompiledFunction shell       ✅ CLOSED
-├── ParameterSlot                ✅ CLOSED
-├── LocalSlot                    ✅ CLOSED
-├── Constant / DynamicConstant   ✅ CLOSED — revalidated
-├── ExternalSymbol               ✅ CLOSED — revalidated
-├── External physical arity      ✅ CLOSED
+├── CompiledProgram              ✅ CLOSED
+├── CompiledFunction             ✅ CLOSED
+├── ParameterSlot / LocalSlot    ✅ CLOSED
+├── Constant / DynamicConstant   ✅ CLOSED
+├── ExternalSymbol + arity       ✅ CLOSED
 ├── core Load / Store            ✅ CLOSED
 ├── internal / external Calls    ✅ CLOSED
-├── NumericKind                  ✅ CLOSED
+├── NumericKind                  ✅ CLOSED — 12 variants
 ├── fixed arithmetic/comparison  ✅ CLOSED
 ├── dynamic numeric lifting      ✅ CLOSED
 ├── dynamic arithmetic           ✅ CLOSED
-├── Instruction typed enum       ✅ CLOSED
+├── Instruction typed enum       ✅ CLOSED — 48 variants
 ├── InstructionIndex             ✅ CLOSED
 ├── control flow / short-circuit ✅ CLOSED
 ├── conversions                  ✅ CLOSED
@@ -108,21 +106,21 @@ Compiled Program / Bytecode Data ← IN ANALYSIS
 ├── EqualityComparable           ✅ CLOSED
 ├── Structural Equality          ✅ CLOSED
 ├── SourceMap                    ✅ CLOSED
-└── exact compiled inventory     ← NEXT
+└── exact compiled inventory     ✅ CLOSED — 18 identities
 
-VM Execution Data                PENDING
+VM Execution Data                ← NEXT
 Outcome / Diagnostic Data        PENDING
 ```
 
 ## Current Documents
 
-Lexical Data:
+### Lexical Data
 
 - [`LEXICAL_DATA.md`](./LEXICAL_DATA.md)
 - [`TOKEN.md`](./TOKEN.md)
 - [`TOKEN_SEQUENCE.md`](./TOKEN_SEQUENCE.md)
 
-AST Data:
+### AST Data
 
 - [`AST_DATA.md`](./AST_DATA.md)
 - [`AST_TYPE_DEFINITIONS.md`](./AST_TYPE_DEFINITIONS.md)
@@ -132,32 +130,36 @@ AST Data:
 - [`AST_WHEN.md`](./AST_WHEN.md)
 - [`AST_INVENTORY.md`](./AST_INVENTORY.md)
 
-Semantic Program Data:
+### Semantic Program Data
 
 - [`SEMANTIC_PROGRAM_DATA.md`](./SEMANTIC_PROGRAM_DATA.md) — reglas base y cierre.
 - [`SEMANTIC_PROGRAM_STRUCTURE.md`](./SEMANTIC_PROGRAM_STRUCTURE.md) — owners, `SignatureSymbol`, types, signatures y functions.
 - [`SEMANTIC_EXPRESSIONS.md`](./SEMANTIC_EXPRESSIONS.md) — body, expressions, calls, conversions, constructions, `when`, Pipeline lowering y SourceSpan.
-- [`SEMANTIC_PROGRAM_INVENTORY.md`](./SEMANTIC_PROGRAM_INVENTORY.md) — segunda revisión, cobertura AST → Semantic Program, inventario exacto de 33 identidades y suficiencia para Bytecode Compiler.
+- [`SEMANTIC_PROGRAM_INVENTORY.md`](./SEMANTIC_PROGRAM_INVENTORY.md) — inventario exacto de 33 identities y cobertura AST → Semantic Program.
 
-Compiled Program / Bytecode Data:
+### Compiled Program / Bytecode Data
 
-- [`COMPILED_PROGRAM_DATA.md`](./COMPILED_PROGRAM_DATA.md) — autoridad base y estado acumulado del producto compilado.
-- [`COMPILED_STORAGE_DATA.md`](./COMPILED_STORAGE_DATA.md) — `ParameterSlot`, `LocalSlot`, `ExternalSymbol.parameter_count`, Constant Pool canonicalizado, `DynamicConstant` y mapping temporal de bindings.
+- [`COMPILED_PROGRAM_DATA.md`](./COMPILED_PROGRAM_DATA.md) — autoridad raíz del producto compilado, ahora CLOSED.
+- [`COMPILED_PROGRAM_INVENTORY.md`](./COMPILED_PROGRAM_INVENTORY.md) — inventario exacto: 18 identities propias, 48 Instruction variants y cobertura Semantic → Compiled.
+- [`COMPILED_STORAGE_DATA.md`](./COMPILED_STORAGE_DATA.md) — `ParameterSlot`, `LocalSlot`, `ExternalSymbol.parameter_count`, Constant Pool canonicalizado y `DynamicConstant`.
 - [`COMPILED_CORE_CALL_INSTRUCTIONS.md`](./COMPILED_CORE_CALL_INSTRUCTIONS.md) — `LoadConstant`, `LoadParameter`, `LoadLocal`, `StoreLocal`, `Call`, `CallExternal` y calling convention física.
-- [`COMPILED_NUMERIC_INSTRUCTIONS.md`](./COMPILED_NUMERIC_INSTRUCTIONS.md) — `NumericKind`, fixed arithmetic/comparison, `LiftDynamic`, dynamic arithmetic, errores de evaluación y fronteras de lowering.
-- [`COMPILED_CONTROL_FLOW.md`](./COMPILED_CONTROL_FLOW.md) — typed `Instruction`, `InstructionIndex`, absolute branches, `Jump`, `JumpIfFalse`, short-circuit `&&` / `||`, `Discard` y `Return`.
-- [`COMPILED_CONVERSIONS.md`](./COMPILED_CONVERSIONS.md) — fixed/dynamic numeric conversions, exact representability, `ConversionError`, `NumericToString` y `DynamicToString`.
-- [`COMPILED_SCALAR_EQUALITY.md`](./COMPILED_SCALAR_EQUALITY.md) — `NotBoolean`, bool equality y string equality.
-- [`COMPILED_COMPOSITE_LAYOUT.md`](./COMPILED_COMPOSITE_LAYOUT.md) — `FieldIndex`, `VariantDiscriminant`, canonical composite ordering, struct/enum conceptual runtime layout y ausencia de runtime type-layout tables en v0.
-- [`COMPILED_COMPOSITE_INSTRUCTIONS.md`](./COMPILED_COMPOSITE_INSTRUCTIONS.md) — construcción/acceso de struct y enum, `TestVariant`, extracción consumidora de payloads, lowering de `when` y corrección para evitar aliasing forzado.
-- [`COMPILED_STRUCTURAL_EQUALITY.md`](./COMPILED_STRUCTURAL_EQUALITY.md) — `EqualityRule`, `CompositeEqualityPlan`, igualdad estructural de struct/enum y prohibición de runtime equality dinámica oculta.
-- [`COMPILED_SOURCE_MAP.md`](./COMPILED_SOURCE_MAP.md) — mapping denso `(FunctionId, InstructionIndex) → SourceSpan`, política de spans, encapsulación y seam para futura extensión multi-source.
+- [`COMPILED_NUMERIC_INSTRUCTIONS.md`](./COMPILED_NUMERIC_INSTRUCTIONS.md) — `NumericKind`, fixed arithmetic/comparison, `LiftDynamic` y dynamic arithmetic.
+- [`COMPILED_CONTROL_FLOW.md`](./COMPILED_CONTROL_FLOW.md) — `InstructionIndex`, branching, short-circuit, `Discard` y `Return`.
+- [`COMPILED_CONVERSIONS.md`](./COMPILED_CONVERSIONS.md) — fixed/dynamic numeric conversions y string conversion.
+- [`COMPILED_SCALAR_EQUALITY.md`](./COMPILED_SCALAR_EQUALITY.md) — bool negation/equality y string equality.
+- [`COMPILED_COMPOSITE_LAYOUT.md`](./COMPILED_COMPOSITE_LAYOUT.md) — `FieldIndex`, `VariantDiscriminant` y canonical composite layout.
+- [`COMPILED_COMPOSITE_INSTRUCTIONS.md`](./COMPILED_COMPOSITE_INSTRUCTIONS.md) — struct/enum construction, access, variant testing, payload extraction y `when` lowering.
+- [`COMPILED_STRUCTURAL_EQUALITY.md`](./COMPILED_STRUCTURAL_EQUALITY.md) — `EqualityRule`, `CompositeEqualityPlan` y struct/enum structural equality.
+- [`COMPILED_SOURCE_MAP.md`](./COMPILED_SOURCE_MAP.md) — dense `(FunctionId, InstructionIndex) → SourceSpan` mapping y future multi-source seam.
 
-Normative language amendment used by compiled equality:
+### Normative language amendments used by compiled model
 
-- [`../../../../evo-script/COMPOSITE_EQUALITY_COMPARABILITY_v0.1.md`](../../../../evo-script/COMPOSITE_EQUALITY_COMPARABILITY_v0.1.md) — propiedad estática `EqualityComparable`; composites que contienen `dynamic` directa o transitivamente no admiten `==` / `!=`.
+- [`../../../../evo-script/DYNAMIC_NUMERIC_ARITHMETIC_v0.1.md`](../../../../evo-script/DYNAMIC_NUMERIC_ARITHMETIC_v0.1.md)
+- [`../../../../evo-script/COMPOSITE_EQUALITY_COMPARABILITY_v0.1.md`](../../../../evo-script/COMPOSITE_EQUALITY_COMPARABILITY_v0.1.md)
+- [`../../../../evo-script/EFN_HOST_BOUNDARY_v0.1.md`](../../../../evo-script/EFN_HOST_BOUNDARY_v0.1.md)
+- [`../../../../evo-script/EFN_TYPE_CARDINALITY_v0.1.md`](../../../../evo-script/EFN_TYPE_CARDINALITY_v0.1.md)
 
-## Technical Data Diagram
+## Technical Data Diagram Rule
 
 El Technical Data Diagram representa datos y artifacts, no behavioral classes.
 
@@ -186,3 +188,11 @@ variant-of
 No se representan methods, inheritance, service classes ni OO interfaces ficticias.
 
 La metodología global se define en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../../../TECHNICAL_DESIGN_METHODOLOGY.md).
+
+## Next Block
+
+```text
+VM Execution Data ← NEXT
+```
+
+Aquí se definirán las identities runtime necesarias para ejecutar el `CompiledProgram` ya cerrado, sin reabrir su semántica salvo que una necesidad técnica concreta lo exija.
