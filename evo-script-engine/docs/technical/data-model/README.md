@@ -2,33 +2,28 @@
 
 Status: TECHNICAL DATA MODEL — IN PROGRESS
 
-Este directorio contiene el **Technical Data Model** de `evo-script-engine` y sus **Technical Data Diagrams** en D2.
+Este directorio contiene el Technical Data Model de `evo-script-engine` y sus Technical Data Diagrams en D2.
 
 ## Responsibility
 
-El Technical Data Model transforma los conceptos del Functional Data Dictionary y las decisiones cerradas de Technical Design en representaciones técnicas concretas.
+El Technical Data Model transforma Functional Data Dictionary + Technical Design cerrado en representaciones técnicas concretas.
 
 Aquí se definen, cuando corresponda:
 
 - structs;
 - enums;
-- artifacts owned;
+- owned artifacts;
 - borrowed views;
-- aliases semánticos;
-- ownership;
-- borrowing;
-- lifetimes;
-- cardinalidades;
-- relaciones entre tipos;
-- datos técnicos internos requeridos por la implementación.
+- semantic aliases;
+- ownership / borrowing / lifetimes;
+- cardinalidades y relaciones;
+- datos internos necesarios por Rust Signatures y Participants.
 
 Regla:
 
 > Toda estructura, enum, artifact o dato interno necesario para expresar una Rust Signature o implementar un Participant debe estar definido previamente en el Technical Data Model.
 
 ## Definition Order
-
-El modelo se construye siguiendo el pipeline técnico cerrado:
 
 ```text
 Source Text
@@ -46,23 +41,39 @@ VM Execution Data
 Outcome / Diagnostic Data
 ```
 
-Este orden no implica que todos los conceptos requieran un tipo independiente. Cada identidad debe justificarse por una necesidad real del diseño.
+El orden no implica que todo concepto necesite tipo independiente. Cada identidad requiere justificación real.
+
+## `.efn` / Host Boundary
+
+El modelo técnico aplica `evo-script/EFN_HOST_BOUNDARY_v0.1.md` y TD-011:
+
+```text
+Host Interactive State
+    !=
+`.efn` Compile / Execution Data
+```
+
+No se introducirán `Active Scope`, Host Session State, Current Provider, Use Node, Use Instruction ni `SET_SCOPE` dentro del Technical Data Model de `.efn`.
 
 ## Current Progress
 
 ```text
 Lexical Data                     ✅ CLOSED
 ├── Token structural rules       ✅ CLOSED
-├── Token Kind                   ✅ CLOSED
+├── Token Kind                   ✅ CLOSED — 50 variants
 ├── Source Span                  ✅ CLOSED
 ├── Lexeme representation        ✅ CLOSED
 ├── Token                        ✅ CLOSED
 └── Token Sequence               ✅ CLOSED
 
 AST Data                         ← IN ANALYSIS
-├── AST structural boundary      ✅ CLOSED
+├── AST syntactic responsibility ✅ CLOSED
 ├── Preserve occurrences         ✅ CLOSED
-└── AST Node inventory           ← IN ANALYSIS
+├── Parser/Semantic boundary      ✅ CLOSED
+├── No Host Scope / no `use`     ✅ CLOSED
+├── `this` parser-only            ✅ CLOSED
+├── Pipeline = data composition  ✅ CLOSED
+└── exact AST inventory           ← IN ANALYSIS
 
 Semantic Program Data            PENDING
 Compiled Program / Bytecode Data PENDING
@@ -70,23 +81,23 @@ VM Execution Data                PENDING
 Outcome / Diagnostic Data        PENDING
 ```
 
-Documentos del bloque lexical cerrado:
+## Current Documents
 
-- [`LEXICAL_DATA.md`](./LEXICAL_DATA.md) — reglas estructurales, `Token Kind`, `Source Span` y `Lexeme`.
-- [`TOKEN.md`](./TOKEN.md) — representación Rust e invariantes cerrados de `Token<'source>`.
-- [`TOKEN_SEQUENCE.md`](./TOKEN_SEQUENCE.md) — representación temporal de `Token Sequence<'source>` y política de lookahead/materialización.
+Lexical Data:
 
-Documento del bloque actual:
+- [`LEXICAL_DATA.md`](./LEXICAL_DATA.md) — lexical identities, Token Kind, Source Span y Lexeme.
+- [`TOKEN.md`](./TOKEN.md) — representación e invariantes de `Token<'source>`.
+- [`TOKEN_SEQUENCE.md`](./TOKEN_SEQUENCE.md) — `Vec<Token<'source>>` temporal bajo Compilation Working State.
 
-- [`AST_DATA.md`](./AST_DATA.md) — frontera sintáctica del AST, preservación de ocurrencias e inventario de nodos en análisis.
+AST Data:
+
+- [`AST_DATA.md`](./AST_DATA.md) — frontera sintáctica, Host exclusion, `this` y Pipeline; exact Rust representation aún en análisis.
 
 ## Technical Data Diagram
 
-El Technical Data Diagram es una vista D2 derivada del modelo.
+El Technical Data Diagram representa datos y artifacts, no behavioral classes.
 
-Representa tipos y artifacts, no clases de comportamiento.
-
-Puede utilizar categorías como:
+Categorías posibles:
 
 ```text
 <<struct>>
@@ -96,7 +107,7 @@ Puede utilizar categorías como:
 <<alias>>
 ```
 
-Y relaciones como:
+Relaciones posibles:
 
 ```text
 contains
@@ -108,6 +119,6 @@ variant-of
 0..N
 ```
 
-No se representan métodos, herencia, service classes ni interfaces OO ficticias.
+No se representan methods, inheritance, service classes ni OO interfaces ficticias.
 
 La metodología global se define en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../../../TECHNICAL_DESIGN_METHODOLOGY.md).
