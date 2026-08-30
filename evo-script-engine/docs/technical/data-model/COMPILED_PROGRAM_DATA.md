@@ -645,7 +645,111 @@ Struct equality compara fields en canonical order y puede terminar en el primer 
 
 Una Structural Equality compilada es total y no produce runtime `ComparisonTypeError`, `DynamicNumericTypeError` ni `ConversionError`.
 
-## CD-021 — Current closure
+## CD-021 — SourceMap
+
+Status: CLOSED
+
+Cerrado en `COMPILED_SOURCE_MAP.md`.
+
+Representación:
+
+```rust
+struct SourceMap {
+    functions: Vec<Vec<SourceSpan>>,
+}
+```
+
+Relación canónica:
+
+```text
+SourceMap.functions[f][i]
+        ↕
+CompiledProgram.functions[f].instructions[i]
+```
+
+Invariantes:
+
+```text
+source_map.functions.len()
+    == compiled_program.functions.len()
+
+source_map.functions[f].len()
+    == compiled_program.functions[f].instructions.len()
+```
+
+Por tanto cada `(FunctionId, InstructionIndex)` resuelve exactamente un `SourceSpan`, y cada Instruction persistente posee exactamente un source anchor.
+
+La estructura es densa; no se introduce `Option<SourceSpan>`, sparse mapping ni `SourceMapEntry` con coordenadas duplicadas.
+
+### Span policy
+
+Cada Instruction recibe el `SourceSpan` de la `SemanticExpression` más específica responsable de producirla. Una Instruction técnica generada por el compiler utiliza el span de la construcción semántica responsable más cercana.
+
+Examples:
+
+```text
+Multiply de b * c
+    → span(b * c)
+
+JumpIfFalse generado por a && b
+    → span(a && b)
+
+TestVariant / extraction machinery
+    → span(when) cuando no existe uno más específico
+
+Return final
+    → span(result expression)
+```
+
+No se vuelve al AST para resolver ubicaciones.
+
+### Source coordinate space v0
+
+Un `CompiledProgram` utiliza un único source coordinate space. Todos sus `SourceSpan` pertenecen al Source Text que produjo ese programa.
+
+No se introducen en v0:
+
+```text
+SourceId
+SourcePath
+SourceName
+SourceLocation
+```
+
+Una futura extensión multi-source puede evolucionar el dato resuelto a:
+
+```rust
+struct SourceLocation {
+    source: SourceId,
+    span: SourceSpan,
+}
+```
+
+sin modificar `Instruction`, `CompiledFunction` ni VM execution semantics.
+
+### Encapsulation boundary
+
+La nested storage shape `Vec<Vec<SourceSpan>>` pertenece exclusivamente al subsistema de Source Mapping. Los consumidores no deben depender de esa forma interna; conceptualmente resuelven:
+
+```text
+FunctionId + InstructionIndex
+        ↓ Source Mapping boundary
+SourceSpan
+```
+
+Esta frontera contiene el impacto de una futura migración multi-source.
+
+### Lifetime / diagnostics boundary
+
+`SourceMap` no borrowea Source Text y no duplica line/column. `SourceSpan` conserva provenance técnica; line, column, snippet y highlight se derivan posteriormente cuando el Host dispone del Source Text.
+
+No existen mappings separados `ConstantId → SourceSpan` o `ExternalSymbolId → SourceSpan`; la ubicación pertenece a cada Instruction occurrence.
+
+### Persistence scope
+
+`CompiledProgram` persistente respecto del Compilation Working State no implica un portable serialized bytecode format. Los `usize` internos no constituyen ABI estable; una futura serialización portable es una responsabilidad separada.
+
+## CD-022 — Current closure
 
 ```text
 Compiled Program responsibility          ✅ CLOSED
@@ -683,7 +787,9 @@ owner/payload aliasing not required      ✅ CLOSED
 EqualityComparable                       ✅ CLOSED
 Struct / Enum Structural Equality        ✅ CLOSED
 no hidden dynamic equality               ✅ CLOSED
+SourceMap                                ✅ CLOSED
+SourceMap encapsulation boundary         ✅ CLOSED
+future multi-source migration seam       ✅ CLOSED
 
-SourceMap                                ← NEXT
-Compiled Program exact inventory         PENDING
+Compiled Program exact inventory         ← NEXT
 ```
