@@ -88,8 +88,13 @@ Semantic Program Data            ← IN ANALYSIS
 ├── TypeId                       ✅ CLOSED
 ├── FunctionId                   ✅ CLOSED
 ├── BindingId                    ✅ CLOSED
-├── identity scope               ✅ CLOSED
-└── remaining semantic inventory ← IN ANALYSIS
+├── FieldId                      ✅ CLOSED
+├── VariantId                    ✅ CLOSED
+├── SignatureId                  ✅ CLOSED
+├── SignatureBindingId           ✅ CLOSED
+├── identity scopes              ✅ CLOSED
+├── no ExternalSymbolId here     ✅ CLOSED
+└── semantic owner structures    ← IN ANALYSIS
 
 Compiled Program / Bytecode Data PENDING
 VM Execution Data                PENDING
@@ -116,7 +121,7 @@ AST Data:
 
 Semantic Program Data:
 
-- [`SEMANTIC_PROGRAM_DATA.md`](./SEMANTIC_PROGRAM_DATA.md) — responsabilidad de Semantic Program, `TypeId`, `FunctionId`, `BindingId`, scope de identidades y separación frente a layout físico.
+- [`SEMANTIC_PROGRAM_DATA.md`](./SEMANTIC_PROGRAM_DATA.md) — responsabilidad de Semantic Program; `TypeId`, `FunctionId`, `BindingId`, `FieldId`, `VariantId`, `SignatureId`, `SignatureBindingId`; scopes de identidad y separación frente a layout/runtime binding.
 
 ## Technical Data Diagram
 
