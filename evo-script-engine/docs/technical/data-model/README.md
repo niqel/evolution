@@ -55,7 +55,7 @@ AST Data                         ✅ CLOSED
 ├── Program / types / functions  ✅ CLOSED
 ├── expression representation    ✅ CLOSED
 ├── `when`                       ✅ CLOSED
-└── exact AST inventory           ✅ CLOSED — 31 identities
+└── exact AST inventory          ✅ CLOSED — 31 identities
 
 Semantic Program Data            ✅ CLOSED
 ├── semantic responsibility      ✅ CLOSED
@@ -75,7 +75,17 @@ Semantic Program Data            ✅ CLOSED
 ├── Pipeline semantic lowering   ✅ CLOSED
 └── exact semantic inventory     ✅ CLOSED — 33 identities
 
-Compiled Program / Bytecode Data ← NEXT
+Compiled Program / Bytecode Data ← IN ANALYSIS
+├── compiled responsibility      ✅ CLOSED
+├── FunctionId preservation      ✅ CLOSED
+├── ConstantId                   ✅ CLOSED
+├── ExternalSymbolId             ✅ CLOSED
+├── Signature Dependency erasure ✅ CLOSED
+├── external call convergence    ✅ CLOSED
+├── CompiledProgram root shell   ✅ CLOSED
+├── CompiledFunction shell       ✅ CLOSED
+└── physical data / instructions ← IN ANALYSIS
+
 VM Execution Data                PENDING
 Outcome / Diagnostic Data        PENDING
 ```
@@ -104,6 +114,10 @@ Semantic Program Data:
 - [`SEMANTIC_PROGRAM_STRUCTURE.md`](./SEMANTIC_PROGRAM_STRUCTURE.md) — owners, `SignatureSymbol`, types, signatures y functions.
 - [`SEMANTIC_EXPRESSIONS.md`](./SEMANTIC_EXPRESSIONS.md) — body, expressions, calls, conversions, constructions, `when`, Pipeline lowering y SourceSpan.
 - [`SEMANTIC_PROGRAM_INVENTORY.md`](./SEMANTIC_PROGRAM_INVENTORY.md) — segunda revisión, cobertura AST → Semantic Program, inventario exacto de 33 identidades y suficiencia para Bytecode Compiler.
+
+Compiled Program / Bytecode Data:
+
+- [`COMPILED_PROGRAM_DATA.md`](./COMPILED_PROGRAM_DATA.md) — responsabilidad persistente, `FunctionId` preservation, `ConstantId`, `ExternalSymbolId`, Signature Dependency Erasure, raíz `CompiledProgram` y shell `CompiledFunction`.
 
 ## Technical Data Diagram
 
