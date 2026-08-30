@@ -1,14 +1,12 @@
 # Evo-Script Engine — Technical Documentation
 
-Status: TECHNICAL DESIGN — IN PROGRESS
+Status: TECHNICAL DATA MODEL — IN PROGRESS
 
 Este directorio contiene la documentación técnica de `evo-script-engine`.
 
-La fase funcional ya se encuentra cerrada. A partir de este punto, todo diseño técnico debe derivarse de los Functional Use Cases y del Functional Data Dictionary sin redefinir retrospectivamente su semántica.
+La fase funcional está cerrada y revalidada bajo `evo-script/EFN_HOST_BOUNDARY_v0.1.md`. Todo diseño técnico deriva de ese modelo sin redefinir retrospectivamente su semántica.
 
-La metodología técnica canónica de Evolution se encuentra en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../../TECHNICAL_DESIGN_METHODOLOGY.md).
-
-Las decisiones estructurales vigentes del componente se registran en [`TECHNICAL_DESIGN.md`](TECHNICAL_DESIGN.md).
+La metodología técnica canónica se encuentra en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../../TECHNICAL_DESIGN_METHODOLOGY.md) y las decisiones estructurales del componente en [`TECHNICAL_DESIGN.md`](TECHNICAL_DESIGN.md).
 
 ## Canonical Technical Sequence
 
@@ -32,19 +30,15 @@ Implementation Tasks
 
 ## Technical Views
 
-Evolution utiliza tres vistas técnicas complementarias:
-
-| Vista | Propósito |
+| View | Propósito |
 | --- | --- |
-| Technical Data Diagram | Representar structs, enums, artifacts, borrowed views y sus relaciones. |
-| Module Signature Diagram | Representar módulos Rust como identidades arquitectónicas, sus firmas y relaciones. |
-| D2 Sequence Diagram | Representar el orden de colaboración entre firmas durante una operación. |
+| Technical Data Diagram | Representar structs, enums, artifacts, borrowed views y relaciones. |
+| Module Signature Diagram | Representar módulos Rust como identidades arquitectónicas, firmas y relaciones. |
+| D2 Sequence Diagram | Representar colaboración dinámica entre firmas. |
 
-No se utiliza UML Class Diagram como modelo primario. En Evolution el comportamiento pertenece a módulos y funciones; los datos pertenecen a tipos concretos.
+No se utiliza UML Class Diagram como modelo primario. En Evolution el comportamiento pertenece a módulos/functions y los datos a tipos concretos.
 
 ## Module Identity Rule
-
-Cuando un archivo Rust representa una responsabilidad arquitectónica:
 
 ```text
 archivo.rs
@@ -52,18 +46,30 @@ archivo.rs
     = identidad arquitectónica
 ```
 
-No se crea una `struct` artificial únicamente para dar identidad a una responsabilidad sin estado.
+No se crea una `struct` artificial únicamente para imitar una service class.
 
-Ejemplo:
+## `.efn` / Host Technical Boundary
+
+TD-011 cierra:
 
 ```text
-definitions/use_cases/compile.rs
-    └── Compile
-
-agents/compiler.rs
-    ├── compile(...)
-    └── COMPILE: compile::Compile = compile
+Interactive Host State
+    !=
+Reusable `.efn` Execution State
 ```
+
+Por tanto el diseño técnico de `.efn` no introduce:
+
+```text
+Active Scope
+Host Session State
+Current Provider
+Use Node
+Use Instruction
+SET_SCOPE Opcode
+```
+
+`Scope` permanece en Evo-Shell/Host cuando exista una sesión interactiva persistente. External Symbols de `.efn` se satisfacen mediante explicit Application Bindings.
 
 ## Directory Organization
 
@@ -83,26 +89,38 @@ technical/
 
 ## Traceability Rules
 
-1. Todo dato usado por una Rust Signature debe existir previamente en el Technical Data Model.
-2. Toda identidad del Module Signature Diagram debe corresponder a un módulo Rust real previsto.
-3. Toda interacción del D2 Sequence Diagram debe corresponder a una firma explícita o llamada técnica definida.
-4. Los diagramas se derivan del diseño cerrado; no son dibujos independientes del código.
-5. Si firma, módulo y diagrama divergen, el diseño no puede considerarse cerrado.
+1. Todo dato usado por una Rust Signature debe existir previamente en Technical Data Model.
+2. Toda identidad de Module Signature Diagram corresponde a un módulo Rust real previsto.
+3. Toda interacción de D2 Sequence Diagram corresponde a una firma/call explícita.
+4. Los diagramas derivan del diseño cerrado; no inventan diseño.
+5. Si firma, módulo y diagrama divergen, el diseño no está cerrado.
 
 ## Current Progress
 
 ```text
-Functional Design         ✅ CLOSED
-Technical Design          ← IN PROGRESS
-Technical Data Model      BLOCKED BY OPEN TECHNICAL DECISIONS
-Technical Data Diagram    PENDING
-Rust Signatures           PENDING
-Participants              PENDING
-Module Signature Diagram  PENDING
-D2 Sequence Diagrams      PENDING
-Implementation Tasks      PENDING
+Functional Design                         ✅ CLOSED / REVALIDATED
+Technical Design                          ✅ CLOSED / REVALIDATED
+Technical Data Model                      ← IN PROGRESS
+├── Lexical Data                          ✅ CLOSED
+└── AST Data                              ← IN ANALYSIS
+Technical Data Diagram                    PENDING
+Rust Signatures                           PENDING
+Participants                              PENDING
+Module Signature Diagram                  PENDING
+D2 Sequence Diagrams                      PENDING
+Implementation Tasks                      PENDING
 ```
 
-Las decisiones ya cerradas incluyen Stack VM, Semantic Program como identidad técnica y única IR semántica de v0, resolución de funciones internas durante compilación, forma arquitectónica de Compiled Program y Constant Pool owned.
+Decisiones técnicas estructurales cerradas incluyen:
 
-Las siguientes decisiones abiertas son el modelo Operand Stack / Call Frame, Parameters / Locals y ownership de Values provenientes de External Capabilities.
+- Stack VM;
+- Semantic Program como identidad propia y única Semantic IR;
+- internal Function resolution durante Compile;
+- Compiled Program shape y owned Constant Pool;
+- Shared Operand Stack + Shared Frame Region;
+- external Value ownership policy;
+- Evo-Script-driven VM;
+- Compilation Working State policy;
+- `.efn` / Host State separation.
+
+El trabajo actual continúa en `data-model/AST_DATA.md`: exact AST inventory y representación Rust.
