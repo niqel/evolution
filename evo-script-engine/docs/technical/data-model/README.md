@@ -85,16 +85,14 @@ AST Data                         ✅ CLOSED
 Semantic Program Data            ← IN ANALYSIS
 ├── semantic responsibility      ✅ CLOSED
 ├── no name re-resolution        ✅ CLOSED
-├── TypeId                       ✅ CLOSED
-├── FunctionId                   ✅ CLOSED
-├── BindingId                    ✅ CLOSED
-├── FieldId                      ✅ CLOSED
-├── VariantId                    ✅ CLOSED
-├── SignatureId                  ✅ CLOSED
-├── SignatureBindingId           ✅ CLOSED
+├── semantic identity family     ✅ CLOSED
 ├── identity scopes              ✅ CLOSED
 ├── no ExternalSymbolId here     ✅ CLOSED
-└── semantic owner structures    ← IN ANALYSIS
+├── SemanticProgram root         ✅ CLOSED
+├── SemanticType / variants      ✅ CLOSED
+├── SemanticSignature            ✅ CLOSED
+├── SemanticFunction shell       ✅ CLOSED
+└── Semantic body / expressions  ← IN ANALYSIS
 
 Compiled Program / Bytecode Data PENDING
 VM Execution Data                PENDING
@@ -122,6 +120,7 @@ AST Data:
 Semantic Program Data:
 
 - [`SEMANTIC_PROGRAM_DATA.md`](./SEMANTIC_PROGRAM_DATA.md) — responsabilidad de Semantic Program; `TypeId`, `FunctionId`, `BindingId`, `FieldId`, `VariantId`, `SignatureId`, `SignatureBindingId`; scopes de identidad y separación frente a layout/runtime binding.
+- [`SEMANTIC_PROGRAM_STRUCTURE.md`](./SEMANTIC_PROGRAM_STRUCTURE.md) — `SemanticProgram`, `NativeType`, `SemanticType`, `SemanticField`, `SemanticVariant`, `SemanticBinding`, Signatures, Semantic Parameters y shell de `SemanticFunction`.
 
 ## Technical Data Diagram
 
