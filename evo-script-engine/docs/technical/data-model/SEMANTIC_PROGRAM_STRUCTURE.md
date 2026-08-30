@@ -26,7 +26,7 @@ Regla:
 
 > El owner es la única fuente de verdad para la relación índice-identidad; no se duplica `id` dentro del elemento referenciado.
 
-Esto no convierte los IDs en layout de Runtime. Continúa aplicando:
+Esto no convierte los IDs en layout de Runtime.
 
 ```text
 FieldId             != FieldOffset
@@ -37,7 +37,7 @@ SignatureBindingId  != ExternalSymbolId / runtime binding
 
 ## 2. NativeType
 
-En Semantic Program sí existe una identidad explícita para los tipos nativos porque la resolución de tipos ya concluyó.
+En Semantic Program sí existe una identidad explícita para tipos nativos porque type resolution ya concluyó.
 
 ```rust
 enum NativeType {
@@ -64,7 +64,7 @@ enum NativeType {
 }
 ```
 
-`NativeType` no pertenece al AST. El flujo es:
+`NativeType` no pertenece al AST.
 
 ```text
 AST Identifier("int")
@@ -75,8 +75,6 @@ SemanticType::Native(NativeType::Int)
 ```
 
 ## 3. SemanticType
-
-Representación cerrada:
 
 ```rust
 enum SemanticType {
@@ -90,13 +88,11 @@ enum SemanticType {
 }
 ```
 
-No se introduce `SemanticTypeKind`: la propia variant Rust expresa la naturaleza semántica resuelta.
+No se introduce `SemanticTypeKind`: la propia variant expresa la naturaleza resuelta.
 
-`TypeId` puede identificar Native, local Struct, local Enum, imported shared Type o tipo transitivamente requerido; el origen textual no crea categorías adicionales en esta IR.
+`TypeId` puede identificar Native, local Struct, local Enum, imported shared Type o tipo transitivamente requerido. El origen textual no crea categorías adicionales.
 
 ## 4. SemanticField
-
-Representación cerrada:
 
 ```rust
 struct SemanticField {
@@ -104,26 +100,11 @@ struct SemanticField {
 }
 ```
 
-El nombre textual del field se utiliza durante Semantic Analysis para resolver `FieldId`, pero no es mecanismo de resolución para Bytecode Compiler.
+El nombre textual se utiliza durante Semantic Analysis para resolver `FieldId`, pero no es mecanismo de resolución para Bytecode Compiler.
 
-La identidad del field proviene de su posición en el owner:
-
-```text
-owner.fields[FieldId]
-```
-
-La misma estructura se reutiliza para:
-
-```text
-Struct fields
-Structured Enum Variant fields
-```
-
-porque después de resolución ambas expresan exactamente un field de datos con tipo semántico resuelto.
+La misma estructura se reutiliza para Struct fields y Structured Enum Variant fields.
 
 ## 5. SemanticVariant
-
-Representación cerrada:
 
 ```rust
 enum SemanticVariant {
@@ -137,17 +118,11 @@ enum SemanticVariant {
 }
 ```
 
-La identidad de la variante proviene de:
+La identidad proviene de `semantic_enum.variants[VariantId]`.
 
-```text
-semantic_enum.variants[VariantId]
-```
-
-`VariantId` no es discriminante de runtime. Bytecode Compiler decide posteriormente la representación ejecutable.
+`VariantId != runtime discriminant`.
 
 ## 6. SemanticBinding
-
-Representación cerrada:
 
 ```rust
 struct SemanticBinding {
@@ -155,7 +130,7 @@ struct SemanticBinding {
 }
 ```
 
-`SemanticFunction.bindings` contiene Value bindings resueltos originados por:
+`SemanticFunction.bindings` contiene Value bindings originados por:
 
 ```text
 Value Parameter
@@ -164,13 +139,9 @@ Associated when extraction
 Structured when extraction
 ```
 
-`BindingId` identifica el elemento dentro de esta colección.
-
-No se almacena aquí Parameter/Local Slot ni otra identidad física.
+No contiene Parameter/Local Slot.
 
 ## 7. SemanticSignatureBinding
-
-Representación cerrada:
 
 ```rust
 struct SemanticSignatureBinding {
@@ -178,21 +149,13 @@ struct SemanticSignatureBinding {
 }
 ```
 
-Cada elemento representa una dependencia concreta de Signature dentro de una función. Dos dependencies diferentes pueden referenciar el mismo `SignatureId`.
+Cada elemento representa una Signature Dependency concreta dentro de una función. Dos dependencies distintas pueden referenciar el mismo `SignatureId`.
 
-```text
-SignatureId
-├── SignatureBindingId A
-└── SignatureBindingId B
-```
-
-No es un Value binding ni un runtime external binding.
+No es Value binding ni runtime external binding.
 
 ## 8. SemanticParameter
 
-La lista de parámetros de una Function Implementation conserva una única secuencia posicional común para Values y Signature Dependencies.
-
-Representación cerrada:
+La lista de parámetros de una Function Implementation conserva una sola secuencia posicional común para Values y Signature Dependencies.
 
 ```rust
 enum SemanticParameter {
@@ -201,15 +164,11 @@ enum SemanticParameter {
 }
 ```
 
-Esto preserva el orden original necesario para llamadas y forwarding sin convertir una Signature Dependency en Value de primer orden.
-
-No se separan parámetros en dos listas independientes.
+No se separan los parámetros en listas independientes.
 
 ## 9. SemanticSignatureParameter
 
-Una Signature define contrato, no bindings locales ejecutables.
-
-Representación cerrada:
+Una Signature define contrato, no lexical bindings ejecutables.
 
 ```rust
 enum SemanticSignatureParameter {
@@ -218,26 +177,62 @@ enum SemanticSignatureParameter {
 }
 ```
 
-No utiliza `BindingId` ni `SignatureBindingId` porque una definición de Signature no posee Function Body ni lexical bindings locales.
+No utiliza `BindingId` ni `SignatureBindingId`.
 
-## 10. SemanticSignature
+## 10. SignatureSymbol
 
-Representación cerrada:
+La revisión del Semantic Program confirmó que una Signature externa necesita conservar su identidad contractual canónica para que Bytecode Compiler pueda construir el External Symbol persistente sin volver al AST o imports.
+
+```rust
+struct SignatureSymbol {
+    module: String,
+    name: String,
+}
+```
+
+Ejemplo:
+
+```text
+values::search
+    ↓ Semantic Analyzer
+SignatureId(3)
+    ↓
+SemanticProgram.signatures[3].symbol
+    → SignatureSymbol { module: "values", name: "search" }
+```
+
+Separación obligatoria:
+
+```text
+SignatureId
+    = identidad compacta dentro de SemanticProgram
+
+SignatureSymbol
+    = identidad contractual canónica necesaria para producir
+      el símbolo externo persistente
+
+local import alias
+local Signature Dependency name
+    = no sobreviven como mecanismo de resolución
+```
+
+`SignatureSymbol` no es `ExternalSymbolId`, Provider identity ni runtime binding.
+
+## 11. SemanticSignature
 
 ```rust
 struct SemanticSignature {
+    symbol: SignatureSymbol,
     parameters: Vec<SemanticSignatureParameter>,
     result_type: TypeId,
 }
 ```
 
-Expresa únicamente el contrato semántico resuelto necesario para validar/compilar invocaciones y dependency forwarding.
+`symbol` conserva la identidad formal `module::signature`. La resolución interna continúa utilizando `SignatureId`.
 
-No contiene Provider, runtime binding ni ExternalSymbolId.
+La Signature no contiene Provider, runtime binding ni `ExternalSymbolId`.
 
-## 11. SemanticFunction
-
-Representación cerrada para el shell estructural de una función semántica:
+## 12. SemanticFunction
 
 ```rust
 struct SemanticFunction {
@@ -250,21 +245,17 @@ struct SemanticFunction {
 }
 ```
 
-`SemanticFunctionBody` queda como identidad requerida pero su representación interna se cierra en el siguiente bloque junto con Semantic Expressions.
-
 Invariantes:
 
 1. `parameters` preserva el orden posicional único de Value Parameters y Signature Dependency Parameters.
-2. `bindings` es el owner del namespace `BindingId` de la función.
-3. `signature_bindings` es el owner del namespace `SignatureBindingId` de la función.
-4. `result_type` ya está completamente resuelto.
+2. `bindings` es owner del namespace `BindingId`.
+3. `signature_bindings` es owner del namespace `SignatureBindingId`.
+4. `result_type` ya está resuelto.
 5. `satisfaction` conserva la Signature resuelta que la función declara satisfacer, cuando existe.
-6. No contiene visibility como mecanismo de entry selection; el entry resuelto vive en `SemanticProgram.entry_function`.
-7. No contiene slots, bytecode, external runtime bindings ni physical addresses.
+6. Entry selection vive en `SemanticProgram.entry_function`, no en visibility textual.
+7. No contiene slots, bytecode, runtime bindings ni physical addresses.
 
-## 12. SemanticProgram
-
-Representación raíz cerrada:
+## 13. SemanticProgram
 
 ```rust
 struct SemanticProgram {
@@ -274,8 +265,6 @@ struct SemanticProgram {
     entry_function: FunctionId,
 }
 ```
-
-Relaciones:
 
 ```text
 SemanticProgram
@@ -287,6 +276,7 @@ SemanticProgram
 │           └── SemanticVariant 1..N
 │
 ├── signatures: Vec<SemanticSignature>
+│      └── SignatureSymbol
 │
 ├── functions: Vec<SemanticFunction>
 │      ├── parameters
@@ -303,6 +293,7 @@ Semantic Program no conserva por defecto:
 
 ```text
 imports
+local aliases
 name lookup tables
 AST declarations
 Providers
@@ -316,22 +307,19 @@ runtime discriminants
 field offsets
 ```
 
-## 13. Names and diagnostic metadata
+## 14. Names and symbolic identity boundary
 
-Las representaciones cerradas anteriores no requieren names para resolution. Si Source Mapping / diagnostics demuestra posteriormente la necesidad de conservar nombres semánticos como metadata, podrán agregarse como diagnostic metadata sin convertir strings nuevamente en identities.
+Los nombres locales no sobreviven como mecanismo de resolution. La excepción intencional es `SignatureSymbol`, porque `module::signature` es identidad contractual externa que debe persistir hacia Compiled Program.
 
-La regla permanece:
+Regla:
 
-> Bytecode Compiler nunca depende de nombres textuales para resolver Type, Function, Binding, Field, Variant o Signature identity.
+> Bytecode Compiler nunca usa strings para resolver Type, Function, Binding, Field, Variant o Signature dentro de Semantic Program; solo materializa `SignatureSymbol` al producir external-symbol data.
 
-## 14. Explicitly Excluded
+## 15. Explicitly Excluded
 
 ```text
 SemanticTypeKind
-id field duplicated inside SemanticType
-id field duplicated inside SemanticFunction
-id field duplicated inside SemanticSignature
-id field duplicated inside SemanticField / SemanticVariant
+id field duplicated inside owner elements
 SemanticImport
 Global Binding table
 Provider identity
@@ -341,9 +329,11 @@ runtime discriminant
 ParameterSlot
 LocalSlot
 bytecode / Opcode
+local import alias persistence
+local Signature Dependency name persistence
 ```
 
-## 15. Closure
+## 16. Closure
 
 ```text
 Owner-index identity rule          ✅ CLOSED
@@ -355,10 +345,8 @@ SemanticBinding                    ✅ CLOSED
 SemanticSignatureBinding           ✅ CLOSED
 SemanticParameter                  ✅ CLOSED
 SemanticSignatureParameter         ✅ CLOSED
+SignatureSymbol                    ✅ CLOSED
 SemanticSignature                  ✅ CLOSED
 SemanticFunction shell             ✅ CLOSED
 SemanticProgram root               ✅ CLOSED
-
-SemanticFunctionBody               ← NEXT
-SemanticExpression                 ← NEXT
 ```
