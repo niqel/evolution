@@ -82,7 +82,15 @@ AST Data                         ✅ CLOSED
 ├── `when` model                  ✅ CLOSED
 └── exact AST inventory           ✅ CLOSED — 31 identities
 
-Semantic Program Data            PENDING
+Semantic Program Data            ← IN ANALYSIS
+├── semantic responsibility      ✅ CLOSED
+├── no name re-resolution        ✅ CLOSED
+├── TypeId                       ✅ CLOSED
+├── FunctionId                   ✅ CLOSED
+├── BindingId                    ✅ CLOSED
+├── identity scope               ✅ CLOSED
+└── remaining semantic inventory ← IN ANALYSIS
+
 Compiled Program / Bytecode Data PENDING
 VM Execution Data                PENDING
 Outcome / Diagnostic Data        PENDING
@@ -105,6 +113,10 @@ AST Data:
 - [`AST_EXPRESSIONS.md`](./AST_EXPRESSIONS.md) — `Expression`, operators, FunctionCall, FieldInitializer, constructions, Pipeline, `when` variant y forma final de OperationStatement.
 - [`AST_WHEN.md`](./AST_WHEN.md) — `WhenExpression`, `WhenCorrespondence`, `WhenPattern`, `PatternField` y frontera Parser/Semantic Analyzer para exhaustividad y bindings.
 - [`AST_INVENTORY.md`](./AST_INVENTORY.md) — consolidación final del inventario exacto de 31 identidades AST y cierre de `AST Data` v0.
+
+Semantic Program Data:
+
+- [`SEMANTIC_PROGRAM_DATA.md`](./SEMANTIC_PROGRAM_DATA.md) — responsabilidad de Semantic Program, `TypeId`, `FunctionId`, `BindingId`, scope de identidades y separación frente a layout físico.
 
 ## Technical Data Diagram
 
