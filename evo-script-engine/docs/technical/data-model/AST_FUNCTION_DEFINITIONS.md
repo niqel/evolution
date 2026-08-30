@@ -42,15 +42,14 @@ struct LetBinding<'source> {
     binding: TypedBinding<'source>,
     value: Expression<'source>,
 }
+
+enum OperationStatement<'source> {
+    FunctionCall(FunctionCall<'source>),
+    Pipeline(Pipeline<'source>),
+}
 ```
 
-`OperationStatement` queda cerrado conceptualmente como una alternativa entre Function Call y Pipeline, pero sus payloads Rust concretos se completarán junto con `Expression`, `FunctionCall` y `Pipeline` porque dependen de la representación recursiva del AST.
-
-```text
-OperationStatement
-├── FunctionCall
-└── Pipeline
-```
+La representación de `OperationStatement` se completa mediante las identidades cerradas en `AST_EXPRESSIONS.md`.
 
 ## 2. FunctionDefinition
 
@@ -192,17 +191,18 @@ function_call;
 pipeline_expression;
 ```
 
-No se modela como un wrapper general sobre `Expression`, porque eso permitiría estados AST que la gramática prohíbe, como literals, binary expressions o field access usados como statements.
+Representación cerrada:
 
-La identidad conceptual queda cerrada:
-
-```text
-OperationStatement
-├── FunctionCall
-└── Pipeline
+```rust
+enum OperationStatement<'source> {
+    FunctionCall(FunctionCall<'source>),
+    Pipeline(Pipeline<'source>),
+}
 ```
 
-La representación física de ambas variantes se cerrará junto con el modelo recursivo de Expressions.
+No se modela como un wrapper general sobre `Expression`, porque eso permitiría estados AST que la gramática prohíbe, como literals, binary expressions o field access usados como statements.
+
+`FunctionCall` y `Pipeline` se definen en `AST_EXPRESSIONS.md` y reutilizan exactamente las mismas construcciones sintácticas que participan como Expressions.
 
 ## 8. Source Span Policy
 
@@ -236,6 +236,6 @@ FunctionBody              ✅ CLOSED
 BodyStatement             ✅ CLOSED
 LetBinding                ✅ CLOSED
 return parser-only        ✅ CLOSED
-OperationStatement shape  ✅ CLOSED
-Operation payload layout  → closes with Expression/Pipeline model
+OperationStatement        ✅ CLOSED
+Operation payload layout  ✅ CLOSED
 ```
