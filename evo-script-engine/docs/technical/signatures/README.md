@@ -26,14 +26,13 @@ Una vez cerradas las firmas se derivan los Participants y posteriormente los Mod
 ## Current Progress
 
 ```text
-Root Use Case signatures              ✅ CLOSED
-RSD-001..RSD-010                      ✅ CLOSED
-Compile Participant Design            ← IN PROGRESS
-├── lex_source                        ✅ CLOSED — RSD-011..RSD-013
-├── parse_tokens                      ✅ CLOSED — RSD-014..RSD-015
-├── analyze_program                   ← NEXT
-└── lower_program                     PENDING
-Execution Participant Design          PENDING
+Root Use Case signatures              ✅ CLOSED — RSD-001..RSD-010
+Compile Participant Design            ✅ CLOSED — RSD-011..RSD-020
+├── lex_source                        ✅ CLOSED
+├── parse_tokens                      ✅ CLOSED
+├── analyze_program                   ✅ CLOSED
+└── lower_program                     ✅ CLOSED
+Execution Participant Design          ← NEXT
 Module Signature Diagrams             PENDING
 D2 Sequence Diagrams                  PENDING
 Implementation Tasks                  PENDING
