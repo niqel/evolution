@@ -104,13 +104,9 @@ Functional Design                         ✅ CLOSED / REVALIDATED
 Technical Design                          ✅ CLOSED / REVALIDATED
 Technical Data Model                      ✅ CLOSED
 Technical Data Diagram                    ✅ CLOSED — 9 D2 views
-Rust Signatures root                      ✅ CLOSED — RSD-001..RSD-010
-Compile Participant Design                ← IN PROGRESS
-├── lex_source                            ✅ CLOSED — RSD-011..RSD-013
-├── parse_tokens                          ← NEXT
-├── analyze_program                       PENDING
-└── lower_program                         PENDING
-Execution Participant Design              PENDING
+Root Rust Signatures                      ✅ CLOSED — RSD-001..RSD-010
+Compile Participant Design                ✅ CLOSED — RSD-011..RSD-020
+Execution Participant Design              ← NEXT
 Module Signature Diagram                  PENDING
 D2 Sequence Diagrams                      PENDING
 Implementation Tasks                      PENDING
@@ -127,6 +123,7 @@ Decisiones técnicas estructurales cerradas incluyen:
 - Evo-Script-driven VM;
 - Compilation Working State policy;
 - `.efn` / Host State separation;
-- Earliest Responsible Failure.
+- Earliest Responsible Failure;
+- Compile Agent con cuatro Collaborators internos cerrados.
 
-El trabajo actual continúa en `signatures/COMPILE_PARTICIPANT_DESIGN.md` cerrando las firmas y Participants internos de Compile. No se reabre el Technical Data Model salvo que una contradicción técnica demostrable obligue a hacerlo explícitamente.
+El trabajo actual continúa en Execution Participant Design. El Technical Data Model y Compile Participant Design permanecen cerrados salvo contradicción técnica demostrable que obligue a reabrirlos explícitamente.
