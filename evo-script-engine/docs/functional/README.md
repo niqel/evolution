@@ -50,8 +50,11 @@ Implementation Tasks
 | 4 | [Functional Data Dictionary](DATA_DICTIONARY.md) | REVALIDATED — FUNCTIONAL CLOSED |
 | 5 | [Functional Use Cases](use-cases/README.md) | REVALIDATED — FUNCTIONAL CLOSED |
 | 6 | Technical Design | CLOSED / REVALIDATED |
-| 7 | Technical Data Model | IN PROGRESS — AST Data |
-| 8–13 | Remaining Technical Artifacts | PENDING |
+| 7 | Technical Data Model | CLOSED |
+| 8 | Technical Data Diagram | CLOSED — 9 D2 views |
+| 9 | Rust Signatures raíz | CLOSED — RSD-001..RSD-010 |
+| 10 | Participant Design / firmas internas | IN PROGRESS — `lex_source` cerrado |
+| 11–13 | Module Signature Diagram, D2 Sequence Diagrams, Implementation Tasks | PENDING |
 
 ## Closed Public Functional Set
 
@@ -118,9 +121,10 @@ evo-script-engine/
     └── technical/
         ├── TECHNICAL_DESIGN.md
         ├── data-model/
+        ├── data-diagram/
         ├── signatures/
         ├── module-signatures/
         └── sequences/
 ```
 
-La fase funcional permanece cerrada. El trabajo actual está en `Technical Data Model → AST Data` y no puede reintroducir retrospectivamente Scope/Host state dentro de `.efn` sin reabrir explícitamente la decisión normativa correspondiente.
+La fase funcional permanece cerrada. El trabajo actual pertenece al rol de Líder Técnico y continúa en Rust Signatures / Participant Design; no puede reintroducir retrospectivamente Scope/Host state dentro de `.efn` sin reabrir explícitamente la decisión normativa correspondiente.
