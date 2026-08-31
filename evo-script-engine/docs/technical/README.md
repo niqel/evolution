@@ -1,6 +1,6 @@
 # Evo-Script Engine — Technical Documentation
 
-Status: RUST SIGNATURES / PARTICIPANT DESIGN — IN PROGRESS
+Status: D2 SEQUENCE DIAGRAMS — IN PROGRESS
 
 Este directorio contiene la documentación técnica de `evo-script-engine`.
 
@@ -28,75 +28,6 @@ D2 Sequence Diagrams
 Implementation Tasks
 ```
 
-## Technical Views
-
-| View | Propósito |
-| --- | --- |
-| Technical Data Diagram | Representar structs, enums, artifacts, borrowed views y relaciones. |
-| Module Signature Diagram | Representar módulos Rust como identidades arquitectónicas, firmas y relaciones. |
-| D2 Sequence Diagram | Representar colaboración dinámica entre firmas. |
-
-No se utiliza UML Class Diagram como modelo primario. En Evolution el comportamiento pertenece a módulos/functions y los datos a tipos concretos.
-
-## Module Identity Rule
-
-```text
-archivo.rs
-    = módulo
-    = identidad arquitectónica
-```
-
-No se crea una `struct` artificial únicamente para imitar una service class.
-
-## `.efn` / Host Technical Boundary
-
-TD-011 cierra:
-
-```text
-Interactive Host State
-    !=
-Reusable `.efn` Execution State
-```
-
-Por tanto el diseño técnico de `.efn` no introduce:
-
-```text
-Active Scope
-Host Session State
-Current Provider
-Use Node
-Use Instruction
-SET_SCOPE Opcode
-```
-
-`Scope` permanece en Evo-Shell/Host cuando exista una sesión interactiva persistente. External Symbols de `.efn` se satisfacen mediante explicit Application Bindings.
-
-## Directory Organization
-
-```text
-technical/
-├── README.md
-├── TECHNICAL_DESIGN.md
-├── data-model/
-│   └── Technical Data Model
-├── data-diagram/
-│   └── Technical Data Diagrams D2
-├── signatures/
-│   └── Rust Signatures + Participant Design
-├── module-signatures/
-│   └── Module Signature Diagrams
-└── sequences/
-    └── D2 Sequence Diagrams
-```
-
-## Traceability Rules
-
-1. Todo dato usado por una Rust Signature debe existir previamente en Technical Data Model.
-2. Toda identidad de Module Signature Diagram corresponde a un módulo Rust real previsto.
-3. Toda interacción de D2 Sequence Diagram corresponde a una firma/call explícita.
-4. Los diagramas derivan del diseño cerrado; no inventan diseño.
-5. Si firma, módulo y diagrama divergen, el diseño no está cerrado.
-
 ## Current Progress
 
 ```text
@@ -106,24 +37,47 @@ Technical Data Model                      ✅ CLOSED
 Technical Data Diagram                    ✅ CLOSED — 9 D2 views
 Root Rust Signatures                      ✅ CLOSED — RSD-001..RSD-010
 Compile Participant Design                ✅ CLOSED — RSD-011..RSD-020
-Execution Participant Design              ← NEXT
-Module Signature Diagram                  PENDING
-D2 Sequence Diagrams                      PENDING
+Execution Participant Design              ✅ CLOSED — RSD-021..RSD-040
+Rust Signatures / Participant Design      ✅ CLOSED
+Module Signature Design                   ✅ CLOSED — MSD-001..MSD-010
+Module Signature Diagram                  ✅ CLOSED — 4 D2 views
+D2 Sequence Diagrams                      ← IN PROGRESS
 Implementation Tasks                      PENDING
 ```
 
-Decisiones técnicas estructurales cerradas incluyen:
+## Technical Views
 
-- Stack VM;
-- Semantic Program como identidad propia y única Semantic IR;
-- internal Function resolution durante Compile;
-- Compiled Program shape y owned Constant Pool;
-- Shared Operand Stack + Shared Frame Region;
-- external Value ownership policy;
-- Evo-Script-driven VM;
-- Compilation Working State policy;
-- `.efn` / Host State separation;
-- Earliest Responsible Failure;
-- Compile Agent con cuatro Collaborators internos cerrados.
+| View | Propósito |
+| --- | --- |
+| Technical Data Diagram | Representar structs, enums, artifacts, borrowed views y relaciones. |
+| Module Signature Diagram | Representar módulos Rust como identidades arquitectónicas, firmas y relaciones. |
+| D2 Sequence Diagram | Representar colaboración dinámica entre firmas. |
 
-El trabajo actual continúa en Execution Participant Design. El Technical Data Model y Compile Participant Design permanecen cerrados salvo contradicción técnica demostrable que obligue a reabrirlos explícitamente.
+## Traceability Rules
+
+1. Todo dato usado por una Rust Signature existe previamente en Technical Data Model.
+2. Toda identidad de Module Signature Diagram corresponde a un módulo Rust real previsto.
+3. Toda interacción de D2 Sequence Diagram debe corresponder a una firma/call explícita cerrada.
+4. Los diagramas derivan del diseño; no inventan Participants, helpers o dependencias.
+5. Si firma, módulo y diagrama divergen, el diseño no está cerrado.
+
+## Closed technical foundation
+
+La etapa actual no reabre:
+
+- Stack VM y VM Execution Data;
+- Technical Data Model de 140 identities;
+- Technical Data Diagram suite de 9 vistas;
+- Use Case signatures públicas;
+- 6 Collaborators únicos;
+- 1 Resolver único;
+- 8 Tools únicas;
+- 21 módulos conductuales previstos;
+- `ExternalCapability` como frontera runtime function-pointer sin Contract duplicado;
+- ausencia de Requesters en `evo-script-engine` v0.
+
+## Current work
+
+El trabajo actual consiste exclusivamente en derivar D2 Sequence Diagrams desde las firmas y módulos ya cerrados.
+
+Después de cerrar las secuencias, el siguiente paso será producir `Implementation Tasks` para AGY/Codex.
