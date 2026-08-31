@@ -159,7 +159,7 @@ type ExternalCapability =
 
 ## CompileFailure root
 
-Status: CLOSED
+Status: CLOSED — SUBFAMILIES IN PROGRESS
 
 La autoridad especializada está en [`COMPILE_FAILURE.md`](./COMPILE_FAILURE.md).
 
@@ -193,7 +193,14 @@ structured Consumer-neutral data
 one primary deterministic CompileFailure in v0
 ```
 
-Las subfamilies exactas permanecen por cerrar individualmente.
+Subfamilies ya cerradas:
+
+```text
+LexicalFailure = 6 variants
+SyntaxFailure  = 10 variants
+```
+
+Antes de `SemanticFailure` se corrigió explícitamente la fuente de contratos externos mediante [`COMPILATION_DEPENDENCY_MODEL.md`](./COMPILATION_DEPENDENCY_MODEL.md): Semantic Analyzer borrows un `CompilationCatalog` validado y no realiza filesystem/module resolution.
 
 ## Explicitly Not Introduced
 
@@ -229,9 +236,10 @@ OD-010 failure meaning separated from diagnostic provenance       ✅ CLOSED
 
 Outcome / Diagnostic root model                                   ✅ CLOSED
 CompileFailure root / CPF-001..CPF-010                            ✅ CLOSED
-LexicalFailure exact family                                       ← NEXT
-SyntaxFailure exact family                                        PENDING
-SemanticFailure exact family                                      PENDING
+LexicalFailure exact family                                       ✅ CLOSED — 6 variants
+SyntaxFailure exact family                                        ✅ CLOSED — 10 variants
+CompilationCatalog corrective dependency                          ✅ CLOSED — 8 identities
+SemanticFailure exact family                                      ← NEXT
 ExecutionFailure exact family                                     PENDING
 ExternalCapabilityFailure exact representation                    PENDING
 DiagnosticAnchor                                                   PENDING
