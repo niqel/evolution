@@ -88,12 +88,18 @@ VM Execution Data                    ✅ STRUCTURAL / INVENTORY CLOSED
 ├── Compiled Boundary Value Shape    ✅ CLOSED
 └── exact VM inventory               ✅ CLOSED — 19 identities
 
-Outcome / Diagnostic Data            ← NEXT
-├── execution Result                 PENDING
-├── compile Outcome                  PENDING
-├── technical Failure family         PENDING
-├── ExternalCapability failure type  PENDING
-├── source-linked diagnostic anchor  PENDING
+Outcome / Diagnostic Data            ◉ IN PROGRESS
+├── Outcome root                     ✅ CLOSED
+│   ├── CompileOutcome               ✅ CLOSED
+│   ├── ExecutionOutcome             ✅ CLOSED
+│   └── external failure ownership   ✅ CLOSED at root level
+├── CompileFailure root              ✅ CLOSED
+│   ├── LexicalFailure               ✅ CLOSED — 6 variants
+│   ├── SyntaxFailure                ✅ CLOSED — 10 variants
+│   └── SemanticFailure              ← NEXT
+├── ExecutionFailure exact family    PENDING
+├── ExternalCapabilityFailure shape  PENDING
+├── DiagnosticAnchor exact shape     PENDING
 ├── Source Location materialization  PENDING
 └── exact outcome inventory          PENDING
 ```
@@ -121,7 +127,7 @@ CompiledProgram
         ↓ boundary validation through CompiledValueShape
 VmExecution                   19 own VM identities
         ↓ bytecode execution
-Outcome / Diagnostic Data     ← not yet modeled technically
+Outcome / Diagnostic Data     ◉ currently being modeled
 ```
 
 ## Current Documents
@@ -181,6 +187,13 @@ Outcome / Diagnostic Data     ← not yet modeled technically
 - [`VM_EXECUTION_ROOT.md`](./VM_EXECUTION_ROOT.md)
 - [`../../../../evo-values/INTERCHANGE_MODEL.md`](../../../../evo-values/INTERCHANGE_MODEL.md)
 
+### Outcome / Diagnostic Data
+
+- [`OUTCOME_DIAGNOSTIC_DATA.md`](./OUTCOME_DIAGNOSTIC_DATA.md)
+- [`COMPILE_FAILURE.md`](./COMPILE_FAILURE.md)
+- [`LEXICAL_FAILURE.md`](./LEXICAL_FAILURE.md)
+- [`SYNTAX_FAILURE.md`](./SYNTAX_FAILURE.md)
+
 ### Normative language amendments used by compiled/runtime model
 
 - [`../../../../evo-script/DYNAMIC_NUMERIC_ARITHMETIC_v0.1.md`](../../../../evo-script/DYNAMIC_NUMERIC_ARITHMETIC_v0.1.md)
@@ -218,12 +231,8 @@ No se representan methods, inheritance, service classes ni OO interfaces fictici
 
 ## Next Block
 
-Antes de avanzar, corresponde revisar el mapa arquitectónico completo.
-
-Después de esa revisión:
-
 ```text
-Outcome / Diagnostic Data ← NEXT TECHNICAL PHASE
+SemanticFailure exact family ← NEXT
 ```
 
-La primera responsabilidad de esa fase será definir la representación técnica neutral de outcomes y failures sin mezclar presentación humana con datos diagnósticos, y completar finalmente el failure type de `ExternalCapability`.
+Después de cerrar las tres subfamilias de `CompileFailure`, continuará el modelado de `ExecutionFailure`, `ExternalCapabilityFailure` y `DiagnosticAnchor` antes del inventario exacto de Outcome / Diagnostic Data.
