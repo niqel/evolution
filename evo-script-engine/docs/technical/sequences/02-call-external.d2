@@ -1,0 +1,38 @@
+call_external: {
+  shape: sequence_diagram
+
+  executor: "ExecuteCompiled / ExecuteSource Agent"
+  resolver: "resolvers/external_call_resolver"
+  observer: "tools/observe_runtime_value"
+  capability: "ExternalCapability boundary"
+  matcher: "tools/matches_owned_value_shape"
+  materializer: "tools/materialize_owned_value"
+  locator: "tools/locate_source_span"
+
+  executor -> resolver: "RESOLVE_EXTERNAL_CALL(&mut execution)"
+
+  resolver."Lee current CallExternal, ExternalSymbol y SignatureSymbol; realiza lookup lazy en ApplicationBindings."
+
+  arguments: {
+    resolver -> observer: "OBSERVE_RUNTIME_VALUE(runtime_arg_i, compiled_program, backing_store)"
+    observer -> resolver: "Value<'call>"
+  }
+
+  resolver -> capability: "ExternalCapability(&arguments)"
+  capability -> resolver: "Result<OwnedValue, ExternalCapabilityFailure>"
+
+  success_path: {
+    resolver -> matcher: "MATCHES_OWNED_VALUE_SHAPE(&result, result_shape, value_shapes)"
+    matcher -> resolver: "true"
+    resolver -> materializer: "MATERIALIZE_OWNED_VALUE(result, backing_store)"
+    materializer -> resolver: "RuntimeValue"
+    resolver -> executor: "Ok(()) · N→1 commit · ip += 1"
+  }
+
+  failure_context_alternative: {
+    resolver -> locator: "LOCATE_SOURCE_SPAN(compiled_program, active_frame)"
+    locator -> resolver: "SourceSpan"
+  }
+
+  resolver."Alternativas de failure: MissingBinding, CapabilityFailure o ResultContractMismatch. En cualquiera: no N→1 commit, IP permanece en CallExternal y ExecutionFailure::External conserva Some(SourceSpan)."
+}
