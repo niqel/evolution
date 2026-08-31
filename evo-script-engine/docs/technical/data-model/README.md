@@ -97,7 +97,7 @@ VM Execution Data                    ✅ STRUCTURAL / INVENTORY CLOSED
 ├── CallFrame                        ✅ CLOSED — 3 fields
 ├── InstructionPointer               ✅ CLOSED
 ├── stepping semantics               ✅ CLOSED
-├── ExternalCapability ABI           ✅ CLOSED — failure identity known; shape pending
+├── ExternalCapability ABI           ✅ CLOSED — exact Rust signature complete
 ├── Value<'a> / OwnedValue boundary  ✅ CLOSED
 ├── VmExecution exact Rust root      ✅ CLOSED — 5 fields
 ├── Compiled Boundary Value Shape    ✅ CLOSED
@@ -107,7 +107,7 @@ Outcome / Diagnostic Data            ◉ IN PROGRESS
 ├── Outcome root                     ✅ CLOSED
 │   ├── CompileOutcome               ✅ CLOSED
 │   ├── ExecutionOutcome             ✅ CLOSED
-│   └── external failure ownership   ✅ CLOSED at root level
+│   └── external failure ownership   ✅ CLOSED
 ├── CompileFailure                   ✅ CLOSED — ROOT + SUBFAMILIES
 │   ├── LexicalFailure               ✅ CLOSED — 6 variants
 │   ├── SyntaxFailure                ✅ CLOSED — 10 variants
@@ -126,8 +126,12 @@ Outcome / Diagnostic Data            ◉ IN PROGRESS
 │   ├── DiagnosticAnchor             ❌ NOT NEEDED v0
 │   ├── SourceLocation identity      ❌ NOT NEEDED v0
 │   └── runtime SourceMap materialization ✅ CLOSED
-├── ExternalCapabilityFailure shape  ← NEXT
-├── ExecutionFailure exact family    PENDING
+├── ExternalCapabilityFailure        ✅ CLOSED — 1 identity / 1 field
+│   ├── code: Box<str>               ✅ CLOSED
+│   ├── lowercase snake_case         ✅ CLOSED
+│   ├── provider normalization       ✅ CLOSED
+│   └── exact ExternalCapability ABI ✅ CLOSED
+├── ExecutionFailure exact family    ← NEXT
 └── exact outcome inventory          PENDING
 ```
 
@@ -232,6 +236,40 @@ Invocation failures que ocurren antes de una `VmExecution` válida usan `source_
 
 `SourceSpan` conserva provenance técnica; line/column/snippet/path son presentación derivada por el Consumer cuando dispone del Source Text.
 
+## Closed external capability failure boundary
+
+```rust
+struct ExternalCapabilityFailure {
+    code: Box<str>,
+}
+```
+
+Exact ABI:
+
+```rust
+type ExternalCapability =
+    for<'value> fn(
+        &'value [Value<'value>],
+    ) -> Result<OwnedValue, ExternalCapabilityFailure>;
+```
+
+El code es una identity simbólica estable lowercase snake_case y está contextualizado por la `SignatureSymbol` que el Engine ya conoce.
+
+El adapter de aplicación normaliza errors de Provider/vendor antes de cruzar el ABI.
+
+No cruzan hacia el Engine:
+
+```text
+Provider-specific error type
+Box<dyn Error>
+std::io::Error
+SourceSpan
+human message
+arbitrary details payload
+```
+
+`MissingBinding` y `ResultContractMismatch` siguen siendo failures propios del Engine y se definirán dentro de `ExecutionFailure`.
+
 ## Current Documents
 
 ### Lexical Data
@@ -301,6 +339,7 @@ Invocation failures que ocurren antes de una `VmExecution` válida usan `source_
 - [`SYNTAX_FAILURE.md`](./SYNTAX_FAILURE.md)
 - [`SEMANTIC_FAILURE.md`](./SEMANTIC_FAILURE.md)
 - [`DIAGNOSTIC_PROVENANCE.md`](./DIAGNOSTIC_PROVENANCE.md)
+- [`EXTERNAL_CAPABILITY_FAILURE.md`](./EXTERNAL_CAPABILITY_FAILURE.md)
 
 ### Normative language amendments used by compiled/runtime model
 
@@ -340,16 +379,14 @@ No se representan methods, inheritance, service classes ni OO interfaces fictici
 ## Next Block
 
 ```text
-ExternalCapabilityFailure exact representation ← NEXT
+ExecutionFailure exact family ← NEXT
 ```
 
-La provenance diagnóstica ya está cerrada sin nuevas identities. El siguiente bloque debe definir únicamente qué información estructurada puede producir una capability externa cuando su propia operación falla; después esa failure será integrada por `ExecutionFailure`, que agregará la provenance del `CallExternal` responsable.
+Ya no quedan placeholders dentro de `ExternalCapability` ni de provenance diagnóstica.
 
 Después:
 
 ```text
-ExternalCapabilityFailure
-    ↓
 ExecutionFailure exact family
     ↓
 Outcome exact inventory
