@@ -30,8 +30,8 @@ Root Use Case signatures              ✅ CLOSED
 RSD-001..RSD-010                      ✅ CLOSED
 Compile Participant Design            ← IN PROGRESS
 ├── lex_source                        ✅ CLOSED — RSD-011..RSD-013
-├── parse_tokens                      ← NEXT
-├── analyze_program                   PENDING
+├── parse_tokens                      ✅ CLOSED — RSD-014..RSD-015
+├── analyze_program                   ← NEXT
 └── lower_program                     PENDING
 Execution Participant Design          PENDING
 Module Signature Diagrams             PENDING
