@@ -142,7 +142,7 @@ VmExecution
 └── is logical owner of execution-lifetime backing data
 ```
 
-El Rust struct final de `VmExecution` permanece pendiente únicamente de cerrar sus lifetimes/fields exactos; las responsabilidades root ya están cerradas.
+La representación Rust exacta se cierra finalmente en VM-024 / `VM_EXECUTION_ROOT.md`.
 
 ## VM-010 — RuntimeValue and evo_values::Value<'a> are distinct
 
@@ -537,6 +537,54 @@ type ExternalCapability =
 
 El tipo exacto de external failure se cierra en Outcome / Diagnostic Data y no reabre el intercambio de Values.
 
+## VM-024 — VmExecution Exact Rust Root
+
+Status: CLOSED
+
+Cerrado en `VM_EXECUTION_ROOT.md` mediante VE-001..VE-010.
+
+Representación exacta:
+
+```rust
+struct VmExecution<'compiled, 'bindings> {
+    compiled_program: &'compiled CompiledProgram,
+    application_bindings: &'bindings ApplicationBindings,
+    value_storage: SharedValueStorage,
+    backing_store: ExecutionBackingStore,
+    call_frames: Vec<CallFrame>,
+}
+```
+
+Reglas centrales:
+
+```text
+exactly 5 persistent fields
+2 independent external borrow lifetimes
+3 mutable runtime roots
+no persistent self-borrows
+active frame = call_frames.last()
+entry_point derived from CompiledProgram
+Invocation Values are initialization-only
+entry frame = entry_point / ip 0 / frame_base 0
+no persistent Running/Completed/Failed state
+no Outcome/result/failure field
+no derived/cache fields in v0
+```
+
+El cierre detectó una inconsistencia previa que NO pertenece al root: el `CompiledProgram` vigente conserva aridad de entry/external calls, pero no conserva información suficiente para validar Value compatibility en dos fronteras.
+
+```text
+Execute Compiled Invocation Values
+    → exact arity can be checked
+    → exact expected Value shape currently cannot
+
+ExternalCapability Success(OwnedValue)
+    → one result exists
+    → exact expected result Value shape currently cannot
+```
+
+La corrección se analiza separadamente en `COMPILED_BOUNDARY_VALUE_SHAPE.md` y no reabre VE-001..VE-010.
+
 ## Runtime Value / VM Data Authorities
 
 - `RUNTIME_VALUE_MODEL.md`
@@ -548,6 +596,8 @@ El tipo exacto de external failure se cierra en Outcome / Diagnostic Data y no r
 - `INSTRUCTION_POINTER_STEPPING.md`
 - `APPLICATION_BINDINGS.md`
 - `EXTERNAL_CAPABILITY_ABI.md`
+- `VM_EXECUTION_ROOT.md`
+- `COMPILED_BOUNDARY_VALUE_SHAPE.md` — current corrective analysis
 - `../../../../evo-values/INTERCHANGE_MODEL.md`
 
 ## Current Closure
@@ -589,12 +639,16 @@ evo-values Value<'a> exact 17 families           ✅ CLOSED
 evo-values OwnedValue exact 17 families          ✅ CLOSED
 canonical Dynamic Integer interchange            ✅ CLOSED
 no_std + alloc shared Value model                 ✅ CLOSED
+VmExecution exact 5-field Rust root              ✅ CLOSED
+independent CompiledProgram/Bindings lifetimes   ✅ CLOSED
+entry frame initialization                       ✅ CLOSED
+no VmExecution derived/cache fields              ✅ CLOSED
 
 root InstructionPointer                         ❌ EXCLUDED
 Host / Active Scope / Current Provider          ❌ EXCLUDED
 Outcome / Diagnostic data                       ❌ SEPARATE PHASE
 
+Compiled Boundary Value Shape                   ← NEXT
 ExternalCapability failure type                 PENDING — Outcome / Diagnostic Data
-VmExecution exact Rust root                     ← NEXT
 VM Execution exact inventory                    PENDING
 ```
