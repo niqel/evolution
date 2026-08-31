@@ -108,11 +108,19 @@ Outcome / Diagnostic Data            ◉ IN PROGRESS
 │   ├── CompileOutcome               ✅ CLOSED
 │   ├── ExecutionOutcome             ✅ CLOSED
 │   └── external failure ownership   ✅ CLOSED at root level
-├── CompileFailure root              ✅ CLOSED
+├── CompileFailure                   ✅ CLOSED — ROOT + SUBFAMILIES
 │   ├── LexicalFailure               ✅ CLOSED — 6 variants
 │   ├── SyntaxFailure                ✅ CLOSED — 10 variants
-│   └── SemanticFailure              ← NEXT
-├── ExecutionFailure exact family    PENDING
+│   └── SemanticFailure              ✅ CLOSED — 12 own identities
+│       ├── root families            ✅ CLOSED — 7 variants
+│       ├── ResolutionFailure        ✅ CLOSED — 4 variants
+│       ├── DeclarationFailure       ✅ CLOSED — 7 variants
+│       ├── TypeCheckingFailure      ✅ CLOSED — 8 variants
+│       ├── CallFailure              ✅ CLOSED — 7 variants
+│       ├── CompositeFailure         ✅ CLOSED — 10 variants
+│       ├── WhenFailure              ✅ CLOSED — 11 variants
+│       └── SignatureMismatchKind    ✅ CLOSED — 6 variants
+├── ExecutionFailure exact family    ← NEXT
 ├── ExternalCapabilityFailure shape  PENDING
 ├── DiagnosticAnchor exact shape     PENDING
 ├── Source Location materialization  PENDING
@@ -166,6 +174,29 @@ ApplicationBindings
 ```
 
 They are intentionally distinct and are never ambient/global Engine state.
+
+## Closed compile-failure boundary
+
+```text
+Source Text
+    ↓
+Lexer
+    ├── LexicalFailure       6 variants
+    ▼
+TokenSequence
+    ↓
+Parser
+    ├── SyntaxFailure       10 variants
+    ▼
+AST + CompilationCatalog
+    ↓
+Semantic Analyzer
+    ├── SemanticFailure     12 own identities
+    ▼
+SemanticProgram
+```
+
+`SemanticFailure` no absorbe failures físicos de `.elib`, `.emod`, filesystem o construcción del catálogo. Esas condiciones deben resolverse antes de entregar un `CompilationCatalog` válido al Engine.
 
 ## Current Documents
 
@@ -234,6 +265,7 @@ They are intentionally distinct and are never ambient/global Engine state.
 - [`COMPILE_FAILURE.md`](./COMPILE_FAILURE.md)
 - [`LEXICAL_FAILURE.md`](./LEXICAL_FAILURE.md)
 - [`SYNTAX_FAILURE.md`](./SYNTAX_FAILURE.md)
+- [`SEMANTIC_FAILURE.md`](./SEMANTIC_FAILURE.md)
 
 ### Normative language amendments used by compiled/runtime model
 
@@ -273,9 +305,9 @@ No se representan methods, inheritance, service classes ni OO interfaces fictici
 ## Next Block
 
 ```text
-SemanticFailure exact family ← NEXT
+ExecutionFailure exact family ← NEXT
 ```
 
-La corrección `CompilationCatalog` ya proporciona al Semantic Analyzer los contratos externos que necesita para decidir esos failures sin hacer filesystem/module resolution dentro del Engine.
+`CompileFailure` está completo. El siguiente bloque debe definir qué puede fallar al entrar y ejecutar un `CompiledProgram`: invocation boundary, evaluation failures y external execution failures, manteniendo separado `ExternalCapabilityFailure` de los failures propios del Engine.
 
-Después de cerrar las tres subfamilias de `CompileFailure`, continuará el modelado de `ExecutionFailure`, `ExternalCapabilityFailure` y `DiagnosticAnchor` antes del inventario exacto de Outcome / Diagnostic Data.
+Después se cerrarán `ExternalCapabilityFailure`, `DiagnosticAnchor`, Source Location materialization y el inventario exacto de Outcome / Diagnostic Data.
