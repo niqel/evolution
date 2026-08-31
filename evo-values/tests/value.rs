@@ -2,7 +2,7 @@ extern crate alloc;
 
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
-use evo_values::definitions::value::{
+use evo_values::{
     DynamicIntegerValue, DynamicValue, EnumPayload, OwnedDynamicInteger, OwnedDynamicValue,
     OwnedEnumPayload, OwnedValue, Value,
 };
@@ -387,4 +387,27 @@ fn owned_enum_variants() {
             },
         }
     );
+}
+
+#[test]
+fn public_exports_access() {
+    let _: evo_values::Value = evo_values::Value::Boolean(true);
+    let _: evo_values::DynamicValue = evo_values::DynamicValue::Float32(1.0);
+    let _: evo_values::DynamicIntegerValue = evo_values::DynamicIntegerValue {
+        negative: false,
+        magnitude: Cow::Borrowed(&[]),
+    };
+    let _: evo_values::EnumPayload = evo_values::EnumPayload::Simple;
+
+    let _: evo_values::OwnedValue = evo_values::OwnedValue::Boolean(true);
+    let _: evo_values::OwnedDynamicValue = evo_values::OwnedDynamicValue::Float32(1.0);
+    let _: evo_values::OwnedDynamicInteger = evo_values::OwnedDynamicInteger {
+        negative: false,
+        magnitude: Box::new([]),
+    };
+    let _: evo_values::OwnedEnumPayload = evo_values::OwnedEnumPayload::Simple;
+
+    let _: evo_values::definitions::Value = evo_values::definitions::Value::Boolean(false);
+    let _: evo_values::definitions::OwnedValue =
+        evo_values::definitions::OwnedValue::Boolean(false);
 }
