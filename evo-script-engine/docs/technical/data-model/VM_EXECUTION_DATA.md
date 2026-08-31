@@ -30,19 +30,17 @@ Status: CLOSED
 
 ## VM-003 — Application Bindings Relationship
 
-Status: CLOSED — RELATIONSHIP ONLY
+Status: CLOSED
 
-La ejecución referencia exactamente un conjunto explícito de `ApplicationBindings` utilizado para resolver `ExternalSymbolId` durante `CallExternal`.
+La ejecución referencia exactamente un conjunto explícito e inmutable de `ApplicationBindings` durante toda la invocation.
+
+La representación exacta queda cerrada en `APPLICATION_BINDINGS.md` y se resume en VM-021.
 
 No existe `Current Provider`, provider lookup ambiental ni Host Session State dentro de la ejecución.
-
-La estructura exacta de `ApplicationBindings` permanece pendiente.
 
 ## VM-004 — One Shared Value Storage
 
 Status: CLOSED
-
-La representación exacta se cierra en `SHARED_VALUE_STORAGE.md`:
 
 ```rust
 struct SharedValueStorage {
@@ -57,8 +55,6 @@ Parameters, Locals y Operands son regiones lógicas del mismo storage físico.
 Status: CLOSED
 
 `VmExecution` posee una colección ordenada LIFO de `CallFrame`.
-
-La representación exacta queda cerrada en `CALL_FRAME.md`:
 
 ```rust
 struct InstructionPointer(usize);
@@ -146,7 +142,7 @@ VmExecution
 └── is logical owner of execution-lifetime backing data
 ```
 
-El Rust struct final de `VmExecution` permanece pendiente hasta cerrar `ApplicationBindings` y las relaciones borrowed exactas.
+El Rust struct final de `VmExecution` permanece pendiente hasta cerrar el ABI externo y las relaciones borrowed exactas.
 
 ## VM-010 — RuntimeValue and evo_values::Value<'a> are distinct
 
@@ -307,8 +303,6 @@ struct SharedValueStorage {
 }
 ```
 
-Semántica:
-
 ```text
 Some(RuntimeValue) = occupied materialized cell
 None               = reserved LocalSlot not yet materialized
@@ -391,8 +385,6 @@ Regla de commit:
 
 Esto no implica rollback transaccional ni resumability.
 
-Tabla cerrada:
-
 ```text
 ordinary success           → ip += 1
 ordinary failure           → unchanged
@@ -408,6 +400,54 @@ CallExternal failure       → unchanged
 
 No existen `next_ip`, `return_ip`, past-end sentinel ni root-level `InstructionPointer`.
 
+## VM-021 — ApplicationBindings Exact Model
+
+Status: CLOSED
+
+Cerrado en `APPLICATION_BINDINGS.md` mediante AB-001..AB-009.
+
+Representación base v0:
+
+```rust
+struct ApplicationBindings {
+    capabilities: HashMap<SignatureSymbol, ExternalCapability>,
+}
+```
+
+Separación de identities:
+
+```text
+ExternalSymbolId
+    = program-local compiled identity
+
+SignatureSymbol
+    = cross-boundary contractual identity used for lookup
+
+ExternalCapability
+    = uniform executable function pointer supplied by application
+```
+
+`ApplicationBindings` es application-oriented y reusable entre distintos `CompiledProgram`; no está indexado por `ExternalSymbolId`.
+
+`VmExecution` lo borrows de forma inmutable durante toda la invocation. Capabilities extra son válidas.
+
+La resolución es lazy en `CallExternal`:
+
+```text
+ExternalSymbolId
+    → ExternalSymbol.symbol
+    → SignatureSymbol
+    → ApplicationBindings lookup
+        ├── found   → invoke ExternalCapability
+        └── missing → execution Failure
+```
+
+Un binding faltante no falla durante Compile ni al crear la ejecución; falla cuando el símbolo correspondiente es realmente alcanzado.
+
+No existen Provider identity, Current Provider, Active Scope, reflection, Service Locator, global registry o binding mutation dentro del modelo.
+
+La firma exacta de `ExternalCapability` permanece pendiente del siguiente bloque.
+
 ## Runtime Value / VM Data Authorities
 
 - `RUNTIME_VALUE_MODEL.md`
@@ -417,6 +457,7 @@ No existen `next_ip`, `return_ip`, past-end sentinel ni root-level `InstructionP
 - `SHARED_VALUE_STORAGE.md`
 - `CALL_FRAME.md`
 - `INSTRUCTION_POINTER_STEPPING.md`
+- `APPLICATION_BINDINGS.md`
 
 ## Current Closure
 
@@ -424,7 +465,8 @@ No existen `next_ip`, `return_ip`, past-end sentinel ni root-level `InstructionP
 VmExecution responsibility                     ✅ CLOSED
 one invocation per VmExecution                 ✅ CLOSED
 CompiledProgram relationship                   ✅ CLOSED
-ApplicationBindings relationship               ✅ CLOSED — exact model pending
+ApplicationBindings relationship               ✅ CLOSED
+ApplicationBindings exact model                ✅ CLOSED
 one SharedValueStorage root                    ✅ CLOSED
 Call Frames root ownership                      ✅ CLOSED
 execution-lifetime backing logical owner        ✅ CLOSED
@@ -444,13 +486,16 @@ active IP validity / no past-end                 ✅ CLOSED
 sequential / branch stepping                     ✅ CLOSED
 Call / Return stepping                           ✅ CLOSED
 failure preserves responsible IP                 ✅ CLOSED
+SignatureSymbol application lookup              ✅ CLOSED
+lazy missing-binding failure                     ✅ CLOSED
+immutable explicit application composition       ✅ CLOSED
 
 root InstructionPointer                         ❌ EXCLUDED
 Host / Active Scope / Current Provider          ❌ EXCLUDED
 Outcome / Diagnostic data                       ❌ SEPARATE PHASE
 
-ApplicationBindings exact model                 ← NEXT
-remaining external call/value mechanics         PENDING
-VmExecution exact Rust root                     PENDING
-VM Execution exact inventory                    PENDING
+ExternalCapability uniform ABI                  ← NEXT
+external argument/result materialization         PENDING
+VmExecution exact Rust root                      PENDING
+VM Execution exact inventory                     PENDING
 ```
