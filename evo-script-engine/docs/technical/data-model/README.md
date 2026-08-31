@@ -160,7 +160,11 @@ VM Execution Data                ← IN ANALYSIS
 ├── borrowed external arguments ✅ CLOSED
 ├── owned external success result ✅ CLOSED
 ├── external N→1 commit-on-success ✅ CLOSED
-└── evo-values borrowed / owned interchange model ← NEXT
+├── evo-values Value<'a>         ✅ CLOSED — 17 variants
+├── evo-values OwnedValue        ✅ CLOSED — 17 variants
+├── canonical Dynamic Integer interchange ✅ CLOSED
+├── no_std + alloc interchange   ✅ CLOSED
+└── VmExecution exact Rust root  ← NEXT
 
 Outcome / Diagnostic Data        PENDING
 ```
@@ -216,7 +220,8 @@ Outcome / Diagnostic Data        PENDING
 - [`CALL_FRAME.md`](./CALL_FRAME.md) — `CallFrame` exacto de tres fields, `InstructionPointer`, `frame_base`, `operand_base` derivado y suspensión del caller sobre `Call`.
 - [`INSTRUCTION_POINTER_STEPPING.md`](./INSTRUCTION_POINTER_STEPPING.md) — valid IP invariant, commit-after-success, sequential/branch stepping y transitions exactas de `Call`, `Return` y `CallExternal`.
 - [`APPLICATION_BINDINGS.md`](./APPLICATION_BINDINGS.md) — `HashMap<SignatureSymbol, ExternalCapability>`, composición explícita reusable y resolución lazy de `CallExternal`.
-- [`EXTERNAL_CAPABILITY_ABI.md`](./EXTERNAL_CAPABILITY_ABI.md) — ABI uniforme por function pointer, borrowed arguments, owned success result y commit `N → 1` después de success.
+- [`EXTERNAL_CAPABILITY_ABI.md`](./EXTERNAL_CAPABILITY_ABI.md) — ABI uniforme por function pointer, `&[Value<'a>]` arguments, `OwnedValue` success result y commit `N → 1` después de success.
+- [`../../../../evo-values/INTERCHANGE_MODEL.md`](../../../../evo-values/INTERCHANGE_MODEL.md) — modelo compartido `Value<'a>` / `OwnedValue`, 17 familias exactas, Dynamic Integer canónico y `no_std + alloc`.
 
 ### Normative language amendments used by compiled/runtime model
 
@@ -258,7 +263,7 @@ La metodología global se define en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../..
 ## Next Block
 
 ```text
-evo-values borrowed / owned interchange model ← NEXT
+VmExecution exact Rust root ← NEXT
 ```
 
-Aquí se definirá la representación completa que permite observar un `RuntimeValue` como borrowed `Value<'a>` y transferir un resultado externo owned hacia `VmExecution` como `OwnedValue`, cubriendo todas las familias de Value que Evo-Script v0 ya cerró.
+Aquí se cerrará el `struct VmExecution<'...>` exacto: lifetimes de `CompiledProgram` y `ApplicationBindings`, fields owned (`SharedValueStorage`, `ExecutionBackingStore`, `Vec<CallFrame>`) y cualquier invariante de inicialización que realmente pertenezca al root, sin introducir Context, Session ni estado duplicado.
