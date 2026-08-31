@@ -78,57 +78,29 @@ Parser
 
 Status: CLOSED
 
-```rust
-MalformedDeclaration
-```
+`MalformedDeclaration` es la failure genérica cuando Parser no puede construir una de las formas legales de declaración de Evo-Script v0.
 
-es la failure genérica cuando Parser no puede construir una de las formas legales de declaración de Evo-Script v0.
-
-No se introducen tipos separados como:
-
-```text
-MalformedStructDeclaration
-MalformedEnumDeclaration
-MalformedFunctionDeclaration
-MalformedImportDeclaration
-MalformedParameterDeclaration
-```
-
-porque todos expresan la misma responsabilidad estructural: la secuencia no forma una declaración válida.
+No se introducen tipos separados por cada production de declaration porque todos expresan la misma responsabilidad estructural.
 
 ## SF-004 — MalformedExpression
 
 Status: CLOSED
 
-```rust
-MalformedExpression
-```
-
-es la failure genérica cuando Parser no puede construir una `Expression` legal.
+`MalformedExpression` es la failure genérica cuando Parser no puede construir una `Expression` legal.
 
 Las violaciones particulares de productions internas de Expression no generan automáticamente identities de failure independientes.
-
-La familia cubre grammar failures en construcciones como unary/binary expressions, grouping, function calls, field access, composite construction, pipelines y `when`, siempre que no exista una responsabilidad estructural más específica ya cerrada en este enum.
 
 ## SF-005 — InvalidImportPlacement
 
 Status: CLOSED
 
-```rust
-InvalidImportPlacement
-```
-
-es distinta de `MalformedDeclaration` porque un `ImportDeclaration` puede estar localmente bien formado y aun así aparecer en una posición estructural inválida después de local declarations.
-
-Esto corresponde a la forma AST cerrada:
+`InvalidImportPlacement` es distinta de `MalformedDeclaration` porque un `ImportDeclaration` puede estar localmente bien formado y aun así aparecer después de local declarations.
 
 ```text
 Program
 ├── Imports 0..N
 └── Declarations 1..N
 ```
-
-`ImportDeclaration` no es variante de `Declaration`.
 
 ## SF-006 — Exact FunctionBody structural failures
 
@@ -145,21 +117,6 @@ InvalidReturnPlacement
 
 `InvalidReturnPlacement` cubre una forma de return múltiple, temprana, no final o seguida de statements.
 
-No se introducen aliases separados como:
-
-```text
-EarlyReturn
-MultipleReturns
-StatementAfterReturn
-```
-
-La regla estructural común es:
-
-```text
-Body Statements 0..N
-Final Return     exactly 1 and final
-```
-
 ## SF-007 — Exact public-function cardinality failures
 
 Status: CLOSED
@@ -173,73 +130,30 @@ MultiplePublicFunctions
 
 Parser puede usar working counters temporales, pero esos counters no sobreviven en AST ni en `SyntaxFailure`.
 
-La invariante de success es:
-
-```text
-Program
-    → exactly one FunctionDefinition with Visibility::Public
-```
-
 ## SF-008 — EmptyEnum is parser-owned
 
 Status: CLOSED
 
-```rust
-EmptyEnum
-```
-
-es `SyntaxFailure` porque un `EnumDefinition` v0 requiere cardinalidad:
-
-```text
-variants 1..N
-```
-
-Mientras:
-
-```text
-Struct fields             0..N
-Structured Variant fields 0..N
-```
-
-pueden ser legítimamente vacíos.
-
-Parser posee toda la información necesaria para confirmar esta violation.
+`EmptyEnum` es `SyntaxFailure` porque un `EnumDefinition` v0 requiere `variants 1..N`, mientras Struct fields y Structured Variant fields pueden ser `0..N`.
 
 ## SF-009 — InvalidOperationStatement
 
 Status: CLOSED
 
-```rust
-InvalidOperationStatement
-```
-
-representa una `Expression` sintácticamente válida utilizada como statement cuando no pertenece a las dos únicas formas permitidas:
+`InvalidOperationStatement` representa una `Expression` sintácticamente válida utilizada como statement cuando no pertenece a las dos únicas formas permitidas:
 
 ```text
 FunctionCall
 Pipeline
 ```
 
-Ejemplos de Expressions válidas que no son statements válidos:
-
-```text
-literal;
-identifier;
-binary_expression;
-field_access;
-```
-
-No se clasifican como `MalformedExpression`, porque la Expression puede estar bien formada; el problema es su rol estructural dentro de `FunctionBody`.
+No se clasifica como `MalformedExpression`, porque la Expression puede estar bien formada; el problema es su rol estructural dentro de `FunctionBody`.
 
 ## SF-010 — InvalidThisUsage
 
 Status: CLOSED
 
-```rust
-InvalidThisUsage
-```
-
-es una failure contextual propiedad del Parser.
+`InvalidThisUsage` es una failure contextual propiedad del Parser.
 
 `this` participa exclusivamente en la sintaxis contextual de Pipeline y debe desaparecer durante parsing exitoso.
 
@@ -250,8 +164,6 @@ ThisExpression
 ThisNode
 ResolvedThis
 ```
-
-Por tanto cualquier uso de `this` fuera de la posición permitida por Pipeline produce `InvalidThisUsage` en Parser.
 
 ## SF-011 — Stable language meaning, not parser implementation state
 
@@ -271,11 +183,13 @@ copied Source Text fragments
 SyntaxFailure<'source>
 ```
 
-La provenance fuente permanece separada en:
+La provenance fuente permanece separada en la raíz:
 
 ```text
-CompileFailure.diagnostic
+CompileFailure.source_span: SourceSpan
 ```
+
+La autoridad de provenance está en [`DIAGNOSTIC_PROVENANCE.md`](./DIAGNOSTIC_PROVENANCE.md).
 
 ## Parser / Semantic Analyzer boundary
 
@@ -318,7 +232,7 @@ Parser
            ↓
        CompileFailure {
            kind: Syntax(...),
-           diagnostic: ...,
+           source_span,
        }
 ```
 
@@ -335,6 +249,8 @@ ThisExpression AST
 identity/type/signature resolution failures in Parser
 SyntaxFailure<'source>
 Parser working-state payloads
+DiagnosticAnchor
+SourceLocation
 ```
 
 ## Closure
@@ -353,6 +269,6 @@ SF-010 InvalidThisUsage                                          ✅ CLOSED
 SF-011 stable language meaning / no parser-state payloads        ✅ CLOSED
 
 SyntaxFailure exact family                                       ✅ CLOSED — 10 variants
-SemanticFailure exact family                                     ← NEXT
-DiagnosticAnchor exact shape                                     PENDING
+SemanticFailure exact family                                     ✅ CLOSED elsewhere
+Diagnostic provenance                                            ✅ CLOSED — SourceSpan
 ```
