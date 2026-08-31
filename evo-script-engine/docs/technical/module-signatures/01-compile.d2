@@ -1,0 +1,35 @@
+direction: right
+
+compile_use_case: {
+  label: "<<Use Case Module>>\ndefinitions/use_cases/compile.rs\n\nCompile\nfor<'source, 'catalog> fn(\n  &'source str,\n  &'catalog CompilationCatalog\n) -> CompileOutcome"
+}
+
+compiler_agent: {
+  label: "<<Agent Module>>\nagents/compiler.rs\n\ncompile(...) -> CompileOutcome\nCOMPILE: Compile = compile"
+}
+
+lexer: {
+  label: "<<Collaborator Module>>\ncollaborators/lexer.rs\n\nLex\nlex_source(...)\nLEX_SOURCE: Lex = lex_source"
+}
+
+parser: {
+  label: "<<Collaborator Module>>\ncollaborators/parser.rs\n\nParse\nparse_tokens(...)\nPARSE_TOKENS: Parse = parse_tokens"
+}
+
+semantic_analyzer: {
+  label: "<<Collaborator Module>>\ncollaborators/semantic_analyzer.rs\n\nAnalyze\nanalyze_program(...)\nANALYZE_PROGRAM: Analyze = analyze_program"
+}
+
+bytecode_compiler: {
+  label: "<<Collaborator Module>>\ncollaborators/bytecode_compiler.rs\n\nLower\nlower_program(...)\nLOWER_PROGRAM: Lower = lower_program"
+}
+
+compile_use_case -> compiler_agent: "implemented by"
+compiler_agent -> lexer: "coordinates · Lex"
+compiler_agent -> parser: "coordinates · Parse"
+compiler_agent -> semantic_analyzer: "coordinates · Analyze"
+compiler_agent -> bytecode_compiler: "coordinates · Lower"
+
+notes: {
+  label: "Compile Module Rules\nAgent only orchestrates\nCollaborator → Collaborator calls: none\nContracts: 0\nResolvers: 0\nRequesters: 0\nTools: 0"
+}
