@@ -136,13 +136,107 @@ Tool           0
 
 Esto no prescribe una función monolítica. El Collaborator puede poseer tantos mecanismos privados como requiera una implementación clara y correcta.
 
+## RSD-014 — Firma exacta de `parse_tokens`
+
+Status: CLOSED
+
+`parse_tokens` es un Collaborator interno de compilación responsable de transformar una `TokenSequence<'source>` léxicamente válida en un `Program<'source>` estructuralmente válido.
+
+Firma cerrada:
+
+```rust
+pub type Parse =
+    for<'source> fn(
+        &TokenSequence<'source>,
+        &'source str,
+    ) -> Result<
+        Program<'source>,
+        CompileFailure,
+    >;
+```
+
+El primer argumento es el working input que Parser interpreta. El segundo argumento es el `Source Text` original correspondiente a esa misma `TokenSequence` y existe únicamente como dependencia explícita de provenance fuente cuando la posición responsable no puede recuperarse de un Token existente.
+
+Caso determinante:
+
+```text
+Source Text = "   // comment final"
+TokenSequence = []
+
+MissingPublicFunction
+    → SourceSpan [source_len, source_len)
+```
+
+Como `TokenSequence` no materializa `EOF`, whitespace ni comments, la longitud total del Source Text no puede derivarse correctamente desde los Tokens. `Diagnostic Provenance` exige que ausencias detectadas en EOF se materialicen exactamente en `[source_len, source_len)`.
+
+Invariantes:
+
+- `TokenSequence` y `Source Text` corresponden al mismo source coordinate space;
+- Parser no vuelve a tokenizar, escanear ni reinterpretar lexicalmente el `Source Text`;
+- el acceso al `Source Text` no convierte parsing en una segunda fase lexical;
+- Parser utiliza los Tokens como autoridad de reconocimiento lexical;
+- `Source Text` aporta únicamente la extensión/coordenadas fuente necesarias para provenance que no exista en un Token materializado;
+- en éxito produce `Program<'source>`;
+- todo failure normal pertenece exclusivamente a `CompileFailureKind::Syntax(...)`;
+- Parser materializa directamente `CompileFailure` con el `SourceSpan` responsable;
+- no se introduce un error intermedio `ParserError`, `LocatedSyntaxFailure` o equivalente sin semántica propia.
+
+## RSD-015 — Ownership y Participants de `parse_tokens`
+
+Status: CLOSED
+
+Parser observa `TokenSequence<'source>` mediante borrow y materializa un AST owned como Compilation Working State.
+
+```text
+Source Text
+    ▲
+    │ borrowed lexemes
+    │
+TokenSequence<'source>
+    │ observed by Parser
+    ▼
+Program<'source>
+    ├── owns AST containers / tree structure
+    └── borrows textual lexemes from Source Text
+```
+
+El AST no borrowea el almacenamiento del `Vec<Token<'source>>`.
+
+Por tanto:
+
+```text
+parse_tokens success
+    ↓
+Program<'source>
+    ↓
+TokenSequence puede destruirse
+    ↓
+Program continúa válido mientras Source Text siga vivo
+```
+
+Las operaciones internas de grammar navigation, lookahead, precedence, grouping, construcción de expressions, validación de cardinalidades estructurales y manejo del cursor pertenecen a la implementación privada del Parser.
+
+No se promueven automáticamente a Tools o Collaborators independientes.
+
+Inventario arquitectónico cerrado para `parse_tokens`:
+
+```text
+Collaborator   1  parse_tokens
+Contract       0
+Resolver       0
+Requester      0
+Tool           0
+```
+
+`parse_tokens` tampoco recibe `CompilationCatalog` ni `ApplicationBindings`; identity resolution, type resolution y signature resolution pertenecen a `analyze_program`.
+
 ## Compile participant progress
 
 ```text
 Compile Agent
 ├── lex_source          ✅ CLOSED
-├── parse_tokens        ← NEXT
-├── analyze_program     PENDING
+├── parse_tokens        ✅ CLOSED
+├── analyze_program     ← NEXT
 └── lower_program       PENDING
 ```
 
@@ -152,6 +246,8 @@ Compile Agent
 RSD-011 Tool classification rule        ✅ CLOSED
 RSD-012 lex_source exact signature      ✅ CLOSED
 RSD-013 lex_source Tool inventory       ✅ CLOSED
+RSD-014 parse_tokens exact signature    ✅ CLOSED
+RSD-015 parse_tokens ownership/inventory✅ CLOSED
 
 Compile participant design              ← IN PROGRESS
 Execution participant design            PENDING
