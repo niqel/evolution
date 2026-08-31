@@ -142,10 +142,11 @@ VmExecution
 ├── references exactly 1 ApplicationBindings
 ├── owns exactly 1 Shared Value Storage
 ├── owns ordered CallFrame collection
+├── owns exactly 1 ExecutionBackingStore
 └── is logical owner of execution-lifetime backing data
 ```
 
-No se cierra todavía un Rust struct exacto porque los fields concretos dependen de Shared Value Storage, CallFrame y backing representations.
+No se cierra todavía un Rust struct exacto porque los fields concretos dependen de Shared Value Storage, CallFrame y ApplicationBindings.
 
 ## VM-010 — RuntimeValue and evo_values::Value<'a> are distinct
 
@@ -241,45 +242,7 @@ Status: CLOSED
 
 Cerrado en `RUNTIME_VALUE_REPRESENTATION.md`.
 
-`RuntimeValue` contiene exactamente **17 variants**:
-
-```rust
-#[derive(Clone, Copy)]
-enum RuntimeValue {
-    Boolean(bool),
-
-    Int8(i8),
-    Int16(i16),
-    Int32(i32),
-    Int64(i64),
-    Int128(i128),
-
-    Uint8(u8),
-    Uint16(u16),
-    Uint32(u32),
-    Uint64(u64),
-    Uint128(u128),
-
-    Float32(f32),
-    Float64(f64),
-
-    String(StringBackingRef),
-    Dynamic(DynamicValue),
-    Struct(StructBackingId),
-    Enum(EnumBackingId),
-}
-```
-
-`DynamicValue` contiene exactamente **3 variants**:
-
-```rust
-#[derive(Clone, Copy)]
-enum DynamicValue {
-    Integer(DynamicIntegerBackingRef),
-    Float32(f32),
-    Float64(f64),
-}
-```
+`RuntimeValue` contiene exactamente **17 variants** y `DynamicValue` exactamente **3 variants**.
 
 Reglas cerradas:
 
@@ -294,7 +257,53 @@ Rust PartialEq/Eq is not Evo language equality
 RuntimeValue is execution-context-relative
 ```
 
-Un RuntimeValue con handles no puede escapar de `VmExecution` como resultado autónomo sin materialización o ownership transfer apropiado.
+## VM-017 — Backing Data Representation
+
+Status: CLOSED
+
+Cerrado en `BACKING_DATA_REPRESENTATION.md` mediante BD-001..BD-009.
+
+`VmExecution` posee exactamente un:
+
+```rust
+struct ExecutionBackingStore {
+    strings: Vec<Box<str>>,
+    dynamic_integers: Vec<DynamicIntegerBacking>,
+    structs: Vec<StructBacking>,
+    enums: Vec<EnumBacking>,
+}
+```
+
+Los cuatro stores son tipados, append-only y resuelven `BackingId(n)` posicionalmente en su store correspondiente.
+
+Execution Strings usan `Box<str>` inmutable.
+
+`DynamicIntegerBacking` posee un entero signed de precisión arbitraria detrás de una identity propia del engine; no se fija una crate BigInt como dependencia arquitectónica.
+
+```rust
+struct StructBacking {
+    fields: Box<[RuntimeValue]>,
+}
+
+struct EnumBacking {
+    variant: VariantDiscriminant,
+    payload: RuntimeEnumPayload,
+}
+
+enum RuntimeEnumPayload {
+    Simple,
+    Associated(RuntimeValue),
+    Structured {
+        fields: Box<[RuntimeValue]>,
+    },
+}
+```
+
+Todos los execution backings son inmutables después de insertarse. Las operaciones que producen nuevos Values crean nuevo backing cuando es necesario.
+
+El graph de Struct/Enum backing es finito, inmutable y acíclico; sharing por typed backing IDs está permitido.
+
+No se requieren GC, cycle collector, `Rc` o `Arc` para representar composite Values v0.
 
 ## Runtime Value Model Authority
 
@@ -303,6 +312,7 @@ Las reglas detalladas se registran en:
 - `RUNTIME_VALUE_MODEL.md`
 - `BACKING_IDENTITY_STRATEGY.md`
 - `RUNTIME_VALUE_REPRESENTATION.md`
+- `BACKING_DATA_REPRESENTATION.md`
 
 ## Current Closure
 
@@ -314,6 +324,7 @@ ApplicationBindings relationship            ✅ CLOSED — exact model pending
 one Shared Value Storage root                ✅ CLOSED
 Call Frames root ownership                   ✅ CLOSED
 execution-lifetime backing logical owner     ✅ CLOSED
+ExecutionBackingStore owner                  ✅ CLOSED
 
 RuntimeValue / evo_values::Value boundary    ✅ CLOSED
 RuntimeValue immutable descriptor            ✅ CLOSED
@@ -325,13 +336,18 @@ RuntimeValue exact representation            ✅ CLOSED — 17 variants
 DynamicValue exact representation            ✅ CLOSED — 3 variants
 descriptor family Clone + Copy               ✅ CLOSED
 RuntimeValue execution-context-relative      ✅ CLOSED
+Backing Data Representation                  ✅ CLOSED
+four typed append-only backing stores        ✅ CLOSED
+String backing representation                ✅ CLOSED
+Dynamic Integer backing responsibility       ✅ CLOSED
+Struct / Enum backing representation         ✅ CLOSED
+immutable finite composite backing DAG       ✅ CLOSED
 
 root InstructionPointer                      ❌ EXCLUDED
 Host / Active Scope / Current Provider       ❌ EXCLUDED
 Outcome / Diagnostic data                    ❌ SEPARATE PHASE
 
-Backing Data Representation                  ← NEXT
-Shared Value Storage exact representation    PENDING
+Shared Value Storage exact representation    ← NEXT
 CallFrame                                    PENDING
 InstructionPointer                           PENDING
 ApplicationBindings exact model              PENDING
