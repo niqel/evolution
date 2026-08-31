@@ -230,28 +230,123 @@ Tool           0
 
 `parse_tokens` tampoco recibe `CompilationCatalog` ni `ApplicationBindings`; identity resolution, type resolution y signature resolution pertenecen a `analyze_program`.
 
+## RSD-016 — Firma exacta de `analyze_program`
+
+Status: CLOSED
+
+`analyze_program` es un Collaborator interno de compilación responsable de transformar un `Program<'source>` sintácticamente válido en un `SemanticProgram` completamente resuelto.
+
+Firma cerrada:
+
+```rust
+pub type Analyze =
+    for<'source> fn(
+        &Program<'source>,
+        &CompilationCatalog,
+    ) -> Result<
+        SemanticProgram,
+        CompileFailure,
+    >;
+```
+
+Responsabilidad:
+
+```text
+Program<'source>
++ borrowed validated CompilationCatalog
+        ↓
+analyze_program
+        ├── success → SemanticProgram
+        └── failure → CompileFailure {
+                         kind: Semantic(...),
+                         source_span,
+                     }
+```
+
+Invariantes:
+
+- `Program<'source>` es observed mediante borrow;
+- `CompilationCatalog` es dependencia técnica explícita, borrowed e inmutable;
+- el catálogo ya fue construido y validado fuera de `evo-script-engine`;
+- `analyze_program` no realiza filesystem I/O, module discovery, Provider discovery ni runtime binding;
+- todo failure normal pertenece exclusivamente a `CompileFailureKind::Semantic(...)`;
+- catalog-construction/integration failures no se reinterpretan como `CompileFailure` del Source Text;
+- en éxito, todas las identidades necesarias para lowering están resueltas dentro de `SemanticProgram`;
+- el Bytecode Compiler no vuelve a resolver nombres, tipos, imports o Signatures;
+- no se introduce un error intermedio `SemanticAnalyzerError`, `LocatedSemanticFailure` o equivalente sin semántica propia.
+
+## RSD-017 — Ownership y Participants de `analyze_program`
+
+Status: CLOSED
+
+`SemanticProgram` es owned Compilation Working State y no conserva borrows hacia AST ni `CompilationCatalog`.
+
+```text
+Source Text
+   ▲
+   │ AST lexemes borrow
+Program<'source>
+   │ observed
+   ▼
+analyze_program ◄── &CompilationCatalog
+   │
+   ▼
+SemanticProgram
+   ├── owns semantic structures
+   ├── owns canonical data that must survive analysis
+   └── preserves SourceSpan where required
+```
+
+Por tanto, tras success:
+
+```text
+Program / AST          puede destruirse
+CompilationCatalog     deja de ser requerido por lowering
+SemanticProgram        continúa autónomo
+```
+
+Las tareas internas de symbol collection, name resolution, type resolution, type checking, Signature validation, call-graph validation, composite validation, `when` validation y materialización de semantic identities forman parte de una sola responsabilidad arquitectónica: producir un `SemanticProgram` completamente resuelto o un `SemanticFailure` preciso.
+
+Estas tareas pueden organizarse en múltiples funciones, estructuras de working state o pases privados de implementación. No se promueven por ese hecho a Collaborators independientes, porque no existe un producto arquitectónico intermedio cerrado entre ellos y el Semantic Analyzer es la frontera que posee la responsabilidad completa de resolución semántica.
+
+Inventario arquitectónico cerrado para `analyze_program`:
+
+```text
+Collaborator   1  analyze_program
+Contract       0
+Resolver       0
+Requester      0
+Tool           0
+```
+
+`CompilationCatalog` no es Contract: es dato técnico validado suministrado explícitamente. Observarlo no cruza una frontera técnica de Provider.
+
+No se identifica en v0 una Tool semántica independiente demostrada. Helpers para naming conventions, lookups, materialización de descriptors o validación de grafos permanecen privados mientras su responsabilidad siga perteneciendo exclusivamente al Semantic Analyzer.
+
 ## Compile participant progress
 
 ```text
 Compile Agent
 ├── lex_source          ✅ CLOSED
 ├── parse_tokens        ✅ CLOSED
-├── analyze_program     ← NEXT
-└── lower_program       PENDING
+├── analyze_program     ✅ CLOSED
+└── lower_program       ← NEXT
 ```
 
 ## Closure parcial
 
 ```text
-RSD-011 Tool classification rule        ✅ CLOSED
-RSD-012 lex_source exact signature      ✅ CLOSED
-RSD-013 lex_source Tool inventory       ✅ CLOSED
-RSD-014 parse_tokens exact signature    ✅ CLOSED
-RSD-015 parse_tokens ownership/inventory✅ CLOSED
+RSD-011 Tool classification rule             ✅ CLOSED
+RSD-012 lex_source exact signature           ✅ CLOSED
+RSD-013 lex_source Tool inventory            ✅ CLOSED
+RSD-014 parse_tokens exact signature         ✅ CLOSED
+RSD-015 parse_tokens ownership/inventory     ✅ CLOSED
+RSD-016 analyze_program exact signature      ✅ CLOSED
+RSD-017 analyze_program ownership/inventory  ✅ CLOSED
 
-Compile participant design              ← IN PROGRESS
-Execution participant design            PENDING
-Module Signature Diagrams               AFTER PARTICIPANTS
-D2 Sequence Diagrams                    AFTER SIGNATURES/PARTICIPANTS
-Implementation Tasks                    AFTER DIAGRAMS
+Compile participant design                   ← IN PROGRESS
+Execution participant design                 PENDING
+Module Signature Diagrams                    AFTER PARTICIPANTS
+D2 Sequence Diagrams                         AFTER SIGNATURES/PARTICIPANTS
+Implementation Tasks                         AFTER DIAGRAMS
 ```
