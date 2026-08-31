@@ -303,8 +303,9 @@ EC-010 plain fn = statically composed behavior v0         ✅ CLOSED
 ExternalCapability ABI semantics                          ✅ CLOSED
 ExternalCapability argument type                          ✅ CLOSED — &[Value<'a>]
 ExternalCapability success result type                    ✅ CLOSED — OwnedValue
+VmExecution exact Rust root                               ✅ CLOSED elsewhere
 ExternalCapability failure type                           PENDING — Outcome / Diagnostic Data
 
-VmExecution exact Rust root                               ← NEXT
+Compiled Boundary Value Shape                             ← NEXT
 VM Execution exact inventory                              PENDING
 ```
