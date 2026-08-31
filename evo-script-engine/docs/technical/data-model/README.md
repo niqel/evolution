@@ -69,7 +69,7 @@ Compiled Program / Bytecode Data     ✅ CLOSED — REVALIDATED
 ├── boundary validation              ✅ CLOSED — exact / recursive / no coercion
 └── exact compiled inventory         ✅ CLOSED — 21 identities
 
-VM Execution Data                    ← IN ANALYSIS
+VM Execution Data                    ✅ STRUCTURAL / INVENTORY CLOSED
 ├── VmExecution responsibility       ✅ CLOSED
 ├── CompiledProgram relationship     ✅ CLOSED
 ├── ApplicationBindings              ✅ CLOSED
@@ -82,13 +82,46 @@ VM Execution Data                    ← IN ANALYSIS
 ├── CallFrame                        ✅ CLOSED — 3 fields
 ├── InstructionPointer               ✅ CLOSED
 ├── stepping semantics               ✅ CLOSED
-├── ExternalCapability ABI           ✅ CLOSED
+├── ExternalCapability ABI           ✅ CLOSED — failure type cross-phase pending
 ├── Value<'a> / OwnedValue boundary  ✅ CLOSED
 ├── VmExecution exact Rust root      ✅ CLOSED — 5 fields
 ├── Compiled Boundary Value Shape    ✅ CLOSED
-└── VM Execution exact inventory     ← NEXT
+└── exact VM inventory               ✅ CLOSED — 19 identities
 
-Outcome / Diagnostic Data            PENDING
+Outcome / Diagnostic Data            ← NEXT
+├── execution Result                 PENDING
+├── compile Outcome                  PENDING
+├── technical Failure family         PENDING
+├── ExternalCapability failure type  PENDING
+├── source-linked diagnostic anchor  PENDING
+├── Source Location materialization  PENDING
+└── exact outcome inventory          PENDING
+```
+
+## Phase Map
+
+```text
+SOURCE / COMPILE SIDE
+────────────────────────────────────────────────────────────
+Source Text
+    ↓
+Lexical Data                  4 identities / TokenKind 50
+    ↓
+AST Data                      31 identities
+    ↓
+Semantic Program Data         33 identities
+    ↓
+Compiled Program Data         21 identities / Instruction 48
+
+EXECUTION SIDE
+────────────────────────────────────────────────────────────
+CompiledProgram
+    + ApplicationBindings
+    + Invocation Values
+        ↓ boundary validation through CompiledValueShape
+VmExecution                   19 own VM identities
+        ↓ bytecode execution
+Outcome / Diagnostic Data     ← not yet modeled technically
 ```
 
 ## Current Documents
@@ -130,11 +163,12 @@ Outcome / Diagnostic Data            PENDING
 - [`COMPILED_COMPOSITE_INSTRUCTIONS.md`](./COMPILED_COMPOSITE_INSTRUCTIONS.md)
 - [`COMPILED_STRUCTURAL_EQUALITY.md`](./COMPILED_STRUCTURAL_EQUALITY.md)
 - [`COMPILED_SOURCE_MAP.md`](./COMPILED_SOURCE_MAP.md)
-- [`COMPILED_BOUNDARY_VALUE_SHAPE.md`](./COMPILED_BOUNDARY_VALUE_SHAPE.md) — `CompiledValueShapeId`, 17 shape variants, entry/external-result validation.
+- [`COMPILED_BOUNDARY_VALUE_SHAPE.md`](./COMPILED_BOUNDARY_VALUE_SHAPE.md) — boundary contract metadata.
 
 ### VM Execution Data
 
-- [`VM_EXECUTION_DATA.md`](./VM_EXECUTION_DATA.md) — autoridad acumulada.
+- [`VM_EXECUTION_DATA.md`](./VM_EXECUTION_DATA.md) — autoridad acumulada de VM.
+- [`VM_EXECUTION_INVENTORY.md`](./VM_EXECUTION_INVENTORY.md) — inventario exacto de 19 identities propias.
 - [`RUNTIME_VALUE_MODEL.md`](./RUNTIME_VALUE_MODEL.md)
 - [`BACKING_IDENTITY_STRATEGY.md`](./BACKING_IDENTITY_STRATEGY.md)
 - [`RUNTIME_VALUE_REPRESENTATION.md`](./RUNTIME_VALUE_REPRESENTATION.md)
@@ -184,8 +218,12 @@ No se representan methods, inheritance, service classes ni OO interfaces fictici
 
 ## Next Block
 
+Antes de avanzar, corresponde revisar el mapa arquitectónico completo.
+
+Después de esa revisión:
+
 ```text
-VM Execution exact inventory ← NEXT
+Outcome / Diagnostic Data ← NEXT TECHNICAL PHASE
 ```
 
-La siguiente auditoría debe contar exactamente las identities propias de VM Execution Data, comprobar ownership/cardinalidades y verificar que cada una tenga una responsabilidad runtime real antes de cerrar la fase y pasar a Outcome / Diagnostic Data.
+La primera responsabilidad de esa fase será definir la representación técnica neutral de outcomes y failures sin mezclar presentación humana con datos diagnósticos, y completar finalmente el failure type de `ExternalCapability`.
