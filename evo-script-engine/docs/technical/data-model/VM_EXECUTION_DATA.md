@@ -44,18 +44,16 @@ La estructura exacta de `ApplicationBindings` permanece pendiente.
 
 ## VM-004 — One Shared Value Storage
 
-Status: CLOSED — ROOT OWNERSHIP
+Status: CLOSED
 
 TD-006 y TD-007 establecen que Parameters, Locals y Operands comparten un único storage lógico de Values por ejecución.
 
-```text
-Shared Value Storage
+La representación exacta se cierra en `SHARED_VALUE_STORAGE.md`:
 
-frame_base
-    ↓
-[parameters][locals][temporaries...]
-                     ↑
-                 operand_base
+```rust
+struct SharedValueStorage {
+    cells: Vec<Option<RuntimeValue>>,
+}
 ```
 
 Cada `CallFrame` delimita una región lógica propia dentro de este storage.
@@ -67,6 +65,8 @@ Status: CLOSED — ROOT OWNERSHIP
 `VmExecution` posee una colección ordenada LIFO de `CallFrame`.
 
 `InstructionPointer`, current `FunctionId` y frame boundaries pertenecen al `CallFrame` activo, no se duplican en `VmExecution`.
+
+La representación exacta de `CallFrame` permanece pendiente.
 
 ## VM-006 — Execution-Lifetime Backing Ownership
 
@@ -140,13 +140,13 @@ VmExecution
 │
 ├── references exactly 1 CompiledProgram
 ├── references exactly 1 ApplicationBindings
-├── owns exactly 1 Shared Value Storage
+├── owns exactly 1 SharedValueStorage
 ├── owns ordered CallFrame collection
 ├── owns exactly 1 ExecutionBackingStore
 └── is logical owner of execution-lifetime backing data
 ```
 
-No se cierra todavía un Rust struct exacto porque los fields concretos dependen de Shared Value Storage, CallFrame y ApplicationBindings.
+No se cierra todavía un Rust struct exacto porque los fields concretos dependen de CallFrame y ApplicationBindings.
 
 ## VM-010 — RuntimeValue and evo_values::Value<'a> are distinct
 
@@ -203,7 +203,7 @@ Enum
 
 Status: CLOSED
 
-`Shared Value Storage` no conserva direct Rust references hacia backing data owned por el mismo `VmExecution` cuando eso produciría una estructura self-referential.
+`SharedValueStorage` no conserva direct Rust references hacia backing data owned por el mismo `VmExecution` cuando eso produciría una estructura self-referential.
 
 Borrowed views temporales siguen permitidas al observar/materializar Values.
 
@@ -305,6 +305,85 @@ El graph de Struct/Enum backing es finito, inmutable y acíclico; sharing por ty
 
 No se requieren GC, cycle collector, `Rc` o `Arc` para representar composite Values v0.
 
+## VM-018 — Shared Value Storage Exact Representation
+
+Status: CLOSED
+
+Cerrado en `SHARED_VALUE_STORAGE.md` mediante SV-001..SV-011.
+
+Representación exacta v0:
+
+```rust
+struct SharedValueStorage {
+    cells: Vec<Option<RuntimeValue>>,
+}
+```
+
+Semántica de cells:
+
+```text
+Some(RuntimeValue)
+    = occupied materialized Value cell
+
+None
+    = reserved stable LocalSlot not yet materialized
+```
+
+`None` es estado técnico de VM storage; no es `null` ni un Value de Evo-Script.
+
+Cada frame utiliza una región contigua:
+
+```text
+frame_base
+    ↓
+[parameters][locals][operands...]
+                     ↑
+                 operand_base
+```
+
+Invariantes:
+
+```text
+Parameters  → always Some(RuntimeValue)
+Locals      → None, then Some(RuntimeValue) exactly once
+Operands    → always Some(RuntimeValue)
+```
+
+El Operand Window activo es:
+
+```text
+cells[operand_base .. cells.len()]
+```
+
+El depth activo es:
+
+```text
+cells.len() - operand_base
+```
+
+y no puede exceder `CompiledFunction.max_operand_depth`.
+
+No existen `OperandSlot`, `OperandIndex` ni container de operands per-frame.
+
+Una internal call reutiliza directamente los `N` argument cells superiores del caller como Parameter cells del callee:
+
+```text
+callee.frame_base = cells.len() - N
+```
+
+Después se agregan `local_count` cells `None`; no se agregan placeholders para operands.
+
+La transformación de storage de `Return` queda cerrada:
+
+```text
+copy result descriptor
+truncate to callee.frame_base
+remove callee frame
+push result for caller
+```
+
+`CallFrame` describe boundaries dentro de `SharedValueStorage`; no posee Parameters, Locals u Operands como collections independientes.
+
 ## Runtime Value Model Authority
 
 Las reglas detalladas se registran en:
@@ -313,6 +392,7 @@ Las reglas detalladas se registran en:
 - `BACKING_IDENTITY_STRATEGY.md`
 - `RUNTIME_VALUE_REPRESENTATION.md`
 - `BACKING_DATA_REPRESENTATION.md`
+- `SHARED_VALUE_STORAGE.md`
 
 ## Current Closure
 
@@ -321,7 +401,7 @@ VmExecution responsibility                  ✅ CLOSED
 one invocation per VmExecution              ✅ CLOSED
 CompiledProgram relationship                ✅ CLOSED
 ApplicationBindings relationship            ✅ CLOSED — exact model pending
-one Shared Value Storage root                ✅ CLOSED
+one SharedValueStorage root                 ✅ CLOSED
 Call Frames root ownership                   ✅ CLOSED
 execution-lifetime backing logical owner     ✅ CLOSED
 ExecutionBackingStore owner                  ✅ CLOSED
@@ -342,14 +422,19 @@ String backing representation                ✅ CLOSED
 Dynamic Integer backing responsibility       ✅ CLOSED
 Struct / Enum backing representation         ✅ CLOSED
 immutable finite composite backing DAG       ✅ CLOSED
+Shared Value Storage exact representation    ✅ CLOSED
+Option cell semantics                        ✅ CLOSED
+Parameter / Local / Operand occupancy        ✅ CLOSED
+Operand Window tail mechanics                ✅ CLOSED
+call argument cell reuse                     ✅ CLOSED
+Return storage transformation                ✅ CLOSED
 
 root InstructionPointer                      ❌ EXCLUDED
 Host / Active Scope / Current Provider       ❌ EXCLUDED
 Outcome / Diagnostic data                    ❌ SEPARATE PHASE
 
-Shared Value Storage exact representation    ← NEXT
-CallFrame                                    PENDING
+CallFrame exact representation               ← NEXT
 InstructionPointer                           PENDING
 ApplicationBindings exact model              PENDING
-call / return mechanics                      PENDING
+remaining call / return frame mechanics      PENDING
 ```
