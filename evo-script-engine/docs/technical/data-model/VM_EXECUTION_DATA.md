@@ -142,7 +142,7 @@ VmExecution
 └── is logical owner of execution-lifetime backing data
 ```
 
-El Rust struct final de `VmExecution` permanece pendiente hasta cerrar el ABI externo y las relaciones borrowed exactas.
+El Rust struct final de `VmExecution` permanece pendiente hasta cerrar el modelo completo de intercambio externo y las relaciones borrowed exactas.
 
 ## VM-010 — RuntimeValue and evo_values::Value<'a> are distinct
 
@@ -446,7 +446,47 @@ Un binding faltante no falla durante Compile ni al crear la ejecución; falla cu
 
 No existen Provider identity, Current Provider, Active Scope, reflection, Service Locator, global registry o binding mutation dentro del modelo.
 
-La firma exacta de `ExternalCapability` permanece pendiente del siguiente bloque.
+## VM-022 — ExternalCapability ABI Semantics
+
+Status: CLOSED
+
+Cerrado en `EXTERNAL_CAPABILITY_ABI.md` mediante EC-001..EC-010.
+
+`ExternalCapability` es una única function-pointer identity uniforme almacenada por `ApplicationBindings`.
+
+Reglas de frontera:
+
+```text
+VM → external capability
+    borrowed interchange Value views
+
+external capability → VM
+    one owned interchange Value on success
+```
+
+`RuntimeValue` y sus backing handles nunca cruzan hacia la aplicación.
+
+Para `CallExternal`:
+
+```text
+N = ExternalSymbol.parameter_count
+arguments = top N active operands
+```
+
+Las argument cells permanecen en `SharedValueStorage` durante la invocación. En success, el owned result se materializa/transfiere primero a `RuntimeValue`; solo entonces se reemplazan `N` argumentos por un resultado y `ip += 1`.
+
+En external failure no se hace commit `N → 1` y el IP permanece sobre `CallExternal`; esto no garantiza rollback ni resumability.
+
+No se usa Requester para el one-result `CallExternal` normal porque el resultado debe sobrevivir a la external invocation y por tanto requiere ownership real.
+
+La representation v0 usa plain `fn`, lo cual expresa comportamiento estáticamente compuesto y no captura state de instancia. Una futura necesidad de per-instance state debe reabrir explícitamente esta frontera.
+
+La firma Rust textual final queda pendiente únicamente de completar en `evo-values`:
+
+```text
+Value<'a>  = complete borrowed interchange view
+OwnedValue = complete owned interchange representation
+```
 
 ## Runtime Value / VM Data Authorities
 
@@ -458,6 +498,7 @@ La firma exacta de `ExternalCapability` permanece pendiente del siguiente bloque
 - `CALL_FRAME.md`
 - `INSTRUCTION_POINTER_STEPPING.md`
 - `APPLICATION_BINDINGS.md`
+- `EXTERNAL_CAPABILITY_ABI.md`
 
 ## Current Closure
 
@@ -468,7 +509,7 @@ CompiledProgram relationship                   ✅ CLOSED
 ApplicationBindings relationship               ✅ CLOSED
 ApplicationBindings exact model                ✅ CLOSED
 one SharedValueStorage root                    ✅ CLOSED
-Call Frames root ownership                      ✅ CLOSED
+Call Frames root ownership                     ✅ CLOSED
 execution-lifetime backing logical owner        ✅ CLOSED
 ExecutionBackingStore owner                     ✅ CLOSED
 
@@ -489,13 +530,19 @@ failure preserves responsible IP                 ✅ CLOSED
 SignatureSymbol application lookup              ✅ CLOSED
 lazy missing-binding failure                     ✅ CLOSED
 immutable explicit application composition       ✅ CLOSED
+ExternalCapability ABI semantics                ✅ CLOSED
+borrowed external arguments                     ✅ CLOSED
+owned external success result                   ✅ CLOSED
+CallExternal N→1 commit-after-success            ✅ CLOSED
+plain fn static composition boundary             ✅ CLOSED
 
 root InstructionPointer                         ❌ EXCLUDED
 Host / Active Scope / Current Provider          ❌ EXCLUDED
 Outcome / Diagnostic data                       ❌ SEPARATE PHASE
 
-ExternalCapability uniform ABI                  ← NEXT
-external argument/result materialization         PENDING
+evo-values borrowed / owned interchange model   ← NEXT
+ExternalCapability exact Rust type              PENDING — depends on evo-values
+external failure exact representation            PENDING — Outcome / Diagnostic Data
 VmExecution exact Rust root                      PENDING
 VM Execution exact inventory                     PENDING
 ```
