@@ -22,7 +22,7 @@ semantic: {
   label: "Semantic Program Data · owner"
   SemanticExpression: { label: "<<struct>> SemanticExpression" }
   SemanticExpressionKind: { label: "<<enum>> SemanticExpressionKind" }
-  FunctionId: { label: "<<identity>> FunctionId" }
+  FunctionId: { label: "<<struct>> FunctionId" }
   SignatureSymbol: { label: "<<struct>> SignatureSymbol" }
 }
 
@@ -55,7 +55,7 @@ outcome: {
 evo_values: {
   label: "evo-values · external shared owner"
   Value: { label: "<<borrowed view>> Value<'a>" }
-  OwnedValue: { label: "<<owned value>> OwnedValue" }
+  OwnedValue: { label: "<<enum>> OwnedValue · external shared" }
 }
 
 # SourceSpan ownership and reuse
