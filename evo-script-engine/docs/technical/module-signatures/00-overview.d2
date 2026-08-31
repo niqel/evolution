@@ -1,0 +1,69 @@
+direction: right
+
+definitions: {
+  label: "Use Case Definitions · 3 modules"
+
+  compile: {
+    label: "<<Use Case>>\ndefinitions/use_cases/compile.rs\nCompile"
+  }
+
+  execute_compiled: {
+    label: "<<Use Case>>\ndefinitions/use_cases/execute_compiled.rs\nExecuteCompiled"
+  }
+
+  execute_source: {
+    label: "<<Use Case>>\ndefinitions/use_cases/execute_source.rs\nExecuteSource"
+  }
+}
+
+agents: {
+  label: "Agents · 3 modules"
+
+  compiler: {
+    label: "<<Agent>>\nagents/compiler.rs\ncompile · COMPILE"
+  }
+
+  compiled_program_executor: {
+    label: "<<Agent>>\nagents/compiled_program_executor.rs\nexecute_compiled · EXECUTE_COMPILED"
+  }
+
+  source_executor: {
+    label: "<<Agent>>\nagents/source_executor.rs\nexecute_source · EXECUTE_SOURCE"
+  }
+}
+
+collaborators: {
+  label: "Collaborators · 6 modules"
+
+  lexer: "collaborators/lexer.rs\nLex · lex_source · LEX_SOURCE"
+  parser: "collaborators/parser.rs\nParse · parse_tokens · PARSE_TOKENS"
+  semantic_analyzer: "collaborators/semantic_analyzer.rs\nAnalyze · analyze_program · ANALYZE_PROGRAM"
+  bytecode_compiler: "collaborators/bytecode_compiler.rs\nLower · lower_program · LOWER_PROGRAM"
+  execution_initializer: "collaborators/execution_initializer.rs\nInitialize · initialize_execution · INITIALIZE_EXECUTION"
+  instruction_executor: "collaborators/instruction_executor.rs\nExecuteInstruction · execute_instruction · EXECUTE_INSTRUCTION"
+}
+
+resolvers: {
+  label: "Resolvers · 1 module"
+
+  external_call_resolver: {
+    label: "<<Resolver>>\nresolvers/external_call_resolver.rs\nResolveExternalCall\nresolve_external_call · RESOLVE_EXTERNAL_CALL"
+  }
+}
+
+tools: {
+  label: "Tools · 8 modules"
+
+  matches_value_shape: "tools/matches_value_shape.rs"
+  materialize_value: "tools/materialize_value.rs"
+  own_runtime_value: "tools/own_runtime_value.rs"
+  locate_source_span: "tools/locate_source_span.rs"
+  observe_runtime_value: "tools/observe_runtime_value.rs"
+  matches_owned_value_shape: "tools/matches_owned_value_shape.rs"
+  materialize_owned_value: "tools/materialize_owned_value.rs"
+  contextualize_compile_failure: "tools/contextualize_compile_failure.rs"
+}
+
+summary: {
+  label: "Conductual Module Inventory\nUse Cases 3\nAgents 3\nCollaborators 6\nResolvers 1\nTools 8\nTOTAL 21"
+}
