@@ -22,15 +22,11 @@ Status: CLOSED
 
 Un mismo `CompiledProgram` puede participar en múltiples `VmExecution` independientes.
 
-La ejecución no duplica Functions, Constant Pool, External Symbols ni SourceMap.
-
 ## VM-002 — CompiledProgram Relationship
 
 Status: CLOSED
 
-`VmExecution` referencia exactamente un `CompiledProgram`; no lo posee como copia mutable.
-
-La forma Rust exacta del borrow/lifetime se cierra junto con las demás relaciones runtime borrowed.
+`VmExecution` referencia exactamente un `CompiledProgram`; no duplica Functions, Constant Pool, External Symbols ni SourceMap.
 
 ## VM-003 — Application Bindings Relationship
 
@@ -38,15 +34,13 @@ Status: CLOSED — RELATIONSHIP ONLY
 
 La ejecución referencia exactamente un conjunto explícito de `ApplicationBindings` utilizado para resolver `ExternalSymbolId` durante `CallExternal`.
 
-`VmExecution` no posee `Current Provider`, provider lookup ambiental ni Host Session State.
+No existe `Current Provider`, provider lookup ambiental ni Host Session State dentro de la ejecución.
 
 La estructura exacta de `ApplicationBindings` permanece pendiente.
 
 ## VM-004 — One Shared Value Storage
 
 Status: CLOSED
-
-TD-006 y TD-007 establecen que Parameters, Locals y Operands comparten un único storage lógico de Values por ejecución.
 
 La representación exacta se cierra en `SHARED_VALUE_STORAGE.md`:
 
@@ -56,32 +50,40 @@ struct SharedValueStorage {
 }
 ```
 
-Cada `CallFrame` delimita una región lógica propia dentro de este storage.
+Parameters, Locals y Operands son regiones lógicas del mismo storage físico.
 
 ## VM-005 — Call Frames
 
-Status: CLOSED — ROOT OWNERSHIP
+Status: CLOSED
 
 `VmExecution` posee una colección ordenada LIFO de `CallFrame`.
 
-`InstructionPointer`, current `FunctionId` y frame boundaries pertenecen al `CallFrame` activo, no se duplican en `VmExecution`.
+La representación exacta queda cerrada en `CALL_FRAME.md`:
 
-La representación exacta de `CallFrame` permanece pendiente.
+```rust
+struct InstructionPointer(usize);
+
+struct CallFrame {
+    function: FunctionId,
+    instruction_pointer: InstructionPointer,
+    frame_base: usize,
+}
+```
+
+`CallFrame` no posee containers de Parameters, Locals u Operands.
 
 ## VM-006 — Execution-Lifetime Backing Ownership
 
-Status: CLOSED — LOGICAL OWNERSHIP
+Status: CLOSED
 
-Se preserva TD-008:
+Se preserva:
 
 ```text
 borrow mientras alcance
 ownership cuando deba sobrevivir
 ```
 
-Cuando datos producidos por una External Capability deben sobrevivir a la invocación/materializador original, `VmExecution` es su owner lógico natural durante el execution lifetime.
-
-`CallFrame`, Parameter Slots, Local Slots y Shared Value Storage no se convierten automáticamente en owners del backing data.
+Cuando datos externos deben sobrevivir a su materializador inmediato, `VmExecution` es owner lógico del backing durante el execution lifetime.
 
 ## VM-007 — Invocation Lifetime
 
@@ -103,11 +105,9 @@ produce Outcome
 VmExecution ends
 ```
 
-`VmExecution` no representa una VM global con estado persistente entre invocations.
-
 ## VM-008 — Explicitly Excluded from Root
 
-No pertenecen al root de ejecución:
+No pertenecen al root:
 
 ```text
 AST
@@ -146,7 +146,7 @@ VmExecution
 └── is logical owner of execution-lifetime backing data
 ```
 
-No se cierra todavía un Rust struct exacto porque los fields concretos dependen de CallFrame y ApplicationBindings.
+El Rust struct final de `VmExecution` permanece pendiente hasta cerrar `ApplicationBindings` y las relaciones borrowed exactas.
 
 ## VM-010 — RuntimeValue and evo_values::Value<'a> are distinct
 
@@ -164,13 +164,11 @@ evo_values::Value<'a>
 
 Status: CLOSED
 
-`RuntimeValue` representa un Value ejecutable ya materializado sin convertirse automáticamente en owner de todo backing variable/composite.
+`RuntimeValue` representa un Value ejecutable materializado sin ser automáticamente owner de backing variable/composite.
 
 ## VM-012 — Fixed Scalars Inline
 
 Status: CLOSED
-
-Fixed scalar Values viven directamente dentro de `RuntimeValue`:
 
 ```text
 Boolean
@@ -190,8 +188,6 @@ float / float64 → Float64
 
 Status: CLOSED
 
-La categoría incluye:
-
 ```text
 String
 Dynamic Integer
@@ -199,30 +195,26 @@ Struct
 Enum
 ```
 
+utilizan backing indirection.
+
 ## VM-014 — No Persistent Self-Borrow in Shared Value Storage
 
 Status: CLOSED
 
 `SharedValueStorage` no conserva direct Rust references hacia backing data owned por el mismo `VmExecution` cuando eso produciría una estructura self-referential.
 
-Borrowed views temporales siguen permitidas al observar/materializar Values.
-
 ## VM-015 — Backing Identity Strategy
 
 Status: CLOSED
 
-Cerrado en `BACKING_IDENTITY_STRATEGY.md`.
+Cerrado en `BACKING_IDENTITY_STRATEGY.md`:
 
 ```rust
 struct StringBackingId(usize);
 struct DynamicIntegerBackingId(usize);
 struct StructBackingId(usize);
 struct EnumBackingId(usize);
-```
 
-No existe `RuntimeBackingId` universal.
-
-```rust
 enum StringBackingRef {
     Compiled(ConstantId),
     Execution(StringBackingId),
@@ -234,7 +226,7 @@ enum DynamicIntegerBackingRef {
 }
 ```
 
-Struct y Enum usan execution-owned typed IDs. Todo backing ID es estable y no se reutiliza durante la vida de la `VmExecution` que lo creó.
+No existe `RuntimeBackingId` universal. IDs son estables y no se reutilizan durante una `VmExecution`.
 
 ## VM-016 — RuntimeValue Exact Representation
 
@@ -242,28 +234,38 @@ Status: CLOSED
 
 Cerrado en `RUNTIME_VALUE_REPRESENTATION.md`.
 
-`RuntimeValue` contiene exactamente **17 variants** y `DynamicValue` exactamente **3 variants**.
+`RuntimeValue` posee exactamente 17 variants y `DynamicValue` exactamente 3.
 
-Reglas cerradas:
-
-```text
-no NumericValue / FixedNumericValue intermediary
-Dynamic family represented by DynamicValue discriminant
-Dynamic Integer uses backing
-Dynamic Float32 / Float64 stay inline
-RuntimeValue family is Clone + Copy descriptor data
-copying RuntimeValue never copies backing
-Rust PartialEq/Eq is not Evo language equality
-RuntimeValue is execution-context-relative
+```rust
+#[derive(Clone, Copy)]
+enum DynamicValue {
+    Integer(DynamicIntegerBackingRef),
+    Float32(f32),
+    Float64(f64),
+}
 ```
+
+```rust
+#[derive(Clone, Copy)]
+enum RuntimeValue {
+    Boolean(bool),
+    Int8(i8), Int16(i16), Int32(i32), Int64(i64), Int128(i128),
+    Uint8(u8), Uint16(u16), Uint32(u32), Uint64(u64), Uint128(u128),
+    Float32(f32), Float64(f64),
+    String(StringBackingRef),
+    Dynamic(DynamicValue),
+    Struct(StructBackingId),
+    Enum(EnumBackingId),
+}
+```
+
+Copiar el descriptor nunca copia backing. `RuntimeValue` es execution-context-relative.
 
 ## VM-017 — Backing Data Representation
 
 Status: CLOSED
 
-Cerrado en `BACKING_DATA_REPRESENTATION.md` mediante BD-001..BD-009.
-
-`VmExecution` posee exactamente un:
+Cerrado en `BACKING_DATA_REPRESENTATION.md`.
 
 ```rust
 struct ExecutionBackingStore {
@@ -272,15 +274,7 @@ struct ExecutionBackingStore {
     structs: Vec<StructBacking>,
     enums: Vec<EnumBacking>,
 }
-```
 
-Los cuatro stores son tipados, append-only y resuelven `BackingId(n)` posicionalmente en su store correspondiente.
-
-Execution Strings usan `Box<str>` inmutable.
-
-`DynamicIntegerBacking` posee un entero signed de precisión arbitraria detrás de una identity propia del engine; no se fija una crate BigInt como dependencia arquitectónica.
-
-```rust
 struct StructBacking {
     fields: Box<[RuntimeValue]>,
 }
@@ -293,17 +287,13 @@ struct EnumBacking {
 enum RuntimeEnumPayload {
     Simple,
     Associated(RuntimeValue),
-    Structured {
-        fields: Box<[RuntimeValue]>,
-    },
+    Structured { fields: Box<[RuntimeValue]> },
 }
 ```
 
-Todos los execution backings son inmutables después de insertarse. Las operaciones que producen nuevos Values crean nuevo backing cuando es necesario.
+Los cuatro stores son tipados, append-only y positionally indexed. Backings son inmutables después de insertion. Composite backing forma un DAG finito e inmutable.
 
-El graph de Struct/Enum backing es finito, inmutable y acíclico; sharing por typed backing IDs está permitido.
-
-No se requieren GC, cycle collector, `Rc` o `Arc` para representar composite Values v0.
+`DynamicIntegerBacking` encapsula un signed arbitrary-precision integer sin fijar una crate concreta como dependencia arquitectónica.
 
 ## VM-018 — Shared Value Storage Exact Representation
 
@@ -311,27 +301,20 @@ Status: CLOSED
 
 Cerrado en `SHARED_VALUE_STORAGE.md` mediante SV-001..SV-011.
 
-Representación exacta v0:
-
 ```rust
 struct SharedValueStorage {
     cells: Vec<Option<RuntimeValue>>,
 }
 ```
 
-Semántica de cells:
+Semántica:
 
 ```text
-Some(RuntimeValue)
-    = occupied materialized Value cell
-
-None
-    = reserved stable LocalSlot not yet materialized
+Some(RuntimeValue) = occupied materialized cell
+None               = reserved LocalSlot not yet materialized
 ```
 
-`None` es estado técnico de VM storage; no es `null` ni un Value de Evo-Script.
-
-Cada frame utiliza una región contigua:
+Layout:
 
 ```text
 frame_base
@@ -341,100 +324,131 @@ frame_base
                  operand_base
 ```
 
-Invariantes:
-
 ```text
-Parameters  → always Some(RuntimeValue)
-Locals      → None, then Some(RuntimeValue) exactly once
-Operands    → always Some(RuntimeValue)
+Parameters → always Some
+Locals     → None → Some exactly once
+Operands   → always Some
 ```
 
-El Operand Window activo es:
+El Operand Window activo es el tail `cells[operand_base .. cells.len()]`.
 
-```text
-cells[operand_base .. cells.len()]
-```
-
-El depth activo es:
-
-```text
-cells.len() - operand_base
-```
-
-y no puede exceder `CompiledFunction.max_operand_depth`.
-
-No existen `OperandSlot`, `OperandIndex` ni container de operands per-frame.
-
-Una internal call reutiliza directamente los `N` argument cells superiores del caller como Parameter cells del callee:
+Internal `Call` reutiliza los N argument cells superiores como Parameter cells del callee:
 
 ```text
 callee.frame_base = cells.len() - N
 ```
 
-Después se agregan `local_count` cells `None`; no se agregan placeholders para operands.
+`Return` copia el result descriptor, trunca a `callee.frame_base`, elimina el frame y empuja el result para el caller.
 
-La transformación de storage de `Return` queda cerrada:
+## VM-019 — CallFrame Exact Representation
 
-```text
-copy result descriptor
-truncate to callee.frame_base
-remove callee frame
-push result for caller
+Status: CLOSED
+
+Cerrado en `CALL_FRAME.md` mediante CF-001..CF-010.
+
+Representación exacta:
+
+```rust
+struct InstructionPointer(usize);
+
+struct CallFrame {
+    function: FunctionId,
+    instruction_pointer: InstructionPointer,
+    frame_base: usize,
+}
 ```
 
-`CallFrame` describe boundaries dentro de `SharedValueStorage`; no posee Parameters, Locals u Operands como collections independientes.
+Reglas centrales:
 
-## Runtime Value Model Authority
+```text
+CallFrame = one active/suspended internal invocation
+FunctionId resolves CompiledFunction
+InstructionPointer = mutable runtime identity distinct from InstructionIndex
+InstructionPointer identifies current responsible instruction
+frame_base = absolute beginning of frame region
+operand_base = derived, never stored
+```
 
-Las reglas detalladas se registran en:
+Derivación:
+
+```text
+compiled_function
+    = CompiledProgram.functions[frame.function]
+
+operand_base
+    = frame.frame_base
+    + compiled_function.parameter_count
+    + compiled_function.local_count
+```
+
+Internal `Call(FunctionId)`:
+
+```text
+caller.ip remains on Call
+callee.function = target
+callee.ip = InstructionPointer(0)
+```
+
+Successful `Return` elimina el callee y avanza exactamente una instruction al caller reanudado.
+
+No se almacenan:
+
+```text
+operand_base
+parameter_count
+local_count
+max_operand_depth
+return_address
+parent frame
+caller index
+call-site field
+SourceSpan
+```
+
+`CallExternal` no crea `CallFrame`; permanece dentro del active frame actual.
+
+## Runtime Value / VM Data Authorities
 
 - `RUNTIME_VALUE_MODEL.md`
 - `BACKING_IDENTITY_STRATEGY.md`
 - `RUNTIME_VALUE_REPRESENTATION.md`
 - `BACKING_DATA_REPRESENTATION.md`
 - `SHARED_VALUE_STORAGE.md`
+- `CALL_FRAME.md`
 
 ## Current Closure
 
 ```text
-VmExecution responsibility                  ✅ CLOSED
-one invocation per VmExecution              ✅ CLOSED
-CompiledProgram relationship                ✅ CLOSED
-ApplicationBindings relationship            ✅ CLOSED — exact model pending
-one SharedValueStorage root                 ✅ CLOSED
-Call Frames root ownership                   ✅ CLOSED
-execution-lifetime backing logical owner     ✅ CLOSED
-ExecutionBackingStore owner                  ✅ CLOSED
+VmExecution responsibility                     ✅ CLOSED
+one invocation per VmExecution                 ✅ CLOSED
+CompiledProgram relationship                   ✅ CLOSED
+ApplicationBindings relationship               ✅ CLOSED — exact model pending
+one SharedValueStorage root                    ✅ CLOSED
+Call Frames root ownership                      ✅ CLOSED
+execution-lifetime backing logical owner        ✅ CLOSED
+ExecutionBackingStore owner                     ✅ CLOSED
 
-RuntimeValue / evo_values::Value boundary    ✅ CLOSED
-RuntimeValue immutable descriptor            ✅ CLOSED
-fixed scalar inline                          ✅ CLOSED
-variable/composite backing indirection       ✅ CLOSED
-no persistent self-borrow in storage         ✅ CLOSED
-Backing Identity Strategy                    ✅ CLOSED
-RuntimeValue exact representation            ✅ CLOSED — 17 variants
-DynamicValue exact representation            ✅ CLOSED — 3 variants
-descriptor family Clone + Copy               ✅ CLOSED
-RuntimeValue execution-context-relative      ✅ CLOSED
-Backing Data Representation                  ✅ CLOSED
-four typed append-only backing stores        ✅ CLOSED
-String backing representation                ✅ CLOSED
-Dynamic Integer backing responsibility       ✅ CLOSED
-Struct / Enum backing representation         ✅ CLOSED
-immutable finite composite backing DAG       ✅ CLOSED
-Shared Value Storage exact representation    ✅ CLOSED
-Option cell semantics                        ✅ CLOSED
-Parameter / Local / Operand occupancy        ✅ CLOSED
-Operand Window tail mechanics                ✅ CLOSED
-call argument cell reuse                     ✅ CLOSED
-Return storage transformation                ✅ CLOSED
+RuntimeValue / evo_values::Value boundary       ✅ CLOSED
+RuntimeValue exact representation — 17 variants ✅ CLOSED
+DynamicValue exact representation — 3 variants  ✅ CLOSED
+Backing Identity Strategy                       ✅ CLOSED
+Backing Data Representation                     ✅ CLOSED
+Shared Value Storage exact representation       ✅ CLOSED
+CallFrame exact representation                  ✅ CLOSED
+InstructionPointer identity                     ✅ CLOSED
+InstructionPointer current-instruction meaning  ✅ CLOSED
+operand_base derived / not stored               ✅ CLOSED
+caller suspended on internal Call               ✅ CLOSED
+no return-address / parent-frame fields         ✅ CLOSED
+CallExternal creates no CallFrame               ✅ CLOSED
 
-root InstructionPointer                      ❌ EXCLUDED
-Host / Active Scope / Current Provider       ❌ EXCLUDED
-Outcome / Diagnostic data                    ❌ SEPARATE PHASE
+root InstructionPointer                         ❌ EXCLUDED
+Host / Active Scope / Current Provider          ❌ EXCLUDED
+Outcome / Diagnostic data                       ❌ SEPARATE PHASE
 
-CallFrame exact representation               ← NEXT
-InstructionPointer                           PENDING
-ApplicationBindings exact model              PENDING
-remaining call / return frame mechanics      PENDING
+InstructionPointer stepping semantics           ← NEXT
+ApplicationBindings exact model                 PENDING
+remaining external call mechanics               PENDING
+VmExecution exact Rust root                     PENDING
+VM Execution exact inventory                    PENDING
 ```
