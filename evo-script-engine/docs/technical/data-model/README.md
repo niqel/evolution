@@ -113,7 +113,7 @@ VM Execution Data                ← IN ANALYSIS
 ├── one invocation lifetime      ✅ CLOSED
 ├── CompiledProgram relationship ✅ CLOSED
 ├── ApplicationBindings relation ✅ CLOSED — exact model pending
-├── Shared Value Storage owner   ✅ CLOSED — representation pending
+├── Shared Value Storage owner   ✅ CLOSED
 ├── Call Frames owner            ✅ CLOSED — exact model pending
 ├── execution backing owner      ✅ CLOSED
 ├── RuntimeValue / Value boundary ✅ CLOSED
@@ -138,7 +138,13 @@ VM Execution Data                ← IN ANALYSIS
 ├── Dynamic Integer backing      ✅ CLOSED
 ├── Struct / Enum backing        ✅ CLOSED
 ├── immutable composite DAG      ✅ CLOSED
-└── Shared Value Storage exact representation ← NEXT
+├── SharedValueStorage           ✅ CLOSED
+├── Vec<Option<RuntimeValue>>    ✅ CLOSED
+├── parameter/local/operand cells ✅ CLOSED
+├── operand tail mechanics       ✅ CLOSED
+├── call argument cell reuse     ✅ CLOSED
+├── Return storage transformation ✅ CLOSED
+└── CallFrame exact representation ← NEXT
 
 Outcome / Diagnostic Data        PENDING
 ```
@@ -190,6 +196,7 @@ Outcome / Diagnostic Data        PENDING
 - [`BACKING_IDENTITY_STRATEGY.md`](./BACKING_IDENTITY_STRATEGY.md) — typed backing IDs, referencias `Compiled | Execution`, estabilidad por invocation y separación frente al container físico.
 - [`RUNTIME_VALUE_REPRESENTATION.md`](./RUNTIME_VALUE_REPRESENTATION.md) — exact `RuntimeValue` de 17 variants, `DynamicValue` de 3 variants, copy semantics y execution-context-relative handles.
 - [`BACKING_DATA_REPRESENTATION.md`](./BACKING_DATA_REPRESENTATION.md) — `ExecutionBackingStore`, String/Dynamic Integer/Struct/Enum backing, inmutabilidad y composite DAG.
+- [`SHARED_VALUE_STORAGE.md`](./SHARED_VALUE_STORAGE.md) — `Vec<Option<RuntimeValue>>`, regiones Parameter/Local/Operand, reuse de argument cells y transformación de storage en `Return`.
 
 ### Normative language amendments used by compiled/runtime model
 
@@ -231,7 +238,7 @@ La metodología global se define en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../..
 ## Next Block
 
 ```text
-Shared Value Storage exact representation ← NEXT
+CallFrame exact representation ← NEXT
 ```
 
-Aquí se definirá el container físico de `RuntimeValue` para Parameters, Locals y Operand Window, sus índices/bounds y la relación exacta con `CallFrame`, sin reabrir el backing model ya cerrado.
+Aquí se definirá la identity runtime que delimita una invocation interna dentro de `SharedValueStorage`: FunctionId, execution position, `frame_base`, `operand_base` y cualquier dato adicional que la revisión de call/return demuestre estrictamente necesario.
