@@ -75,6 +75,9 @@ Outcome / Diagnostic Data            ✅ CLOSED
 └── exact Outcome inventory         ✅ 24 identities
 
 TECHNICAL DATA MODEL                  ✅ CLOSED
+
+Technical Data Diagram scheme        ✅ CLOSED
+└── canonical D2 view suite          ✅ 9 views / TDD-001..TDD-010
 ```
 
 ## Phase Map
@@ -298,38 +301,50 @@ TOTAL                              24
 - [`EXTERNAL_CAPABILITY_FAILURE.md`](./EXTERNAL_CAPABILITY_FAILURE.md)
 - [`EXECUTION_FAILURE.md`](./EXECUTION_FAILURE.md)
 
-## Technical Data Diagram Rule
+### Technical Data Diagram
+- [`../data-diagram/README.md`](../data-diagram/README.md) — scheme authority / TDD-001..TDD-010.
 
-El siguiente artifact representa datos y relaciones ya cerrados; no behavioral classes.
+## Technical Data Diagram Scheme
 
-Categories:
+Status: CLOSED
 
-```text
-<<struct>>
-<<enum>>
-<<artifact>>
-<<borrowed view>>
-<<alias>>
-```
+La autoridad del esquema está en [`../data-diagram/README.md`](../data-diagram/README.md).
 
-Relations:
+Vistas canónicas:
 
 ```text
-contains
-references
-borrows
-owns
-variant-of
-0..1
-0..N
+00-overview.d2
+01-lexical-data.d2
+02-ast-data.d2
+03-compilation-dependency-data.d2
+04-semantic-program-data.d2
+05-compiled-program-data.d2
+06-vm-execution-data.d2
+07-outcome-diagnostic-data.d2
+08-cross-phase-boundaries.d2
 ```
 
-No se representan methods, inheritance, service classes ni OO interfaces ficticias.
+Reglas centrales:
+
+```text
+D2 source is canonical
+one authoritative owner-phase view per own identity
+reused identities may appear as marked references but are not recounted
+relations limited to owns / contains / references / borrows / variant payload
+ordered cardinality explicit when semantically significant
+enum variants are not promoted to identities
+no Participants / services / behavioral call arrows
+diagramming cannot silently invent identities
+```
 
 ## Next Block
 
 ```text
-Technical Data Diagram ← NEXT
+Technical Data Diagram construction
+├── 00-overview.d2                ← NEXT
+└── 08-cross-phase-boundaries.d2  ← NEXT
 ```
 
-El Technical Data Diagram debe visualizar el Data Model ya cerrado. Cualquier nueva identity detectada durante el diagrama debe tratarse como una inconsistencia explícita y reabrir únicamente el bloque afectado; no debe inventarse silenciosamente durante diagramación.
+Estas dos vistas validan primero la arquitectura global. Después se construyen las siete vistas owner-phase `01..07`.
+
+Cualquier nueva identity detectada durante diagramación debe tratarse como inconsistencia explícita y reabrir únicamente el bloque dueño correspondiente; no puede inventarse silenciosamente durante esta etapa.
