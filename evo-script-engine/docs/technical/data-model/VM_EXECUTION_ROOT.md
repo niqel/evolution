@@ -4,7 +4,7 @@ Status: CLOSED
 
 Este documento cierra la representación Rust exacta del root mutable de una `VmExecution` en `evo-script-engine` v0.
 
-La autoridad deriva de:
+La authority deriva de:
 
 - `VM_EXECUTION_DATA.md`;
 - `SHARED_VALUE_STORAGE.md`;
@@ -12,15 +12,12 @@ La autoridad deriva de:
 - `CALL_FRAME.md`;
 - `APPLICATION_BINDINGS.md`;
 - `EXTERNAL_CAPABILITY_ABI.md`;
+- `COMPILED_BOUNDARY_VALUE_SHAPE.md`;
 - `evo-values/INTERCHANGE_MODEL.md`.
-
-Este bloque cierra únicamente la composición persistente del root de ejecución. La validación exacta de Value shapes en fronteras de invocation/external capability se analiza separadamente en `COMPILED_BOUNDARY_VALUE_SHAPE.md`.
 
 ## VE-001 — Exact five-field root
 
 Status: CLOSED
-
-La representación exacta v0 es:
 
 ```rust
 struct VmExecution<'compiled, 'bindings> {
@@ -32,31 +29,22 @@ struct VmExecution<'compiled, 'bindings> {
 }
 ```
 
-`VmExecution` contiene exactamente cinco fields persistentes.
+Exactamente cinco fields persistentes.
 
 ## VE-002 — Independent external borrow lifetimes
 
 Status: CLOSED
 
-`CompiledProgram` y `ApplicationBindings` poseen lifetimes de borrow independientes:
-
 ```text
-'compiled
-    → CompiledProgram must outlive VmExecution
-
-'bindings
-    → ApplicationBindings must outlive VmExecution
+'compiled → CompiledProgram must outlive VmExecution
+'bindings → ApplicationBindings must outlive VmExecution
 ```
 
-No existe una regla semántica que obligue a ambos owners externos a compartir el mismo lifetime.
-
-Por tanto v0 no los acopla artificialmente mediante un único lifetime.
+No se acoplan artificialmente en un único lifetime.
 
 ## VE-003 — Exactly three mutable runtime roots
 
 Status: CLOSED
-
-`VmExecution` posee exactamente tres roots mutables de estado runtime:
 
 ```text
 SharedValueStorage
@@ -64,97 +52,55 @@ ExecutionBackingStore
 Vec<CallFrame>
 ```
 
-Los otros dos fields son borrows inmutables hacia artifacts/composición externa.
+Los otros dos fields son borrows inmutables.
 
 ## VE-004 — No persistent self-borrows
 
 Status: CLOSED
 
-`VmExecution` no conserva referencias Rust persistentes hacia datos owned por sí mismo.
+Las relaciones internas utilizan typed IDs, `FunctionId`, `InstructionPointer`, `frame_base` y positional boundaries.
 
-Las relaciones internas utilizan:
-
-```text
-typed backing IDs
-FunctionId
-InstructionPointer
-frame_base
-positional boundaries
-```
-
-No existen fields persistentes como:
-
-```text
-&self.backing_store.strings[n]
-&self.call_frames[n]
-&self.value_storage.cells[n]
-```
-
-Esto preserva la regla de no self-referential execution storage.
+No se almacenan referencias persistentes hacia datos owned por el mismo root.
 
 ## VE-005 — Active frame is the LIFO tail
 
 Status: CLOSED
 
-El frame activo es exactamente:
-
 ```text
-call_frames.last()
+active frame = call_frames.last()
 ```
 
-No se almacenan duplicados:
-
-```text
-current_frame
-current_frame_index
-current_function
-root InstructionPointer
-```
-
-El `FunctionId` y `InstructionPointer` activos pertenecen al último `CallFrame`.
+No existen `current_frame`, `current_frame_index`, `current_function` ni root `InstructionPointer`.
 
 ## VE-006 — entry_point is derived
 
 Status: CLOSED
 
-`entry_point` permanece owned por `CompiledProgram` y no se duplica dentro de `VmExecution`.
-
 ```text
 VmExecution.compiled_program.entry_point
-    → entry FunctionId
 ```
+
+No se duplica dentro del root.
 
 ## VE-007 — Invocation Values are initialization input only
 
 Status: CLOSED
 
-Los Invocation Values no permanecen como colección separada dentro de `VmExecution`.
-
-Después de validación/materialización válida:
+Después de validación y materialización:
 
 ```text
 Invocation Values
-    ↓ materialize
-RuntimeValue descriptors
     ↓
 entry Parameter cells in SharedValueStorage
 ```
 
-Por tanto no existe:
+No existe `VmExecution.invocation_values`.
 
-```text
-VmExecution.invocation_values
-```
-
-como estado persistente v0.
-
-La validación exacta de compatibilidad de Value shapes antes de comenzar una ejecución válida depende de metadata compilada suficiente y se analiza en `COMPILED_BOUNDARY_VALUE_SHAPE.md`.
+La validación exacta previa se encuentra cerrada en `COMPILED_BOUNDARY_VALUE_SHAPE.md` mediante `CompiledProgram.entry_parameter_shapes`.
 
 ## VE-008 — Entry CallFrame initialization
 
 Status: CLOSED
-
-Una vez materializados los entry Parameters y reservados sus locals, el primer frame se crea como:
 
 ```rust
 CallFrame {
@@ -164,18 +110,16 @@ CallFrame {
 }
 ```
 
-Los `local_count` locals del entry se agregan como `None` después de sus Parameter cells conforme a `SHARED_VALUE_STORAGE.md`.
-
-`operand_base` continúa derivándose y no se almacena.
+Los `local_count` locals se agregan como `None` después de los Parameters. `operand_base` se deriva.
 
 ## VE-009 — No persistent execution outcome/state flag
 
 Status: CLOSED
 
-`VmExecution` no almacena:
+No se almacenan:
 
 ```text
-Running / Completed / Failed enum
+Running / Completed / Failed
 completed bool
 Outcome
 Failure
@@ -183,17 +127,13 @@ Diagnostic
 result RuntimeValue
 ```
 
-Mientras existe ejecución bytecode activa, `call_frames` contiene el stack de invocations.
-
-Successful entry `Return` o failure concluyen la frontera de ejecución y producen el outcome correspondiente fuera del root mutable.
-
-Un `RuntimeValue` final con handles execution-relative debe materializarse mientras sus owners runtime siguen vivos; su representación pública pertenece a Outcome / Diagnostic Data.
+Successful entry `Return` o Failure concluyen la frontera de ejecución.
 
 ## VE-010 — No derived/cache fields in v0
 
 Status: CLOSED
 
-No se introducen por prevención:
+No se introducen:
 
 ```text
 operand_base field
@@ -210,8 +150,6 @@ max_operand_depth copy
 Invocation Values collection
 ```
 
-Toda información derivable se obtiene desde las autoridades ya existentes.
-
 ## Exact Closed Shape
 
 ```rust
@@ -224,44 +162,34 @@ struct VmExecution<'compiled, 'bindings> {
 }
 ```
 
-Relación:
+## Compiled boundary validation — CLOSED externally to root
+
+El problema detectado durante el cierre del root fue resuelto sin cambiar `VmExecution`.
+
+`CompiledProgram` ahora conserva:
 
 ```text
-VmExecution
-│
-├── borrows
-│   ├── CompiledProgram
-│   └── ApplicationBindings
-│
-└── owns
-    ├── SharedValueStorage
-    ├── ExecutionBackingStore
-    └── Vec<CallFrame>
+entry_parameter_shapes: Vec<CompiledValueShapeId>
+value_shapes: Vec<CompiledValueShape>
 ```
 
-## Boundary inconsistency discovered during closure
-
-El cierre del root detectó que la estructura de `VmExecution` es suficiente, pero la metadata compilada vigente todavía no permite cumplir dos verificaciones de frontera ya requeridas:
+`ExternalSymbol` conserva:
 
 ```text
-1. Execute Compiled invocation input
-   → arity can be validated
-   → exact Value shape currently cannot be validated from CompiledFunction
-
-2. CallExternal success result
-   → one OwnedValue is returned
-   → exact expected Value shape currently cannot be validated from ExternalSymbol
+result_shape: CompiledValueShapeId
 ```
 
-El problema pertenece al persistent executable contract, no al mutable root de `VmExecution`.
-
-Por tanto este documento NO reintroduce `TypeId`, `SemanticType` o reflection en la VM y NO agrega metadata al root.
-
-La corrección mínima se analiza en:
+Por tanto:
 
 ```text
-COMPILED_BOUNDARY_VALUE_SHAPE.md
+Invocation Values
+    → exact validation before valid VmExecution initialization
+
+ExternalCapability Success(OwnedValue)
+    → exact validation before runtime materialization / stack commit
 ```
+
+No se reintroduce `TypeId`, `SemanticType` ni reflection en `VmExecution`.
 
 ## Closure
 
@@ -276,8 +204,8 @@ VE-007 Invocation Values initialization-only             ✅ CLOSED
 VE-008 entry frame = entry_point / ip0 / frame_base0     ✅ CLOSED
 VE-009 no persistent execution state/outcome/result      ✅ CLOSED
 VE-010 no derived/cache fields                           ✅ CLOSED
+Compiled Boundary Value Shape                            ✅ CLOSED
 
 VmExecution exact Rust root                              ✅ CLOSED
-Compiled Boundary Value Shape                            ← NEXT
-VM Execution exact inventory                             PENDING
+VM Execution exact inventory                             ← NEXT
 ```
