@@ -1,0 +1,113 @@
+direction: right
+
+semantic_reused: {
+  label: "Semantic Program Data · reused"
+  FunctionId: { label: "<<struct>> FunctionId" }
+  SignatureSymbol: { label: "<<struct>> SignatureSymbol" }
+}
+
+lexical_reused: {
+  label: "Lexical Data · reused"
+  SourceSpan: { label: "<<struct>> SourceSpan" }
+}
+
+compiled: {
+  label: "Compiled Program / Bytecode Data · owner · 21 identities"
+
+  ids: {
+    label: "Persistent IDs / Coordinates · 8"
+    ConstantId: { label: "<<struct>> ConstantId" }
+    ExternalSymbolId: { label: "<<struct>> ExternalSymbolId" }
+    CompiledValueShapeId: { label: "<<struct>> CompiledValueShapeId" }
+    ParameterSlot: { label: "<<struct>> ParameterSlot" }
+    LocalSlot: { label: "<<struct>> LocalSlot" }
+    InstructionIndex: { label: "<<struct>> InstructionIndex" }
+    FieldIndex: { label: "<<struct>> FieldIndex" }
+    VariantDiscriminant: { label: "<<struct>> VariantDiscriminant" }
+  }
+
+  root_storage: {
+    label: "Program / Function / Storage · 7"
+    CompiledProgram: { label: "<<artifact>> CompiledProgram" }
+    CompiledFunction: { label: "<<struct>> CompiledFunction" }
+    ExternalSymbol: { label: "<<struct>> ExternalSymbol" }
+    Constant: { label: "<<enum>> Constant\n15 variants" }
+    DynamicConstant: { label: "<<enum>> DynamicConstant\n3 variants" }
+    NumericKind: { label: "<<enum>> NumericKind\n12 variants" }
+    Instruction: { label: "<<enum>> Instruction\n48 variants" }
+  }
+
+  equality: {
+    label: "Structural Equality · 3"
+    EqualityRule: { label: "<<enum>> EqualityRule\n4 variants" }
+    CompositeEqualityPlan: { label: "<<enum>> CompositeEqualityPlan\n2 variants" }
+    EnumEqualityPayloadPlan: { label: "<<enum>> EnumEqualityPayloadPlan\n3 variants" }
+  }
+
+  mapping_boundary: {
+    label: "Source Mapping / Boundary Shape · 3"
+    SourceMap: { label: "<<struct>> SourceMap" }
+    CompiledValueShape: { label: "<<enum>> CompiledValueShape\n17 variants" }
+    CompiledEnumValueShape: { label: "<<enum>> CompiledEnumValueShape\n3 variants" }
+  }
+}
+
+# ID / owner relationships
+compiled.ids.ConstantId -> compiled.root_storage.Constant: "references · 1"
+compiled.ids.ExternalSymbolId -> compiled.root_storage.ExternalSymbol: "references · 1"
+compiled.ids.CompiledValueShapeId -> compiled.mapping_boundary.CompiledValueShape: "references · 1"
+compiled.ids.InstructionIndex -> compiled.root_storage.Instruction: "references · 1"
+
+# Program root
+compiled.root_storage.CompiledProgram -> compiled.root_storage.CompiledFunction: "owns · 1..N ordered"
+compiled.root_storage.CompiledProgram -> semantic_reused.FunctionId: "contains · 1"
+compiled.root_storage.CompiledProgram -> compiled.ids.CompiledValueShapeId: "contains · 0..N ordered"
+compiled.root_storage.CompiledProgram -> compiled.root_storage.Constant: "owns · 0..N ordered"
+compiled.root_storage.CompiledProgram -> compiled.root_storage.ExternalSymbol: "owns · 0..N ordered"
+compiled.root_storage.CompiledProgram -> compiled.mapping_boundary.CompiledValueShape: "owns · 0..N ordered"
+compiled.root_storage.CompiledProgram -> compiled.mapping_boundary.SourceMap: "contains · 1"
+
+# Function bytecode
+compiled.root_storage.CompiledFunction -> compiled.root_storage.Instruction: "owns · 1..N ordered"
+
+# External symbols and constants
+compiled.root_storage.ExternalSymbol -> semantic_reused.SignatureSymbol: "contains · 1"
+compiled.root_storage.ExternalSymbol -> compiled.ids.CompiledValueShapeId: "contains · 1"
+compiled.root_storage.Constant -> compiled.root_storage.DynamicConstant: "variant payload · 0..1"
+
+# Instruction payload identities
+compiled.root_storage.Instruction -> compiled.ids.ConstantId: "variant payload · 0..1"
+compiled.root_storage.Instruction -> compiled.ids.ParameterSlot: "variant payload · 0..1"
+compiled.root_storage.Instruction -> compiled.ids.LocalSlot: "variant payload · 0..1"
+compiled.root_storage.Instruction -> semantic_reused.FunctionId: "variant payload · 0..1"
+compiled.root_storage.Instruction -> compiled.ids.ExternalSymbolId: "variant payload · 0..1"
+compiled.root_storage.Instruction -> compiled.root_storage.NumericKind: "variant payload · 0..2"
+compiled.root_storage.Instruction -> compiled.ids.InstructionIndex: "variant payload · 0..1"
+compiled.root_storage.Instruction -> compiled.ids.FieldIndex: "variant payload · 0..N ordered"
+compiled.root_storage.Instruction -> compiled.ids.VariantDiscriminant: "variant payload · 0..1"
+compiled.root_storage.Instruction -> compiled.equality.CompositeEqualityPlan: "variant payload · 0..1"
+
+# Structural equality plan
+compiled.equality.EqualityRule -> compiled.root_storage.NumericKind: "variant payload · 0..1"
+compiled.equality.EqualityRule -> compiled.equality.CompositeEqualityPlan: "variant payload · 0..1"
+compiled.equality.CompositeEqualityPlan -> compiled.equality.EqualityRule: "variant payload · 0..N ordered"
+compiled.equality.CompositeEqualityPlan -> compiled.equality.EnumEqualityPayloadPlan: "variant payload · 0..N ordered"
+compiled.equality.EnumEqualityPayloadPlan -> compiled.equality.EqualityRule: "variant payload · 0..N ordered"
+
+# Source mapping
+compiled.mapping_boundary.SourceMap -> lexical_reused.SourceSpan: "contains · 1..N ordered"
+
+# Boundary executable shapes
+compiled.mapping_boundary.CompiledValueShape -> compiled.ids.CompiledValueShapeId: "variant payload · 0..N ordered"
+compiled.mapping_boundary.CompiledValueShape -> compiled.mapping_boundary.CompiledEnumValueShape: "variant payload · 0..N ordered"
+compiled.mapping_boundary.CompiledEnumValueShape -> compiled.ids.CompiledValueShapeId: "variant payload · 0..N ordered"
+
+notes: {
+  label: "Compiled Program Boundaries"
+  count: "Exactly 21 own identities; FunctionId, SignatureSymbol and SourceSpan are reused"
+  instruction: "Instruction remains one enum node with exactly 48 variants"
+  slots: "ParameterSlot and LocalSlot are logical function-relative coordinates; no generic FrameSlot or OperandSlot is introduced"
+  equality: "CompositeEqualityPlan is stored directly inside equality instructions; no EqualityPlanId/table exists"
+  shapes: "Boundary shapes are executable contract metadata for entry arguments and external results, not general runtime reflection"
+  no_semantic: "No TypeId, BindingId, AST, names for local resolution or SemanticProgram borrow persists into CompiledProgram"
+}
