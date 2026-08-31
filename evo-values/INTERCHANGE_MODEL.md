@@ -433,6 +433,7 @@ EV-011 OwnedValue distinct; no Value<'static>/generic store ✅ CLOSED
 
 Borrowed / owned interchange model                          ✅ CLOSED
 ExternalCapability exact Value argument/result types        ✅ CLOSED
+VmExecution exact Rust root                                 ✅ CLOSED elsewhere
 ExternalCapability failure type                             PENDING — Outcome / Diagnostic Data
-VmExecution exact Rust root                                 ← NEXT
+Compiled Boundary Value Shape                               ← NEXT in evo-script-engine
 ```
