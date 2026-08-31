@@ -58,39 +58,40 @@ evo_values: {
   OwnedValue: { label: "<<enum>> OwnedValue · external shared" }
 }
 
-# SourceSpan ownership and reuse
-ast.Expression -> lexical.SourceSpan: "contains · 1 · reused"
-semantic.SemanticExpression -> lexical.SourceSpan: "contains · 1 · reused"
-compiled.SourceMap -> lexical.SourceSpan: "contains · 1..N ordered · reused"
-outcome.CompileFailure -> lexical.SourceSpan: "contains · 1 · reused"
-outcome.ExecutionFailure -> lexical.SourceSpan: "contains · 0..1 · reused"
+# SourceSpan ownership and cross-phase reuse
+ast.Expression -> lexical.SourceSpan: "contains · 1"
+semantic.SemanticExpression -> lexical.SourceSpan: "contains · 1"
+compiled.SourceMap -> lexical.SourceSpan: "contains · 1..N ordered"
+outcome.CompileFailure -> lexical.SourceSpan: "contains · 1"
+outcome.ExecutionFailure -> lexical.SourceSpan: "contains · 0..1"
 
 # AST operators reused by Semantic Program
-semantic.SemanticExpressionKind -> ast.UnaryOperator: "variant payload · reused"
-semantic.SemanticExpressionKind -> ast.BinaryOperator: "variant payload · reused"
+semantic.SemanticExpressionKind -> ast.UnaryOperator: "variant payload · 0..1"
+semantic.SemanticExpressionKind -> ast.BinaryOperator: "variant payload · 0..1"
 
 # Canonical semantic identities reused by later phases
-compiled.CompiledProgram -> semantic.FunctionId: "references · 1 entry point · reused"
-compiled.Instruction -> semantic.FunctionId: "variant payload · reused"
-vm.CallFrame -> semantic.FunctionId: "references · 1 · reused"
+compiled.CompiledProgram -> semantic.FunctionId: "references · 1"
+compiled.Instruction -> semantic.FunctionId: "variant payload · 0..1"
+vm.CallFrame -> semantic.FunctionId: "references · 1"
 
-compilation_dependency.CatalogSignatureParameter -> semantic.SignatureSymbol: "variant payload · reused"
-compiled.ExternalSymbol -> semantic.SignatureSymbol: "contains · 1 · reused"
-vm.ApplicationBindings -> semantic.SignatureSymbol: "references · 0..N map keys · reused"
-outcome.ExternalExecutionFailure -> semantic.SignatureSymbol: "variant payload · reused"
+compilation_dependency.CompilationCatalog -> semantic.SignatureSymbol: "references · 0..N"
+compilation_dependency.CatalogSignatureParameter -> semantic.SignatureSymbol: "variant payload · 0..1"
+compiled.ExternalSymbol -> semantic.SignatureSymbol: "contains · 1"
+vm.ApplicationBindings -> semantic.SignatureSymbol: "references · 0..N"
+outcome.ExternalExecutionFailure -> semantic.SignatureSymbol: "variant payload · 1"
 
 # Compiled artifact borrowed by one execution
 vm.VmExecution -> compiled.CompiledProgram: "borrows · 1"
 
 # Runtime external composition
 vm.ApplicationBindings -> vm.ExternalCapability: "owns · 0..N"
-vm.ExternalCapability -> evo_values.Value: "references · borrowed arguments"
-vm.ExternalCapability -> evo_values.OwnedValue: "references · success result"
-vm.ExternalCapability -> outcome.ExternalCapabilityFailure: "references · failure result"
+vm.ExternalCapability -> evo_values.Value: "references · 0..N ordered"
+vm.ExternalCapability -> evo_values.OwnedValue: "references · 1"
+vm.ExternalCapability -> outcome.ExternalCapabilityFailure: "references · 1"
 
-# Public outcomes cross phase/crate boundaries
-outcome.CompileOutcome -> compiled.CompiledProgram: "references · Ok"
-outcome.ExecutionOutcome -> evo_values.OwnedValue: "references · Ok"
+# Public outcomes reference success payload types across boundaries
+outcome.CompileOutcome -> compiled.CompiledProgram: "references · 1"
+outcome.ExecutionOutcome -> evo_values.OwnedValue: "references · 1"
 
 notes: {
   label: "Cross-Phase Boundary Rules"
