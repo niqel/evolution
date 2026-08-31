@@ -15,7 +15,7 @@ La autoridad deriva de:
 - `VM_EXECUTION_DATA.md`;
 - `ENGINEERING_PRINCIPLES.md`.
 
-Este bloque define la composición y lookup de bindings. La semántica del ABI uniforme de `ExternalCapability` queda cerrada en `EXTERNAL_CAPABILITY_ABI.md`; su firma Rust textual final depende del modelo borrowed/owned de `evo-values`.
+Este bloque define la composición y lookup de bindings. La semántica del ABI uniforme y sus tipos exactos de Value quedan cerrados en `EXTERNAL_CAPABILITY_ABI.md` + `evo-values/INTERCHANGE_MODEL.md`; solo el tipo exacto de failure permanece pendiente de Outcome / Diagnostic Data.
 
 ## AB-001 — Explicit application capability composition
 
@@ -254,9 +254,10 @@ AB-009 no provider/session/service-locator state          ✅ CLOSED
 
 ApplicationBindings exact model                           ✅ CLOSED
 ExternalCapability ABI semantics                          ✅ CLOSED elsewhere
-Exact ABI value types                                     PENDING — evo-values
+ExternalCapability exact Value types                      ✅ CLOSED elsewhere
+VmExecution exact Rust root                               ✅ CLOSED elsewhere
+ExternalCapability failure type                           PENDING — Outcome / Diagnostic Data
 
-evo-values borrowed / owned interchange model             ← NEXT
-VmExecution exact Rust root                               PENDING
+Compiled Boundary Value Shape                             ← NEXT
 VM Execution exact inventory                              PENDING
 ```
