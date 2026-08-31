@@ -1,6 +1,6 @@
 # Evo-Script Engine — VM Execution Data
 
-Status: VM EXECUTION DATA — IN ANALYSIS — EXACT INVENTORY NEXT
+Status: VM EXECUTION DATA — STRUCTURALLY CLOSED — OUTCOME FAILURE TYPE REFERENCE PENDING
 
 Este documento es la autoridad acumulada del estado runtime mutable utilizado para ejecutar un `CompiledProgram` en `evo-script-engine` v0.
 
@@ -9,10 +9,10 @@ Compiled Program
     ↓ referenced by
 VmExecution
     ↓
-Outcome
+Outcome / Diagnostic Data
 ```
 
-Los documentos especializados contienen las reglas completas. Este root consolida su estado normativo y evita duplicar representación semántica dentro de la VM.
+Las responsabilidades, representaciones e inventario propio de VM quedan cerrados. La fase `Outcome / Diagnostic Data` debe todavía definir el tipo técnico de failure referenciado por `ExternalCapability`; esa dependencia cruzada no agrega una identity VM ni reabre las reglas cerradas aquí.
 
 ## VM-001 — VmExecution Root Responsibility
 
@@ -24,7 +24,7 @@ Status: CLOSED
 
 Status: CLOSED
 
-`VmExecution` referencia exactamente un `CompiledProgram`; no duplica Functions, Constant Pool, External Symbols, Value Shapes ni SourceMap.
+`VmExecution` referencia exactamente un `CompiledProgram`; no duplica Functions, Constant Pool, External Symbols, Compiled Value Shapes ni SourceMap.
 
 ## VM-003 — ApplicationBindings Relationship
 
@@ -124,14 +124,14 @@ VmExecution
 └── owns ordered CallFrames
 ```
 
-## VM-010 — RuntimeValue and evo_values::Value<'a> are distinct
+## VM-010 — RuntimeValue / interchange boundary
 
 Status: CLOSED
 
 ```text
-RuntimeValue            = private internal VM descriptor
-Value<'a>               = borrowed interchange representation
-OwnedValue              = owned interchange representation
+RuntimeValue = private internal VM descriptor
+Value<'a>    = borrowed interchange representation
+OwnedValue   = owned interchange representation
 ```
 
 ## VM-011 — RuntimeValue is immutable descriptor
@@ -202,7 +202,7 @@ No existe universal `RuntimeBackingId`.
 
 Status: CLOSED
 
-`RuntimeValue` tiene exactamente 17 variants y `DynamicValue` exactamente 3.
+`RuntimeValue` posee exactamente 17 variants y `DynamicValue` exactamente 3.
 
 ```rust
 #[derive(Clone, Copy)]
@@ -211,9 +211,7 @@ enum DynamicValue {
     Float32(f32),
     Float64(f64),
 }
-```
 
-```rust
 #[derive(Clone, Copy)]
 enum RuntimeValue {
     Boolean(bool),
@@ -257,7 +255,7 @@ enum RuntimeEnumPayload {
 }
 ```
 
-Backings son typed, append-only, inmutables después de insertion; composites forman DAG finito.
+Backings son typed, append-only e inmutables después de insertion; composites forman DAG finito.
 
 ## VM-018 — Shared Value Storage Exact Representation
 
@@ -276,7 +274,7 @@ frame_base
                  operand_base
 ```
 
-Internal `Call` reutiliza top-N argument cells como Parameter cells del callee. `Return` trunca a `callee.frame_base` y empuja un result descriptor para el caller.
+Internal `Call` reutiliza top-N argument cells como Parameters del callee. `Return` trunca a `callee.frame_base` y empuja un result descriptor para el caller.
 
 ## VM-019 — CallFrame Exact Representation
 
@@ -290,13 +288,7 @@ struct CallFrame {
 }
 ```
 
-`operand_base` es derivado:
-
-```text
-frame_base + parameter_count + local_count
-```
-
-Internal caller permanece suspendido sobre `Call`; `CallExternal` no crea frame.
+`operand_base = frame_base + parameter_count + local_count` y no se almacena.
 
 ## VM-020 — InstructionPointer Stepping Semantics
 
@@ -308,9 +300,9 @@ ordinary failure           → unchanged
 Jump(target)               → ip = target
 JumpIfFalse(false)         → ip = target
 JumpIfFalse(true)          → ip += 1
-internal Call success      → caller unchanged; callee ip = 0
-internal Return success    → remove callee; caller ip += 1
-entry Return success       → execution complete
+internal Call              → caller unchanged; callee ip = 0
+internal Return            → remove callee; caller ip += 1
+entry Return               → execution complete
 CallExternal success       → ip += 1
 CallExternal failure       → unchanged
 ```
@@ -326,8 +318,6 @@ struct ApplicationBindings {
     capabilities: HashMap<SignatureSymbol, ExternalCapability>,
 }
 ```
-
-Resolution en `CallExternal`:
 
 ```text
 ExternalSymbolId
@@ -350,11 +340,7 @@ capability → VM on success
     OwnedValue
 ```
 
-Top-N argument cells permanecen hasta conocer success/failure.
-
-Success materializa un valid `RuntimeValue` antes del commit `N → 1`.
-
-Failure no hace commit y conserva IP sobre `CallExternal`; no garantiza rollback ni resumability.
+Top-N argument cells permanecen hasta conocer success/failure. Success valida/materializa un `RuntimeValue` antes del commit `N → 1`. Failure no hace commit y conserva IP sobre `CallExternal`; no garantiza rollback ni resumability.
 
 Plain `fn` representa composición estática v0 y no captura state de instancia.
 
@@ -364,7 +350,7 @@ Status: CLOSED
 
 `Value<'a>` y `OwnedValue` cubren exactamente 17 semantic Value families.
 
-Dynamic mantiene Integer / Float32 / Float64 y el Dynamic Integer cruza frontera como:
+Dynamic mantiene Integer / Float32 / Float64 y Dynamic Integer cruza frontera como:
 
 ```text
 negative + minimal unsigned big-endian magnitude
@@ -387,8 +373,6 @@ struct VmExecution<'compiled, 'bindings> {
 }
 ```
 
-Reglas:
-
 ```text
 exactly 5 persistent fields
 2 independent external borrow lifetimes
@@ -405,42 +389,14 @@ no derived/cache fields
 
 Status: CLOSED
 
-Cerrado en `COMPILED_BOUNDARY_VALUE_SHAPE.md`.
-
-`CompiledProgram` conserva boundary executable contract metadata:
-
-```rust
-struct CompiledValueShapeId(usize);
-
-enum CompiledValueShape {
-    Boolean,
-    Int8, Int16, Int32, Int64, Int128,
-    Uint8, Uint16, Uint32, Uint64, Uint128,
-    Float32, Float64,
-    String,
-    Dynamic,
-    Struct { fields: Vec<CompiledValueShapeId> },
-    Enum { variants: Vec<CompiledEnumValueShape> },
-}
-
-enum CompiledEnumValueShape {
-    Simple,
-    Associated(CompiledValueShapeId),
-    Structured { fields: Vec<CompiledValueShapeId> },
-}
-```
-
-`CompiledProgram` agrega:
+`CompiledProgram` conserva boundary executable contract metadata mediante:
 
 ```text
-entry_parameter_shapes: Vec<CompiledValueShapeId>
-value_shapes: Vec<CompiledValueShape>
-```
-
-`ExternalSymbol` agrega:
-
-```text
-result_shape: CompiledValueShapeId
+CompiledValueShapeId
+CompiledValueShape — 17 variants
+CompiledEnumValueShape — 3 variants
+entry_parameter_shapes
+ExternalSymbol.result_shape
 ```
 
 Uso exacto:
@@ -453,13 +409,70 @@ ExternalCapability Success(OwnedValue)
     → validate before RuntimeValue materialization / N→1 commit
 ```
 
-Boundary validation es exacta, recursiva y sin coerción.
+Validation es exacta, recursiva y sin coerción. Esta metadata no participa en ordinary bytecode dispatch y no es general runtime reflection.
 
-Esta metadata NO participa en ordinary bytecode dispatch y NO es runtime reflection general.
+## VM-026 — Exact VM Execution Inventory
 
-No modifica el shape de `VmExecution`.
+Status: CLOSED
 
-## Current Authorities
+Cerrado en `VM_EXECUTION_INVENTORY.md` mediante VMI-001..VMI-008.
+
+`VM Execution Data` contiene exactamente **19 identities técnicas propias**:
+
+```text
+01 VmExecution
+02 ApplicationBindings
+03 ExternalCapability
+04 RuntimeValue
+05 DynamicValue
+06 StringBackingId
+07 DynamicIntegerBackingId
+08 StructBackingId
+09 EnumBackingId
+10 StringBackingRef
+11 DynamicIntegerBackingRef
+12 ExecutionBackingStore
+13 DynamicIntegerBacking
+14 StructBacking
+15 EnumBacking
+16 RuntimeEnumPayload
+17 SharedValueStorage
+18 InstructionPointer
+19 CallFrame
+```
+
+Categorías:
+
+```text
+Root / external composition       3
+Runtime Value descriptors         2
+Backing identities / references   6
+Execution backing data            5
+Execution state / control         3
+                                 ──
+TOTAL                            19
+```
+
+Reused Semantic/Compiled/evo-values identities no se cuentan otra vez. Containers, primitives, fields, lifetimes y boundaries derivadas no son identities independientes.
+
+No se introducen wrappers como `OperandWindow`, `CallStack`, `FrameBase`, `ExecutionState`, `RuntimeBackingId`, `ApplicationBinding`, `ExecutionContext` o `Session`.
+
+Conteos internos exactos:
+
+```text
+RuntimeValue variants                 17
+DynamicValue variants                  3
+StringBackingRef variants              2
+DynamicIntegerBackingRef variants      2
+RuntimeEnumPayload variants            3
+VmExecution persistent fields          5
+CallFrame persistent fields             3
+ExecutionBackingStore typed stores      4
+```
+
+`ExternalCapability` cuenta como identity VM aunque el tipo técnico de failure de su `Result` sea owned por `Outcome / Diagnostic Data`.
+
+## Authorities
 
 - `RUNTIME_VALUE_MODEL.md`
 - `BACKING_IDENTITY_STRATEGY.md`
@@ -471,10 +484,11 @@ No modifica el shape de `VmExecution`.
 - `APPLICATION_BINDINGS.md`
 - `EXTERNAL_CAPABILITY_ABI.md`
 - `VM_EXECUTION_ROOT.md`
+- `VM_EXECUTION_INVENTORY.md`
 - `COMPILED_BOUNDARY_VALUE_SHAPE.md`
 - `../../../../evo-values/INTERCHANGE_MODEL.md`
 
-## Current Closure
+## Closure
 
 ```text
 VmExecution root responsibility                   ✅ CLOSED
@@ -492,11 +506,16 @@ VmExecution exact Rust root                       ✅ CLOSED — 5 fields
 Compiled Boundary Value Shape                     ✅ CLOSED
 entry Invocation Value validation contract        ✅ CLOSED
 external result validation contract               ✅ CLOSED
+VM Execution exact inventory                      ✅ CLOSED — 19 identities
 
 root InstructionPointer                           ❌ EXCLUDED
 Current Provider / Active Scope / Host Session    ❌ EXCLUDED
 Outcome / Diagnostic representation               ❌ SEPARATE PHASE
 
+VM structural/data model                          ✅ CLOSED
 ExternalCapability failure type                   PENDING — Outcome / Diagnostic Data
-VM Execution exact inventory                      ← NEXT
+
+NEXT
+    Architecture map / review
+    then Outcome / Diagnostic Data
 ```
