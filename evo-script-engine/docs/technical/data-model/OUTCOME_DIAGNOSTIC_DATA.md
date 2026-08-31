@@ -1,6 +1,6 @@
 # Evo-Script Engine — Outcome / Diagnostic Data
 
-Status: IN ANALYSIS — ROOT OUTCOME MODEL + COMPILE FAILURE COMPLETE
+Status: IN ANALYSIS — ROOT + COMPILE FAILURE + DIAGNOSTIC PROVENANCE CLOSED
 
 Este documento es la autoridad acumulada de `Outcome / Diagnostic Data` para `evo-script-engine` v0.
 
@@ -128,19 +128,9 @@ Status: CLOSED
 La identity del error expresa **qué falló**.
 La provenance diagnóstica expresa **dónde se originó**, cuando existe una ubicación fuente válida.
 
-No se duplican dentro de cada error concreto:
+La representación exacta de provenance quedó cerrada posteriormente en [`DIAGNOSTIC_PROVENANCE.md`](./DIAGNOSTIC_PROVENANCE.md) reutilizando `SourceSpan` directamente.
 
-```text
-line
-column
-SourceSpan
-FunctionId
-InstructionPointer
-CallFrame
-VmExecution
-```
-
-La forma exacta del diagnostic anchor se cierra posteriormente.
+No se introduce `DiagnosticAnchor` ni `SourceLocation` en v0.
 
 ## Closed Root Shape
 
@@ -159,7 +149,7 @@ type ExternalCapability =
 
 ## CompileFailure
 
-Status: CLOSED — ROOT + ALL THREE SUBFAMILIES
+Status: CLOSED — ROOT + ALL THREE SUBFAMILIES + PROVENANCE
 
 La autoridad especializada está en [`COMPILE_FAILURE.md`](./COMPILE_FAILURE.md).
 
@@ -168,7 +158,7 @@ Forma cerrada:
 ```rust
 struct CompileFailure {
     kind: CompileFailureKind,
-    diagnostic: Option<DiagnosticAnchor>,
+    source_span: SourceSpan,
 }
 
 enum CompileFailureKind {
@@ -219,6 +209,57 @@ La fuente de contratos externos durante compile está cerrada en [`COMPILATION_D
 
 Los failures físicos/de construcción de catálogo permanecen fuera de `CompileFailure` del Engine.
 
+## Diagnostic provenance
+
+Status: CLOSED
+
+La autoridad especializada está en [`DIAGNOSTIC_PROVENANCE.md`](./DIAGNOSTIC_PROVENANCE.md).
+
+Decisiones cerradas `DP-001..DP-010`:
+
+```text
+DiagnosticAnchor                    ❌ NOT NEEDED v0
+SourceLocation identity             ❌ NOT NEEDED v0
+SourceId                            ❌ NOT NEEDED v0
+new diagnostic identities           0
+
+CompileFailure.source_span          SourceSpan — mandatory
+ExecutionFailure.source_span        Option<SourceSpan>
+```
+
+Compile provenance:
+
+```text
+Lexer / Parser / Semantic Analyzer
+    ↓ responsible SourceSpan
+CompileFailure {
+    kind,
+    source_span,
+}
+```
+
+Runtime provenance:
+
+```text
+CallFrame.function
++
+InstructionPointer ordinal
+    ↓
+SourceMap
+    ↓
+SourceSpan
+    ↓
+ExecutionFailure.source_span = Some(span)
+```
+
+Invocation-boundary failure before a valid `VmExecution` begins:
+
+```text
+ExecutionFailure.source_span = None
+```
+
+`SourceSpan` es provenance técnica, no presentación. Line/column/snippet/path se derivan posteriormente por el Consumer cuando dispone del Source Text.
+
 ## Compile phase failure map
 
 ```text
@@ -267,6 +308,11 @@ CompileFailure<'source>
 TypeId / SignatureId escaping through SemanticFailure
 Vec<Diagnostic> multi-error compile result
 physical/module/catalog-construction failures inside SemanticFailure
+DiagnosticAnchor
+SourceLocation
+SourceId
+Source Text ownership in failure outcomes
+script source location inside ExternalCapabilityFailure
 ```
 
 ## Closure
@@ -290,10 +336,12 @@ SyntaxFailure exact family                                        ✅ CLOSED —
 CompilationCatalog corrective dependency                          ✅ CLOSED — 8 identities
 SemanticFailure exact family                                      ✅ CLOSED — 12 own identities
 CompileFailure exact subfamilies                                  ✅ CLOSED
+Diagnostic provenance / DP-001..DP-010                           ✅ CLOSED — 0 new identities
+Source Location materialization                                   ✅ CLOSED
+DiagnosticAnchor                                                  ❌ NOT NEEDED v0
+SourceLocation identity                                           ❌ NOT NEEDED v0
 
-ExecutionFailure exact family                                     ← NEXT
-ExternalCapabilityFailure exact representation                    PENDING
-DiagnosticAnchor exact shape                                      PENDING
-Source Location materialization                                   PENDING
+ExternalCapabilityFailure exact representation                    ← NEXT
+ExecutionFailure exact family                                     PENDING
 exact Outcome inventory                                           PENDING
 ```
