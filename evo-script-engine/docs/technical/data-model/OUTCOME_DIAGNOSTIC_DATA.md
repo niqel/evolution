@@ -1,6 +1,6 @@
 # Evo-Script Engine — Outcome / Diagnostic Data
 
-Status: IN ANALYSIS — ROOT OUTCOME MODEL + COMPILE FAILURE ROOT CLOSED
+Status: IN ANALYSIS — ROOT OUTCOME MODEL + COMPILE FAILURE COMPLETE
 
 Este documento es la autoridad acumulada de `Outcome / Diagnostic Data` para `evo-script-engine` v0.
 
@@ -157,13 +157,13 @@ type ExternalCapability =
     ) -> Result<OwnedValue, ExternalCapabilityFailure>;
 ```
 
-## CompileFailure root
+## CompileFailure
 
-Status: CLOSED — SUBFAMILIES IN PROGRESS
+Status: CLOSED — ROOT + ALL THREE SUBFAMILIES
 
 La autoridad especializada está en [`COMPILE_FAILURE.md`](./COMPILE_FAILURE.md).
 
-Forma conceptual cerrada:
+Forma cerrada:
 
 ```rust
 struct CompileFailure {
@@ -178,29 +178,75 @@ enum CompileFailureKind {
 }
 ```
 
-Reglas cerradas `CPF-001..CPF-010`:
+Reglas root `CPF-001..CPF-010` están CLOSED.
+
+Subfamilies exactas:
 
 ```text
-CompileFailure is owned
-meaning != diagnostic provenance
-exactly Lexical / Syntax / Semantic families
-no normal BytecodeCompiler failure variant
-Lexer owns LexicalFailure
-Parser owns SyntaxFailure
-Semantic Analyzer owns SemanticFailure
-no Source Text / Token / AST borrows survive
-structured Consumer-neutral data
-one primary deterministic CompileFailure in v0
+LexicalFailure
+    ✅ CLOSED — 6 variants
+    authority: LEXICAL_FAILURE.md
+
+SyntaxFailure
+    ✅ CLOSED — 10 variants
+    authority: SYNTAX_FAILURE.md
+
+SemanticFailure
+    ✅ CLOSED — 12 own technical identities
+    root variants = 7
+    authority: SEMANTIC_FAILURE.md
 ```
 
-Subfamilies ya cerradas:
+La familia semántica cerrada se divide en:
 
 ```text
-LexicalFailure = 6 variants
-SyntaxFailure  = 10 variants
+ResolutionFailure           4 variants
+DeclarationFailure          7 variants
+TypeCheckingFailure         8 variants
+CallFailure                 7 variants
+CompositeFailure           10 variants
+WhenFailure                11 variants
+SignatureMismatchKind       6 variants
+
+supporting descriptors:
+SemanticTypeDescriptor      3 variants
+SemanticNameRole            7 variants
+SemanticArgumentKind        2 variants
+EnumPayloadShape            3 variants
 ```
 
-Antes de `SemanticFailure` se corrigió explícitamente la fuente de contratos externos mediante [`COMPILATION_DEPENDENCY_MODEL.md`](./COMPILATION_DEPENDENCY_MODEL.md): Semantic Analyzer borrows un `CompilationCatalog` validado y no realiza filesystem/module resolution.
+La fuente de contratos externos durante compile está cerrada en [`COMPILATION_DEPENDENCY_MODEL.md`](./COMPILATION_DEPENDENCY_MODEL.md): Semantic Analyzer borrows un `CompilationCatalog` validado y no realiza filesystem/module resolution.
+
+Los failures físicos/de construcción de catálogo permanecen fuera de `CompileFailure` del Engine.
+
+## Compile phase failure map
+
+```text
+Source Text
+    ↓
+Lexer
+    ├── LexicalFailure
+    ▼
+TokenSequence
+    ↓
+Parser
+    ├── SyntaxFailure
+    ▼
+AST
+    +
+CompilationCatalog
+    ↓
+Semantic Analyzer
+    ├── SemanticFailure
+    ▼
+SemanticProgram
+    ↓
+Bytecode Compiler
+    ↓
+CompiledProgram
+```
+
+Bytecode Compiler no agrega una cuarta familia normal de compile failure: una imposibilidad al lowering de un `SemanticProgram` válido es una invariant violation interna.
 
 ## Explicitly Not Introduced
 
@@ -211,13 +257,16 @@ ExecuteSourceOutcome
 OutcomeValue
 ResultValue
 universal Failure enum shared blindly by every phase
+universal SystemError enum
 opcode-specific failure types
 RuntimeValue as public outcome
 line/column embedded in every error
 VmExecution state embedded in public failure
 BytecodeFailure as normal language CompileFailure
 CompileFailure<'source>
+TypeId / SignatureId escaping through SemanticFailure
 Vec<Diagnostic> multi-error compile result
+physical/module/catalog-construction failures inside SemanticFailure
 ```
 
 ## Closure
@@ -239,10 +288,12 @@ CompileFailure root / CPF-001..CPF-010                            ✅ CLOSED
 LexicalFailure exact family                                       ✅ CLOSED — 6 variants
 SyntaxFailure exact family                                        ✅ CLOSED — 10 variants
 CompilationCatalog corrective dependency                          ✅ CLOSED — 8 identities
-SemanticFailure exact family                                      ← NEXT
-ExecutionFailure exact family                                     PENDING
+SemanticFailure exact family                                      ✅ CLOSED — 12 own identities
+CompileFailure exact subfamilies                                  ✅ CLOSED
+
+ExecutionFailure exact family                                     ← NEXT
 ExternalCapabilityFailure exact representation                    PENDING
-DiagnosticAnchor                                                   PENDING
+DiagnosticAnchor exact shape                                      PENDING
 Source Location materialization                                   PENDING
 exact Outcome inventory                                           PENDING
 ```
