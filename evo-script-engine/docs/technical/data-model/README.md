@@ -75,18 +75,18 @@ Semantic Program Data            ✅ CLOSED
 ├── Pipeline semantic lowering   ✅ CLOSED
 └── exact semantic inventory     ✅ CLOSED — 33 identities
 
-Compiled Program / Bytecode Data ✅ CLOSED
+Compiled Program / Bytecode Data ✅ CLOSED BASE — CORRECTIVE BOUNDARY ANALYSIS OPEN
 ├── compiled responsibility      ✅ CLOSED
 ├── FunctionId preservation      ✅ CLOSED
 ├── ConstantId                   ✅ CLOSED
 ├── ExternalSymbolId             ✅ CLOSED
 ├── Signature Dependency erasure ✅ CLOSED
 ├── external call convergence    ✅ CLOSED
-├── CompiledProgram              ✅ CLOSED
-├── CompiledFunction             ✅ CLOSED
+├── CompiledProgram              ✅ CLOSED BASE SHAPE
+├── CompiledFunction             ✅ CLOSED BASE SHAPE
 ├── ParameterSlot / LocalSlot    ✅ CLOSED
 ├── Constant / DynamicConstant   ✅ CLOSED
-├── ExternalSymbol + arity       ✅ CLOSED
+├── ExternalSymbol + arity       ✅ CLOSED BASE SHAPE
 ├── core Load / Store            ✅ CLOSED
 ├── internal / external Calls    ✅ CLOSED
 ├── NumericKind                  ✅ CLOSED — 12 variants
@@ -106,7 +106,8 @@ Compiled Program / Bytecode Data ✅ CLOSED
 ├── EqualityComparable           ✅ CLOSED
 ├── Structural Equality          ✅ CLOSED
 ├── SourceMap                    ✅ CLOSED
-└── exact compiled inventory     ✅ CLOSED — 18 identities
+├── exact compiled inventory     ✅ CLOSED BASE — 18 identities
+└── Compiled Boundary Value Shape ← IN ANALYSIS
 
 VM Execution Data                ← IN ANALYSIS
 ├── VmExecution root             ✅ CLOSED
@@ -164,7 +165,10 @@ VM Execution Data                ← IN ANALYSIS
 ├── evo-values OwnedValue        ✅ CLOSED — 17 variants
 ├── canonical Dynamic Integer interchange ✅ CLOSED
 ├── no_std + alloc interchange   ✅ CLOSED
-└── VmExecution exact Rust root  ← NEXT
+├── VmExecution exact Rust root  ✅ CLOSED — 5 fields
+├── independent root lifetimes   ✅ CLOSED
+├── entry frame initialization   ✅ CLOSED
+└── no derived/cache root fields ✅ CLOSED
 
 Outcome / Diagnostic Data        PENDING
 ```
@@ -196,8 +200,8 @@ Outcome / Diagnostic Data        PENDING
 
 ### Compiled Program / Bytecode Data
 
-- [`COMPILED_PROGRAM_DATA.md`](./COMPILED_PROGRAM_DATA.md) — autoridad raíz del producto compilado, CLOSED.
-- [`COMPILED_PROGRAM_INVENTORY.md`](./COMPILED_PROGRAM_INVENTORY.md) — inventario exacto: 18 identities propias, 48 Instruction variants y cobertura Semantic → Compiled.
+- [`COMPILED_PROGRAM_DATA.md`](./COMPILED_PROGRAM_DATA.md) — autoridad raíz del producto compilado base; la metadata mínima de fronteras está reabierta de forma correctiva.
+- [`COMPILED_PROGRAM_INVENTORY.md`](./COMPILED_PROGRAM_INVENTORY.md) — inventario base cerrado: 18 identities propias y 48 Instruction variants; puede requerir ajuste tras el bloque correctivo.
 - [`COMPILED_STORAGE_DATA.md`](./COMPILED_STORAGE_DATA.md) — `ParameterSlot`, `LocalSlot`, `ExternalSymbol.parameter_count`, Constant Pool canonicalizado y `DynamicConstant`.
 - [`COMPILED_CORE_CALL_INSTRUCTIONS.md`](./COMPILED_CORE_CALL_INSTRUCTIONS.md) — Load/Store, `Call`, `CallExternal` y calling convention física.
 - [`COMPILED_NUMERIC_INSTRUCTIONS.md`](./COMPILED_NUMERIC_INSTRUCTIONS.md) — `NumericKind`, fixed arithmetic/comparison, `LiftDynamic` y dynamic arithmetic.
@@ -208,6 +212,7 @@ Outcome / Diagnostic Data        PENDING
 - [`COMPILED_COMPOSITE_INSTRUCTIONS.md`](./COMPILED_COMPOSITE_INSTRUCTIONS.md) — struct/enum construction, access, variant testing, payload extraction y `when` lowering.
 - [`COMPILED_STRUCTURAL_EQUALITY.md`](./COMPILED_STRUCTURAL_EQUALITY.md) — `EqualityRule`, `CompositeEqualityPlan` y struct/enum structural equality.
 - [`COMPILED_SOURCE_MAP.md`](./COMPILED_SOURCE_MAP.md) — dense `(FunctionId, InstructionIndex) → SourceSpan` mapping.
+- [`COMPILED_BOUNDARY_VALUE_SHAPE.md`](./COMPILED_BOUNDARY_VALUE_SHAPE.md) — análisis correctivo de metadata mínima para validar Invocation Values y external results.
 
 ### VM Execution Data
 
@@ -221,6 +226,7 @@ Outcome / Diagnostic Data        PENDING
 - [`INSTRUCTION_POINTER_STEPPING.md`](./INSTRUCTION_POINTER_STEPPING.md) — valid IP invariant, commit-after-success, sequential/branch stepping y transitions exactas de `Call`, `Return` y `CallExternal`.
 - [`APPLICATION_BINDINGS.md`](./APPLICATION_BINDINGS.md) — `HashMap<SignatureSymbol, ExternalCapability>`, composición explícita reusable y resolución lazy de `CallExternal`.
 - [`EXTERNAL_CAPABILITY_ABI.md`](./EXTERNAL_CAPABILITY_ABI.md) — ABI uniforme por function pointer, `&[Value<'a>]` arguments, `OwnedValue` success result y commit `N → 1` después de success.
+- [`VM_EXECUTION_ROOT.md`](./VM_EXECUTION_ROOT.md) — root Rust exacto de cinco fields, lifetimes independientes y exclusión de estado derivado/cacheado.
 - [`../../../../evo-values/INTERCHANGE_MODEL.md`](../../../../evo-values/INTERCHANGE_MODEL.md) — modelo compartido `Value<'a>` / `OwnedValue`, 17 familias exactas, Dynamic Integer canónico y `no_std + alloc`.
 
 ### Normative language amendments used by compiled/runtime model
@@ -263,7 +269,14 @@ La metodología global se define en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../..
 ## Next Block
 
 ```text
-VmExecution exact Rust root ← NEXT
+Compiled Boundary Value Shape ← NEXT
 ```
 
-Aquí se cerrará el `struct VmExecution<'...>` exacto: lifetimes de `CompiledProgram` y `ApplicationBindings`, fields owned (`SharedValueStorage`, `ExecutionBackingStore`, `Vec<CallFrame>`) y cualquier invariante de inicialización que realmente pertenezca al root, sin introducir Context, Session ni estado duplicado.
+Aquí se definirá la metadata compilada mínima necesaria para validar dos fronteras sin reintroducir Semantic Program ni runtime reflection general:
+
+```text
+Invocation Values → entry Parameters
+ExternalCapability OwnedValue → expected external result
+```
+
+El bloque deberá decidir si esa metadata toma la forma de un `ValueShape` estructural inline, una tabla owner-indexed u otra representación ejecutable menor.
