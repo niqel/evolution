@@ -1,7 +1,53 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use alloc::borrow::Cow;
+use alloc::boxed::Box;
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value<'value> {
-    Text(&'value str),
-    Unsigned(u64),
-    Signed(i64),
     Boolean(bool),
+
+    Int8(i8),
+    Int16(i16),
+    Int32(i32),
+    Int64(i64),
+    Int128(i128),
+
+    Uint8(u8),
+    Uint16(u16),
+    Uint32(u32),
+    Uint64(u64),
+    Uint128(u128),
+
+    Float32(f32),
+    Float64(f64),
+
+    String(&'value str),
+
+    Dynamic(DynamicValue<'value>),
+
+    Struct(Box<[Value<'value>]>),
+
+    Enum {
+        variant: usize,
+        payload: EnumPayload<'value>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DynamicValue<'value> {
+    Integer(DynamicIntegerValue<'value>),
+    Float32(f32),
+    Float64(f64),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DynamicIntegerValue<'value> {
+    pub negative: bool,
+    pub magnitude: Cow<'value, [u8]>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum EnumPayload<'value> {
+    Simple,
+    Associated(Box<Value<'value>>),
+    Structured { fields: Box<[Value<'value>]> },
 }
