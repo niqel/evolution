@@ -113,8 +113,8 @@ VM Execution Data                ← IN ANALYSIS
 ├── one invocation lifetime      ✅ CLOSED
 ├── CompiledProgram relationship ✅ CLOSED
 ├── ApplicationBindings relation ✅ CLOSED — exact model pending
-├── Shared Value Storage owner   ✅ CLOSED
-├── Call Frames owner            ✅ CLOSED — exact model pending
+├── SharedValueStorage owner     ✅ CLOSED
+├── Call Frames owner            ✅ CLOSED
 ├── execution backing owner      ✅ CLOSED
 ├── RuntimeValue / Value boundary ✅ CLOSED
 ├── RuntimeValue descriptor role ✅ CLOSED
@@ -144,7 +144,12 @@ VM Execution Data                ← IN ANALYSIS
 ├── operand tail mechanics       ✅ CLOSED
 ├── call argument cell reuse     ✅ CLOSED
 ├── Return storage transformation ✅ CLOSED
-└── CallFrame exact representation ← NEXT
+├── CallFrame exact representation ✅ CLOSED — 3 fields
+├── InstructionPointer identity  ✅ CLOSED
+├── current responsible IP       ✅ CLOSED
+├── operand_base derived         ✅ CLOSED
+├── caller suspended on Call     ✅ CLOSED
+└── InstructionPointer stepping semantics ← NEXT
 
 Outcome / Diagnostic Data        PENDING
 ```
@@ -197,6 +202,7 @@ Outcome / Diagnostic Data        PENDING
 - [`RUNTIME_VALUE_REPRESENTATION.md`](./RUNTIME_VALUE_REPRESENTATION.md) — exact `RuntimeValue` de 17 variants, `DynamicValue` de 3 variants, copy semantics y execution-context-relative handles.
 - [`BACKING_DATA_REPRESENTATION.md`](./BACKING_DATA_REPRESENTATION.md) — `ExecutionBackingStore`, String/Dynamic Integer/Struct/Enum backing, inmutabilidad y composite DAG.
 - [`SHARED_VALUE_STORAGE.md`](./SHARED_VALUE_STORAGE.md) — `Vec<Option<RuntimeValue>>`, regiones Parameter/Local/Operand, reuse de argument cells y transformación de storage en `Return`.
+- [`CALL_FRAME.md`](./CALL_FRAME.md) — `CallFrame` exacto de tres fields, `InstructionPointer`, `frame_base`, `operand_base` derivado y suspensión del caller sobre `Call`.
 
 ### Normative language amendments used by compiled/runtime model
 
@@ -238,7 +244,7 @@ La metodología global se define en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../..
 ## Next Block
 
 ```text
-CallFrame exact representation ← NEXT
+InstructionPointer stepping semantics ← NEXT
 ```
 
-Aquí se definirá la identity runtime que delimita una invocation interna dentro de `SharedValueStorage`: FunctionId, execution position, `frame_base`, `operand_base` y cualquier dato adicional que la revisión de call/return demuestre estrictamente necesario.
+Aquí se cerrará el avance exacto del `InstructionPointer` para ejecución normal, `Jump`, `JumpIfFalse`, `Call`, `Return` y `CallExternal`, manteniendo la regla ya cerrada de que el pointer identifica la instruction actualmente responsable hasta que ésta termina exitosamente.
