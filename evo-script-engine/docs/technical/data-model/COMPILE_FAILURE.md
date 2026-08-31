@@ -17,7 +17,7 @@ La raíz separa la naturaleza del fallo de su provenance diagnóstica y conserva
 ```rust
 struct CompileFailure {
     kind: CompileFailureKind,
-    diagnostic: Option<DiagnosticAnchor>,
+    source_span: SourceSpan,
 }
 
 enum CompileFailureKind {
@@ -27,7 +27,9 @@ enum CompileFailureKind {
 }
 ```
 
-`DiagnosticAnchor` permanece pendiente dentro de `Outcome / Diagnostic Data`; su placeholder no reabre las reglas cerradas aquí.
+`SourceSpan` es la identity técnica de provenance ya cerrada en Lexical Data. No se introduce `DiagnosticAnchor` en v0.
+
+La autoridad especializada de provenance está en [`DIAGNOSTIC_PROVENANCE.md`](./DIAGNOSTIC_PROVENANCE.md).
 
 ## CPF-001 — CompileFailure is the owned Compile error
 
@@ -49,11 +51,13 @@ Status: CLOSED
 kind
     = qué falló
 
-diagnostic
-    = dónde ocurrió, cuando existe provenance fuente válida
+source_span
+    = dónde ocurrió dentro del Source Text
 ```
 
-La forma exacta del diagnostic anchor se define posteriormente.
+La separación permanece explícita aunque ambas piezas vivan en la misma raíz.
+
+Todo `CompileFailure` normal del Engine posee un `SourceSpan` obligatorio; no se usa `Option<SourceSpan>` en Compile.
 
 ## CPF-003 — Exactly three compile failure families
 
@@ -153,6 +157,8 @@ CompilationCatalog references
 
 Si una failure necesita conservar texto o identidad descriptiva, ese dato se materializa como ownership de outcome.
 
+La provenance sobrevive únicamente como `SourceSpan`, que contiene byte offsets y no borrowea el Source Text.
+
 No se introduce:
 
 ```rust
@@ -168,6 +174,9 @@ La representación canónica conserva datos estructurados, no un único mensaje 
 ```text
 Failure data
     → structured technical meaning
+
+SourceSpan
+    → technical provenance
 
 CLI/UI/API/LSP presentation
     → derived later by Consumer/presentation boundary
@@ -223,6 +232,29 @@ Semantic Analyzer
 
 Failures de filesystem / `.elib` / `.emod` / construcción del catálogo permanecen fuera de `SemanticFailure` y de este `CompileOutcome` del Engine.
 
+## Diagnostic provenance
+
+Todo `CompileFailure` normal del Engine posee exactamente un `SourceSpan`.
+
+```text
+LexicalFailure
+    → responsible lexical span
+
+SyntaxFailure
+    → responsible syntactic/structural span
+
+SemanticFailure
+    → responsible semantic reference/declaration/expression span
+```
+
+Cuando una ausencia se detecta en una frontera como EOF puede utilizarse un span zero-width:
+
+```text
+[source_len, source_len)
+```
+
+No se introducen `DiagnosticAnchor`, `SourceLocation`, `SourceId`, line/column ni Source Text ownership dentro de `CompileFailure`.
+
 ## Phase flow
 
 ```text
@@ -231,7 +263,10 @@ Source Text
 Lexer
     ├── Err(LexicalFailure)
     │       ↓
-    │  CompileFailureKind::Lexical
+    │  CompileFailure {
+    │      kind: Lexical(...),
+    │      source_span,
+    │  }
     │
     ▼
 TokenSequence
@@ -239,7 +274,10 @@ TokenSequence
 Parser
     ├── Err(SyntaxFailure)
     │       ↓
-    │  CompileFailureKind::Syntax
+    │  CompileFailure {
+    │      kind: Syntax(...),
+    │      source_span,
+    │  }
     │
     ▼
 AST
@@ -249,7 +287,10 @@ CompilationCatalog
 Semantic Analyzer
     ├── Err(SemanticFailure)
     │       ↓
-    │  CompileFailureKind::Semantic
+    │  CompileFailure {
+    │      kind: Semantic(...),
+    │      source_span,
+    │  }
     │
     ▼
 SemanticProgram
@@ -272,13 +313,18 @@ TypeId / SignatureId escaping through SemanticFailure
 preformatted message as canonical model
 Vec<Diagnostic> multi-error compile result
 physical/library/module resolution failures inside Engine SemanticFailure
+DiagnosticAnchor
+SourceLocation / SourceId
+Option<SourceSpan> in CompileFailure
+line / column duplication
+Source Text ownership in CompileFailure
 ```
 
 ## Closure
 
 ```text
 CPF-001 CompileFailure owned Compile error                         ✅ CLOSED
-CPF-002 meaning separated from diagnostic provenance              ✅ CLOSED
+CPF-002 meaning separated from SourceSpan provenance               ✅ CLOSED
 CPF-003 exactly Lexical / Syntax / Semantic families              ✅ CLOSED
 CPF-004 no normal BytecodeCompiler failure                        ✅ CLOSED
 CPF-005 LexicalFailure = Lexer responsibility                     ✅ CLOSED
@@ -293,6 +339,10 @@ LexicalFailure exact family                                        ✅ CLOSED �
 SyntaxFailure exact family                                         ✅ CLOSED — 10 variants
 SemanticFailure exact family                                       ✅ CLOSED — 12 own identities
 CompileFailure exact subfamilies                                   ✅ CLOSED
-DiagnosticAnchor exact shape                                       PENDING
-ExecutionFailure exact family                                      ← NEXT
+Diagnostic provenance                                              ✅ CLOSED — SourceSpan
+DiagnosticAnchor                                                   ❌ NOT NEEDED v0
+SourceLocation identity                                            ❌ NOT NEEDED v0
+
+ExternalCapabilityFailure exact representation                     ← NEXT
+ExecutionFailure exact family                                      PENDING
 ```
