@@ -1,6 +1,6 @@
 # Evo-Script Engine — Outcome / Diagnostic Data
 
-Status: IN ANALYSIS — ROOT OUTCOME MODEL CLOSED
+Status: IN ANALYSIS — ROOT OUTCOME MODEL + COMPILE FAILURE ROOT CLOSED
 
 Este documento es la autoridad acumulada de `Outcome / Diagnostic Data` para `evo-script-engine` v0.
 
@@ -9,8 +9,6 @@ La fase representa outcomes públicos, failures técnicos y provenance diagnóst
 ## OD-001 — CompileOutcome uses Rust Result
 
 Status: CLOSED
-
-La representación técnica del `Compile Outcome` funcional es:
 
 ```rust
 type CompileOutcome = Result<CompiledProgram, CompileFailure>;
@@ -22,8 +20,6 @@ No se introduce un enum `CompileOutcome { Success, Failure }` duplicando `Result
 
 Status: CLOSED
 
-La representación técnica del `Result` funcional de ejecución es:
-
 ```rust
 type ExecutionOutcome = Result<OwnedValue, ExecutionFailure>;
 ```
@@ -34,11 +30,7 @@ type ExecutionOutcome = Result<OwnedValue, ExecutionFailure>;
 
 Status: CLOSED
 
-`Execute Source` y `Execute Compiled` producen la misma identity técnica:
-
-```text
-ExecutionOutcome
-```
+`Execute Source` y `Execute Compiled` producen la misma identity técnica `ExecutionOutcome`.
 
 No se introduce `ExecuteSourceOutcome`.
 
@@ -58,13 +50,9 @@ ExecutionOutcome::Ok
 VmExecution ends
 ```
 
-`RuntimeValue` nunca escapa como dato autónomo de outcome.
-
 ## OD-005 — Compile success returns CompiledProgram directly
 
 Status: CLOSED
-
-El success de Compile contiene directamente el artifact completo:
 
 ```text
 CompileOutcome::Ok(CompiledProgram)
@@ -76,14 +64,10 @@ No se introduce `CompileSuccess` wrapper.
 
 Status: CLOSED
 
-Las dos Public Capabilities poseen failure families distintas:
-
 ```text
 Compile        → CompileFailure
 Execution      → ExecutionFailure
 ```
-
-Esto evita expresar failures imposibles en una frontera equivocada.
 
 No se introduce un único enum técnico universal capaz de mezclar indiscriminadamente compilation, invocation y execution failures.
 
@@ -107,8 +91,6 @@ No se introducen `AddFailure`, `SubtractFailure`, `DivideInstructionFailure` u o
 ## OD-008 — ExternalCapability owns a dedicated failure type
 
 Status: CLOSED
-
-La firma uniforme queda conceptualmente completada con una failure identity propia de la frontera externa:
 
 ```rust
 type ExternalCapability =
@@ -143,7 +125,7 @@ Ambas pertenecen a la futura familia exacta de `ExecutionFailure`.
 
 Status: CLOSED
 
-La identidad del error expresa **qué falló**.
+La identity del error expresa **qué falló**.
 La provenance diagnóstica expresa **dónde se originó**, cuando existe una ubicación fuente válida.
 
 No se duplican dentro de cada error concreto:
@@ -175,13 +157,43 @@ type ExternalCapability =
     ) -> Result<OwnedValue, ExternalCapabilityFailure>;
 ```
 
-Las siguientes identities existen ya como responsabilidades técnicas aunque sus shapes internos todavía estén en análisis:
+## CompileFailure root
+
+Status: CLOSED
+
+La autoridad especializada está en [`COMPILE_FAILURE.md`](./COMPILE_FAILURE.md).
+
+Forma conceptual cerrada:
+
+```rust
+struct CompileFailure {
+    kind: CompileFailureKind,
+    diagnostic: Option<DiagnosticAnchor>,
+}
+
+enum CompileFailureKind {
+    Lexical(LexicalFailure),
+    Syntax(SyntaxFailure),
+    Semantic(SemanticFailure),
+}
+```
+
+Reglas cerradas `CPF-001..CPF-010`:
 
 ```text
-CompileFailure
-ExecutionFailure
-ExternalCapabilityFailure
+CompileFailure is owned
+meaning != diagnostic provenance
+exactly Lexical / Syntax / Semantic families
+no normal BytecodeCompiler failure variant
+Lexer owns LexicalFailure
+Parser owns SyntaxFailure
+Semantic Analyzer owns SemanticFailure
+no Source Text / Token / AST borrows survive
+structured Consumer-neutral data
+one primary deterministic CompileFailure in v0
 ```
+
+Las subfamilies exactas permanecen por cerrar individualmente.
 
 ## Explicitly Not Introduced
 
@@ -196,6 +208,9 @@ opcode-specific failure types
 RuntimeValue as public outcome
 line/column embedded in every error
 VmExecution state embedded in public failure
+BytecodeFailure as normal language CompileFailure
+CompileFailure<'source>
+Vec<Diagnostic> multi-error compile result
 ```
 
 ## Closure
@@ -213,10 +228,13 @@ OD-009 missing binding / result mismatch are Engine failures      ✅ CLOSED
 OD-010 failure meaning separated from diagnostic provenance       ✅ CLOSED
 
 Outcome / Diagnostic root model                                   ✅ CLOSED
-CompileFailure exact family                                       ← NEXT
+CompileFailure root / CPF-001..CPF-010                            ✅ CLOSED
+LexicalFailure exact family                                       ← NEXT
+SyntaxFailure exact family                                        PENDING
+SemanticFailure exact family                                      PENDING
 ExecutionFailure exact family                                     PENDING
 ExternalCapabilityFailure exact representation                    PENDING
-diagnostic anchor                                                  PENDING
+DiagnosticAnchor                                                   PENDING
 Source Location materialization                                   PENDING
 exact Outcome inventory                                           PENDING
 ```
