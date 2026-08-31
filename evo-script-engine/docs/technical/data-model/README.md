@@ -31,53 +31,16 @@ Outcome / Diagnostic Data
 ## Global Status
 
 ```text
-Lexical Data                         ✅ CLOSED
-├── TokenKind                       ✅ 50 variants
-├── SourceSpan                      ✅
-├── Token                           ✅
-└── TokenSequence                   ✅
-
-AST Data                             ✅ CLOSED
-└── exact AST inventory             ✅ 31 identities
-
-Compilation Dependency Data          ✅ CLOSED
-├── CompilationCatalog              ✅
-├── CatalogTypeRef                  ✅ 18 variants
-└── exact dependency inventory      ✅ 8 identities
-
-Semantic Program Data                ✅ CLOSED
-└── exact semantic inventory        ✅ 33 identities
-
-Compiled Program / Bytecode Data     ✅ CLOSED / REVALIDATED
-├── NumericKind                     ✅ 12 variants
-├── Instruction                     ✅ 48 variants
-├── CompiledValueShape              ✅ 17 variants
-├── CompiledEnumValueShape          ✅ 3 variants
-└── exact compiled inventory        ✅ 21 identities
-
-VM Execution Data                    ✅ CLOSED
-├── VmExecution                     ✅ 5 fields
-├── RuntimeValue                    ✅ 17 variants
-├── DynamicValue                    ✅ 3 variants
-├── CallFrame                       ✅ 3 fields
-├── ExternalCapability ABI          ✅ exact Rust signature complete
-└── exact VM inventory              ✅ 19 identities
-
-Outcome / Diagnostic Data            ✅ CLOSED
-├── CompileOutcome / ExecutionOutcome ✅
-├── CompileFailure                  ✅
-│   ├── LexicalFailure              ✅ 6 variants
-│   ├── SyntaxFailure               ✅ 10 variants
-│   └── SemanticFailure             ✅ 12 own identities
-├── Diagnostic provenance           ✅ SourceSpan / 0 new identities
-├── ExternalCapabilityFailure       ✅ 1 identity
-├── ExecutionFailure                ✅ 5 own identities
-└── exact Outcome inventory         ✅ 24 identities
+Lexical Data                         ✅ CLOSED — 4 identities / TokenKind 50
+AST Data                             ✅ CLOSED — 31 identities
+Compilation Dependency Data          ✅ CLOSED — 8 identities / CatalogTypeRef 18
+Semantic Program Data                ✅ CLOSED — 33 identities
+Compiled Program / Bytecode Data     ✅ CLOSED — 21 identities / Instruction 48
+VM Execution Data                    ✅ CLOSED — 19 identities
+Outcome / Diagnostic Data            ✅ CLOSED — 24 identities
 
 TECHNICAL DATA MODEL                  ✅ CLOSED
-
-Technical Data Diagram scheme        ✅ CLOSED
-└── canonical D2 view suite          ✅ 9 views / TDD-001..TDD-010
+TECHNICAL DATA DIAGRAM                ✅ CLOSED — 9 canonical D2 views
 ```
 
 ## Phase Map
@@ -87,9 +50,9 @@ SOURCE / COMPILE SIDE
 ────────────────────────────────────────────────────────────
 Source Text
     ↓
-Lexical Data                  4 identities / TokenKind 50
+Lexical Data                  4 identities
     ↓
-AST Data                      31 identities
+AST Data                     31 identities
     ↓
                             CompilationCatalog
                             8 own dependency identities
@@ -97,9 +60,9 @@ AST Data                      31 identities
                                    ▼
 Semantic Analyzer ◄────────────────┘
     ↓
-Semantic Program Data         33 identities
+Semantic Program Data        33 identities
     ↓
-Compiled Program Data         21 identities / Instruction 48
+Compiled Program Data        21 identities
 
 EXECUTION SIDE
 ────────────────────────────────────────────────────────────
@@ -107,26 +70,26 @@ CompiledProgram
     + ApplicationBindings
     + Invocation Values
         ↓ exact boundary validation
-VmExecution                   19 own VM identities
+VmExecution                  19 identities
         ↓
-Outcome / Diagnostic Data     24 own identities
+Outcome / Diagnostic Data    24 identities
 ```
 
 ## Compile-time vs runtime external composition
 
 ```text
 CompilationCatalog
-    = describes semantic contracts at compile time
+    = compile-time semantic contracts
     = shared Types + Signatures
     = no Provider / fn pointer
 
 ApplicationBindings
-    = supplies executable capabilities at runtime
+    = runtime executable capabilities
     = SignatureSymbol → ExternalCapability
     = no compile-time type resolution
 ```
 
-Estas dos composiciones son intencionalmente distintas y nunca son estado ambient/global del Engine.
+Estas composiciones son intencionalmente distintas y nunca son ambient/global Engine state.
 
 ## Host Boundary
 
@@ -138,7 +101,7 @@ Host Interactive State
 
 No se introducen `Active Scope`, Host Session State, Current Provider, Use Node, Use Instruction ni `SET_SCOPE` dentro del Data Model de `.efn`.
 
-## Closed diagnostic boundary
+## Closed Diagnostic Boundary
 
 ```text
 CompileFailure
@@ -158,7 +121,7 @@ SourceLocation
 SourceId
 ```
 
-Runtime materialization:
+Runtime provenance:
 
 ```text
 CallFrame.function
@@ -170,7 +133,7 @@ SourceMap
 SourceSpan
 ```
 
-## Closed external capability boundary
+## Closed External Capability Boundary
 
 ```rust
 struct ExternalCapabilityFailure {
@@ -185,7 +148,7 @@ type ExternalCapability =
 
 Provider/vendor errors are normalized before crossing the Engine ABI.
 
-## Closed execution-failure boundary
+## Closed Execution Failure Boundary
 
 ```rust
 struct ExecutionFailure {
@@ -301,30 +264,27 @@ TOTAL                              24
 - [`EXTERNAL_CAPABILITY_FAILURE.md`](./EXTERNAL_CAPABILITY_FAILURE.md)
 - [`EXECUTION_FAILURE.md`](./EXECUTION_FAILURE.md)
 
-### Technical Data Diagram
-- [`../data-diagram/README.md`](../data-diagram/README.md) — scheme authority / TDD-001..TDD-010.
-
-## Technical Data Diagram Scheme
+## Technical Data Diagram
 
 Status: CLOSED
 
-La autoridad del esquema está en [`../data-diagram/README.md`](../data-diagram/README.md).
+Authority: [`../data-diagram/README.md`](../data-diagram/README.md).
 
-Vistas canónicas:
+Canonical suite:
 
 ```text
-00-overview.d2
-01-lexical-data.d2
-02-ast-data.d2
-03-compilation-dependency-data.d2
-04-semantic-program-data.d2
-05-compiled-program-data.d2
-06-vm-execution-data.d2
-07-outcome-diagnostic-data.d2
-08-cross-phase-boundaries.d2
+00-overview.d2                    ✅
+01-lexical-data.d2                ✅ 4 identities
+02-ast-data.d2                    ✅ 31 identities
+03-compilation-dependency-data.d2 ✅ 8 identities
+04-semantic-program-data.d2       ✅ 33 identities
+05-compiled-program-data.d2       ✅ 21 identities
+06-vm-execution-data.d2           ✅ 19 identities
+07-outcome-diagnostic-data.d2     ✅ 24 identities
+08-cross-phase-boundaries.d2      ✅
 ```
 
-Reglas centrales:
+Diagram rules remain `TDD-001..TDD-010` CLOSED:
 
 ```text
 D2 source is canonical
@@ -337,14 +297,32 @@ no Participants / services / behavioral call arrows
 diagramming cannot silently invent identities
 ```
 
-## Next Block
+Construction of the nine views introduced **zero new Technical Data Model identities** and reopened **zero** owner phases.
+
+El entorno usado para construir estas vistas no dispone de ejecutable D2, por lo que no se declara una validación local de render/parser que no fue realizada. La autoridad cerrada es la estructura D2 auditada contra los documentos/inventarios canónicos.
+
+## Next Architectural Stage
 
 ```text
-Technical Data Diagram construction
-├── 00-overview.d2                ← NEXT
-└── 08-cross-phase-boundaries.d2  ← NEXT
+Rust Signatures / Participant Design ← NEXT
 ```
 
-Estas dos vistas validan primero la arquitectura global. Después se construyen las siete vistas owner-phase `01..07`.
+La siguiente etapa corresponde al rol de Líder Técnico:
 
-Cualquier nueva identity detectada durante diagramación debe tratarse como inconsistencia explícita y reabrir únicamente el bloque dueño correspondiente; no puede inventarse silenciosamente durante esta etapa.
+```text
+User Stories
++
+Technical Data Model
++
+Technical Data Diagram
+        ↓
+Rust function-pointer signatures
+├── Use Cases
+├── Contracts      cuando exista frontera externa
+├── Requesters     cuando exista inversión de control hacia cliente
+├── Collaborators  para trabajo interno significativo
+├── Resolvers      para resolver Provider compliance mediante Contract
+└── Tools          para operaciones pequeñas/genéricas
+```
+
+Los Sequence Diagrams se construyen después de contar con las signatures y data shapes suficientes. Una signature nueva que requiera una identity de datos inexistente no debe inventarla silenciosamente: debe demostrar la inconsistencia y reabrir únicamente el bloque dueño correspondiente.
