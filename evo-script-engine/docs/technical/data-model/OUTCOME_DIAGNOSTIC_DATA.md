@@ -1,111 +1,38 @@
 # Evo-Script Engine — Outcome / Diagnostic Data
 
-Status: IN ANALYSIS — ALL OUTCOME SHAPES CLOSED / EXACT INVENTORY PENDING
+Status: CLOSED
 
 Este documento es la autoridad acumulada de `Outcome / Diagnostic Data` para `evo-script-engine` v0.
 
 La fase representa outcomes públicos, failures técnicos y provenance diagnóstica sin mezclar presentación humana, estado mutable de VM o datos de Host.
 
-## Closed outcome roots
-
-### OD-001 — CompileOutcome uses Rust Result
-
-Status: CLOSED
+## Public outcome aliases
 
 ```rust
 type CompileOutcome = Result<CompiledProgram, CompileFailure>;
-```
 
-No se introduce un enum `CompileOutcome { Success, Failure }` duplicando `Result`.
-
-### OD-002 — ExecutionOutcome uses Rust Result and OwnedValue
-
-Status: CLOSED
-
-```rust
 type ExecutionOutcome = Result<OwnedValue, ExecutionFailure>;
 ```
 
-`OwnedValue` puede sobrevivir a `VmExecution`; `RuntimeValue` nunca escapa como outcome público.
+Decisiones root `OD-001..OD-010`: CLOSED.
 
-### OD-003 — Execute Source reuses ExecutionOutcome
-
-Status: CLOSED
-
-`Execute Source` y `Execute Compiled` producen la misma identity técnica `ExecutionOutcome`. No existe `ExecuteSourceOutcome`.
-
-### OD-004 — RuntimeValue materializes before VmExecution ends
-
-Status: CLOSED
+Reglas centrales:
 
 ```text
-RuntimeValue
-    ↓ materialize while VmExecution alive
-OwnedValue
-    ↓
-ExecutionOutcome::Ok
+Compile success      → CompiledProgram
+Execution success    → OwnedValue
+Execute Source       → reuses ExecutionOutcome
+RuntimeValue         → never escapes public outcome
+CompileFailure       != ExecutionFailure
+ExternalCapability   → returns ExternalCapabilityFailure
+failure meaning      != source provenance
 ```
 
-### OD-005 — Compile success returns CompiledProgram directly
-
-Status: CLOSED
-
-No existe `CompileSuccess` wrapper.
-
-### OD-006 — CompileFailure and ExecutionFailure are distinct
-
-Status: CLOSED
-
-```text
-Compile    → CompileFailure
-Execution  → ExecutionFailure
-```
-
-No existe un universal Failure enum compartido indiscriminadamente por todas las fases.
-
-### OD-007 — Evaluation failures are semantic families, not opcode failures
-
-Status: CLOSED
-
-Los failures normales de evaluación se agrupan por significado semántico. No se introducen failures específicos por opcode.
-
-### OD-008 — ExternalCapability owns a dedicated failure type
-
-Status: CLOSED
-
-```rust
-type ExternalCapability =
-    for<'value> fn(
-        &'value [Value<'value>],
-    ) -> Result<OwnedValue, ExternalCapabilityFailure>;
-```
-
-`ExternalCapabilityFailure` no es `ExecutionFailure`.
-
-### OD-009 — Missing binding / result mismatch are Engine failures
-
-Status: CLOSED
-
-```text
-MissingBinding
-ResultContractMismatch
-```
-
-pertenecen a `ExternalExecutionFailure`, no a `ExternalCapabilityFailure`.
-
-### OD-010 — Failure meaning and provenance are separate
-
-Status: CLOSED
-
-La failure expresa qué ocurrió; `SourceSpan` expresa dónde ocurrió cuando existe provenance fuente válida.
-
-No existen `DiagnosticAnchor`, `SourceLocation` ni `SourceId` en v0.
-
----
+No existen `CompileSuccess`, `ExecutionSuccess`, `ExecuteSourceOutcome`, `OutcomeValue`, `ResultValue` ni un universal `Failure/SystemError` enum.
 
 ## CompileFailure
 
-Status: CLOSED — ROOT + ALL SUBFAMILIES + PROVENANCE
+Status: CLOSED
 
 Authority: [`COMPILE_FAILURE.md`](./COMPILE_FAILURE.md).
 
@@ -122,17 +49,24 @@ enum CompileFailureKind {
 }
 ```
 
-Exact closed subfamilies:
+Subfamilies:
 
 ```text
-LexicalFailure        ✅ CLOSED — 6 variants
-SyntaxFailure         ✅ CLOSED — 10 variants
-SemanticFailure       ✅ CLOSED — 12 own identities / 7 root variants
+LexicalFailure          ✅ CLOSED — 6 variants
+SyntaxFailure           ✅ CLOSED — 10 variants
+SemanticFailure         ✅ CLOSED — 12 own identities
 ```
 
-Semantic failure supporting families:
+Authorities:
+
+- [`LEXICAL_FAILURE.md`](./LEXICAL_FAILURE.md)
+- [`SYNTAX_FAILURE.md`](./SYNTAX_FAILURE.md)
+- [`SEMANTIC_FAILURE.md`](./SEMANTIC_FAILURE.md)
+
+La familia semántica exacta contiene:
 
 ```text
+SemanticFailure             7 variants
 ResolutionFailure           4 variants
 DeclarationFailure          7 variants
 TypeCheckingFailure         8 variants
@@ -146,13 +80,11 @@ SemanticArgumentKind        2 variants
 EnumPayloadShape            3 variants
 ```
 
-Compilation-time external contracts come from a valid borrowed `CompilationCatalog`; filesystem/module/catalog-construction failures remain outside Engine `CompileFailure`.
-
----
+Filesystem/module/catalog-construction failures permanecen fuera de Engine `CompileFailure`; Semantic Analyzer recibe un `CompilationCatalog` válido y borrowed.
 
 ## Diagnostic provenance
 
-Status: CLOSED — 0 NEW IDENTITIES
+Status: CLOSED — 0 new identities
 
 Authority: [`DIAGNOSTIC_PROVENANCE.md`](./DIAGNOSTIC_PROVENANCE.md).
 
@@ -162,29 +94,20 @@ SourceLocation        ❌ NOT NEEDED v0
 SourceId              ❌ NOT NEEDED v0
 ```
 
-Canonical roots:
-
-```rust
-struct CompileFailure {
-    kind: CompileFailureKind,
-    source_span: SourceSpan,
-}
-
-struct ExecutionFailure {
-    kind: ExecutionFailureKind,
-    source_span: Option<SourceSpan>,
-}
-```
-
-Interpretation:
+Canonical provenance:
 
 ```text
-CompileFailure                     → mandatory SourceSpan
-Invocation ExecutionFailure        → None
-Bytecode ExecutionFailure          → Some(SourceSpan)
+CompileFailure
+    → source_span: SourceSpan
+    → mandatory
+
+ExecutionFailure
+    → source_span: Option<SourceSpan>
+    → Invocation = None
+    → bytecode failure = Some(span)
 ```
 
-Runtime provenance materialization:
+Runtime source materialization:
 
 ```text
 CallFrame.function
@@ -196,13 +119,11 @@ CompiledProgram.source_map
 SourceSpan
 ```
 
-No VM coordinates or CompiledProgram borrows escape after span materialization.
-
----
+Line/column/snippet/path son presentation derivada por el Consumer y no forman parte del outcome técnico.
 
 ## ExternalCapabilityFailure
 
-Status: CLOSED — 1 OWN IDENTITY
+Status: CLOSED — 1 own identity
 
 Authority: [`EXTERNAL_CAPABILITY_FAILURE.md`](./EXTERNAL_CAPABILITY_FAILURE.md).
 
@@ -212,28 +133,26 @@ struct ExternalCapabilityFailure {
 }
 ```
 
-Rules `ECF-001..ECF-008` are CLOSED.
+`code` es symbolic lowercase snake_case, owned y Consumer-neutral.
 
-```text
-fields                                1
-code                                  stable symbolic lowercase_snake_case
-universal external error catalog      ❌
-Provider/vendor error across ABI      ❌
-SourceSpan inside capability failure  ❌
-human message/details payload         ❌
+El Provider/application adapter normaliza errors físicos antes de cruzar el ABI.
+
+Exact ABI:
+
+```rust
+type ExternalCapability =
+    for<'value> fn(
+        &'value [Value<'value>],
+    ) -> Result<OwnedValue, ExternalCapabilityFailure>;
 ```
 
-Provider/vendor failures are normalized by the application adapter before crossing the Engine ABI.
-
----
+`MissingBinding` y `ResultContractMismatch` siguen siendo failures propios del Engine.
 
 ## ExecutionFailure
 
-Status: CLOSED — 5 OWN IDENTITIES
+Status: CLOSED — 5 own identities
 
 Authority: [`EXECUTION_FAILURE.md`](./EXECUTION_FAILURE.md).
-
-Canonical shape:
 
 ```rust
 struct ExecutionFailure {
@@ -253,7 +172,6 @@ enum InvocationFailure {
         expected: usize,
         actual: usize,
     },
-
     ArgumentShapeMismatch {
         position: usize,
     },
@@ -270,29 +188,14 @@ enum ExternalExecutionFailure {
     MissingBinding {
         signature: SignatureSymbol,
     },
-
     CapabilityFailure {
         signature: SignatureSymbol,
         failure: ExternalCapabilityFailure,
     },
-
     ResultContractMismatch {
         signature: SignatureSymbol,
     },
 }
-```
-
-Rules `EXF-001..EXF-012` are CLOSED.
-
-Exact counts:
-
-```text
-ExecutionFailure fields             2
-ExecutionFailureKind variants       4
-InvocationFailure variants          2
-EvaluationFailure variants          4
-ExternalExecutionFailure variants   3
-own technical identities            5
 ```
 
 Provenance matrix:
@@ -304,34 +207,87 @@ Evaluation(...)   → Some(responsible instruction SourceSpan)
 External(...)     → Some(responsible CallExternal SourceSpan)
 ```
 
-`Compilation` stores `CompileFailureKind`, not `CompileFailure`, avoiding duplicated `SourceSpan`.
+VM/compiler invariant violations no se representan como normal `ExecutionFailure`.
 
-`ArgumentShapeMismatch` stores only top-level argument `position`; exact recursive validation remains owned by `CompiledProgram.entry_parameter_shapes` + `CompiledValueShape`.
+## Exact Outcome / Diagnostic inventory
 
-Normal evaluation failures are exactly:
+Status: CLOSED — 24 own identities
 
-```text
-Overflow
-DivisionByZero
-Conversion
-DynamicNumericType
-```
-
-VM/compiler invariant violations are internal bugs and never normal `ExecutionFailure` values.
-
-Normal external execution failures are exactly:
+Authority: [`OUTCOME_DIAGNOSTIC_INVENTORY.md`](./OUTCOME_DIAGNOSTIC_INVENTORY.md).
 
 ```text
-MissingBinding
-CapabilityFailure
-ResultContractMismatch
+Public outcome aliases             2
+Compile failure root               2
+Lexical / Syntax failure families  2
+Semantic failure family           12
+External capability failure        1
+Execution failure family           5
+                                  ──
+TOTAL                              24
 ```
 
-Each preserves the responsible `SignatureSymbol`; only `CapabilityFailure` additionally owns `ExternalCapabilityFailure`.
+Exact identities:
 
-Execution v0 produces one primary deterministic failure; no catch/resume/multi-failure model exists.
+```text
+01 CompileOutcome
+02 ExecutionOutcome
+03 CompileFailure
+04 CompileFailureKind
+05 LexicalFailure
+06 SyntaxFailure
+07 SemanticFailure
+08 ResolutionFailure
+09 DeclarationFailure
+10 TypeCheckingFailure
+11 CallFailure
+12 CompositeFailure
+13 WhenFailure
+14 SignatureMismatchKind
+15 SemanticTypeDescriptor
+16 SemanticNameRole
+17 SemanticArgumentKind
+18 EnumPayloadShape
+19 ExternalCapabilityFailure
+20 ExecutionFailure
+21 ExecutionFailureKind
+22 InvocationFailure
+23 EvaluationFailure
+24 ExternalExecutionFailure
+```
 
----
+Reused identities are not recounted:
+
+```text
+SourceSpan
+CompiledProgram
+OwnedValue
+SignatureSymbol
+NativeType
+TypeSymbol
+UnaryOperator
+BinaryOperator
+ExternalCapability
+```
+
+Containers/primitives/fields are not identities:
+
+```text
+Result
+Option
+Box
+Vec
+Box<str>
+char
+usize
+kind
+source_span
+code
+expected
+actual
+position
+signature
+failure
+```
 
 ## Phase maps
 
@@ -374,41 +330,12 @@ Execute Source
 Execute Compiled
     ↓
 Invocation boundary validation
-    ├── InvocationFailure / source_span None
+    ├── InvocationFailure
     ▼
 VmExecution
-    ├── EvaluationFailure / Some(SourceSpan)
-    ├── ExternalExecutionFailure / Some(SourceSpan)
+    ├── EvaluationFailure
+    ├── ExternalExecutionFailure
     └── successful entry Return → OwnedValue
-```
-
----
-
-## Explicitly not introduced
-
-```text
-CompileSuccess
-ExecutionSuccess
-ExecuteSourceOutcome
-OutcomeValue
-ResultValue
-universal Failure/SystemError enum
-opcode-specific failure types
-RuntimeValue as public outcome
-DiagnosticAnchor
-SourceLocation
-SourceId
-line/column/snippet/path embedded in failures
-CompileFailure<'source>
-ExecutionFailure<'a>
-Vec<Diagnostic>
-Vec<ExecutionFailure>
-catch/resume execution
-BytecodeFailure as normal language failure
-Provider/vendor error objects across Engine ABI
-human messages as canonical failure representation
-CompiledValueShapeId inside InvocationFailure
-VM invariant violations as normal execution failures
 ```
 
 ## Closure
@@ -416,15 +343,22 @@ VM invariant violations as normal execution failures
 ```text
 OD-001..OD-010 Outcome root rules                              ✅ CLOSED
 CompileFailure / CPF-001..CPF-010                             ✅ CLOSED
-LexicalFailure                                                 ✅ CLOSED — 6 variants
-SyntaxFailure                                                  ✅ CLOSED — 10 variants
-SemanticFailure                                                ✅ CLOSED — 12 own identities
-Diagnostic provenance / DP-001..DP-010                        ✅ CLOSED — 0 new identities
-ExternalCapabilityFailure / ECF-001..ECF-008                  ✅ CLOSED — 1 identity
-ExternalCapability exact Rust ABI                              ✅ CLOSED
-ExecutionFailure / EXF-001..EXF-012                           ✅ CLOSED — 5 own identities
+LexicalFailure / LF-001..LF-010                              ✅ CLOSED
+SyntaxFailure / SF-001..SF-011                               ✅ CLOSED
+SemanticFailure / SEF-001..SEF-012                           ✅ CLOSED
+Diagnostic provenance / DP-001..DP-010                       ✅ CLOSED
+ExternalCapabilityFailure / ECF-001..ECF-008                 ✅ CLOSED
+ExecutionFailure / EXF-001..EXF-012                          ✅ CLOSED
+Outcome inventory / OI-001..OI-008                           ✅ CLOSED — 24 identities
 
-exact Outcome / Diagnostic inventory                           ← NEXT
+Outcome / Diagnostic Data                                    ✅ CLOSED
+Technical Data Model                                         ✅ CLOSED
 ```
 
-El siguiente bloque no debe introducir semántica nueva: debe auditar y contar todas las identities propias de `Outcome / Diagnostic Data`, distinguir aliases/reused identities y declarar la fase completa CLOSED si no aparece ninguna inconsistencia.
+## Next
+
+```text
+Technical Data Diagram
+```
+
+El siguiente artifact debe representar visualmente las identities y relaciones ya cerradas. No debe introducir nuevas estructuras conductuales ni reabrir el Technical Data Model sin una inconsistencia explícitamente demostrada.
