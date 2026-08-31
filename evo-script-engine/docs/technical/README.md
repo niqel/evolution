@@ -1,10 +1,10 @@
 # Evo-Script Engine — Technical Documentation
 
-Status: D2 SEQUENCE DIAGRAMS — IN PROGRESS
+Status: TECHNICAL DESIGN PACKAGE — CLOSED / PROGRAMMING READY
 
-Este directorio contiene la documentación técnica de `evo-script-engine`.
+Este directorio contiene la documentación técnica canónica de `evo-script-engine` v0.
 
-La fase funcional está cerrada y revalidada bajo `evo-script/EFN_HOST_BOUNDARY_v0.1.md`. Todo diseño técnico deriva de ese modelo sin redefinir retrospectivamente su semántica.
+La fase funcional está cerrada y revalidada bajo `evo-script/EFN_HOST_BOUNDARY_v0.1.md`. El paquete técnico completo deriva de ese modelo sin redefinir retrospectivamente su semántica.
 
 La metodología técnica canónica se encuentra en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../../TECHNICAL_DESIGN_METHODOLOGY.md) y las decisiones estructurales del componente en [`TECHNICAL_DESIGN.md`](TECHNICAL_DESIGN.md).
 
@@ -26,6 +26,8 @@ Module Signature Diagram
 D2 Sequence Diagrams
    ↓
 Implementation Tasks
+   ↓
+PROGRAMMING
 ```
 
 ## Current Progress
@@ -41,43 +43,96 @@ Execution Participant Design              ✅ CLOSED — RSD-021..RSD-040
 Rust Signatures / Participant Design      ✅ CLOSED
 Module Signature Design                   ✅ CLOSED — MSD-001..MSD-010
 Module Signature Diagram                  ✅ CLOSED — 4 D2 views
-D2 Sequence Diagrams                      ← IN PROGRESS
-Implementation Tasks                      PENDING
+D2 Sequence Diagrams                      ✅ CLOSED — 4 D2 views
+Implementation Tasks                      ✅ CLOSED — 54 tasks
+Programming                               ← READY
 ```
 
-## Technical Views
+## Technical artifact structure
 
-| View | Propósito |
-| --- | --- |
-| Technical Data Diagram | Representar structs, enums, artifacts, borrowed views y relaciones. |
-| Module Signature Diagram | Representar módulos Rust como identidades arquitectónicas, firmas y relaciones. |
-| D2 Sequence Diagram | Representar colaboración dinámica entre firmas. |
+```text
+technical/
+├── README.md
+├── TECHNICAL_DESIGN.md
+├── data-model/
+│   └── closed Technical Data Model
+├── data-diagram/
+│   └── 9 Technical Data Diagram D2 views
+├── signatures/
+│   └── RSD-001..RSD-040 + participant design
+├── module-signatures/
+│   ├── MODULE_SIGNATURE_DESIGN.md
+│   └── 4 Module Signature D2 views
+├── sequences/
+│   └── 4 D2 Sequence views
+└── implementation-tasks/
+    └── README.md — 54 task programming backlog
+```
 
-## Traceability Rules
+## Closed behavioral inventory
 
-1. Todo dato usado por una Rust Signature existe previamente en Technical Data Model.
-2. Toda identidad de Module Signature Diagram corresponde a un módulo Rust real previsto.
-3. Toda interacción de D2 Sequence Diagram debe corresponder a una firma/call explícita cerrada.
-4. Los diagramas derivan del diseño; no inventan Participants, helpers o dependencias.
-5. Si firma, módulo y diagrama divergen, el diseño no está cerrado.
+```text
+Use Cases        3
+Agents           3
+Collaborators    6 unique
+Resolvers        1 unique
+Requesters       0
+Additional Contracts 0
+Tools            8 unique
+Conductual modules 21
+```
 
-## Closed technical foundation
+`ExternalCapability` permanece como la frontera runtime function-pointer cerrada; no existe un Contract wrapper duplicado.
 
-La etapa actual no reabre:
+## Programming prerequisite detected
 
-- Stack VM y VM Execution Data;
-- Technical Data Model de 140 identities;
-- Technical Data Diagram suite de 9 vistas;
-- Use Case signatures públicas;
-- 6 Collaborators únicos;
-- 1 Resolver único;
-- 8 Tools únicas;
-- 21 módulos conductuales previstos;
-- `ExternalCapability` como frontera runtime function-pointer sin Contract duplicado;
-- ausencia de Requesters en `evo-script-engine` v0.
+El código actual de `evo-values` todavía implementa el modelo histórico:
 
-## Current work
+```text
+Text
+Unsigned
+Signed
+Boolean
+```
 
-El trabajo actual consiste exclusivamente en derivar D2 Sequence Diagrams desde las firmas y módulos ya cerrados.
+mientras `INTERCHANGE_MODEL.md` exige el modelo v0 de 17 familias con `Value<'a>` y `OwnedValue`.
 
-Después de cerrar las secuencias, el siguiente paso será producir `Implementation Tasks` para AGY/Codex.
+Por ello `implementation-tasks/README.md` inicia con cuatro tareas `EVO-V-001..EVO-V-004` que deben cerrarse antes de implementar las fronteras runtime de `evo-script-engine`.
+
+## Programming authority order
+
+AGY/Codex deben resolver ambigüedad consultando, en este orden conceptual:
+
+```text
+Functional closed artifacts
+    ↓
+Technical Design
+    ↓
+Technical Data Model
+    ↓
+Rust Signatures / Participants
+    ↓
+Module Signature Design / Diagrams
+    ↓
+D2 Sequence Diagrams
+    ↓
+Implementation Tasks
+```
+
+Un artefacto posterior implementa/representa al anterior; no puede redefinirlo silenciosamente.
+
+Si dos artifacts cerrados parecen contradictorios, el programador debe detener esa tarea y reportar la contradicción en lugar de improvisar una nueva arquitectura.
+
+## Final technical closure
+
+```text
+Architecture / Functional Analysis     ✅ CLOSED
+Technical Lead Design                  ✅ CLOSED
+Programming Backlog                    ✅ CLOSED
+
+NEXT ROLE
+    Programmer
+
+PROGRAMMERS
+    AGY / Codex
+```
