@@ -32,7 +32,10 @@ Compile Participant Design            ✅ CLOSED — RSD-011..RSD-020
 ├── parse_tokens                      ✅ CLOSED
 ├── analyze_program                   ✅ CLOSED
 └── lower_program                     ✅ CLOSED
-Execution Participant Design          ← NEXT
+Execution Participant Design          ← IN PROGRESS — RSD-021..RSD-026
+├── initialize_execution              root signature ✅ / internals ← NEXT
+├── execute_instruction               root signature ✅ / internals PENDING
+└── resolve_external_call             root signature ✅ / internals PENDING
 Module Signature Diagrams             PENDING
 D2 Sequence Diagrams                  PENDING
 Implementation Tasks                  PENDING
@@ -43,4 +46,5 @@ Documentos canónicos actuales:
 ```text
 ROOT_SIGNATURE_DESIGN.md
 COMPILE_PARTICIPANT_DESIGN.md
+EXECUTION_PARTICIPANT_DESIGN.md
 ```
