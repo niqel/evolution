@@ -17,7 +17,7 @@ compilation_dependency: {
   }
 
   CatalogType: {
-    label: "<<enum>> CatalogType\n2 variants"
+    label: "<<enum>> CatalogType\n2 variants\nStruct fields 0..N\nEnum variants 1..N"
   }
 
   CatalogField: {
@@ -46,7 +46,7 @@ compilation_dependency.CatalogTypeRef -> compilation_dependency.TypeSymbol: "var
 
 # Shared type definitions
 compilation_dependency.CatalogType -> compilation_dependency.CatalogField: "variant payload · 0..N ordered"
-compilation_dependency.CatalogType -> compilation_dependency.CatalogVariant: "variant payload · 1..N ordered"
+compilation_dependency.CatalogType -> compilation_dependency.CatalogVariant: "variant payload · 0..N ordered"
 compilation_dependency.CatalogField -> compilation_dependency.CatalogTypeRef: "contains · 1"
 compilation_dependency.CatalogVariant -> compilation_dependency.CatalogTypeRef: "variant payload · 0..1"
 compilation_dependency.CatalogVariant -> compilation_dependency.CatalogField: "variant payload · 0..N ordered"
@@ -66,6 +66,7 @@ compilation_dependency.CompilationCatalog -> compilation_dependency.CatalogSigna
 notes: {
   label: "Compilation Dependency Boundaries"
   count: "Exactly 8 own identities; SignatureSymbol is reused and not recounted"
+  enum_cardinality: "When CatalogType is Enum, variants are exactly 1..N ordered; Struct has 0..N ordered fields"
   borrow: "Compile borrows one validated CompilationCatalog immutably; the borrow belongs to later signature design, not a new data identity"
   compile_only: "CompilationCatalog is compile-time contract data and never persists into CompiledProgram or VmExecution"
   no_runtime: "No ApplicationBindings, ExternalCapability, Provider identity or runtime address belongs to this owner phase"
