@@ -142,7 +142,7 @@ VmExecution
 └── is logical owner of execution-lifetime backing data
 ```
 
-El Rust struct final de `VmExecution` permanece pendiente hasta cerrar el modelo completo de intercambio externo y las relaciones borrowed exactas.
+El Rust struct final de `VmExecution` permanece pendiente únicamente de cerrar sus lifetimes/fields exactos; las responsabilidades root ya están cerradas.
 
 ## VM-010 — RuntimeValue and evo_values::Value<'a> are distinct
 
@@ -458,10 +458,10 @@ Reglas de frontera:
 
 ```text
 VM → external capability
-    borrowed interchange Value views
+    borrowed evo_values::Value<'a> views
 
 external capability → VM
-    one owned interchange Value on success
+    one evo_values::OwnedValue on success
 ```
 
 `RuntimeValue` y sus backing handles nunca cruzan hacia la aplicación.
@@ -481,12 +481,61 @@ No se usa Requester para el one-result `CallExternal` normal porque el resultado
 
 La representation v0 usa plain `fn`, lo cual expresa comportamiento estáticamente compuesto y no captura state de instancia. Una futura necesidad de per-instance state debe reabrir explícitamente esta frontera.
 
-La firma Rust textual final queda pendiente únicamente de completar en `evo-values`:
+Los tipos exactos de Value del ABI quedan cerrados por VM-023. Solo el tipo de failure permanece pendiente de Outcome / Diagnostic Data.
+
+## VM-023 — evo-values Borrowed / Owned Interchange Model
+
+Status: CLOSED
+
+Cerrado en `evo-values/INTERCHANGE_MODEL.md` mediante EV-001..EV-011.
+
+Separación canónica:
 
 ```text
-Value<'a>  = complete borrowed interchange view
-OwnedValue = complete owned interchange representation
+evo_values::Value<'a>
+    = borrowed/interchange representation
+
+evo_values::OwnedValue
+    = owned/interchange representation
+
+RuntimeValue
+    = private VM execution descriptor
 ```
+
+`Value<'a>` y `OwnedValue` cubren exactamente las mismas 17 familias semánticas de Value que `RuntimeValue`, sin compartir su representación física.
+
+El modelo histórico `Text / Signed / Unsigned` queda sustituido por `String` y numeric variants exact-width.
+
+Dynamic conserva exactamente:
+
+```text
+Integer
+Float32
+Float64
+```
+
+Dynamic Integer cruza fronteras mediante representación canónica neutral:
+
+```text
+negative + minimal unsigned big-endian magnitude
+zero = empty magnitude
+zero.negative = false
+```
+
+`Value<'a>` puede prestar backing pesado y poseer únicamente árboles temporales de descriptors necesarios para composites/canonicalization. `OwnedValue` es completamente autónomo, sin Rust references ni VM handles.
+
+`evo-values` permanece compatible con `no_std + alloc` y no depende de una implementación BigInt concreta.
+
+El ABI externo puede por tanto fijar sus Value types como:
+
+```rust
+type ExternalCapability =
+    for<'value> fn(
+        &'value [Value<'value>],
+    ) -> Result<OwnedValue, /* failure pending */>;
+```
+
+El tipo exacto de external failure se cierra en Outcome / Diagnostic Data y no reabre el intercambio de Values.
 
 ## Runtime Value / VM Data Authorities
 
@@ -499,6 +548,7 @@ OwnedValue = complete owned interchange representation
 - `INSTRUCTION_POINTER_STEPPING.md`
 - `APPLICATION_BINDINGS.md`
 - `EXTERNAL_CAPABILITY_ABI.md`
+- `../../../../evo-values/INTERCHANGE_MODEL.md`
 
 ## Current Closure
 
@@ -509,7 +559,7 @@ CompiledProgram relationship                   ✅ CLOSED
 ApplicationBindings relationship               ✅ CLOSED
 ApplicationBindings exact model                ✅ CLOSED
 one SharedValueStorage root                    ✅ CLOSED
-Call Frames root ownership                     ✅ CLOSED
+Call Frames root ownership                      ✅ CLOSED
 execution-lifetime backing logical owner        ✅ CLOSED
 ExecutionBackingStore owner                     ✅ CLOSED
 
@@ -535,14 +585,16 @@ borrowed external arguments                     ✅ CLOSED
 owned external success result                   ✅ CLOSED
 CallExternal N→1 commit-after-success            ✅ CLOSED
 plain fn static composition boundary             ✅ CLOSED
+evo-values Value<'a> exact 17 families           ✅ CLOSED
+evo-values OwnedValue exact 17 families          ✅ CLOSED
+canonical Dynamic Integer interchange            ✅ CLOSED
+no_std + alloc shared Value model                 ✅ CLOSED
 
 root InstructionPointer                         ❌ EXCLUDED
 Host / Active Scope / Current Provider          ❌ EXCLUDED
 Outcome / Diagnostic data                       ❌ SEPARATE PHASE
 
-evo-values borrowed / owned interchange model   ← NEXT
-ExternalCapability exact Rust type              PENDING — depends on evo-values
-external failure exact representation            PENDING — Outcome / Diagnostic Data
-VmExecution exact Rust root                      PENDING
-VM Execution exact inventory                     PENDING
+ExternalCapability failure type                 PENDING — Outcome / Diagnostic Data
+VmExecution exact Rust root                     ← NEXT
+VM Execution exact inventory                    PENDING
 ```
