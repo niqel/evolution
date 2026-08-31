@@ -198,64 +198,83 @@ y sus invariantes.
 
 No EOF, Invalid, Whitespace o Comment Tokens.
 
-## ESE-011 — Compile / Lexical / Syntax failure data
+## ESE-011 — Lexical / Syntax failure data
 
 Dependencias: ESE-010.
 
 Implementar:
 
 ```text
-CompileOutcome
-CompileFailure
-CompileFailureKind
 LexicalFailure — 6 variants
 SyntaxFailure — 10 variants
 ```
 
 Preservar provenance exacta y zero-width spans.
 
+> Nota: `CompileOutcome`, `CompileFailure` y `CompileFailureKind` se implementan en `ESE-023`, cuando ya existen `SemanticFailure` y `CompiledProgram`. Esto no cambia sus identities ni su diseño cerrado; únicamente evita introducir placeholders o adelantar identities de tareas posteriores.
+
 ## ESE-012 — AST foundational + top-level data
 
 Dependencias: ESE-010.
 
-Implementar:
+Implementar las 5 identities AST que pueden existir independientemente:
 
 ```text
 Identifier
 QualifiedName
 Visibility
 TypedBinding
-Program
 ImportDeclaration
-Declaration
 ```
 
 No semantic resolution.
 
-## ESE-013 — AST local types + function/body data
+## ESE-013 — AST local types data
 
 Dependencias: ESE-012.
 
-Implementar identities cerradas de:
+Implementar las 4 identities cerradas de Local Type Definitions:
 
 ```text
 StructDefinition
 FieldDefinition
 EnumDefinition
 EnumVariant
+```
+
+## ESE-014 — AST remaining top-level + function/body + expression + when data
+
+Dependencias: ESE-013.
+
+Implementar las 22 identities AST restantes hasta completar exactamente las 31 identities AST cerradas:
+
+```text
+Program
+Declaration
+
 FunctionDefinition
 Parameter
 FunctionBody
 BodyStatement
 LetBinding
 OperationStatement
+
+Expression
+ExpressionKind
+LiteralKind
+UnaryOperator
+BinaryOperator
+FunctionCall
+FieldInitializer
+EnumConstruction
+Pipeline
+PipelineStage
+
+WhenExpression
+WhenCorrespondence
+WhenPattern
+PatternField
 ```
-
-## ESE-014 — AST Expression + When data
-
-Dependencias: ESE-013.
-
-Implementar el inventario restante hasta completar exactamente 31 identities AST.
 
 Reglas físicas:
 
@@ -304,30 +323,51 @@ Implementar exactamente las 12 identities propias de la familia `SemanticFailure
 
 No dejar escapar IDs locales de `SemanticProgram` dentro del outcome.
 
-## ESE-018 — Compiled Program core + constants + identities
+## ESE-018 — Compiled Program foundational identities + constants
 
 Dependencias: ESE-016, EVO-V-003.
 
-Implementar root, functions, persistent IDs, constants y ExternalSymbol conforme a `COMPILED_PROGRAM_DATA.md`.
+Implementar las 12 foundational compiled identities que no dependen de `Instruction`, `CompiledValueShape` ni `SourceMap`:
 
-## ESE-019 — Instructions, equality, boundary shapes y SourceMap
+```text
+ConstantId
+ExternalSymbolId
+CompiledValueShapeId
+
+ParameterSlot
+LocalSlot
+InstructionIndex
+FieldIndex
+VariantDiscriminant
+
+ExternalSymbol
+Constant
+DynamicConstant
+NumericKind
+```
+
+conforme a `COMPILED_PROGRAM_DATA.md`.
+
+## ESE-019 — Instructions, equality, boundary shapes, SourceMap y CompiledProgram
 
 Dependencias: ESE-018.
 
-Implementar:
+Implementar las 9 identities restantes de Compiled Program:
 
 ```text
+CompiledProgram
+CompiledFunction
+
 Instruction — exactamente 48 variants
-NumericKind — 12 variants
-CompiledValueShape — 17 variants
-CompiledEnumValueShape — 3 variants
 EqualityRule
 CompositeEqualityPlan
 EnumEqualityPayloadPlan
 SourceMap
+CompiledValueShape — 17 variants
+CompiledEnumValueShape — 3 variants
 ```
 
-Completar exactamente 21 own Compiled Program identities.
+Completar exactamente 21 own Compiled Program identities (12 en ESE-018 + 9 en ESE-019).
 
 ## ESE-020 — RuntimeValue + backing data
 
@@ -352,7 +392,7 @@ La crate concreta usada internamente para arbitrary integer, si se necesita, no 
 
 ## ESE-021 — SharedValueStorage + CallFrame + VmExecution
 
-Dependencias: ESE-020.
+Dependencias: ESE-020, ESE-022.
 
 Implementar:
 
@@ -366,6 +406,18 @@ VmExecution<'compiled, 'bindings>
 con exactamente los cinco fields cerrados del root.
 
 No `OperandStack`, `CurrentFrame`, root IP, outcome flag o execution state enum.
+
+Orden de programación:
+
+```text
+ESE-020
+    ↓
+ESE-022
+    ↓
+ESE-021
+    ↓
+ESE-023
+```
 
 ## ESE-022 — ApplicationBindings + ExternalCapability ABI
 
@@ -389,11 +441,19 @@ for<'value> fn(
 
 No `dyn Fn`, Provider object o captured closure ABI.
 
-## ESE-023 — ExecutionOutcome / ExecutionFailure family
+## ESE-023 — CompileOutcome, ExecutionOutcome / ExecutionFailure family
 
-Dependencias: ESE-011, ESE-017, ESE-022.
+Dependencias: ESE-011, ESE-017, ESE-019, ESE-022.
 
-Implementar exactamente:
+Implementar el root completo de Compile Outcome:
+
+```text
+CompileOutcome
+CompileFailure
+CompileFailureKind
+```
+
+y las identities de Execution Outcome y Failure:
 
 ```text
 ExecutionOutcome
@@ -404,7 +464,42 @@ EvaluationFailure
 ExternalExecutionFailure
 ```
 
-Preservar `Option<SourceSpan>` según provenance cerrada.
+Preservar `Option<SourceSpan>` según provenance cerrada y la representación cerrada:
+
+```rust
+type CompileOutcome =
+    Result<CompiledProgram, CompileFailure>;
+
+struct CompileFailure {
+    kind: CompileFailureKind,
+    source_span: SourceSpan,
+}
+
+enum CompileFailureKind {
+    Lexical(LexicalFailure),
+    Syntax(SyntaxFailure),
+    Semantic(SemanticFailure),
+}
+```
+
+---
+
+### Invariante de particionado de WP-02
+
+```text
+Technical Data Model identities       SIN CAMBIOS
+Technical Data Model counts           SIN CAMBIOS
+Rust representations                  SIN CAMBIOS
+Enum variants                         SIN CAMBIOS
+Participants                          SIN CAMBIOS
+Rust Signatures                       SIN CAMBIOS
+Module Signature Design               SIN CAMBIOS
+Sequence Diagrams                     SIN CAMBIOS
+Implementation task IDs               SIN CAMBIOS
+Implementation task count             54 — SIN CAMBIOS
+```
+
+Esta corrección modifica únicamente qué task materializa determinadas identities y sus dependencias de programación, para permitir commits Rust incrementalmente compilables sin placeholders.
 
 ---
 
@@ -412,7 +507,7 @@ Preservar `Option<SourceSpan>` según provenance cerrada.
 
 ## ESE-030 — Implementar las tres definiciones Use Case
 
-Dependencias: ESE-015, ESE-018, ESE-022, ESE-023, EVO-V-003.
+Dependencias: ESE-015, ESE-019, ESE-022, ESE-023, EVO-V-003.
 
 Crear exactamente:
 
