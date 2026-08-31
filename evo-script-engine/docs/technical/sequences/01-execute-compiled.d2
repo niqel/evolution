@@ -1,0 +1,41 @@
+execute_compiled: {
+  shape: sequence_diagram
+
+  consumer: Consumer
+  executor: "agents/compiled_program_executor"
+  initializer: "collaborators/execution_initializer"
+  shape_matcher: "tools/matches_value_shape"
+  materializer: "tools/materialize_value"
+  instruction_executor: "collaborators/instruction_executor"
+  outcome_owner: "tools/own_runtime_value"
+
+  consumer -> executor: "EXECUTE_COMPILED(compiled_program, invocation_values, application_bindings)"
+
+  executor -> initializer: "INITIALIZE_EXECUTION(compiled_program, invocation_values, application_bindings)"
+
+  initialization: {
+    initializer -> shape_matcher: "MATCHES_VALUE_SHAPE(value_i, shape_i, value_shapes)"
+    shape_matcher -> initializer: "bool"
+    initializer -> materializer: "MATERIALIZE_VALUE(value_i, backing_store)"
+    materializer -> initializer: "RuntimeValue"
+  }
+
+  initializer -> executor: "Ok(VmExecution)"
+
+  ordinary_loop: {
+    executor -> instruction_executor: "EXECUTE_INSTRUCTION(&mut execution)"
+    instruction_executor -> executor: "Ok(None) · continue"
+  }
+
+  entry_return: {
+    executor -> instruction_executor: "EXECUTE_INSTRUCTION(&mut execution) · entry Return"
+    instruction_executor -> outcome_owner: "OWN_RUNTIME_VALUE(runtime_result, compiled_program, backing_store)"
+    outcome_owner -> instruction_executor: "OwnedValue"
+    instruction_executor -> executor: "Ok(Some(OwnedValue))"
+  }
+
+  executor -> consumer: "Ok(OwnedValue)"
+
+  initializer."InvocationFailure termina antes de una VmExecution válida."
+  instruction_executor."EvaluationFailure usa locate_source_span y termina la ejecución. CallExternal no entra en este Collaborator; su secuencia está en 02-call-external.d2."
+}
