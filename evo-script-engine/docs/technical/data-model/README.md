@@ -112,7 +112,10 @@ VM Execution Data                ← IN ANALYSIS
 ├── VmExecution root             ✅ CLOSED
 ├── one invocation lifetime      ✅ CLOSED
 ├── CompiledProgram relationship ✅ CLOSED
-├── ApplicationBindings relation ✅ CLOSED — exact model pending
+├── ApplicationBindings relation ✅ CLOSED
+├── ApplicationBindings exact    ✅ CLOSED
+├── SignatureSymbol lookup       ✅ CLOSED
+├── lazy missing-binding failure ✅ CLOSED
 ├── SharedValueStorage owner     ✅ CLOSED
 ├── Call Frames owner            ✅ CLOSED
 ├── execution backing owner      ✅ CLOSED
@@ -153,7 +156,7 @@ VM Execution Data                ← IN ANALYSIS
 ├── active IP validity           ✅ CLOSED
 ├── branch / sequential stepping ✅ CLOSED
 ├── call / return stepping       ✅ CLOSED
-└── ApplicationBindings exact model ← NEXT
+└── ExternalCapability uniform ABI ← NEXT
 
 Outcome / Diagnostic Data        PENDING
 ```
@@ -208,6 +211,7 @@ Outcome / Diagnostic Data        PENDING
 - [`SHARED_VALUE_STORAGE.md`](./SHARED_VALUE_STORAGE.md) — `Vec<Option<RuntimeValue>>`, regiones Parameter/Local/Operand, reuse de argument cells y transformación de storage en `Return`.
 - [`CALL_FRAME.md`](./CALL_FRAME.md) — `CallFrame` exacto de tres fields, `InstructionPointer`, `frame_base`, `operand_base` derivado y suspensión del caller sobre `Call`.
 - [`INSTRUCTION_POINTER_STEPPING.md`](./INSTRUCTION_POINTER_STEPPING.md) — valid IP invariant, commit-after-success, sequential/branch stepping y transitions exactas de `Call`, `Return` y `CallExternal`.
+- [`APPLICATION_BINDINGS.md`](./APPLICATION_BINDINGS.md) — `HashMap<SignatureSymbol, ExternalCapability>`, composición explícita reusable y resolución lazy de `CallExternal`.
 
 ### Normative language amendments used by compiled/runtime model
 
@@ -249,7 +253,7 @@ La metodología global se define en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../..
 ## Next Block
 
 ```text
-ApplicationBindings exact model ← NEXT
+ExternalCapability uniform ABI ← NEXT
 ```
 
-Aquí se definirá la estructura runtime explícita que satisface los `ExternalSymbol` del `CompiledProgram`, su relación exacta con Signature contracts/function pointers y la mecánica de `CallExternal`, sin reintroducir provider lookup ambiental ni Host Session State.
+Aquí se cerrará la calling convention uniforme que permite a `CallExternal` prestar argumentos ejecutables a una capability heterogénea y materializar exactamente un resultado dentro de `VmExecution`, preservando borrowing cuando alcance y ownership cuando el resultado deba sobrevivir.
