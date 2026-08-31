@@ -1,0 +1,101 @@
+direction: right
+
+lexical: {
+  label: "Lexical Data · owner"
+  SourceSpan: { label: "<<struct>> SourceSpan" }
+}
+
+ast: {
+  label: "AST Data · owner"
+  Expression: { label: "<<struct>> Expression" }
+  UnaryOperator: { label: "<<enum>> UnaryOperator" }
+  BinaryOperator: { label: "<<enum>> BinaryOperator" }
+}
+
+compilation_dependency: {
+  label: "Compilation Dependency Data · owner"
+  CatalogSignatureParameter: { label: "<<enum>> CatalogSignatureParameter" }
+  CompilationCatalog: { label: "<<struct>> CompilationCatalog" }
+}
+
+semantic: {
+  label: "Semantic Program Data · owner"
+  SemanticExpression: { label: "<<struct>> SemanticExpression" }
+  SemanticExpressionKind: { label: "<<enum>> SemanticExpressionKind" }
+  FunctionId: { label: "<<identity>> FunctionId" }
+  SignatureSymbol: { label: "<<struct>> SignatureSymbol" }
+}
+
+compiled: {
+  label: "Compiled Program Data · owner"
+  CompiledProgram: { label: "<<artifact>> CompiledProgram" }
+  Instruction: { label: "<<enum>> Instruction · 48 variants" }
+  ExternalSymbol: { label: "<<struct>> ExternalSymbol" }
+  SourceMap: { label: "<<struct>> SourceMap" }
+}
+
+vm: {
+  label: "VM Execution Data · owner"
+  VmExecution: { label: "<<struct>> VmExecution" }
+  ApplicationBindings: { label: "<<struct>> ApplicationBindings" }
+  ExternalCapability: { label: "<<alias>> ExternalCapability" }
+  CallFrame: { label: "<<struct>> CallFrame" }
+}
+
+outcome: {
+  label: "Outcome / Diagnostic Data · owner"
+  CompileOutcome: { label: "<<alias>> CompileOutcome" }
+  ExecutionOutcome: { label: "<<alias>> ExecutionOutcome" }
+  CompileFailure: { label: "<<struct>> CompileFailure" }
+  ExecutionFailure: { label: "<<struct>> ExecutionFailure" }
+  ExternalCapabilityFailure: { label: "<<struct>> ExternalCapabilityFailure" }
+  ExternalExecutionFailure: { label: "<<enum>> ExternalExecutionFailure" }
+}
+
+evo_values: {
+  label: "evo-values · external shared owner"
+  Value: { label: "<<borrowed view>> Value<'a>" }
+  OwnedValue: { label: "<<owned value>> OwnedValue" }
+}
+
+# SourceSpan ownership and reuse
+ast.Expression -> lexical.SourceSpan: "contains · 1 · reused"
+semantic.SemanticExpression -> lexical.SourceSpan: "contains · 1 · reused"
+compiled.SourceMap -> lexical.SourceSpan: "contains · 1..N ordered · reused"
+outcome.CompileFailure -> lexical.SourceSpan: "contains · 1 · reused"
+outcome.ExecutionFailure -> lexical.SourceSpan: "contains · 0..1 · reused"
+
+# AST operators reused by Semantic Program
+semantic.SemanticExpressionKind -> ast.UnaryOperator: "variant payload · reused"
+semantic.SemanticExpressionKind -> ast.BinaryOperator: "variant payload · reused"
+
+# Canonical semantic identities reused by later phases
+compiled.CompiledProgram -> semantic.FunctionId: "references · 1 entry point · reused"
+compiled.Instruction -> semantic.FunctionId: "variant payload · reused"
+vm.CallFrame -> semantic.FunctionId: "references · 1 · reused"
+
+compilation_dependency.CatalogSignatureParameter -> semantic.SignatureSymbol: "variant payload · reused"
+compiled.ExternalSymbol -> semantic.SignatureSymbol: "contains · 1 · reused"
+vm.ApplicationBindings -> semantic.SignatureSymbol: "references · 0..N map keys · reused"
+outcome.ExternalExecutionFailure -> semantic.SignatureSymbol: "variant payload · reused"
+
+# Compiled artifact borrowed by one execution
+vm.VmExecution -> compiled.CompiledProgram: "borrows · 1"
+
+# Runtime external composition
+vm.ApplicationBindings -> vm.ExternalCapability: "owns · 0..N"
+vm.ExternalCapability -> evo_values.Value: "references · borrowed arguments"
+vm.ExternalCapability -> evo_values.OwnedValue: "references · success result"
+vm.ExternalCapability -> outcome.ExternalCapabilityFailure: "references · failure result"
+
+# Public outcomes cross phase/crate boundaries
+outcome.CompileOutcome -> compiled.CompiledProgram: "references · Ok"
+outcome.ExecutionOutcome -> evo_values.OwnedValue: "references · Ok"
+
+notes: {
+  label: "Cross-Phase Boundary Rules"
+  one: "Only persistent/reused data relations are shown; no lowering/execution arrows"
+  two: "Owner phase remains authoritative even when an identity is reused elsewhere"
+  three: "Value<'a> and OwnedValue are owned by evo-values, not evo-script-engine"
+  four: "CompilationCatalog has no persistence relation into CompiledProgram or VmExecution"
+}
