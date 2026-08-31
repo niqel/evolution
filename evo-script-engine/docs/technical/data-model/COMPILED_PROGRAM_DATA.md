@@ -1,10 +1,8 @@
 # Evo-Script Engine — Compiled Program / Bytecode Data
 
-Status: COMPILED PROGRAM / BYTECODE DATA — CLOSED
+Status: COMPILED PROGRAM / BYTECODE DATA — CLOSED — REVALIDATED AFTER BOUNDARY SHAPE CORRECTION
 
 Este documento es la autoridad raíz del producto persistente producido por Bytecode Compiler y consumido directamente por la Stack VM de `evo-script-engine` v0.
-
-El detalle de cada familia se encuentra en los documentos especializados y el inventario final se cierra en `COMPILED_PROGRAM_INVENTORY.md`.
 
 ```text
 Semantic Program
@@ -16,8 +14,6 @@ Execution Result
 
 ## 1. Responsibility
 
-Regla canónica:
-
 > `Semantic Program` representa significado resuelto; `Compiled Program` representa mecanismo ejecutable persistente que la VM consume sin volver al AST ni al Semantic Program.
 
 Consecuencias:
@@ -25,14 +21,14 @@ Consecuencias:
 ```text
 no name resolution in VM
 no type inference in VM
-no semantic validation in VM
+no semantic validation in ordinary bytecode execution
 no Active Scope
 no Host Session State
 no Current Provider
 no ambient provider lookup
 ```
 
-`CompiledProgram` puede sobrevivir al Source Text y al Compilation Working State sin borrowearlos.
+La corrección de `Compiled Boundary Value Shape` agrega únicamente contrato ejecutable para validar Values que cruzan fronteras externas. No convierte a `CompiledProgram` en un segundo Semantic Program.
 
 ## 2. Closed Root Representation
 
@@ -40,8 +36,10 @@ no ambient provider lookup
 struct CompiledProgram {
     functions: Vec<CompiledFunction>,
     entry_point: FunctionId,
+    entry_parameter_shapes: Vec<CompiledValueShapeId>,
     constants: Vec<Constant>,
     external_symbols: Vec<ExternalSymbol>,
+    value_shapes: Vec<CompiledValueShape>,
     source_map: SourceMap,
 }
 ```
@@ -55,31 +53,40 @@ struct CompiledFunction {
 }
 ```
 
-Cardinalities:
+Cardinalidades:
 
 ```text
-functions         1..N
-entry_point       exactly 1 valid FunctionId
-constants         0..N
-external_symbols  0..N
-source_map        exactly 1
+functions               1..N
+entry_point             exactly 1 valid FunctionId
+entry_parameter_shapes  exactly entry Value-parameter count
+constants               0..N
+external_symbols        0..N
+value_shapes             0..N
+source_map               exactly 1
 ```
 
-`FunctionId` se preserva:
+Invariante:
 
 ```text
-SemanticProgram.functions[n]
-    ↕
-CompiledProgram.functions[n]
+entry_parameter_shapes.len()
+    == functions[entry_point].parameter_count
 ```
 
-No existe `CompiledFunctionId`.
+`FunctionId` se preserva desde `SemanticProgram.functions`.
 
 ## 3. Persistent Compiled Identities
+
+Program-level identities:
 
 ```rust
 struct ConstantId(usize);
 struct ExternalSymbolId(usize);
+struct CompiledValueShapeId(usize);
+```
+
+Function/storage identities:
+
+```rust
 struct ParameterSlot(usize);
 struct LocalSlot(usize);
 struct InstructionIndex(usize);
@@ -96,18 +103,21 @@ ConstantId(n)
 ExternalSymbolId(n)
     → CompiledProgram.external_symbols[n]
 
+CompiledValueShapeId(n)
+    → CompiledProgram.value_shapes[n]
+
 InstructionIndex(n)
     → CompiledFunction.instructions[n]
 ```
 
-`ParameterSlot`, `LocalSlot` e `InstructionIndex` son locales a una `CompiledFunction`.
-
 ## 4. Semantic Data Lowering Boundary
 
-Semantic data no persiste cuando ya fue traducido a mecanismo físico.
-
 ```text
-TypeId              → executable mechanism
+TypeId
+    → executable mechanism
+    → and, only when boundary-reachable,
+      CompiledValueShapeId
+
 BindingId           → ParameterSlot / LocalSlot
 FieldId             → FieldIndex
 VariantId           → VariantDiscriminant
@@ -118,10 +128,11 @@ SemanticExpression  → Instructions
 SourceSpan           → SourceMap entry
 ```
 
-No sobreviven por costumbre:
+No persisten por costumbre:
 
 ```text
 TypeId
+SemanticType
 BindingId
 FieldId
 VariantId
@@ -129,45 +140,33 @@ SignatureId
 SignatureBindingId
 SemanticExpression
 SemanticStatement
-parameter type metadata
 local type metadata
+per-function parameter type metadata
 ```
+
+`CompiledValueShape` persiste solo para boundary validation y no para ordinary bytecode dispatch.
 
 ## 5. Signature Dependency Erasure
 
-Signature Dependencies no son Values de primer orden.
+Signature Dependencies continúan sin ser Values físicos.
 
 ```text
 Signature Dependency Parameter
     → no ParameterSlot
-    → no operand Value
+    → no Invocation Value
 
 Signature Dependency Argument
-    → no physical Value argument
+    → no operand Value
 ```
 
-Direct Signature y Signature Dependency calls convergen:
+Direct Signature y Signature Dependency calls convergen a:
 
 ```text
-DirectSignature(SignatureId)
-SignatureDependency(SignatureBindingId)
-        ↓ Bytecode Compiler
 ExternalSymbolId
-        ↓
-CallExternal(ExternalSymbolId)
-```
-
-No existen:
-
-```text
-SignatureSlot
-Function Value
-closure generated for dependency forwarding
+    → CallExternal(ExternalSymbolId)
 ```
 
 ## 6. Storage Data
-
-Cerrado en `COMPILED_STORAGE_DATA.md`.
 
 ### ExternalSymbol
 
@@ -175,14 +174,15 @@ Cerrado en `COMPILED_STORAGE_DATA.md`.
 struct ExternalSymbol {
     symbol: SignatureSymbol,
     parameter_count: usize,
+    result_shape: CompiledValueShapeId,
 }
 ```
 
-`parameter_count` cuenta únicamente `SemanticSignatureParameter::Value`.
+`parameter_count` cuenta solo Value Parameters físicos.
 
-Signature Dependency Parameters cuentan cero.
+`result_shape` permite validar el `OwnedValue` retornado por la `ExternalCapability` uniforme antes de materializarlo como `RuntimeValue` y antes del commit `N → 1`.
 
-No contiene Provider, runtime binding, parameter TypeIds ni result TypeId.
+No persisten external argument shapes.
 
 ### Constant
 
@@ -210,17 +210,12 @@ enum Constant {
 }
 ```
 
-Canonical physical lowering:
+Canonical lowering:
 
 ```text
-semantic int   → Int32
-semantic int32 → Int32
-
-semantic float   → Float64
-semantic float64 → Float64
+int / int32     → Int32
+float / float64 → Float64
 ```
-
-No existen `Constant::Int` ni `Constant::Float` separados.
 
 ### DynamicConstant
 
@@ -235,11 +230,79 @@ enum DynamicConstant {
 }
 ```
 
-Integer magnitude es minimal unsigned big-endian; zero usa empty magnitude + `negative = false`.
+Integer usa minimal unsigned big-endian magnitude y zero canónico no-negativo.
 
-## 7. Core Data Movement and Calls
+## 7. Compiled Boundary Value Shape
 
-Cerrado en `COMPILED_CORE_CALL_INSTRUCTIONS.md`.
+Cerrado en `COMPILED_BOUNDARY_VALUE_SHAPE.md`.
+
+```rust
+struct CompiledValueShapeId(usize);
+```
+
+```rust
+enum CompiledValueShape {
+    Boolean,
+
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    Int128,
+
+    Uint8,
+    Uint16,
+    Uint32,
+    Uint64,
+    Uint128,
+
+    Float32,
+    Float64,
+
+    String,
+    Dynamic,
+
+    Struct {
+        fields: Vec<CompiledValueShapeId>,
+    },
+
+    Enum {
+        variants: Vec<CompiledEnumValueShape>,
+    },
+}
+```
+
+Exactamente 17 variants.
+
+```rust
+enum CompiledEnumValueShape {
+    Simple,
+    Associated(CompiledValueShapeId),
+    Structured {
+        fields: Vec<CompiledValueShapeId>,
+    },
+}
+```
+
+Exactamente 3 variants.
+
+`CompiledProgram.value_shapes` conserva únicamente shapes boundary-reachable desde:
+
+```text
+entry Value Parameters
+external result types
+```
+
+Uso runtime permitido:
+
+```text
+Invocation Value validation
+ExternalCapability result validation
+```
+
+No se utiliza para arithmetic, field access, calls internas, equality, RuntimeValue dispatch ni reflection.
+
+## 8. Core Data Movement and Calls
 
 ```rust
 LoadConstant(ConstantId)
@@ -258,19 +321,13 @@ LoadConstant    0 → 1
 LoadParameter   0 → 1
 LoadLocal       0 → 1
 StoreLocal      1 → 0
-
 Call            N → 1
 CallExternal    N → 1
 ```
 
-Internal call arity proviene de `CompiledFunction.parameter_count`.
-External call arity proviene de `ExternalSymbol.parameter_count`.
+El Instruction Set permanece sin cambios por la corrección de boundary shapes.
 
-`StoreLocal` representa initial materialization, no mutability semántica.
-
-## 8. Numeric Execution
-
-Cerrado en `COMPILED_NUMERIC_INSTRUCTIONS.md`.
+## 9. Numeric Execution
 
 ```rust
 enum NumericKind {
@@ -291,49 +348,9 @@ enum NumericKind {
 
 Exactamente 12 variants.
 
-Fixed arithmetic/comparison:
+Fixed arithmetic/comparison continúa mediante Instructions tipadas por `NumericKind`; Dynamic continúa restringido a Integer / Float32 / Float64 y sin comparison instructions propias.
 
-```text
-Negate
-Add
-Subtract
-Multiply
-Divide
-Remainder
-
-EqualNumeric
-NotEqualNumeric
-LessNumeric
-LessEqualNumeric
-GreaterNumeric
-GreaterEqualNumeric
-```
-
-Dynamic mechanics:
-
-```text
-LiftDynamic
-DynamicNegate
-DynamicAdd
-DynamicSubtract
-DynamicMultiply
-DynamicDivide
-DynamicRemainder
-```
-
-Dynamic runtime dispatch se restringe a:
-
-```text
-Integer
-Float32
-Float64
-```
-
-No existen Dynamic comparison instructions.
-
-## 9. Control Flow
-
-Cerrado en `COMPILED_CONTROL_FLOW.md`.
+## 10. Control Flow
 
 ```rust
 Jump(InstructionIndex)
@@ -342,15 +359,9 @@ Discard
 Return
 ```
 
-Branches usan absolute `InstructionIndex`.
+Branches usan absolute `InstructionIndex`. `&&` y `||` continúan lowered mediante branching real de short-circuit.
 
-`&&` y `||` se reducen a branching real de short-circuit.
-
-No existen eager `AndBoolean` / `OrBoolean` ni `JumpIfTrue` en v0.
-
-## 10. Explicit Conversions
-
-Cerrado en `COMPILED_CONVERSIONS.md`.
+## 11. Explicit Conversions
 
 ```rust
 ConvertNumeric {
@@ -362,13 +373,11 @@ NumericToString(NumericKind)
 DynamicToString
 ```
 
-No hay implicit conversion ni string → numeric parsing.
+No existen implicit conversions en bytecode ni en boundary validation.
 
-## 11. Scalar Equality
+## 12. Scalar Equality
 
-Cerrado en `COMPILED_SCALAR_EQUALITY.md`.
-
-```rust
+```text
 NotBoolean
 EqualBoolean
 NotEqualBoolean
@@ -376,69 +385,33 @@ EqualString
 NotEqualString
 ```
 
-Bool y string no poseen ordering operators en v0.
-
-## 12. Composite Layout
-
-Cerrado en `COMPILED_COMPOSITE_LAYOUT.md`.
+## 13. Composite Layout
 
 ```rust
 struct FieldIndex(usize);
 struct VariantDiscriminant(usize);
 ```
 
+Ordinary runtime composite layout continúa sin `TypeId` ni runtime layout tables.
+
+`CompiledValueShape` no reemplaza este mecanismo; solo valida external boundary data.
+
+## 14. Composite Instructions
+
 ```text
-FieldId(n)   → FieldIndex(n)
-VariantId(n) → VariantDiscriminant(n)
-```
-
-Conceptual runtime contract:
-
-```text
-Struct Value
-└── ordered fields
-
-Enum Value
-├── VariantDiscriminant
-└── Payload
-    ├── Simple
-    ├── Associated(Value)
-    └── Structured(ordered fields)
-```
-
-No existen runtime TypeId/layout tables en v0.
-
-## 13. Composite Instructions
-
-Cerrado en `COMPILED_COMPOSITE_INSTRUCTIONS.md`.
-
-```rust
-ConstructStruct {
-    field_order: Vec<FieldIndex>,
-}
-GetField(FieldIndex)
-
-ConstructEnumSimple(VariantDiscriminant)
-ConstructEnumAssociated(VariantDiscriminant)
-ConstructEnumStructured {
-    variant: VariantDiscriminant,
-    field_order: Vec<FieldIndex>,
-}
-
-TestVariant(VariantDiscriminant)
+ConstructStruct
+GetField
+ConstructEnumSimple
+ConstructEnumAssociated
+ConstructEnumStructured
+TestVariant
 ExtractEnumAssociated
-ExtractEnumStructured {
-    fields: Vec<FieldIndex>,
-}
+ExtractEnumStructured
 ```
 
-Construction preserva source evaluation order y produce canonical storage order.
+Exactamente 8 composite-mechanics instruction variants dentro del enum general.
 
-Enum extraction consume el Enum después de confirmar la variant; el Instruction Set no exige owner/payload aliasing.
-
-## 14. Structural Equality
-
-Cerrado en `COMPILED_STRUCTURAL_EQUALITY.md`.
+## 15. Structural Equality
 
 ```rust
 enum EqualityRule {
@@ -449,37 +422,20 @@ enum EqualityRule {
 }
 
 enum CompositeEqualityPlan {
-    Struct {
-        fields: Vec<EqualityRule>,
-    },
-    Enum {
-        variants: Vec<EnumEqualityPayloadPlan>,
-    },
+    Struct { fields: Vec<EqualityRule> },
+    Enum { variants: Vec<EnumEqualityPayloadPlan> },
 }
 
 enum EnumEqualityPayloadPlan {
     Simple,
     Associated(EqualityRule),
-    Structured {
-        fields: Vec<EqualityRule>,
-    },
+    Structured { fields: Vec<EqualityRule> },
 }
 ```
 
-Instructions:
+Dynamic sigue excluido de structural equality comparability.
 
-```rust
-EqualComposite(CompositeEqualityPlan)
-NotEqualComposite(CompositeEqualityPlan)
-```
-
-No existe `EqualityRule::Dynamic` ni generic `EqualValue`.
-
-La regla normativa `EqualityComparable` impide que composites con `dynamic` directa o transitivamente lleguen a structural equality.
-
-## 15. SourceMap
-
-Cerrado en `COMPILED_SOURCE_MAP.md`.
+## 16. SourceMap
 
 ```rust
 struct SourceMap {
@@ -487,38 +443,28 @@ struct SourceMap {
 }
 ```
 
+Dense mapping:
+
 ```text
-SourceMap.functions[f][i]
-        ↕
-CompiledProgram.functions[f].instructions[i]
+(FunctionId, InstructionIndex)
+    → exactly one SourceSpan
 ```
 
-Cada persistent Instruction posee exactamente un source anchor.
-
-v0 utiliza un único source coordinate space por `CompiledProgram`.
-
-No se introducen SourceId, SourcePath o SourceName en v0.
-
-La nested storage shape queda encapsulada para permitir una futura extensión multi-source.
-
-## 16. Exact Final Inventory
+## 17. Exact Final Inventory
 
 Cerrado en `COMPILED_PROGRAM_INVENTORY.md`.
 
-Resultado:
+Resultado corregido:
 
 ```text
-exact compiled own identities        18
-exact Instruction variants           48
-exact NumericKind variants           12
-exact EqualityRule variants           4
-exact CompositeEqualityPlan variants  2
+exact compiled own identities         21
+exact Instruction variants            48
+exact NumericKind variants            12
+exact CompiledValueShape variants     17
+exact CompiledEnumValueShape variants  3
+exact EqualityRule variants            4
+exact CompositeEqualityPlan variants   2
 exact EnumEqualityPayloadPlan variants 3
-
-SemanticExpressionKind coverage      10 / 10
-SemanticStatement coverage            2 / 2
-SemanticFunction lowering             complete
-SemanticProgram lowering              complete
 ```
 
 Identities propias exactas:
@@ -542,9 +488,12 @@ Identities propias exactas:
 16 CompositeEqualityPlan
 17 EnumEqualityPayloadPlan
 18 SourceMap
+19 CompiledValueShapeId
+20 CompiledValueShape
+21 CompiledEnumValueShape
 ```
 
-Reutilizadas y no contadas nuevamente:
+Reused y no recontadas:
 
 ```text
 FunctionId
@@ -552,9 +501,9 @@ SignatureSymbol
 SourceSpan
 ```
 
-## 17. Exact Instruction Variant Count
+## 18. Exact Instruction Variant Count
 
-El `Instruction` enum completo está cerrado en `COMPILED_PROGRAM_INVENTORY.md` con exactamente 48 variants:
+Continúan exactamente 48:
 
 ```text
 Core data movement      4
@@ -570,48 +519,36 @@ Structural equality     2
 TOTAL                   48
 ```
 
-No se introduce `Opcode` separado.
+## 19. VM Boundary
 
-## 18. VM Boundary
-
-Continúan fuera de este bloque:
+Continúan fuera de Compiled Program:
 
 ```text
 InstructionPointer
 CallFrame
-frame_base runtime value
-active execution state
-Shared Value Storage
-Operand Window runtime bounds
-runtime Value representation
-runtime Dynamic Integer representation
-runtime Struct / Enum backing representation
-Application Bindings instance
-owned external backing storage
-execution lifetime / borrowing state
+frame_base
+SharedValueStorage
+RuntimeValue
+ExecutionBackingStore
+ApplicationBindings
+VmExecution mutable state
 ```
 
-Eso pertenece a `VM Execution Data`.
-
-## 19. Outcome / Diagnostic Boundary
+## 20. Outcome / Diagnostic Boundary
 
 Continúan fuera:
 
 ```text
 ExecutionOutcome
-EvaluationError representation
-OverflowError representation
-DivisionByZeroError representation
-ConversionError representation
-DynamicNumericTypeError representation
+EvaluationError exact representation
+ExternalCapability failure type
 human diagnostic rendering
 line / column presentation
-snippet / highlight
 ```
 
-Eso pertenece a `Outcome / Diagnostic Data`.
+Boundary shape mismatch detection sí es posible desde Compiled Program; su Failure representation pertenece a Outcome / Diagnostic Data.
 
-## 20. Explicitly Excluded v0
+## 21. Explicitly Excluded v0
 
 ```text
 CompiledFunctionId
@@ -626,7 +563,6 @@ EqualityPlanId
 SourceId
 SourcePath
 SourceName
-SourceLocation
 Opcode separated from Instruction
 Label runtime instruction
 JumpIfTrue
@@ -644,35 +580,35 @@ Current Provider
 Active Scope
 Host Session State
 portable bytecode ABI identity
+external parameter shape list
+per-function parameter shape lists
+general reflection table
 ```
 
-## 21. Closure
+## Closure
 
 ```text
-Compiled Program responsibility             ✅ CLOSED
-Compiled root / function structure          ✅ CLOSED
-storage identities / constants              ✅ CLOSED
-Core Load / Store                            ✅ CLOSED
-Internal / External Calls                    ✅ CLOSED
-Numeric execution                            ✅ CLOSED
-Control Flow                                 ✅ CLOSED
-Conversions                                  ✅ CLOSED
-Scalar Equality                              ✅ CLOSED
-Composite Layout                             ✅ CLOSED
-Composite Instructions                       ✅ CLOSED
-Structural Equality                          ✅ CLOSED
-SourceMap                                    ✅ CLOSED
-Exact own identities — 18                    ✅ CLOSED
-Exact Instruction variants — 48              ✅ CLOSED
-SemanticExpressionKind coverage — 10 / 10    ✅ CLOSED
-SemanticStatement coverage — 2 / 2           ✅ CLOSED
-SemanticFunction lowering                    ✅ CLOSED
-SemanticProgram lowering                     ✅ CLOSED
-VM boundary                                  ✅ CLOSED
-Outcome / Diagnostic boundary                ✅ CLOSED
+Compiled Program responsibility               ✅ CLOSED
+Compiled root / function structure            ✅ CLOSED — corrected root
+storage identities / constants                ✅ CLOSED
+Compiled Boundary Value Shape                 ✅ CLOSED
+entry Invocation Value validation metadata     ✅ CLOSED
+external result validation metadata            ✅ CLOSED
+Core Load / Store                              ✅ CLOSED
+Internal / External Calls                      ✅ CLOSED
+Numeric execution                              ✅ CLOSED
+Control Flow                                   ✅ CLOSED
+Conversions                                    ✅ CLOSED
+Scalar Equality                                ✅ CLOSED
+Composite Layout                               ✅ CLOSED
+Composite Instructions                         ✅ CLOSED
+Structural Equality                            ✅ CLOSED
+SourceMap                                      ✅ CLOSED
+Exact own identities — 21                      ✅ CLOSED
+Exact Instruction variants — 48                ✅ CLOSED
 
-Compiled Program / Bytecode Data             ✅ CLOSED
+Compiled Program / Bytecode Data               ✅ CLOSED
 
 NEXT
-    VM Execution Data
+    VM Execution exact inventory
 ```
