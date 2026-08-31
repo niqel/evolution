@@ -128,6 +128,12 @@ Status: CLOSED
 
 Incluye las invariantes estructurales `.efn` cuya responsabilidad ya quedó cerrada en AST Data, sin absorber identity resolution o type resolution.
 
+La familia exacta está cerrada en [`SYNTAX_FAILURE.md`](./SYNTAX_FAILURE.md):
+
+```text
+SyntaxFailure = 10 variants
+```
+
 ## CPF-007 — SemanticFailure belongs only to Semantic Analyzer responsibility
 
 Status: CLOSED
@@ -264,7 +270,7 @@ CPF-010 one primary deterministic failure v0                      ✅ CLOSED
 
 CompileFailure root                                                ✅ CLOSED
 LexicalFailure exact family                                        ✅ CLOSED — 6 variants
-SyntaxFailure exact family                                         ← NEXT
-SemanticFailure exact family                                       PENDING
+SyntaxFailure exact family                                         ✅ CLOSED — 10 variants
+SemanticFailure exact family                                       ← NEXT
 DiagnosticAnchor exact shape                                       PENDING
 ```
