@@ -1,0 +1,51 @@
+execute_source: {
+  shape: sequence_diagram
+
+  consumer: Consumer
+  source_executor: "agents/source_executor"
+  lexer: "collaborators/lexer"
+  parser: "collaborators/parser"
+  analyzer: "collaborators/semantic_analyzer"
+  lowerer: "collaborators/bytecode_compiler"
+  failure_contextualizer: "tools/contextualize_compile_failure"
+  initializer: "collaborators/execution_initializer"
+  instruction_executor: "collaborators/instruction_executor"
+  external_resolver: "resolvers/external_call_resolver"
+
+  consumer -> source_executor: "EXECUTE_SOURCE(source, invocation_values, catalog, application_bindings)"
+
+  compile_phase: {
+    source_executor -> lexer: "LEX_SOURCE(source)"
+    lexer -> source_executor: "Result<TokenSequence, CompileFailure>"
+
+    source_executor -> parser: "PARSE_TOKENS(&tokens, source)"
+    parser -> source_executor: "Result<Program, CompileFailure>"
+
+    source_executor -> analyzer: "ANALYZE_PROGRAM(&program, catalog)"
+    analyzer -> source_executor: "Result<SemanticProgram, CompileFailure>"
+
+    source_executor -> lowerer: "LOWER_PROGRAM(&semantic_program)"
+    lowerer -> source_executor: "CompiledProgram"
+  }
+
+  compile_failure_alternative: {
+    source_executor -> failure_contextualizer: "CONTEXTUALIZE_COMPILE_FAILURE(compile_failure)"
+    failure_contextualizer -> source_executor: "ExecutionFailure::Compilation"
+    source_executor -> consumer: "Err(ExecutionFailure::Compilation)"
+  }
+
+  execution_phase: {
+    source_executor -> initializer: "INITIALIZE_EXECUTION(&compiled_program, invocation_values, application_bindings)"
+    initializer -> source_executor: "Result<VmExecution, ExecutionFailure>"
+
+    source_executor -> instruction_executor: "EXECUTE_INSTRUCTION(&mut execution) · ordinary / entry Return"
+    instruction_executor -> source_executor: "Ok(None) / Ok(Some(OwnedValue)) / Err(Evaluation)"
+
+    source_executor -> external_resolver: "RESOLVE_EXTERNAL_CALL(&mut execution) · only when CallExternal"
+    external_resolver -> source_executor: "Ok(()) / Err(External)"
+  }
+
+  source_executor -> consumer: "Ok(OwnedValue)"
+
+  source_executor."No llama a Compile Agent ni ExecuteCompiled Agent. Reutiliza directamente las mismas firmas internas. El orden detallado de ejecución ordinaria y CallExternal está en 01-execute-compiled.d2 y 02-call-external.d2."
+}
