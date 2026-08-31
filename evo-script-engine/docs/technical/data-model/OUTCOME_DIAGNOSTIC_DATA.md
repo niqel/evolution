@@ -1,6 +1,6 @@
 # Evo-Script Engine — Outcome / Diagnostic Data
 
-Status: IN ANALYSIS — ROOT + COMPILE FAILURE + DIAGNOSTIC PROVENANCE CLOSED
+Status: IN ANALYSIS — ROOT + COMPILE FAILURE + DIAGNOSTIC PROVENANCE + EXTERNAL CAPABILITY FAILURE CLOSED
 
 Este documento es la autoridad acumulada de `Outcome / Diagnostic Data` para `evo-script-engine` v0.
 
@@ -99,11 +99,15 @@ type ExternalCapability =
     ) -> Result<OwnedValue, ExternalCapabilityFailure>;
 ```
 
-`ExternalCapabilityFailure` pertenece a `Outcome / Diagnostic Data`.
+`ExternalCapabilityFailure` pertenece a `Outcome / Diagnostic Data` y su representación exacta está cerrada en [`EXTERNAL_CAPABILITY_FAILURE.md`](./EXTERNAL_CAPABILITY_FAILURE.md):
+
+```rust
+struct ExternalCapabilityFailure {
+    code: Box<str>,
+}
+```
 
 Una capability externa no retorna `ExecutionFailure` y no puede fabricar failures internas del Engine.
-
-La representación interna exacta de `ExternalCapabilityFailure` permanece pendiente.
 
 ## OD-009 — Engine external failures remain Engine-owned
 
@@ -260,6 +264,48 @@ ExecutionFailure.source_span = None
 
 `SourceSpan` es provenance técnica, no presentación. Line/column/snippet/path se derivan posteriormente por el Consumer cuando dispone del Source Text.
 
+## ExternalCapabilityFailure
+
+Status: CLOSED
+
+La autoridad especializada está en [`EXTERNAL_CAPABILITY_FAILURE.md`](./EXTERNAL_CAPABILITY_FAILURE.md).
+
+Forma cerrada:
+
+```rust
+struct ExternalCapabilityFailure {
+    code: Box<str>,
+}
+```
+
+Reglas `ECF-001..ECF-008` están CLOSED.
+
+Consecuencias:
+
+```text
+ExternalCapabilityFailure               1 own identity
+fields                                  1
+code                                    stable symbolic lowercase snake_case
+universal external error catalog        ❌ NOT INTRODUCED
+Provider/vendor error across ABI        ❌ NOT INTRODUCED
+SourceSpan inside capability failure    ❌ NOT INTRODUCED
+human message / arbitrary details       ❌ NOT INTRODUCED
+```
+
+El adapter de aplicación normaliza el failure físico del Provider antes de cruzar el ABI.
+
+El significado contextual completo se obtiene por:
+
+```text
+SignatureSymbol known by Engine
++
+ExternalCapabilityFailure.code
+```
+
+Si la capability falla durante `CallExternal`, el Engine añade además el `SourceSpan` de la instruction responsable al materializar `ExecutionFailure`.
+
+`MissingBinding` y `ResultContractMismatch` permanecen failures propios del Engine.
+
 ## Compile phase failure map
 
 ```text
@@ -313,6 +359,9 @@ SourceLocation
 SourceId
 Source Text ownership in failure outcomes
 script source location inside ExternalCapabilityFailure
+universal ExternalCapability failure enum
+Provider/vendor error objects across Engine ABI
+human message/details inside ExternalCapabilityFailure
 ```
 
 ## Closure
@@ -340,8 +389,9 @@ Diagnostic provenance / DP-001..DP-010                           ✅ CLOSED — 
 Source Location materialization                                   ✅ CLOSED
 DiagnosticAnchor                                                  ❌ NOT NEEDED v0
 SourceLocation identity                                           ❌ NOT NEEDED v0
+ExternalCapabilityFailure / ECF-001..ECF-008                     ✅ CLOSED — 1 identity
+ExternalCapability exact Rust ABI                                 ✅ CLOSED
 
-ExternalCapabilityFailure exact representation                    ← NEXT
-ExecutionFailure exact family                                     PENDING
+ExecutionFailure exact family                                     ← NEXT
 exact Outcome inventory                                           PENDING
 ```
