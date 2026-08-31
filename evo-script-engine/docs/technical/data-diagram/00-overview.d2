@@ -1,0 +1,53 @@
+direction: right
+
+technical_data_model: {
+  label: "Evo-Script Engine v0 — Technical Data Model"
+
+  source_compile_side: {
+    label: "Source / Compile Side"
+
+    lexical: {
+      label: "Lexical Data\n4 identities\nTokenKind: 50 variants"
+    }
+
+    ast: {
+      label: "AST Data\n31 identities"
+    }
+
+    compilation_dependency: {
+      label: "Compilation Dependency Data\n8 identities\nCatalogTypeRef: 18 variants"
+    }
+
+    semantic: {
+      label: "Semantic Program Data\n33 identities"
+    }
+
+    compiled: {
+      label: "Compiled Program / Bytecode Data\n21 identities\nInstruction: 48 variants"
+    }
+  }
+
+  execution_side: {
+    label: "Execution / Outcome Side"
+
+    vm: {
+      label: "VM Execution Data\n19 identities\nRuntimeValue: 17 variants"
+    }
+
+    outcome: {
+      label: "Outcome / Diagnostic Data\n24 identities"
+    }
+  }
+
+  total: {
+    label: "Exact own technical identities\n140 total across closed owner phases"
+  }
+}
+
+notes: {
+  label: "Diagram Rules"
+  owner_rule: "Each own identity has exactly one owner-phase authority"
+  reused_rule: "Reused identities may appear in other views but are never recounted"
+  behavior_rule: "No Participants, services, methods or behavioral call arrows"
+  authority_rule: "D2 source is canonical; rendered images are derived"
+}
