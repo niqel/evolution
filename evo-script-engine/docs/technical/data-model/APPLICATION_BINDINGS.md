@@ -15,7 +15,7 @@ La autoridad deriva de:
 - `VM_EXECUTION_DATA.md`;
 - `ENGINEERING_PRINCIPLES.md`.
 
-Este bloque define la composición y lookup de bindings. La firma ABI exacta de `ExternalCapability` se cierra en el bloque posterior.
+Este bloque define la composición y lookup de bindings. La semántica del ABI uniforme de `ExternalCapability` queda cerrada en `EXTERNAL_CAPABILITY_ABI.md`; su firma Rust textual final depende del modelo borrowed/owned de `evo-values`.
 
 ## AB-001 — Explicit application capability composition
 
@@ -88,7 +88,7 @@ struct ApplicationBindings {
 }
 ```
 
-`ExternalCapability` es una única function-pointer identity compatible con el ABI uniforme del Engine. Su firma exacta permanece pendiente del siguiente bloque.
+`ExternalCapability` es una única function-pointer identity compatible con el ABI uniforme del Engine.
 
 Consecuencia técnica: `SignatureSymbol` debe soportar las propiedades de key requeridas por `HashMap`; esto no cambia su semántica contractual.
 
@@ -199,7 +199,7 @@ El Engine conoce la capability uniforme suministrada por la aplicación, no el P
 ## Exact Closed Shape
 
 ```rust
-type ExternalCapability = fn(/* exact uniform Engine ABI — NEXT */);
+type ExternalCapability = fn(/* uniform Engine ABI */);
 
 struct ApplicationBindings {
     capabilities: HashMap<SignatureSymbol, ExternalCapability>,
@@ -253,8 +253,10 @@ AB-008 lazy resolution at CallExternal                    ✅ CLOSED
 AB-009 no provider/session/service-locator state          ✅ CLOSED
 
 ApplicationBindings exact model                           ✅ CLOSED
-ExternalCapability uniform ABI                            ← NEXT
-external argument/result materialization                  PENDING
+ExternalCapability ABI semantics                          ✅ CLOSED elsewhere
+Exact ABI value types                                     PENDING — evo-values
+
+evo-values borrowed / owned interchange model             ← NEXT
 VmExecution exact Rust root                               PENDING
 VM Execution exact inventory                              PENDING
 ```
