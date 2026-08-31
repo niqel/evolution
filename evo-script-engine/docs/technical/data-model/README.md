@@ -97,7 +97,7 @@ VM Execution Data                    ✅ STRUCTURAL / INVENTORY CLOSED
 ├── CallFrame                        ✅ CLOSED — 3 fields
 ├── InstructionPointer               ✅ CLOSED
 ├── stepping semantics               ✅ CLOSED
-├── ExternalCapability ABI           ✅ CLOSED — failure type cross-phase pending
+├── ExternalCapability ABI           ✅ CLOSED — failure identity known; shape pending
 ├── Value<'a> / OwnedValue boundary  ✅ CLOSED
 ├── VmExecution exact Rust root      ✅ CLOSED — 5 fields
 ├── Compiled Boundary Value Shape    ✅ CLOSED
@@ -120,10 +120,14 @@ Outcome / Diagnostic Data            ◉ IN PROGRESS
 │       ├── CompositeFailure         ✅ CLOSED — 10 variants
 │       ├── WhenFailure              ✅ CLOSED — 11 variants
 │       └── SignatureMismatchKind    ✅ CLOSED — 6 variants
-├── ExecutionFailure exact family    ← NEXT
-├── ExternalCapabilityFailure shape  PENDING
-├── DiagnosticAnchor exact shape     PENDING
-├── Source Location materialization  PENDING
+├── Diagnostic provenance            ✅ CLOSED — SourceSpan / 0 new identities
+│   ├── CompileFailure span          ✅ CLOSED — mandatory SourceSpan
+│   ├── ExecutionFailure span        ✅ CLOSED — Option<SourceSpan>
+│   ├── DiagnosticAnchor             ❌ NOT NEEDED v0
+│   ├── SourceLocation identity      ❌ NOT NEEDED v0
+│   └── runtime SourceMap materialization ✅ CLOSED
+├── ExternalCapabilityFailure shape  ← NEXT
+├── ExecutionFailure exact family    PENDING
 └── exact outcome inventory          PENDING
 ```
 
@@ -198,6 +202,36 @@ SemanticProgram
 
 `SemanticFailure` no absorbe failures físicos de `.elib`, `.emod`, filesystem o construcción del catálogo. Esas condiciones deben resolverse antes de entregar un `CompilationCatalog` válido al Engine.
 
+## Closed diagnostic provenance boundary
+
+```text
+CompileFailure
+├── kind
+└── source_span: SourceSpan
+
+ExecutionFailure
+├── kind
+└── source_span: Option<SourceSpan>
+```
+
+No existe una identity `DiagnosticAnchor` o `SourceLocation` en v0.
+
+Runtime materialization:
+
+```text
+CallFrame.function + InstructionPointer ordinal
+        ↓
+SourceMap
+        ↓
+SourceSpan
+        ↓
+ExecutionFailure.source_span = Some(span)
+```
+
+Invocation failures que ocurren antes de una `VmExecution` válida usan `source_span = None`.
+
+`SourceSpan` conserva provenance técnica; line/column/snippet/path son presentación derivada por el Consumer cuando dispone del Source Text.
+
 ## Current Documents
 
 ### Lexical Data
@@ -266,6 +300,7 @@ SemanticProgram
 - [`LEXICAL_FAILURE.md`](./LEXICAL_FAILURE.md)
 - [`SYNTAX_FAILURE.md`](./SYNTAX_FAILURE.md)
 - [`SEMANTIC_FAILURE.md`](./SEMANTIC_FAILURE.md)
+- [`DIAGNOSTIC_PROVENANCE.md`](./DIAGNOSTIC_PROVENANCE.md)
 
 ### Normative language amendments used by compiled/runtime model
 
@@ -305,9 +340,19 @@ No se representan methods, inheritance, service classes ni OO interfaces fictici
 ## Next Block
 
 ```text
-ExecutionFailure exact family ← NEXT
+ExternalCapabilityFailure exact representation ← NEXT
 ```
 
-`CompileFailure` está completo. El siguiente bloque debe definir qué puede fallar al entrar y ejecutar un `CompiledProgram`: invocation boundary, evaluation failures y external execution failures, manteniendo separado `ExternalCapabilityFailure` de los failures propios del Engine.
+La provenance diagnóstica ya está cerrada sin nuevas identities. El siguiente bloque debe definir únicamente qué información estructurada puede producir una capability externa cuando su propia operación falla; después esa failure será integrada por `ExecutionFailure`, que agregará la provenance del `CallExternal` responsable.
 
-Después se cerrarán `ExternalCapabilityFailure`, `DiagnosticAnchor`, Source Location materialization y el inventario exacto de Outcome / Diagnostic Data.
+Después:
+
+```text
+ExternalCapabilityFailure
+    ↓
+ExecutionFailure exact family
+    ↓
+Outcome exact inventory
+    ↓
+Outcome / Diagnostic Data CLOSED
+```
