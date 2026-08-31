@@ -1,6 +1,6 @@
 # Evo-Script Engine — Technical Documentation
 
-Status: TECHNICAL DATA MODEL — IN PROGRESS
+Status: RUST SIGNATURES / PARTICIPANT DESIGN — IN PROGRESS
 
 Este directorio contiene la documentación técnica de `evo-script-engine`.
 
@@ -78,9 +78,11 @@ technical/
 ├── README.md
 ├── TECHNICAL_DESIGN.md
 ├── data-model/
-│   └── Technical Data Model + Technical Data Diagrams
+│   └── Technical Data Model
+├── data-diagram/
+│   └── Technical Data Diagrams D2
 ├── signatures/
-│   └── Rust Signatures
+│   └── Rust Signatures + Participant Design
 ├── module-signatures/
 │   └── Module Signature Diagrams
 └── sequences/
@@ -100,12 +102,15 @@ technical/
 ```text
 Functional Design                         ✅ CLOSED / REVALIDATED
 Technical Design                          ✅ CLOSED / REVALIDATED
-Technical Data Model                      ← IN PROGRESS
-├── Lexical Data                          ✅ CLOSED
-└── AST Data                              ← IN ANALYSIS
-Technical Data Diagram                    PENDING
-Rust Signatures                           PENDING
-Participants                              PENDING
+Technical Data Model                      ✅ CLOSED
+Technical Data Diagram                    ✅ CLOSED — 9 D2 views
+Rust Signatures root                      ✅ CLOSED — RSD-001..RSD-010
+Compile Participant Design                ← IN PROGRESS
+├── lex_source                            ✅ CLOSED — RSD-011..RSD-013
+├── parse_tokens                          ← NEXT
+├── analyze_program                       PENDING
+└── lower_program                         PENDING
+Execution Participant Design              PENDING
 Module Signature Diagram                  PENDING
 D2 Sequence Diagrams                      PENDING
 Implementation Tasks                      PENDING
@@ -121,6 +126,7 @@ Decisiones técnicas estructurales cerradas incluyen:
 - external Value ownership policy;
 - Evo-Script-driven VM;
 - Compilation Working State policy;
-- `.efn` / Host State separation.
+- `.efn` / Host State separation;
+- Earliest Responsible Failure.
 
-El trabajo actual continúa en `data-model/AST_DATA.md`: exact AST inventory y representación Rust.
+El trabajo actual continúa en `signatures/COMPILE_PARTICIPANT_DESIGN.md` cerrando las firmas y Participants internos de Compile. No se reabre el Technical Data Model salvo que una contradicción técnica demostrable obligue a hacerlo explícitamente.
