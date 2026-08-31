@@ -1,8 +1,8 @@
 # Evo-Script Engine — Compile Participant Design
 
-Status: COMPILE PARTICIPANT DESIGN — IN PROGRESS
+Status: COMPILE PARTICIPANT DESIGN — CLOSED
 
-Este documento cierra progresivamente las Rust Signatures y Participants internos requeridos por los Use Cases `Compile` y `ExecuteSource` para la fase de compilación.
+Este documento cierra las Rust Signatures y Participants internos requeridos por los Use Cases `Compile` y `ExecuteSource` para la fase de compilación.
 
 La autoridad deriva de:
 
@@ -16,7 +16,7 @@ Los nombres de artifacts, Participants y conceptos técnicos canónicos se manti
 
 ## Compile participant tree
 
-La dirección raíz cerrada es:
+Árbol cerrado:
 
 ```text
 Compile Agent
@@ -58,8 +58,6 @@ Status: CLOSED
 
 `lex_source` es un Collaborator interno de compilación.
 
-Firma cerrada:
-
 ```rust
 pub type Lex =
     for<'source> fn(
@@ -70,40 +68,24 @@ pub type Lex =
     >;
 ```
 
-Responsabilidad:
-
-```text
-Source Text
-    ↓
-lex_source
-    ├── success → TokenSequence<'source>
-    └── failure → CompileFailure {
-                     kind: Lexical(...),
-                     source_span,
-                 }
-```
-
 Invariantes:
 
 - recibe únicamente `Source Text`;
-- no recibe `CompilationCatalog`;
-- no recibe `ApplicationBindings`;
+- no recibe `CompilationCatalog` ni `ApplicationBindings`;
 - no cruza fronteras técnicas externas;
 - en éxito materializa `TokenSequence<'source>`;
-- el resultado conserva borrow hacia el `Source Text` mediante los lexemes de `Token<'source>`;
+- el resultado conserva borrow hacia `Source Text` mediante los lexemes de `Token<'source>`;
 - todo failure normal pertenece exclusivamente a `CompileFailureKind::Lexical(...)`;
-- `lex_source` materializa directamente `CompileFailure` porque posee la información necesaria para conservar provenance mediante `SourceSpan`;
-- no se introduce un error intermedio `LexerError`, `LocatedLexicalFailure` o equivalente sin semántica propia.
+- `lex_source` materializa directamente `CompileFailure` con `SourceSpan`;
+- no existe error intermedio sin semántica propia.
 
 ## RSD-013 — `lex_source` no requiere Tools arquitectónicas en v0
 
 Status: CLOSED
 
-Las operaciones necesarias para reconocer identifiers, literals, reserved forms, operators, structural symbols, whitespace y comments pertenecen a la responsabilidad interna del Lexer.
+El reconocimiento de identifiers, literals, reserved forms, operators, structural symbols, whitespace y comments pertenece a la responsabilidad interna del Lexer.
 
-Su posible separación en funciones, métodos, scanner state o estructuras privadas es una decisión de implementación y no crea Participants arquitectónicos.
-
-También pertenece a la implementación lexical la construcción de `Token` que preserve el invariante:
+También pertenece a implementación lexical preservar:
 
 ```text
 Token.lexeme
@@ -111,20 +93,9 @@ Token.lexeme
 &SourceText[Token.span.start .. Token.span.end]
 ```
 
-No se introducen en v0:
+No se introducen en v0 `TokenFactory`, `TokenBuilder` ni scanner Tools por categoría lexical.
 
-```text
-TokenFactory
-TokenBuilder
-IdentifierScanner Tool
-NumericScanner Tool
-StringScanner Tool
-KeywordClassifier Tool
-```
-
-mientras no aparezca una responsabilidad pequeña, genérica e independiente del Lexer que justifique dicha identidad.
-
-Inventario arquitectónico cerrado para `lex_source`:
+Inventario:
 
 ```text
 Collaborator   1  lex_source
@@ -134,15 +105,13 @@ Requester      0
 Tool           0
 ```
 
-Esto no prescribe una función monolítica. El Collaborator puede poseer tantos mecanismos privados como requiera una implementación clara y correcta.
+Esto no prescribe una función monolítica; puede existir cualquier cantidad justificada de funciones, métodos o working state privados.
 
 ## RSD-014 — Firma exacta de `parse_tokens`
 
 Status: CLOSED
 
-`parse_tokens` es un Collaborator interno de compilación responsable de transformar una `TokenSequence<'source>` léxicamente válida en un `Program<'source>` estructuralmente válido.
-
-Firma cerrada:
+`parse_tokens` transforma una `TokenSequence<'source>` léxicamente válida en un `Program<'source>` estructuralmente válido.
 
 ```rust
 pub type Parse =
@@ -155,7 +124,7 @@ pub type Parse =
     >;
 ```
 
-El primer argumento es el working input que Parser interpreta. El segundo argumento es el `Source Text` original correspondiente a esa misma `TokenSequence` y existe únicamente como dependencia explícita de provenance fuente cuando la posición responsable no puede recuperarse de un Token existente.
+El primer argumento es el working input del Parser. El segundo es el `Source Text` original correspondiente a esa misma `TokenSequence` y existe únicamente como dependencia explícita de provenance cuando la posición responsable no puede recuperarse de un Token existente.
 
 Caso determinante:
 
@@ -167,19 +136,18 @@ MissingPublicFunction
     → SourceSpan [source_len, source_len)
 ```
 
-Como `TokenSequence` no materializa `EOF`, whitespace ni comments, la longitud total del Source Text no puede derivarse correctamente desde los Tokens. `Diagnostic Provenance` exige que ausencias detectadas en EOF se materialicen exactamente en `[source_len, source_len)`.
+Como `TokenSequence` no materializa `EOF`, whitespace ni comments, la longitud total del Source Text no puede derivarse correctamente desde los Tokens.
 
 Invariantes:
 
 - `TokenSequence` y `Source Text` corresponden al mismo source coordinate space;
-- Parser no vuelve a tokenizar, escanear ni reinterpretar lexicalmente el `Source Text`;
-- el acceso al `Source Text` no convierte parsing en una segunda fase lexical;
-- Parser utiliza los Tokens como autoridad de reconocimiento lexical;
-- `Source Text` aporta únicamente la extensión/coordenadas fuente necesarias para provenance que no exista en un Token materializado;
+- Parser no vuelve a tokenizar, escanear ni reinterpretar lexicalmente el Source Text;
+- los Tokens son la autoridad de reconocimiento lexical;
+- Source Text aporta únicamente extensión/coordenadas requeridas para provenance no recuperable desde Tokens;
 - en éxito produce `Program<'source>`;
 - todo failure normal pertenece exclusivamente a `CompileFailureKind::Syntax(...)`;
-- Parser materializa directamente `CompileFailure` con el `SourceSpan` responsable;
-- no se introduce un error intermedio `ParserError`, `LocatedSyntaxFailure` o equivalente sin semántica propia.
+- Parser materializa directamente `CompileFailure` con `SourceSpan`;
+- no existe error intermedio sin semántica propia.
 
 ## RSD-015 — Ownership y Participants de `parse_tokens`
 
@@ -193,32 +161,18 @@ Source Text
     │ borrowed lexemes
     │
 TokenSequence<'source>
-    │ observed by Parser
+    │ observed
     ▼
 Program<'source>
     ├── owns AST containers / tree structure
     └── borrows textual lexemes from Source Text
 ```
 
-El AST no borrowea el almacenamiento del `Vec<Token<'source>>`.
+El AST no borrowea el almacenamiento de `Vec<Token<'source>>`. Tras success, `TokenSequence` puede destruirse y `Program<'source>` continúa válido mientras `Source Text` siga vivo.
 
-Por tanto:
+Grammar navigation, lookahead, precedence, grouping, construcción de expressions, validación estructural y cursor son mecanismos privados del Parser.
 
-```text
-parse_tokens success
-    ↓
-Program<'source>
-    ↓
-TokenSequence puede destruirse
-    ↓
-Program continúa válido mientras Source Text siga vivo
-```
-
-Las operaciones internas de grammar navigation, lookahead, precedence, grouping, construcción de expressions, validación de cardinalidades estructurales y manejo del cursor pertenecen a la implementación privada del Parser.
-
-No se promueven automáticamente a Tools o Collaborators independientes.
-
-Inventario arquitectónico cerrado para `parse_tokens`:
+Inventario:
 
 ```text
 Collaborator   1  parse_tokens
@@ -228,15 +182,11 @@ Requester      0
 Tool           0
 ```
 
-`parse_tokens` tampoco recibe `CompilationCatalog` ni `ApplicationBindings`; identity resolution, type resolution y signature resolution pertenecen a `analyze_program`.
-
 ## RSD-016 — Firma exacta de `analyze_program`
 
 Status: CLOSED
 
-`analyze_program` es un Collaborator interno de compilación responsable de transformar un `Program<'source>` sintácticamente válido en un `SemanticProgram` completamente resuelto.
-
-Firma cerrada:
+`analyze_program` transforma un `Program<'source>` sintácticamente válido en un `SemanticProgram` completamente resuelto.
 
 ```rust
 pub type Analyze =
@@ -249,31 +199,17 @@ pub type Analyze =
     >;
 ```
 
-Responsabilidad:
-
-```text
-Program<'source>
-+ borrowed validated CompilationCatalog
-        ↓
-analyze_program
-        ├── success → SemanticProgram
-        └── failure → CompileFailure {
-                         kind: Semantic(...),
-                         source_span,
-                     }
-```
-
 Invariantes:
 
-- `Program<'source>` es observed mediante borrow;
+- `Program<'source>` se observa mediante borrow;
 - `CompilationCatalog` es dependencia técnica explícita, borrowed e inmutable;
 - el catálogo ya fue construido y validado fuera de `evo-script-engine`;
-- `analyze_program` no realiza filesystem I/O, module discovery, Provider discovery ni runtime binding;
+- no realiza filesystem I/O, module discovery, Provider discovery ni runtime binding;
 - todo failure normal pertenece exclusivamente a `CompileFailureKind::Semantic(...)`;
-- catalog-construction/integration failures no se reinterpretan como `CompileFailure` del Source Text;
-- en éxito, todas las identidades necesarias para lowering están resueltas dentro de `SemanticProgram`;
-- el Bytecode Compiler no vuelve a resolver nombres, tipos, imports o Signatures;
-- no se introduce un error intermedio `SemanticAnalyzerError`, `LocatedSemanticFailure` o equivalente sin semántica propia.
+- catalog-construction/integration failures permanecen fuera de `CompileFailure`;
+- en éxito todas las identidades necesarias para lowering están resueltas;
+- Bytecode Compiler no vuelve a resolver nombres, tipos, imports o Signatures;
+- no existe error intermedio sin semántica propia.
 
 ## RSD-017 — Ownership y Participants de `analyze_program`
 
@@ -282,34 +218,22 @@ Status: CLOSED
 `SemanticProgram` es owned Compilation Working State y no conserva borrows hacia AST ni `CompilationCatalog`.
 
 ```text
-Source Text
-   ▲
-   │ AST lexemes borrow
 Program<'source>
-   │ observed
-   ▼
+      │ observed
+      ▼
 analyze_program ◄── &CompilationCatalog
-   │
-   ▼
+      │
+      ▼
 SemanticProgram
-   ├── owns semantic structures
-   ├── owns canonical data that must survive analysis
-   └── preserves SourceSpan where required
+      ├── owns semantic structures
+      └── preserves SourceSpan where required
 ```
 
-Por tanto, tras success:
+Tras success, AST puede destruirse y `CompilationCatalog` deja de ser requerido por lowering.
 
-```text
-Program / AST          puede destruirse
-CompilationCatalog     deja de ser requerido por lowering
-SemanticProgram        continúa autónomo
-```
+Symbol collection, name/type resolution, type checking, Signature validation, call-graph validation, composite validation, `when` validation y materialización de semantic identities pertenecen a la responsabilidad completa del Semantic Analyzer. Pueden implementarse mediante múltiples funciones, estructuras o pases privados sin convertirse automáticamente en Collaborators independientes.
 
-Las tareas internas de symbol collection, name resolution, type resolution, type checking, Signature validation, call-graph validation, composite validation, `when` validation y materialización de semantic identities forman parte de una sola responsabilidad arquitectónica: producir un `SemanticProgram` completamente resuelto o un `SemanticFailure` preciso.
-
-Estas tareas pueden organizarse en múltiples funciones, estructuras de working state o pases privados de implementación. No se promueven por ese hecho a Collaborators independientes, porque no existe un producto arquitectónico intermedio cerrado entre ellos y el Semantic Analyzer es la frontera que posee la responsabilidad completa de resolución semántica.
-
-Inventario arquitectónico cerrado para `analyze_program`:
+Inventario:
 
 ```text
 Collaborator   1  analyze_program
@@ -319,34 +243,138 @@ Requester      0
 Tool           0
 ```
 
-`CompilationCatalog` no es Contract: es dato técnico validado suministrado explícitamente. Observarlo no cruza una frontera técnica de Provider.
+`CompilationCatalog` no es Contract: es dato técnico validado suministrado explícitamente.
 
-No se identifica en v0 una Tool semántica independiente demostrada. Helpers para naming conventions, lookups, materialización de descriptors o validación de grafos permanecen privados mientras su responsabilidad siga perteneciendo exclusivamente al Semantic Analyzer.
+## RSD-018 — Firma exacta de `lower_program`
 
-## Compile participant progress
+Status: CLOSED
+
+`lower_program` es un Collaborator interno de compilación responsable de transformar un `SemanticProgram` válido en el `CompiledProgram` ejecutable persistente de v0.
+
+Firma cerrada:
+
+```rust
+pub type Lower =
+    fn(
+        &SemanticProgram,
+    ) -> CompiledProgram;
+```
+
+Invariantes:
+
+- recibe únicamente un `SemanticProgram` válido;
+- no recibe AST, `Source Text`, `CompilationCatalog` ni `ApplicationBindings`;
+- no realiza name resolution, type resolution o semantic validation normal;
+- produce un `CompiledProgram` owned que puede sobrevivir a todo Compilation Working State;
+- transforma semantic identities en mechanisms ejecutables, constants, instructions, external symbols, boundary value shapes y SourceMap según el Technical Data Model;
+- no conserva borrow hacia `SemanticProgram`.
+
+## RSD-019 — `lower_program` no posee failure normal
+
+Status: CLOSED
+
+Después de `analyze_program` success, un `SemanticProgram` válido debe poder bajarse a `CompiledProgram`.
+
+Por tanto la firma no retorna `Result`.
+
+No existen como failures normales de lenguaje:
+
+```text
+BytecodeFailure
+LoweringFailure
+CodeGenerationFailure
+CompilerInternalFailure
+```
+
+Si lowering no puede representar un `SemanticProgram` que satisface los invariantes cerrados, existe una violación interna del compiler, no un `CompileFailure` normal atribuible al Source Text.
+
+Las operaciones internas para construir functions, instructions, constants, external symbols, boundary shapes, slots, source maps o equality plans pertenecen a implementación privada del lowering mientras no aparezca una responsabilidad arquitectónica independiente demostrada.
+
+Inventario:
+
+```text
+Collaborator   1  lower_program
+Contract       0
+Resolver       0
+Requester      0
+Tool           0
+```
+
+## RSD-020 — Orquestación exacta del Compile Agent
+
+Status: CLOSED
+
+El Agent de `Compile` implementa exactamente la firma pública `Compile` y coordina los cuatro Collaborators cerrados.
+
+Flujo conceptual:
+
+```rust
+fn compile(
+    source: &str,
+    catalog: &CompilationCatalog,
+) -> CompileOutcome {
+    let tokens = lex_source(source)?;
+    let program = parse_tokens(&tokens, source)?;
+    let semantic_program = analyze_program(&program, catalog)?;
+    let compiled_program = lower_program(&semantic_program);
+    Ok(compiled_program)
+}
+```
+
+La representación anterior documenta la orquestación; la implementación concreta deberá enlazar las signatures mediante los módulos/bindings tipados definidos en Module Design.
+
+El Agent:
+
+```text
+NO tokeniza
+NO parsea gramática
+NO resuelve significado
+NO genera bytecode
+NO llama otro Agent
+NO cruza Providers
+```
+
+Únicamente coordina el pipeline y propaga el primer `CompileFailure` producido por Lexer, Parser o Semantic Analyzer.
+
+## Compile participant closure
 
 ```text
 Compile Agent
 ├── lex_source          ✅ CLOSED
 ├── parse_tokens        ✅ CLOSED
 ├── analyze_program     ✅ CLOSED
-└── lower_program       ← NEXT
+└── lower_program       ✅ CLOSED
 ```
 
-## Closure parcial
+Inventario interno de Compile v0:
 
 ```text
-RSD-011 Tool classification rule             ✅ CLOSED
-RSD-012 lex_source exact signature           ✅ CLOSED
-RSD-013 lex_source Tool inventory            ✅ CLOSED
-RSD-014 parse_tokens exact signature         ✅ CLOSED
-RSD-015 parse_tokens ownership/inventory     ✅ CLOSED
-RSD-016 analyze_program exact signature      ✅ CLOSED
-RSD-017 analyze_program ownership/inventory  ✅ CLOSED
+Use Case        1  Compile
+Agent           1  compiler / compile
+Collaborators   4  lex_source, parse_tokens, analyze_program, lower_program
+Contracts       0
+Resolvers       0
+Requesters      0
+Tools           0
+```
 
-Compile participant design                   ← IN PROGRESS
-Execution participant design                 PENDING
-Module Signature Diagrams                    AFTER PARTICIPANTS
-D2 Sequence Diagrams                         AFTER SIGNATURES/PARTICIPANTS
-Implementation Tasks                         AFTER DIAGRAMS
+`ExecuteSource` reutiliza directamente estas cuatro signatures bajo RSD-010; no invoca `Compile Agent`.
+
+## Closure
+
+```text
+RSD-011..RSD-020                    ✅ CLOSED
+Compile root signature              ✅ CLOSED
+Compile Agent orchestration         ✅ CLOSED
+Compile Collaborator signatures     ✅ CLOSED — 4
+Compile Contract inventory          ✅ 0
+Compile Resolver inventory          ✅ 0
+Compile Requester inventory         ✅ 0
+Compile Tool inventory              ✅ 0
+
+Compile Participant Design          ✅ CLOSED
+Execution Participant Design        ← NEXT
+Module Signature Diagrams           AFTER PARTICIPANTS
+D2 Sequence Diagrams                AFTER SIGNATURES/PARTICIPANTS
+Implementation Tasks                AFTER DIAGRAMS
 ```
