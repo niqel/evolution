@@ -51,7 +51,7 @@ Status: CLOSED
 La provenance fuente pertenece a:
 
 ```text
-CompileFailure.diagnostic
+CompileFailure.source_span
 ```
 
 No se embeben `SourceSpan`, line/column ni posiciones dentro de cada variant léxica.
@@ -62,14 +62,14 @@ Status: CLOSED
 
 Todo `LexicalFailure` producido por `Compile` posee una ubicación fuente determinable.
 
-Por tanto, para esta familia aplica la invariante conceptual:
+Por tanto, para esta familia aplica la invariante:
 
 ```text
 CompileFailureKind::Lexical(...)
-    ⇒ diagnostic = Some(...)
+    ⇒ CompileFailure.source_span exists
 ```
 
-La forma exacta de `DiagnosticAnchor` se define posteriormente en `Outcome / Diagnostic Data`.
+La provenance exacta está cerrada en [`DIAGNOSTIC_PROVENANCE.md`](./DIAGNOSTIC_PROVENANCE.md) y reutiliza directamente `SourceSpan`.
 
 ## LF-004 — UnrecognizedCharacter
 
@@ -89,20 +89,14 @@ La failure conserva únicamente el carácter ofensivo como payload mínimo estru
 
 Status: CLOSED
 
-```rust
-InvalidIdentifier
-```
-
-representa una candidata a identifier que viola la gramática léxica oficial:
+`InvalidIdentifier` representa una candidata a identifier que viola la gramática léxica oficial:
 
 ```text
 identifier
     := ascii_letter (ascii_letter | digit | "_")*
 ```
 
-La convención semántica de nombres (`snake_case`, `PascalCase`) **no** pertenece al Lexer.
-
-Por tanto:
+La convención semántica de nombres (`snake_case`, `PascalCase`) no pertenece al Lexer.
 
 ```text
 invalid identifier character/form
@@ -116,11 +110,7 @@ valid identifier grammar + wrong naming convention
 
 Status: CLOSED
 
-```rust
-MalformedNumericLiteral
-```
-
-representa una candidata a literal numérico que no satisface ninguna forma canónica válida de integer, decimal o scientific literal.
+`MalformedNumericLiteral` representa una candidata a literal numérico que no satisface ninguna forma canónica válida de integer, decimal o scientific literal.
 
 Incluye forms lexicalmente mal formadas como exponentes incompletos, separadores `_` prohibidos o sufijos numéricos no definidos.
 
@@ -161,8 +151,6 @@ physical newline appears before closing quote
     → PhysicalNewlineInStringLiteral
 ```
 
-No se agregan aliases redundantes como `InvalidStringLiteral` para ocultar estas causas precisas.
-
 ## LF-008 — Unicode string content is valid; Compile receives Source Text
 
 Status: CLOSED
@@ -177,9 +165,7 @@ InvalidUnicodeString
 SourceEncodingFailure
 ```
 
-porque el Use Case `Compile` recibe **Source Text**, no bytes físicos que deban decodificarse.
-
-La decodificación bytes → UTF-8 Source Text pertenece a una frontera anterior del Host/FS si existe.
+porque el Use Case `Compile` recibe Source Text, no bytes físicos que deban decodificarse.
 
 ## LF-009 — Valid Tokens forming invalid grammar belong to SyntaxFailure
 
@@ -194,16 +180,6 @@ valid Tokens
 ```
 
 El Lexer no infiere intención del programador ni rol sintáctico.
-
-Ejemplos conceptuales:
-
-```text
-+10
-```
-
-puede lexicalizarse como `Plus` + numeric literal aunque unary `+` no exista.
-
-Igualmente una secuencia como `/*` puede estar formada por Tokens reconocibles aun cuando Evo-Script no posea comentario multilínea.
 
 ## LF-010 — No copied lexeme/source fragment in v0
 
@@ -224,10 +200,10 @@ La combinación:
 ```text
 structured failure meaning
 +
-diagnostic provenance
+CompileFailure.source_span
 ```
 
-es suficiente para identificar el source original cuando el Consumer dispone de él.
+es suficiente para identificar la región fuente responsable sin acoplar la failure al Source Text.
 
 Solo se conserva payload mínimo cuando aporta significado técnico real, como el `char` ofensivo o el código de escape desconocido.
 
@@ -247,7 +223,7 @@ Lexer
            ↓
        CompileFailure {
            kind: Lexical(...),
-           diagnostic: Some(...),
+           source_span,
        }
 ```
 
@@ -266,6 +242,8 @@ naming-convention failures in Lexer
 SourceSpan inside each lexical variant
 copied lexeme payloads
 LexicalFailure<'source>
+DiagnosticAnchor
+SourceLocation
 ```
 
 ## Closure
@@ -283,7 +261,7 @@ LF-009 valid Tokens + invalid grammar → SyntaxFailure            ✅ CLOSED
 LF-010 no copied lexeme/source fragment                          ✅ CLOSED
 
 LexicalFailure exact family                                      ✅ CLOSED — 6 variants
-SyntaxFailure exact family                                       ← NEXT
-SemanticFailure exact family                                     PENDING
-DiagnosticAnchor exact shape                                     PENDING
+SyntaxFailure exact family                                       ✅ CLOSED elsewhere
+SemanticFailure exact family                                     ✅ CLOSED elsewhere
+Diagnostic provenance                                            ✅ CLOSED — SourceSpan
 ```
