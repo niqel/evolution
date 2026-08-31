@@ -156,7 +156,11 @@ VM Execution Data                ← IN ANALYSIS
 ├── active IP validity           ✅ CLOSED
 ├── branch / sequential stepping ✅ CLOSED
 ├── call / return stepping       ✅ CLOSED
-└── ExternalCapability uniform ABI ← NEXT
+├── ExternalCapability ABI semantics ✅ CLOSED
+├── borrowed external arguments ✅ CLOSED
+├── owned external success result ✅ CLOSED
+├── external N→1 commit-on-success ✅ CLOSED
+└── evo-values borrowed / owned interchange model ← NEXT
 
 Outcome / Diagnostic Data        PENDING
 ```
@@ -212,6 +216,7 @@ Outcome / Diagnostic Data        PENDING
 - [`CALL_FRAME.md`](./CALL_FRAME.md) — `CallFrame` exacto de tres fields, `InstructionPointer`, `frame_base`, `operand_base` derivado y suspensión del caller sobre `Call`.
 - [`INSTRUCTION_POINTER_STEPPING.md`](./INSTRUCTION_POINTER_STEPPING.md) — valid IP invariant, commit-after-success, sequential/branch stepping y transitions exactas de `Call`, `Return` y `CallExternal`.
 - [`APPLICATION_BINDINGS.md`](./APPLICATION_BINDINGS.md) — `HashMap<SignatureSymbol, ExternalCapability>`, composición explícita reusable y resolución lazy de `CallExternal`.
+- [`EXTERNAL_CAPABILITY_ABI.md`](./EXTERNAL_CAPABILITY_ABI.md) — ABI uniforme por function pointer, borrowed arguments, owned success result y commit `N → 1` después de success.
 
 ### Normative language amendments used by compiled/runtime model
 
@@ -253,7 +258,7 @@ La metodología global se define en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../..
 ## Next Block
 
 ```text
-ExternalCapability uniform ABI ← NEXT
+evo-values borrowed / owned interchange model ← NEXT
 ```
 
-Aquí se cerrará la calling convention uniforme que permite a `CallExternal` prestar argumentos ejecutables a una capability heterogénea y materializar exactamente un resultado dentro de `VmExecution`, preservando borrowing cuando alcance y ownership cuando el resultado deba sobrevivir.
+Aquí se definirá la representación completa que permite observar un `RuntimeValue` como borrowed `Value<'a>` y transferir un resultado externo owned hacia `VmExecution` como `OwnedValue`, cubriendo todas las familias de Value que Evo-Script v0 ya cerró.
