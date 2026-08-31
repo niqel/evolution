@@ -1,0 +1,69 @@
+direction: right
+
+execute_compiled_use_case: {
+  label: "<<Use Case Module>>\ndefinitions/use_cases/execute_compiled.rs\n\nExecuteCompiled\nfor<'compiled, 'value, 'bindings> fn(\n  &'compiled CompiledProgram,\n  &'value [Value<'value>],\n  &'bindings ApplicationBindings\n) -> ExecutionOutcome"
+}
+
+executor_agent: {
+  label: "<<Agent Module>>\nagents/compiled_program_executor.rs\n\nexecute_compiled(...) -> ExecutionOutcome\nEXECUTE_COMPILED: ExecuteCompiled = execute_compiled"
+}
+
+initializer: {
+  label: "<<Collaborator Module>>\ncollaborators/execution_initializer.rs\n\nInitialize\ninitialize_execution(...)\nINITIALIZE_EXECUTION: Initialize = initialize_execution"
+}
+
+instruction_executor: {
+  label: "<<Collaborator Module>>\ncollaborators/instruction_executor.rs\n\nExecuteInstruction\nexecute_instruction(...)\nEXECUTE_INSTRUCTION: ExecuteInstruction = execute_instruction"
+}
+
+external_resolver: {
+  label: "<<Resolver Module>>\nresolvers/external_call_resolver.rs\n\nResolveExternalCall\nresolve_external_call(...)\nRESOLVE_EXTERNAL_CALL: ResolveExternalCall = resolve_external_call\ninvokes ExternalCapability boundary"
+}
+
+matches_value_shape: {
+  label: "<<Tool Module>>\ntools/matches_value_shape.rs\nMatchesValueShape"
+}
+
+materialize_value: {
+  label: "<<Tool Module>>\ntools/materialize_value.rs\nMaterializeValue"
+}
+
+own_runtime_value: {
+  label: "<<Tool Module>>\ntools/own_runtime_value.rs\nOwnRuntimeValue"
+}
+
+locate_source_span: {
+  label: "<<Tool Module>>\ntools/locate_source_span.rs\nLocateSourceSpan"
+}
+
+observe_runtime_value: {
+  label: "<<Tool Module>>\ntools/observe_runtime_value.rs\nObserveRuntimeValue"
+}
+
+matches_owned_value_shape: {
+  label: "<<Tool Module>>\ntools/matches_owned_value_shape.rs\nMatchesOwnedValueShape"
+}
+
+materialize_owned_value: {
+  label: "<<Tool Module>>\ntools/materialize_owned_value.rs\nMaterializeOwnedValue"
+}
+
+execute_compiled_use_case -> executor_agent: "implemented by"
+executor_agent -> initializer: "coordinates"
+executor_agent -> instruction_executor: "coordinates when current instruction != CallExternal"
+executor_agent -> external_resolver: "resolves through when current instruction = CallExternal"
+
+initializer -> matches_value_shape: "uses"
+initializer -> materialize_value: "uses"
+
+instruction_executor -> own_runtime_value: "uses on entry Return"
+instruction_executor -> locate_source_span: "uses on EvaluationFailure"
+
+external_resolver -> observe_runtime_value: "uses for arguments"
+external_resolver -> matches_owned_value_shape: "uses for external result"
+external_resolver -> materialize_owned_value: "uses after result validation"
+external_resolver -> locate_source_span: "uses on External failure"
+
+notes: {
+  label: "ExecuteCompiled Module Rules\nAgent owns execution loop\nCallExternal is Resolver boundary\nRequester: 0\nAdditional Contract type: 0\nTools: 7 unique"
+}
