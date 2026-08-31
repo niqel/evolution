@@ -1,0 +1,33 @@
+direction: right
+
+lexical: {
+  label: "Lexical Data · owner · 4 identities"
+
+  TokenKind: {
+    label: "<<enum>> TokenKind\n50 variants"
+  }
+
+  SourceSpan: {
+    label: "<<struct>> SourceSpan\nstart: usize\nend: usize\n[start, end)"
+  }
+
+  Token: {
+    label: "<<struct>> Token<'source>\nkind: TokenKind\nlexeme: &'source str\nspan: SourceSpan"
+  }
+
+  TokenSequence: {
+    label: "<<alias>> TokenSequence<'source>\nVec<Token<'source>>"
+  }
+}
+
+lexical.Token -> lexical.TokenKind: "contains · 1"
+lexical.Token -> lexical.SourceSpan: "contains · 1"
+lexical.TokenSequence -> lexical.Token: "owns · 0..N ordered"
+
+notes: {
+  label: "Lexical Data Boundaries"
+  lexeme: "lexeme is a borrowed &str field; no Lexeme identity is introduced"
+  source: "Token.lexeme borrows Source Text; Source Text is not counted as a Lexical Data identity"
+  eof: "EOF and Invalid are not TokenKind variants"
+  whitespace: "Whitespace/comments are not normal Token identities"
+}
