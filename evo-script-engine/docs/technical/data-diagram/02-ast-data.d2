@@ -1,0 +1,152 @@
+direction: right
+
+lexical_reused: {
+  label: "Lexical Data · reused"
+  SourceSpan: { label: "<<struct>> SourceSpan" }
+}
+
+ast: {
+  label: "AST Data · owner · 31 identities"
+
+  foundational: {
+    label: "Foundational · 4"
+    Identifier: { label: "<<struct>> Identifier<'source>" }
+    QualifiedName: { label: "<<struct>> QualifiedName<'source>" }
+    Visibility: { label: "<<enum>> Visibility\n2 variants" }
+    TypedBinding: { label: "<<struct>> TypedBinding<'source>" }
+  }
+
+  top_level: {
+    label: "Top-level · 3"
+    Program: { label: "<<struct>> Program<'source>" }
+    ImportDeclaration: { label: "<<struct>> ImportDeclaration<'source>" }
+    Declaration: { label: "<<enum>> Declaration<'source>\n3 variants" }
+  }
+
+  types: {
+    label: "Local Type Definitions · 4"
+    StructDefinition: { label: "<<struct>> StructDefinition<'source>" }
+    FieldDefinition: { label: "<<struct>> FieldDefinition<'source>" }
+    EnumDefinition: { label: "<<struct>> EnumDefinition<'source>" }
+    EnumVariant: { label: "<<enum>> EnumVariant<'source>\n3 variants" }
+  }
+
+  functions: {
+    label: "Functions / Body · 6"
+    FunctionDefinition: { label: "<<struct>> FunctionDefinition<'source>" }
+    Parameter: { label: "<<enum>> Parameter<'source>\n2 variants" }
+    FunctionBody: { label: "<<struct>> FunctionBody<'source>" }
+    BodyStatement: { label: "<<enum>> BodyStatement<'source>\n2 variants" }
+    LetBinding: { label: "<<struct>> LetBinding<'source>" }
+    OperationStatement: { label: "<<enum>> OperationStatement<'source>\n2 variants" }
+  }
+
+  expressions: {
+    label: "Expressions · 10"
+    Expression: { label: "<<struct>> Expression<'source>" }
+    ExpressionKind: { label: "<<enum>> ExpressionKind<'source>\n10 variants" }
+    LiteralKind: { label: "<<enum>> LiteralKind\n4 variants" }
+    UnaryOperator: { label: "<<enum>> UnaryOperator\n2 variants" }
+    BinaryOperator: { label: "<<enum>> BinaryOperator\n13 variants" }
+    FunctionCall: { label: "<<struct>> FunctionCall<'source>" }
+    FieldInitializer: { label: "<<struct>> FieldInitializer<'source>" }
+    EnumConstruction: { label: "<<enum>> EnumConstruction<'source>\n3 variants" }
+    Pipeline: { label: "<<struct>> Pipeline<'source>" }
+    PipelineStage: { label: "<<struct>> PipelineStage<'source>" }
+  }
+
+  when_data: {
+    label: "When · 4"
+    WhenExpression: { label: "<<struct>> WhenExpression<'source>" }
+    WhenCorrespondence: { label: "<<struct>> WhenCorrespondence<'source>" }
+    WhenPattern: { label: "<<enum>> WhenPattern<'source>\n3 variants" }
+    PatternField: { label: "<<struct>> PatternField<'source>" }
+  }
+}
+
+# Foundational syntax
+ast.foundational.Identifier -> lexical_reused.SourceSpan: "contains · 1"
+ast.foundational.QualifiedName -> ast.foundational.Identifier: "contains · 2"
+ast.foundational.TypedBinding -> ast.foundational.Identifier: "contains · 2"
+
+# Top-level tree
+ast.top_level.Program -> ast.top_level.ImportDeclaration: "owns · 0..N ordered"
+ast.top_level.Program -> ast.top_level.Declaration: "owns · 1..N ordered"
+ast.top_level.ImportDeclaration -> ast.foundational.QualifiedName: "contains · 1"
+ast.top_level.ImportDeclaration -> ast.foundational.Identifier: "contains · 0..1"
+ast.top_level.Declaration -> ast.types.StructDefinition: "variant payload · 0..1"
+ast.top_level.Declaration -> ast.types.EnumDefinition: "variant payload · 0..1"
+ast.top_level.Declaration -> ast.functions.FunctionDefinition: "variant payload · 0..1"
+
+# Local type definitions
+ast.types.StructDefinition -> ast.foundational.Identifier: "contains · 1"
+ast.types.StructDefinition -> ast.types.FieldDefinition: "owns · 0..N ordered"
+ast.types.FieldDefinition -> ast.foundational.Identifier: "contains · 2"
+ast.types.EnumDefinition -> ast.foundational.Identifier: "contains · 1"
+ast.types.EnumDefinition -> ast.types.EnumVariant: "owns · 1..N ordered"
+ast.types.EnumVariant -> ast.foundational.Identifier: "variant payload · 1..2"
+ast.types.EnumVariant -> ast.types.FieldDefinition: "variant payload · 0..N ordered"
+
+# Functions / body
+ast.functions.FunctionDefinition -> ast.foundational.Visibility: "contains · 1"
+ast.functions.FunctionDefinition -> ast.foundational.Identifier: "contains · 2"
+ast.functions.FunctionDefinition -> ast.functions.Parameter: "owns · 0..N ordered"
+ast.functions.FunctionDefinition -> ast.foundational.QualifiedName: "contains · 0..1"
+ast.functions.FunctionDefinition -> ast.functions.FunctionBody: "contains · 1"
+ast.functions.Parameter -> ast.foundational.TypedBinding: "variant payload · 0..1"
+ast.functions.Parameter -> ast.foundational.QualifiedName: "variant payload · 0..1"
+ast.functions.Parameter -> ast.foundational.Identifier: "variant payload · 0..1"
+ast.functions.FunctionBody -> ast.functions.BodyStatement: "owns · 0..N ordered"
+ast.functions.FunctionBody -> ast.expressions.Expression: "owns · 1"
+ast.functions.BodyStatement -> ast.functions.LetBinding: "variant payload · 0..1"
+ast.functions.BodyStatement -> ast.functions.OperationStatement: "variant payload · 0..1"
+ast.functions.LetBinding -> ast.foundational.TypedBinding: "contains · 1"
+ast.functions.LetBinding -> ast.expressions.Expression: "owns · 1"
+ast.functions.OperationStatement -> ast.expressions.FunctionCall: "variant payload · 0..1"
+ast.functions.OperationStatement -> ast.expressions.Pipeline: "variant payload · 0..1"
+
+# Expression tree
+ast.expressions.Expression -> ast.expressions.ExpressionKind: "contains · 1"
+ast.expressions.Expression -> lexical_reused.SourceSpan: "contains · 1"
+ast.expressions.ExpressionKind -> ast.expressions.LiteralKind: "variant payload · 0..1"
+ast.expressions.ExpressionKind -> ast.foundational.Identifier: "variant payload · 0..1"
+ast.expressions.ExpressionKind -> ast.expressions.UnaryOperator: "variant payload · 0..1"
+ast.expressions.ExpressionKind -> ast.expressions.BinaryOperator: "variant payload · 0..1"
+ast.expressions.ExpressionKind -> ast.expressions.Expression: "variant payload · 0..2"
+ast.expressions.ExpressionKind -> ast.expressions.FunctionCall: "variant payload · 0..1"
+ast.expressions.ExpressionKind -> ast.expressions.FieldInitializer: "variant payload · 0..N ordered"
+ast.expressions.ExpressionKind -> ast.expressions.EnumConstruction: "variant payload · 0..1"
+ast.expressions.ExpressionKind -> ast.expressions.Pipeline: "variant payload · 0..1"
+ast.expressions.ExpressionKind -> ast.when_data.WhenExpression: "variant payload · 0..1"
+ast.expressions.FunctionCall -> ast.foundational.Identifier: "contains · 1"
+ast.expressions.FunctionCall -> ast.expressions.Expression: "owns · 0..N ordered"
+ast.expressions.FieldInitializer -> ast.foundational.Identifier: "contains · 1"
+ast.expressions.FieldInitializer -> ast.expressions.Expression: "owns · 1"
+ast.expressions.EnumConstruction -> ast.foundational.QualifiedName: "variant payload · 1"
+ast.expressions.EnumConstruction -> ast.expressions.Expression: "variant payload · 0..1"
+ast.expressions.EnumConstruction -> ast.expressions.FieldInitializer: "variant payload · 0..N ordered"
+ast.expressions.Pipeline -> ast.expressions.Expression: "owns · 1"
+ast.expressions.Pipeline -> ast.expressions.PipelineStage: "owns · 1..N ordered"
+ast.expressions.PipelineStage -> ast.foundational.Identifier: "contains · 1"
+ast.expressions.PipelineStage -> ast.expressions.Expression: "owns · 0..N ordered"
+
+# When expression
+ast.when_data.WhenExpression -> ast.expressions.Expression: "owns · 1"
+ast.when_data.WhenExpression -> ast.when_data.WhenCorrespondence: "owns · 1..N ordered"
+ast.when_data.WhenCorrespondence -> ast.when_data.WhenPattern: "contains · 1"
+ast.when_data.WhenCorrespondence -> ast.expressions.Expression: "owns · 1"
+ast.when_data.WhenPattern -> ast.foundational.QualifiedName: "variant payload · 1"
+ast.when_data.WhenPattern -> ast.foundational.TypedBinding: "variant payload · 0..1"
+ast.when_data.WhenPattern -> ast.when_data.PatternField: "variant payload · 0..N ordered"
+ast.when_data.PatternField -> ast.foundational.Identifier: "contains · 1"
+ast.when_data.PatternField -> ast.foundational.TypedBinding: "contains · 1"
+
+notes: {
+  label: "AST Data Boundaries"
+  count: "Exactly 31 AST identities; SourceSpan is reused from Lexical Data"
+  tree: "AST physical representation is a typed nested owned tree"
+  no_fake_nodes: "Literal, Unary, Binary, FieldAccess and StructConstruction remain ExpressionKind variants"
+  no_return: "return is parser-consumed syntax; FunctionBody.result owns the final Expression"
+  no_this: "this is parser-only pipeline syntax and does not survive as an AST identity"
+  semantic: "No TypeId, FunctionId, resolved Signature, slots, Provider bindings or bytecode"
+}
