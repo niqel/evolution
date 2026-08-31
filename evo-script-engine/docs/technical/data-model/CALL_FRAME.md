@@ -124,7 +124,7 @@ CallFrame.function
 SourceMap
 ```
 
-La política completa de avance para cada familia de instructions se cerrará en el bloque posterior de InstructionPointer stepping.
+La política exacta de avance se cierra en `INSTRUCTION_POINTER_STEPPING.md` mediante IP-001..IP-010.
 
 ## CF-006 — frame_base is the absolute beginning of the frame region
 
@@ -333,8 +333,8 @@ CF-010 CallExternal creates no CallFrame                  ✅ CLOSED
 
 CallFrame exact representation                            ✅ CLOSED
 InstructionPointer identity/current-position semantics    ✅ CLOSED
+InstructionPointer stepping semantics                     ✅ CLOSED in INSTRUCTION_POINTER_STEPPING.md
 
-InstructionPointer stepping semantics                     ← NEXT
-ApplicationBindings exact model                           PENDING
-remaining external call mechanics                         PENDING
+ApplicationBindings exact model                           ← NEXT
+remaining external call/value mechanics                   PENDING
 ```
