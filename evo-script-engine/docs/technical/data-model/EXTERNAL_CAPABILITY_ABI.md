@@ -1,6 +1,6 @@
 # Evo-Script Engine — ExternalCapability ABI
 
-Status: CLOSED — ABI VALUE TYPES CLOSED; FAILURE TYPE PENDING
+Status: CLOSED
 
 Este documento cierra las reglas v0 de la frontera uniforme entre `CallExternal` y una `ExternalCapability` suministrada mediante `ApplicationBindings`.
 
@@ -13,21 +13,16 @@ La autoridad deriva de:
 - `INSTRUCTION_POINTER_STEPPING.md`;
 - `TECHNICAL_DESIGN.md`, especialmente TD-008;
 - `ENGINEERING_PRINCIPLES.md`;
-- `evo-values/INTERCHANGE_MODEL.md`.
+- `evo-values/INTERCHANGE_MODEL.md`;
+- `EXTERNAL_CAPABILITY_FAILURE.md`.
 
-Este bloque cierra la responsabilidad, dirección de borrowing/ownership, commit semantics y los tipos exactos de Value que cruzan el ABI. El único componente textual pendiente de la firma Rust final es el tipo exacto de failure, que pertenece a Outcome / Diagnostic Data.
+Este bloque cierra completamente la responsibility, dirección de borrowing/ownership, commit semantics y la firma Rust exacta del ABI externo.
 
 ## EC-001 — One uniform function-pointer ABI
 
 Status: CLOSED
 
 `ExternalCapability` es una única identity técnica de function pointer utilizada por `ApplicationBindings` para todas las capabilities externas ejecutables desde bytecode.
-
-Conceptualmente:
-
-```rust
-type ExternalCapability = fn(/* uniform Engine ABI */);
-```
 
 Las signatures Evo-Script pueden ser heterogéneas semánticamente, pero `ApplicationBindings` necesita un único tipo Rust almacenable en:
 
@@ -222,6 +217,20 @@ u otra abstracción con responsabilidad real.
 
 No se introduce preventivamente `dyn Fn`, trait object, closure box o Provider object.
 
+## External failure representation
+
+`ExternalCapabilityFailure` está cerrado en [`EXTERNAL_CAPABILITY_FAILURE.md`](./EXTERNAL_CAPABILITY_FAILURE.md):
+
+```rust
+struct ExternalCapabilityFailure {
+    code: Box<str>,
+}
+```
+
+La capability expresa únicamente un code simbólico normalizado. No transporta `SourceSpan`, `SignatureSymbol`, Provider identity, VM coordinates ni mensaje humano.
+
+El Engine agrega el contexto de `SignatureSymbol` y provenance de `CallExternal` al construir `ExecutionFailure`.
+
 ## Canonical CallExternal flow
 
 ```text
@@ -239,7 +248,7 @@ Value<'call> argument views
         ↓
 invoke external function pointer
         │
-        ├── Failure
+        ├── Failure(ExternalCapabilityFailure)
         │      ├── no N→1 stack commit
         │      └── IP remains on CallExternal
         │
@@ -254,9 +263,7 @@ invoke external function pointer
         ip += 1
 ```
 
-## Architectural Rust signature
-
-Con `evo-values` ya cerrado, los tipos exactos de argumento y success result son:
+## Exact architectural Rust signature
 
 ```rust
 type ExternalCapability =
@@ -264,11 +271,11 @@ type ExternalCapability =
         &'value [Value<'value>],
     ) -> Result<
         OwnedValue,
-        /* external capability failure — Outcome / Diagnostic Data */,
+        ExternalCapabilityFailure,
     >;
 ```
 
-La identity exacta del tipo de failure se definirá en Outcome / Diagnostic Data. Ese pendiente no reabre el modelo de arguments/result ni EC-001..EC-010.
+La firma no contiene placeholders pendientes.
 
 ## Explicitly Not Introduced
 
@@ -284,6 +291,8 @@ implicit Provider state
 pre-pop of arguments before external success
 rollback guarantee
 resume-after-failure guarantee
+Provider/vendor error type across Engine ABI
+SourceSpan inside ExternalCapabilityFailure
 ```
 
 ## Closure
@@ -303,9 +312,9 @@ EC-010 plain fn = statically composed behavior v0         ✅ CLOSED
 ExternalCapability ABI semantics                          ✅ CLOSED
 ExternalCapability argument type                          ✅ CLOSED — &[Value<'a>]
 ExternalCapability success result type                    ✅ CLOSED — OwnedValue
-VmExecution exact Rust root                               ✅ CLOSED elsewhere
-ExternalCapability failure type                           PENDING — Outcome / Diagnostic Data
+ExternalCapability failure type                           ✅ CLOSED — ExternalCapabilityFailure
+ExternalCapability exact Rust ABI                         ✅ CLOSED
 
-Compiled Boundary Value Shape                             ← NEXT
-VM Execution exact inventory                              PENDING
+ExecutionFailure exact family                             ← NEXT
+Outcome exact inventory                                   PENDING
 ```
