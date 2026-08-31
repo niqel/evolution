@@ -1,0 +1,73 @@
+direction: right
+
+semantic_reused: {
+  label: "Semantic Program Data · reused contractual identity"
+  SignatureSymbol: { label: "<<struct>> SignatureSymbol" }
+}
+
+compilation_dependency: {
+  label: "Compilation Dependency Data · owner · 8 identities"
+
+  TypeSymbol: {
+    label: "<<struct>> TypeSymbol\nmodule: String\nname: String"
+  }
+
+  CatalogTypeRef: {
+    label: "<<enum>> CatalogTypeRef\n18 variants"
+  }
+
+  CatalogType: {
+    label: "<<enum>> CatalogType\n2 variants"
+  }
+
+  CatalogField: {
+    label: "<<struct>> CatalogField"
+  }
+
+  CatalogVariant: {
+    label: "<<enum>> CatalogVariant\n3 variants"
+  }
+
+  CatalogSignatureParameter: {
+    label: "<<enum>> CatalogSignatureParameter\n2 variants"
+  }
+
+  CatalogSignature: {
+    label: "<<struct>> CatalogSignature"
+  }
+
+  CompilationCatalog: {
+    label: "<<artifact>> CompilationCatalog"
+  }
+}
+
+# Shared type vocabulary
+compilation_dependency.CatalogTypeRef -> compilation_dependency.TypeSymbol: "variant payload · 0..1"
+
+# Shared type definitions
+compilation_dependency.CatalogType -> compilation_dependency.CatalogField: "variant payload · 0..N ordered"
+compilation_dependency.CatalogType -> compilation_dependency.CatalogVariant: "variant payload · 1..N ordered"
+compilation_dependency.CatalogField -> compilation_dependency.CatalogTypeRef: "contains · 1"
+compilation_dependency.CatalogVariant -> compilation_dependency.CatalogTypeRef: "variant payload · 0..1"
+compilation_dependency.CatalogVariant -> compilation_dependency.CatalogField: "variant payload · 0..N ordered"
+
+# Signature contracts
+compilation_dependency.CatalogSignatureParameter -> compilation_dependency.CatalogTypeRef: "variant payload · 0..1"
+compilation_dependency.CatalogSignatureParameter -> semantic_reused.SignatureSymbol: "variant payload · 0..1"
+compilation_dependency.CatalogSignature -> compilation_dependency.CatalogSignatureParameter: "owns · 0..N ordered"
+compilation_dependency.CatalogSignature -> compilation_dependency.CatalogTypeRef: "contains · 1"
+
+# Catalog root
+compilation_dependency.CompilationCatalog -> compilation_dependency.TypeSymbol: "owns · 0..N"
+compilation_dependency.CompilationCatalog -> compilation_dependency.CatalogType: "owns · 0..N"
+compilation_dependency.CompilationCatalog -> semantic_reused.SignatureSymbol: "references · 0..N"
+compilation_dependency.CompilationCatalog -> compilation_dependency.CatalogSignature: "owns · 0..N"
+
+notes: {
+  label: "Compilation Dependency Boundaries"
+  count: "Exactly 8 own identities; SignatureSymbol is reused and not recounted"
+  borrow: "Compile borrows one validated CompilationCatalog immutably; the borrow belongs to later signature design, not a new data identity"
+  compile_only: "CompilationCatalog is compile-time contract data and never persists into CompiledProgram or VmExecution"
+  no_runtime: "No ApplicationBindings, ExternalCapability, Provider identity or runtime address belongs to this owner phase"
+  validity: "Catalog is already internally valid when supplied to evo-script-engine"
+}
