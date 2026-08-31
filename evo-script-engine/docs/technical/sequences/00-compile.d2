@@ -1,0 +1,28 @@
+compile: {
+  shape: sequence_diagram
+
+  consumer: Consumer
+  compiler: "agents/compiler"
+  lexer: "collaborators/lexer"
+  parser: "collaborators/parser"
+  analyzer: "collaborators/semantic_analyzer"
+  lowerer: "collaborators/bytecode_compiler"
+
+  consumer -> compiler: "COMPILE(source, catalog)"
+
+  compiler -> lexer: "LEX_SOURCE(source)"
+  lexer -> compiler: "Result<TokenSequence<'source>, CompileFailure>"
+
+  compiler -> parser: "PARSE_TOKENS(&tokens, source)"
+  parser -> compiler: "Result<Program<'source>, CompileFailure>"
+
+  compiler -> analyzer: "ANALYZE_PROGRAM(&program, catalog)"
+  analyzer -> compiler: "Result<SemanticProgram, CompileFailure>"
+
+  compiler -> lowerer: "LOWER_PROGRAM(&semantic_program)"
+  lowerer -> compiler: "CompiledProgram"
+
+  compiler -> consumer: "Ok(CompiledProgram)"
+
+  compiler."Primera Err de Lexer / Parser / Semantic Analyzer se propaga inmediatamente como CompileOutcome::Err. Lowering no posee failure normal."
+}
