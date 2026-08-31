@@ -1,0 +1,148 @@
+direction: right
+
+lexical_reused: {
+  label: "Lexical Data · reused"
+  SourceSpan: { label: "<<struct>> SourceSpan" }
+}
+
+ast_reused: {
+  label: "AST Data · reused"
+  UnaryOperator: { label: "<<enum>> UnaryOperator" }
+  BinaryOperator: { label: "<<enum>> BinaryOperator" }
+}
+
+compilation_dependency_reused: {
+  label: "Compilation Dependency Data · reused"
+  TypeSymbol: { label: "<<struct>> TypeSymbol" }
+}
+
+semantic_reused: {
+  label: "Semantic Program Data · reused"
+  NativeType: { label: "<<enum>> NativeType" }
+  SignatureSymbol: { label: "<<struct>> SignatureSymbol" }
+}
+
+compiled_reused: {
+  label: "Compiled Program Data · reused"
+  CompiledProgram: { label: "<<artifact>> CompiledProgram" }
+}
+
+evo_values: {
+  label: "evo-values · external shared owner"
+  OwnedValue: { label: "<<enum>> OwnedValue" }
+}
+
+outcome: {
+  label: "Outcome / Diagnostic Data · owner · 24 identities"
+
+  aliases: {
+    label: "Public Outcome Aliases · 2"
+    CompileOutcome: { label: "<<alias>> CompileOutcome" }
+    ExecutionOutcome: { label: "<<alias>> ExecutionOutcome" }
+  }
+
+  compile_root: {
+    label: "Compile Failure Root · 2"
+    CompileFailure: { label: "<<struct>> CompileFailure" }
+    CompileFailureKind: { label: "<<enum>> CompileFailureKind\n3 variants" }
+  }
+
+  lexical_syntax: {
+    label: "Lexical / Syntax Failure Families · 2"
+    LexicalFailure: { label: "<<enum>> LexicalFailure\n6 variants" }
+    SyntaxFailure: { label: "<<enum>> SyntaxFailure\n10 variants" }
+  }
+
+  semantic_failure: {
+    label: "Semantic Failure Family · 12"
+    SemanticFailure: { label: "<<enum>> SemanticFailure\n7 variants" }
+    ResolutionFailure: { label: "<<enum>> ResolutionFailure\n4 variants" }
+    DeclarationFailure: { label: "<<enum>> DeclarationFailure\n7 variants" }
+    TypeCheckingFailure: { label: "<<enum>> TypeCheckingFailure\n8 variants" }
+    CallFailure: { label: "<<enum>> CallFailure\n7 variants" }
+    CompositeFailure: { label: "<<enum>> CompositeFailure\n10 variants" }
+    WhenFailure: { label: "<<enum>> WhenFailure\n11 variants" }
+    SignatureMismatchKind: { label: "<<enum>> SignatureMismatchKind\n6 variants" }
+    SemanticTypeDescriptor: { label: "<<enum>> SemanticTypeDescriptor\n3 variants" }
+    SemanticNameRole: { label: "<<enum>> SemanticNameRole\n7 variants" }
+    SemanticArgumentKind: { label: "<<enum>> SemanticArgumentKind\n2 variants" }
+    EnumPayloadShape: { label: "<<enum>> EnumPayloadShape\n3 variants" }
+  }
+
+  external_capability: {
+    label: "External Capability Failure · 1"
+    ExternalCapabilityFailure: { label: "<<struct>> ExternalCapabilityFailure\ncode: Box<str>" }
+  }
+
+  execution_failure: {
+    label: "Execution Failure Family · 5"
+    ExecutionFailure: { label: "<<struct>> ExecutionFailure" }
+    ExecutionFailureKind: { label: "<<enum>> ExecutionFailureKind\n4 variants" }
+    InvocationFailure: { label: "<<enum>> InvocationFailure\n2 variants" }
+    EvaluationFailure: { label: "<<enum>> EvaluationFailure\n4 variants" }
+    ExternalExecutionFailure: { label: "<<enum>> ExternalExecutionFailure\n3 variants" }
+  }
+}
+
+# Public Result aliases
+outcome.aliases.CompileOutcome -> compiled_reused.CompiledProgram: "references · 1"
+outcome.aliases.CompileOutcome -> outcome.compile_root.CompileFailure: "references · 1"
+outcome.aliases.ExecutionOutcome -> evo_values.OwnedValue: "references · 1"
+outcome.aliases.ExecutionOutcome -> outcome.execution_failure.ExecutionFailure: "references · 1"
+
+# Compile failure root and provenance
+outcome.compile_root.CompileFailure -> outcome.compile_root.CompileFailureKind: "contains · 1"
+outcome.compile_root.CompileFailure -> lexical_reused.SourceSpan: "contains · 1"
+outcome.compile_root.CompileFailureKind -> outcome.lexical_syntax.LexicalFailure: "variant payload · 0..1"
+outcome.compile_root.CompileFailureKind -> outcome.lexical_syntax.SyntaxFailure: "variant payload · 0..1"
+outcome.compile_root.CompileFailureKind -> outcome.semantic_failure.SemanticFailure: "variant payload · 0..1"
+
+# Semantic failure root
+outcome.semantic_failure.SemanticFailure -> outcome.semantic_failure.ResolutionFailure: "variant payload · 0..1"
+outcome.semantic_failure.SemanticFailure -> outcome.semantic_failure.DeclarationFailure: "variant payload · 0..1"
+outcome.semantic_failure.SemanticFailure -> outcome.semantic_failure.TypeCheckingFailure: "variant payload · 0..1"
+outcome.semantic_failure.SemanticFailure -> outcome.semantic_failure.CallFailure: "variant payload · 0..1"
+outcome.semantic_failure.SemanticFailure -> outcome.semantic_failure.CompositeFailure: "variant payload · 0..1"
+outcome.semantic_failure.SemanticFailure -> outcome.semantic_failure.WhenFailure: "variant payload · 0..1"
+outcome.semantic_failure.SemanticFailure -> semantic_reused.SignatureSymbol: "variant payload · 0..1"
+outcome.semantic_failure.SemanticFailure -> outcome.semantic_failure.SignatureMismatchKind: "variant payload · 0..1"
+
+# Semantic supporting descriptors
+outcome.semantic_failure.ResolutionFailure -> semantic_reused.SignatureSymbol: "variant payload · 0..1"
+outcome.semantic_failure.DeclarationFailure -> outcome.semantic_failure.SemanticNameRole: "variant payload · 0..1"
+outcome.semantic_failure.TypeCheckingFailure -> outcome.semantic_failure.SemanticTypeDescriptor: "variant payload · 1..2"
+outcome.semantic_failure.TypeCheckingFailure -> ast_reused.UnaryOperator: "variant payload · 0..1"
+outcome.semantic_failure.TypeCheckingFailure -> ast_reused.BinaryOperator: "variant payload · 0..1"
+outcome.semantic_failure.CallFailure -> outcome.semantic_failure.SemanticArgumentKind: "variant payload · 0..2"
+outcome.semantic_failure.CallFailure -> outcome.semantic_failure.SemanticTypeDescriptor: "variant payload · 0..2"
+outcome.semantic_failure.CallFailure -> semantic_reused.SignatureSymbol: "variant payload · 0..2"
+outcome.semantic_failure.CompositeFailure -> outcome.semantic_failure.SemanticTypeDescriptor: "variant payload · 0..2"
+outcome.semantic_failure.CompositeFailure -> outcome.semantic_failure.EnumPayloadShape: "variant payload · 0..2"
+outcome.semantic_failure.WhenFailure -> outcome.semantic_failure.SemanticTypeDescriptor: "variant payload · 0..2"
+outcome.semantic_failure.WhenFailure -> outcome.semantic_failure.EnumPayloadShape: "variant payload · 0..2"
+outcome.semantic_failure.SignatureMismatchKind -> outcome.semantic_failure.SemanticArgumentKind: "variant payload · 0..2"
+outcome.semantic_failure.SignatureMismatchKind -> outcome.semantic_failure.SemanticTypeDescriptor: "variant payload · 0..2"
+outcome.semantic_failure.SignatureMismatchKind -> semantic_reused.SignatureSymbol: "variant payload · 0..2"
+outcome.semantic_failure.SemanticTypeDescriptor -> semantic_reused.NativeType: "variant payload · 0..1"
+outcome.semantic_failure.SemanticTypeDescriptor -> compilation_dependency_reused.TypeSymbol: "variant payload · 0..1"
+
+# Execution failure root and provenance
+outcome.execution_failure.ExecutionFailure -> outcome.execution_failure.ExecutionFailureKind: "contains · 1"
+outcome.execution_failure.ExecutionFailure -> lexical_reused.SourceSpan: "contains · 0..1"
+outcome.execution_failure.ExecutionFailureKind -> outcome.compile_root.CompileFailureKind: "variant payload · 0..1"
+outcome.execution_failure.ExecutionFailureKind -> outcome.execution_failure.InvocationFailure: "variant payload · 0..1"
+outcome.execution_failure.ExecutionFailureKind -> outcome.execution_failure.EvaluationFailure: "variant payload · 0..1"
+outcome.execution_failure.ExecutionFailureKind -> outcome.execution_failure.ExternalExecutionFailure: "variant payload · 0..1"
+outcome.execution_failure.ExternalExecutionFailure -> semantic_reused.SignatureSymbol: "variant payload · 1"
+outcome.execution_failure.ExternalExecutionFailure -> outcome.external_capability.ExternalCapabilityFailure: "variant payload · 0..1"
+
+notes: {
+  label: "Outcome / Diagnostic Boundaries"
+  count: "Exactly 24 own identities: 2 aliases + 2 compile root + 2 lexical/syntax + 12 semantic + 1 external capability + 5 execution"
+  provenance: "Diagnostic provenance reuses SourceSpan and adds zero identities; no DiagnosticAnchor, SourceLocation or SourceId"
+  compile: "CompileFailure always owns one SourceSpan; ExecutionFailure uses Option<SourceSpan>"
+  invocation: "Invocation failures occur before a valid VmExecution and therefore have no SourceSpan"
+  execution: "Evaluation/External failures reached through bytecode materialize the responsible instruction SourceSpan"
+  external: "ExternalCapabilityFailure contains only stable symbolic code; SignatureSymbol and SourceSpan are added by Engine context"
+  invariants: "Compiler/VM invariant violations remain internal bugs and are not normal Outcome identities"
+}
