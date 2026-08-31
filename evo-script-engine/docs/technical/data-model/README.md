@@ -115,7 +115,7 @@ VM Execution Data                ← IN ANALYSIS
 ├── ApplicationBindings relation ✅ CLOSED — exact model pending
 ├── Shared Value Storage owner   ✅ CLOSED — representation pending
 ├── Call Frames owner            ✅ CLOSED — exact model pending
-├── execution backing owner      ✅ CLOSED — representation pending
+├── execution backing owner      ✅ CLOSED
 ├── RuntimeValue / Value boundary ✅ CLOSED
 ├── RuntimeValue descriptor role ✅ CLOSED
 ├── fixed scalars inline         ✅ CLOSED
@@ -127,13 +127,18 @@ VM Execution Data                ← IN ANALYSIS
 ├── Dynamic Integer backing      ✅ CLOSED
 ├── Struct / Enum backing IDs    ✅ CLOSED
 ├── backing ID stability         ✅ CLOSED
-├── container-independent IDs    ✅ CLOSED
 ├── RuntimeValue exact enum      ✅ CLOSED — 17 variants
 ├── DynamicValue exact enum      ✅ CLOSED — 3 variants
 ├── descriptor Clone + Copy      ✅ CLOSED
 ├── runtime equality boundary    ✅ CLOSED
 ├── context-relative RuntimeValue ✅ CLOSED
-└── Backing Data Representation  ← NEXT
+├── ExecutionBackingStore        ✅ CLOSED
+├── four typed append-only stores ✅ CLOSED
+├── String backing = Box<str>    ✅ CLOSED
+├── Dynamic Integer backing      ✅ CLOSED
+├── Struct / Enum backing        ✅ CLOSED
+├── immutable composite DAG      ✅ CLOSED
+└── Shared Value Storage exact representation ← NEXT
 
 Outcome / Diagnostic Data        PENDING
 ```
@@ -184,6 +189,7 @@ Outcome / Diagnostic Data        PENDING
 - [`RUNTIME_VALUE_MODEL.md`](./RUNTIME_VALUE_MODEL.md) — frontera `RuntimeValue` / `evo_values::Value<'a>`, descriptor interno, scalar/backing policy y exact runtime value family.
 - [`BACKING_IDENTITY_STRATEGY.md`](./BACKING_IDENTITY_STRATEGY.md) — typed backing IDs, referencias `Compiled | Execution`, estabilidad por invocation y separación frente al container físico.
 - [`RUNTIME_VALUE_REPRESENTATION.md`](./RUNTIME_VALUE_REPRESENTATION.md) — exact `RuntimeValue` de 17 variants, `DynamicValue` de 3 variants, copy semantics y execution-context-relative handles.
+- [`BACKING_DATA_REPRESENTATION.md`](./BACKING_DATA_REPRESENTATION.md) — `ExecutionBackingStore`, String/Dynamic Integer/Struct/Enum backing, inmutabilidad y composite DAG.
 
 ### Normative language amendments used by compiled/runtime model
 
@@ -225,7 +231,7 @@ La metodología global se define en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../..
 ## Next Block
 
 ```text
-Backing Data Representation ← NEXT
+Shared Value Storage exact representation ← NEXT
 ```
 
-Aquí se definirá qué contienen físicamente String, Dynamic Integer, Struct y Enum backing, preservando typed stable IDs y sin reabrir `RuntimeValue`.
+Aquí se definirá el container físico de `RuntimeValue` para Parameters, Locals y Operand Window, sus índices/bounds y la relación exacta con `CallFrame`, sin reabrir el backing model ya cerrado.
