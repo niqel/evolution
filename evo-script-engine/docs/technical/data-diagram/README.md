@@ -1,10 +1,10 @@
 # Evo-Script Engine — Technical Data Diagram
 
-Status: SCHEME CLOSED / GLOBAL VIEWS + LEXICAL VIEW BUILT
+Status: CLOSED
 
-Este directorio contiene las vistas D2 canónicas del `Technical Data Diagram` de `evo-script-engine` v0.
+Este directorio contiene las nueve vistas D2 canónicas del `Technical Data Diagram` de `evo-script-engine` v0.
 
-El `Technical Data Model` está CLOSED. Esta etapa únicamente representa visualmente identities, ownership, containment, references, borrows, variant payload relations y cardinalidades ya cerradas.
+El `Technical Data Model` está CLOSED. Esta etapa representa visualmente identities, ownership, containment, references, borrows, variant payload relations y cardinalidades ya cerradas; no introduce comportamiento ni nuevas identities.
 
 ## Allowed diagram vocabulary
 
@@ -44,47 +44,24 @@ No se representan methods, inheritance, OO service classes, behavioral calls, Us
 ## Canonical view suite
 
 ```text
-00-overview.d2
-01-lexical-data.d2
-02-ast-data.d2
-03-compilation-dependency-data.d2
-04-semantic-program-data.d2
-05-compiled-program-data.d2
-06-vm-execution-data.d2
-07-outcome-diagnostic-data.d2
-08-cross-phase-boundaries.d2
+00-overview.d2                    ✅ BUILT
+01-lexical-data.d2                ✅ BUILT — 4 own identities
+02-ast-data.d2                    ✅ BUILT — 31 own identities
+03-compilation-dependency-data.d2 ✅ BUILT — 8 own identities
+04-semantic-program-data.d2       ✅ BUILT — 33 own identities
+05-compiled-program-data.d2       ✅ BUILT — 21 own identities
+06-vm-execution-data.d2           ✅ BUILT — 19 own identities
+07-outcome-diagnostic-data.d2     ✅ BUILT — 24 own identities
+08-cross-phase-boundaries.d2      ✅ BUILT
 ```
 
 No existe un mega-diagrama autoritativo con las 140 identities propias.
 
-## Current progress
-
-```text
-00-overview.d2                    ✅ BUILT
-01-lexical-data.d2                ✅ BUILT — 4 own identities
-02-ast-data.d2                    ← NEXT — 31 own identities
-03-compilation-dependency-data.d2 PENDING — 8 own identities
-04-semantic-program-data.d2       PENDING — 33 own identities
-05-compiled-program-data.d2       PENDING — 21 own identities
-06-vm-execution-data.d2           PENDING — 19 own identities
-07-outcome-diagnostic-data.d2     PENDING — 24 own identities
-08-cross-phase-boundaries.d2      ✅ BUILT
-```
-
-Global views:
-
-- [`00-overview.d2`](./00-overview.d2)
-- [`08-cross-phase-boundaries.d2`](./08-cross-phase-boundaries.d2)
-
-Owner-phase view built:
-
-- [`01-lexical-data.d2`](./01-lexical-data.d2)
-
-## View responsibilities
+## Closed view responsibilities
 
 ### 00 — Overview
 
-Resume únicamente las familias cerradas y sus conteos:
+Resume las familias cerradas y sus conteos:
 
 ```text
 Lexical Data                     4
@@ -115,22 +92,24 @@ TokenSequence
 
 ### 02 — AST Data
 
-Debe representar las 31 identities exactas del AST organizadas por:
+Representa las 31 identities exactas organizadas por:
 
 ```text
-Foundational
-Top-level
-Local Type Definitions
-Functions / Body
-Expressions
-When
+Foundational                  4
+Top-level                     3
+Local Type Definitions       4
+Functions / Body             6
+Expressions                 10
+When                         4
+                            ──
+TOTAL                       31
 ```
 
-Variants de `ExpressionKind` sin identity propia no se promueven a nodes ficticios.
+`Literal`, Unary/Binary forms, `FieldAccess` y `StructConstruction` permanecen variants de `ExpressionKind`; `return` y `this` no sobreviven como identities AST.
 
 ### 03 — Compilation Dependency Data
 
-Debe representar exactamente las 8 identities:
+Representa exactamente 8 identities:
 
 ```text
 TypeSymbol
@@ -143,21 +122,35 @@ CatalogSignature
 CompilationCatalog
 ```
 
-No incluye runtime Provider/ApplicationBindings ownership.
+`SignatureSymbol` aparece como identity contractual reutilizada. El catálogo no contiene Provider/runtime composition y no persiste hacia `CompiledProgram` o `VmExecution`.
 
 ### 04 — Semantic Program Data
 
-Debe representar las 33 identities propias distinguiendo semantic IDs, owner collections, type/signature/function structures y expression/body data.
+Representa exactamente:
 
-ID → indexed data usa `references`; los IDs nunca `own` sus targets.
+```text
+Semantic IDs                       7
+Program/Type/Signature/Function   12
+Function Body / Expressions       14
+                                 ──
+TOTAL                             33
+```
+
+Los IDs usan `references` hacia datos dentro de owner collections; nunca `own` sus targets. `Pipeline` no sobrevive como identity semántica y queda reducido a Semantic Expression Composition.
 
 ### 05 — Compiled Program Data
 
-Debe representar las 21 identities propias. `Instruction` permanece un único enum node con 48 variants; `CompiledValueShape` permanece un único enum node con 17 variants.
+Representa exactamente 21 identities.
+
+`Instruction` permanece un único enum node con 48 variants; `CompiledValueShape` un único enum con 17 variants y `CompiledEnumValueShape` con 3 variants.
+
+`FunctionId`, `SignatureSymbol` y `SourceSpan` aparecen como identities reutilizadas. Equality plans viven directamente como payload de Instructions; no existe `EqualityPlanId`/table.
 
 ### 06 — VM Execution Data
 
-Debe representar las 19 identities propias y hacer visible:
+Representa exactamente 19 identities.
+
+Centro visual:
 
 ```text
 VmExecution
@@ -165,99 +158,132 @@ VmExecution
 ├── borrows ApplicationBindings
 ├── owns SharedValueStorage
 ├── owns ExecutionBackingStore
-└── owns ordered CallFrame collection
+└── owns CallFrame 1..N ordered
 ```
 
-No se introducen OperandWindow, FrameRegion, CurrentFrame, CallStack u otros wrappers inexistentes.
+`RuntimeValue` es descriptor relativo a execution context. Shared storage, backing y frames mantienen owners separados; no existen `OperandWindow`, `FrameRegion`, `CurrentFrame`, `CallStack`, `RuntimeTypeId` ni Provider identity.
 
 ### 07 — Outcome / Diagnostic Data
 
-Debe representar las 24 identities propias. `CompileOutcome` y `ExecutionOutcome` son aliases contractuales; `Result`, `Option`, `Box` y `Vec` no son identities.
+Representa exactamente 24 identities:
 
-`SourceSpan` aparece como reutilizado desde Lexical Data y no se vuelve a contar.
+```text
+Public outcome aliases             2
+Compile failure root               2
+Lexical / Syntax failure families  2
+Semantic failure family           12
+External capability failure        1
+Execution failure family           5
+                                  ──
+TOTAL                              24
+```
+
+`SourceSpan` es reutilizado y provenance añade 0 identities. No existen `DiagnosticAnchor`, `SourceLocation` ni `SourceId`.
 
 ### 08 — Cross-Phase Boundaries
 
-Representa únicamente relaciones persistentes/reutilizadas entre owner phases/crates.
-
-La vista construida incluye:
+Representa exclusivamente relaciones persistentes/reutilizadas entre owner phases/crates:
 
 ```text
 SourceSpan reuse
 UnaryOperator / BinaryOperator reuse
 FunctionId / SignatureSymbol reuse
 CompiledProgram borrowed by VmExecution
-ApplicationBindings → ExternalCapability ownership
+ApplicationBindings owns ExternalCapability table
 ExternalCapability references Value<'a>, OwnedValue and ExternalCapabilityFailure
-CompileOutcome → CompiledProgram
-ExecutionOutcome → OwnedValue
+CompileOutcome references CompiledProgram
+ExecutionOutcome references OwnedValue
 ```
 
-`Value<'a>` y `OwnedValue` están marcados como external shared data cuyo owner es `evo-values`.
+`Value<'a>` y `OwnedValue` están marcados como data compartida cuyo owner es `evo-values`.
 
-## TDD closure rules
+## TDD-001 — Nine views, not one mega-diagram
 
-### TDD-001 — Nine views, not one mega-diagram
 Status: CLOSED
 
-### TDD-002 — Canonical location
+El Technical Data Diagram es una suite de exactamente nueve vistas D2.
+
+## TDD-002 — Canonical location
+
 Status: CLOSED
 
 ```text
 evo-script-engine/docs/technical/data-diagram/
 ```
 
-### TDD-003 — Exact view set
+## TDD-003 — Exact view set
+
 Status: CLOSED
 
-Las nueve vistas `00..08` anteriores son el set canónico.
+Las vistas `00..08` anteriores son el set canónico.
 
-### TDD-004 — Every identity has one owner-phase authority
+## TDD-004 — Every identity has one owner-phase authority
+
 Status: CLOSED
 
 Una identity reutilizada puede reaparecer como reference, pero nunca cambia owner ni se vuelve a contar.
 
-### TDD-005 — Restricted relation vocabulary
+## TDD-005 — Restricted relation vocabulary
+
 Status: CLOSED
 
 Solo `owns`, `contains`, `references`, `borrows`, `variant payload` + cardinalidad explícita.
 
-### TDD-006 — Enum variants are not promoted to identities
+## TDD-006 — Enum variants are not promoted to identities
+
 Status: CLOSED
 
-Large enums permanecen nodes únicos con variant count y edges hacia payload identities existentes.
+Large enums permanecen nodes únicos con variant count y edges hacia payload identities ya existentes.
 
-### TDD-007 — Data only; no Participants or services
+## TDD-007 — Data only; no Participants or services
+
 Status: CLOSED
 
-### TDD-008 — Ordered cardinality must be explicit
+Ninguna vista introduce services/classes/Participants o behavioral call arrows.
+
+## TDD-008 — Ordered cardinality explicit
+
 Status: CLOSED
 
-### TDD-009 — D2 source is canonical
+Las colecciones cuyo orden es semánticamente relevante se marcan `ordered`.
+
+## TDD-009 — D2 source is canonical
+
 Status: CLOSED
 
-SVG/PNG/PDF son outputs derivados, no autoridad arquitectónica.
+Los `.d2` son la autoridad versionada. SVG/PNG/PDF son outputs derivados y no autoridad arquitectónica.
 
-### TDD-010 — Diagramming cannot silently invent identities
+La auditoría arquitectónica/textual de la suite está cerrada. El entorno utilizado para esta edición no dispone de ejecutable D2, por lo que no se declara una validación de render/parser local que no se haya realizado.
+
+## TDD-010 — No silent identity invention
+
 Status: CLOSED
 
-Si una vista demuestra que falta una identity o cardinalidad imposible de representar, se reabre únicamente el owning Data Model block; no se corrige silenciosamente desde D2.
+La construcción de las nueve vistas no reveló ninguna identity faltante. Ningún bloque del Technical Data Model tuvo que reabrirse.
 
-## Scheme closure
+## Final audit
+
+```text
+Canonical view files present                   9 / 9 ✅
+Owner-phase identity counts preserved          ✅
+Cross-phase owners preserved                   ✅
+New technical identities introduced            0
+Technical Data Model blocks reopened            0
+Participants/services introduced               0
+D2 source authority                             ✅
+Local D2 render/parser validation               NOT PERFORMED — executable unavailable
+```
+
+## Closure
 
 ```text
 TDD-001..TDD-010                  ✅ CLOSED
-Technical Data Diagram scheme     ✅ CLOSED
 Technical Data Model              ✅ CLOSED
-00 Overview                       ✅ BUILT
-08 Cross-Phase Boundaries         ✅ BUILT
-01 Lexical Data                   ✅ BUILT
+Technical Data Diagram scheme     ✅ CLOSED
+Technical Data Diagram suite      ✅ CLOSED — 9 views
+
+NEXT ARCHITECTURAL STAGE
+    Rust Signatures / Participant Design
 ```
 
-## Next
-
-```text
-Build 02-ast-data.d2
-```
-
-AST será la primera vista owner-phase grande y deberá cubrir exactamente sus 31 identities sin promover variants o syntax-only forms a identities nuevas.
+La siguiente etapa vuelve al rol de Líder Técnico: usar User Stories + Technical Data Model para definir function-pointer signatures de Use Cases y, cuando corresponda, Contracts, Requesters, Collaborators, Resolvers y Tools. Los Sequence Diagrams vienen después de tener signatures y data shapes suficientes.
