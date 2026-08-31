@@ -172,9 +172,9 @@ allocate ID
 
 Status: CLOSED
 
-Backing identities no prescriben el container físico.
+Backing identities por sí mismas no prescriben el container físico.
 
-Permanece abierto si la implementación usa `Vec`, arena, slab, segmented storage u otra estrategia compatible.
+La estrategia concreta queda definida separadamente por `BACKING_DATA_REPRESENTATION.md` para v0.
 
 ## RV-012 — RuntimeValue exact variant inventory
 
@@ -266,8 +266,6 @@ Status: CLOSED
 
 La familia de descriptors/handles runtime es `Clone + Copy` en v0.
 
-Regla canónica:
-
 > Copiar un `RuntimeValue` duplica únicamente el descriptor; nunca duplica el backing referenciado.
 
 Esto permite que `LoadParameter` y `LoadLocal` materialicen el mismo Value lógico en Operand Window sin copiar String, Dynamic Integer, Struct o Enum backing.
@@ -281,8 +279,6 @@ La igualdad semántica de Evo-Script no se define mediante identity equality de 
 Dos backings distintos pueden representar Values semánticamente iguales.
 
 Las operaciones del lenguaje permanecen gobernadas por las instructions de igualdad y por `EqualityRule` / `CompositeEqualityPlan`.
-
-Si una implementación futura añade `PartialEq` / `Eq` por razones internas, esos traits no constituyen la semántica de `==` / `!=` del lenguaje.
 
 ## RV-019 — RuntimeValue is execution-context-relative
 
@@ -301,6 +297,52 @@ Execution(BackingId)
 > Un `RuntimeValue` que contenga handles runtime no puede escapar de `VmExecution` como resultado autónomo sin materialización o transferencia de ownership apropiada.
 
 La transformación hacia un Outcome Value capaz de sobrevivir a `VmExecution` pertenece a `Outcome / Diagnostic Data`.
+
+## RV-020 — Backing Data Representation
+
+Status: CLOSED
+
+Cerrado en `BACKING_DATA_REPRESENTATION.md` mediante BD-001..BD-009.
+
+`VmExecution` posee exactamente un:
+
+```rust
+struct ExecutionBackingStore {
+    strings: Vec<Box<str>>,
+    dynamic_integers: Vec<DynamicIntegerBacking>,
+    structs: Vec<StructBacking>,
+    enums: Vec<EnumBacking>,
+}
+```
+
+Los stores son tipados, append-only y resuelven sus typed IDs posicionalmente.
+
+Las representaciones cerradas son:
+
+```rust
+struct StructBacking {
+    fields: Box<[RuntimeValue]>,
+}
+
+struct EnumBacking {
+    variant: VariantDiscriminant,
+    payload: RuntimeEnumPayload,
+}
+
+enum RuntimeEnumPayload {
+    Simple,
+    Associated(RuntimeValue),
+    Structured {
+        fields: Box<[RuntimeValue]>,
+    },
+}
+```
+
+Execution String backing utiliza `Box<str>` inmutable.
+
+`DynamicIntegerBacking` encapsula un entero signed owned de precisión arbitraria; la crate/implementación concreta no forma parte de la arquitectura.
+
+Todos los execution backings son inmutables después de insertarse. El graph de Struct/Enum backing es finito, inmutable y acíclico; sharing por typed IDs está permitido.
 
 ## Exact Closed Runtime Value Family
 
@@ -338,17 +380,6 @@ enum RuntimeValue {
 }
 ```
 
-## Explicitly Not Closed Yet
-
-```text
-String backing physical representation
-Dynamic Integer backing physical representation
-Struct backing physical representation
-Enum backing physical representation
-Shared Value Storage concrete container
-arena / Vec / slab strategy
-```
-
 ## Closure
 
 ```text
@@ -363,9 +394,14 @@ DynamicValue exact representation                        ✅ CLOSED — 3 varian
 descriptor family Clone + Copy                           ✅ CLOSED
 Rust handle equality != language equality                ✅ CLOSED
 RuntimeValue execution-context-relative                  ✅ CLOSED
+Backing Data Representation                              ✅ CLOSED
+ExecutionBackingStore                                    ✅ CLOSED
+String execution backing                                 ✅ CLOSED
+Dynamic Integer execution backing                        ✅ CLOSED
+Struct / Enum backing                                    ✅ CLOSED
+immutable finite composite backing DAG                    ✅ CLOSED
 
-Backing Data Representation                              ← NEXT
-Shared Value Storage exact representation                PENDING
+Shared Value Storage exact representation                ← NEXT
 CallFrame                                                 PENDING
 InstructionPointer                                        PENDING
 ApplicationBindings exact model                           PENDING
