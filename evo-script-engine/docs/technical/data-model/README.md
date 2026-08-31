@@ -149,7 +149,11 @@ VM Execution Data                ← IN ANALYSIS
 ├── current responsible IP       ✅ CLOSED
 ├── operand_base derived         ✅ CLOSED
 ├── caller suspended on Call     ✅ CLOSED
-└── InstructionPointer stepping semantics ← NEXT
+├── InstructionPointer stepping  ✅ CLOSED
+├── active IP validity           ✅ CLOSED
+├── branch / sequential stepping ✅ CLOSED
+├── call / return stepping       ✅ CLOSED
+└── ApplicationBindings exact model ← NEXT
 
 Outcome / Diagnostic Data        PENDING
 ```
@@ -203,6 +207,7 @@ Outcome / Diagnostic Data        PENDING
 - [`BACKING_DATA_REPRESENTATION.md`](./BACKING_DATA_REPRESENTATION.md) — `ExecutionBackingStore`, String/Dynamic Integer/Struct/Enum backing, inmutabilidad y composite DAG.
 - [`SHARED_VALUE_STORAGE.md`](./SHARED_VALUE_STORAGE.md) — `Vec<Option<RuntimeValue>>`, regiones Parameter/Local/Operand, reuse de argument cells y transformación de storage en `Return`.
 - [`CALL_FRAME.md`](./CALL_FRAME.md) — `CallFrame` exacto de tres fields, `InstructionPointer`, `frame_base`, `operand_base` derivado y suspensión del caller sobre `Call`.
+- [`INSTRUCTION_POINTER_STEPPING.md`](./INSTRUCTION_POINTER_STEPPING.md) — valid IP invariant, commit-after-success, sequential/branch stepping y transitions exactas de `Call`, `Return` y `CallExternal`.
 
 ### Normative language amendments used by compiled/runtime model
 
@@ -244,7 +249,7 @@ La metodología global se define en [`TECHNICAL_DESIGN_METHODOLOGY.md`](../../..
 ## Next Block
 
 ```text
-InstructionPointer stepping semantics ← NEXT
+ApplicationBindings exact model ← NEXT
 ```
 
-Aquí se cerrará el avance exacto del `InstructionPointer` para ejecución normal, `Jump`, `JumpIfFalse`, `Call`, `Return` y `CallExternal`, manteniendo la regla ya cerrada de que el pointer identifica la instruction actualmente responsable hasta que ésta termina exitosamente.
+Aquí se definirá la estructura runtime explícita que satisface los `ExternalSymbol` del `CompiledProgram`, su relación exacta con Signature contracts/function pointers y la mecánica de `CallExternal`, sin reintroducir provider lookup ambiental ni Host Session State.
