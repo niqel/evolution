@@ -1,0 +1,163 @@
+direction: right
+
+lexical_reused: {
+  label: "Lexical Data · reused"
+  SourceSpan: { label: "<<struct>> SourceSpan" }
+}
+
+ast_reused: {
+  label: "AST Data · reused"
+  UnaryOperator: { label: "<<enum>> UnaryOperator" }
+  BinaryOperator: { label: "<<enum>> BinaryOperator" }
+}
+
+semantic: {
+  label: "Semantic Program Data · owner · 33 identities"
+
+  ids: {
+    label: "Semantic IDs · 7"
+    TypeId: { label: "<<struct>> TypeId" }
+    FunctionId: { label: "<<struct>> FunctionId" }
+    BindingId: { label: "<<struct>> BindingId" }
+    FieldId: { label: "<<struct>> FieldId" }
+    VariantId: { label: "<<struct>> VariantId" }
+    SignatureId: { label: "<<struct>> SignatureId" }
+    SignatureBindingId: { label: "<<struct>> SignatureBindingId" }
+  }
+
+  owners: {
+    label: "Program / Type / Signature / Function · 12"
+    NativeType: { label: "<<enum>> NativeType\n17 variants" }
+    SemanticType: { label: "<<enum>> SemanticType\n3 variants\nEnum variants 1..N" }
+    SemanticField: { label: "<<struct>> SemanticField" }
+    SemanticVariant: { label: "<<enum>> SemanticVariant\n3 variants" }
+    SemanticBinding: { label: "<<struct>> SemanticBinding" }
+    SemanticSignatureBinding: { label: "<<struct>> SemanticSignatureBinding" }
+    SemanticParameter: { label: "<<enum>> SemanticParameter\n2 variants" }
+    SemanticSignatureParameter: { label: "<<enum>> SemanticSignatureParameter\n2 variants" }
+    SignatureSymbol: { label: "<<struct>> SignatureSymbol" }
+    SemanticSignature: { label: "<<struct>> SemanticSignature" }
+    SemanticFunction: { label: "<<struct>> SemanticFunction" }
+    SemanticProgram: { label: "<<artifact>> SemanticProgram" }
+  }
+
+  expressions: {
+    label: "Function Body / Expressions · 14"
+    SemanticFunctionBody: { label: "<<struct>> SemanticFunctionBody" }
+    SemanticStatement: { label: "<<enum>> SemanticStatement\n2 variants" }
+    SemanticExpression: { label: "<<struct>> SemanticExpression" }
+    SemanticExpressionKind: { label: "<<enum>> SemanticExpressionKind\n10 variants" }
+    SemanticLiteral: { label: "<<enum>> SemanticLiteral\n4 variants" }
+    SemanticCallTarget: { label: "<<enum>> SemanticCallTarget\n3 variants" }
+    SemanticArgument: { label: "<<enum>> SemanticArgument\n2 variants" }
+    SemanticCall: { label: "<<struct>> SemanticCall" }
+    SemanticFieldValue: { label: "<<struct>> SemanticFieldValue" }
+    SemanticEnumPayload: { label: "<<enum>> SemanticEnumPayload\n3 variants" }
+    SemanticWhen: { label: "<<struct>> SemanticWhen" }
+    SemanticWhenBranch: { label: "<<struct>> SemanticWhenBranch" }
+    SemanticVariantExtraction: { label: "<<enum>> SemanticVariantExtraction\n3 variants" }
+    SemanticFieldBinding: { label: "<<struct>> SemanticFieldBinding" }
+  }
+}
+
+# Owner-index identity references
+semantic.ids.TypeId -> semantic.owners.SemanticType: "references · 1"
+semantic.ids.FunctionId -> semantic.owners.SemanticFunction: "references · 1"
+semantic.ids.BindingId -> semantic.owners.SemanticBinding: "references · 1"
+semantic.ids.FieldId -> semantic.owners.SemanticField: "references · 1"
+semantic.ids.VariantId -> semantic.owners.SemanticVariant: "references · 1"
+semantic.ids.SignatureId -> semantic.owners.SemanticSignature: "references · 1"
+semantic.ids.SignatureBindingId -> semantic.owners.SemanticSignatureBinding: "references · 1"
+
+# Type graph
+semantic.owners.SemanticType -> semantic.owners.NativeType: "variant payload · 0..1"
+semantic.owners.SemanticType -> semantic.owners.SemanticField: "variant payload · 0..N ordered"
+semantic.owners.SemanticType -> semantic.owners.SemanticVariant: "variant payload · 0..N ordered"
+semantic.owners.SemanticField -> semantic.ids.TypeId: "contains · 1"
+semantic.owners.SemanticVariant -> semantic.ids.TypeId: "variant payload · 0..1"
+semantic.owners.SemanticVariant -> semantic.owners.SemanticField: "variant payload · 0..N ordered"
+
+# Function-owned bindings and parameters
+semantic.owners.SemanticBinding -> semantic.ids.TypeId: "contains · 1"
+semantic.owners.SemanticSignatureBinding -> semantic.ids.SignatureId: "contains · 1"
+semantic.owners.SemanticParameter -> semantic.ids.BindingId: "variant payload · 0..1"
+semantic.owners.SemanticParameter -> semantic.ids.SignatureBindingId: "variant payload · 0..1"
+semantic.owners.SemanticSignatureParameter -> semantic.ids.TypeId: "variant payload · 0..1"
+semantic.owners.SemanticSignatureParameter -> semantic.ids.SignatureId: "variant payload · 0..1"
+
+# Signature contract
+semantic.owners.SemanticSignature -> semantic.owners.SignatureSymbol: "contains · 1"
+semantic.owners.SemanticSignature -> semantic.owners.SemanticSignatureParameter: "owns · 0..N ordered"
+semantic.owners.SemanticSignature -> semantic.ids.TypeId: "contains · 1"
+
+# Function owner
+semantic.owners.SemanticFunction -> semantic.owners.SemanticParameter: "owns · 0..N ordered"
+semantic.owners.SemanticFunction -> semantic.owners.SemanticBinding: "owns · 0..N ordered"
+semantic.owners.SemanticFunction -> semantic.owners.SemanticSignatureBinding: "owns · 0..N ordered"
+semantic.owners.SemanticFunction -> semantic.ids.TypeId: "contains · 1"
+semantic.owners.SemanticFunction -> semantic.ids.SignatureId: "contains · 0..1"
+semantic.owners.SemanticFunction -> semantic.expressions.SemanticFunctionBody: "contains · 1"
+
+# SemanticProgram root
+semantic.owners.SemanticProgram -> semantic.owners.SemanticType: "owns · 0..N ordered"
+semantic.owners.SemanticProgram -> semantic.owners.SemanticSignature: "owns · 0..N ordered"
+semantic.owners.SemanticProgram -> semantic.owners.SemanticFunction: "owns · 1..N ordered"
+semantic.owners.SemanticProgram -> semantic.ids.FunctionId: "contains · 1"
+
+# Function body
+semantic.expressions.SemanticFunctionBody -> semantic.expressions.SemanticStatement: "owns · 0..N ordered"
+semantic.expressions.SemanticFunctionBody -> semantic.expressions.SemanticExpression: "owns · 1"
+semantic.expressions.SemanticStatement -> semantic.ids.BindingId: "variant payload · 0..1"
+semantic.expressions.SemanticStatement -> semantic.expressions.SemanticExpression: "variant payload · 1"
+
+# Expression root and reused source/operators
+semantic.expressions.SemanticExpression -> semantic.ids.TypeId: "contains · 1"
+semantic.expressions.SemanticExpression -> semantic.expressions.SemanticExpressionKind: "contains · 1"
+semantic.expressions.SemanticExpression -> lexical_reused.SourceSpan: "contains · 1"
+semantic.expressions.SemanticExpressionKind -> semantic.expressions.SemanticLiteral: "variant payload · 0..1"
+semantic.expressions.SemanticExpressionKind -> semantic.ids.BindingId: "variant payload · 0..1"
+semantic.expressions.SemanticExpressionKind -> ast_reused.UnaryOperator: "variant payload · 0..1"
+semantic.expressions.SemanticExpressionKind -> ast_reused.BinaryOperator: "variant payload · 0..1"
+semantic.expressions.SemanticExpressionKind -> semantic.expressions.SemanticExpression: "variant payload · 0..2"
+semantic.expressions.SemanticExpressionKind -> semantic.ids.FieldId: "variant payload · 0..1"
+semantic.expressions.SemanticExpressionKind -> semantic.expressions.SemanticCall: "variant payload · 0..1"
+semantic.expressions.SemanticExpressionKind -> semantic.expressions.SemanticFieldValue: "variant payload · 0..N ordered"
+semantic.expressions.SemanticExpressionKind -> semantic.ids.VariantId: "variant payload · 0..1"
+semantic.expressions.SemanticExpressionKind -> semantic.expressions.SemanticEnumPayload: "variant payload · 0..1"
+semantic.expressions.SemanticExpressionKind -> semantic.expressions.SemanticWhen: "variant payload · 0..1"
+
+# Calls
+semantic.expressions.SemanticCallTarget -> semantic.ids.FunctionId: "variant payload · 0..1"
+semantic.expressions.SemanticCallTarget -> semantic.ids.SignatureId: "variant payload · 0..1"
+semantic.expressions.SemanticCallTarget -> semantic.ids.SignatureBindingId: "variant payload · 0..1"
+semantic.expressions.SemanticArgument -> semantic.expressions.SemanticExpression: "variant payload · 0..1"
+semantic.expressions.SemanticArgument -> semantic.ids.SignatureBindingId: "variant payload · 0..1"
+semantic.expressions.SemanticCall -> semantic.expressions.SemanticCallTarget: "contains · 1"
+semantic.expressions.SemanticCall -> semantic.expressions.SemanticArgument: "owns · 0..N ordered"
+
+# Composite construction
+semantic.expressions.SemanticFieldValue -> semantic.ids.FieldId: "contains · 1"
+semantic.expressions.SemanticFieldValue -> semantic.expressions.SemanticExpression: "owns · 1"
+semantic.expressions.SemanticEnumPayload -> semantic.expressions.SemanticExpression: "variant payload · 0..1"
+semantic.expressions.SemanticEnumPayload -> semantic.expressions.SemanticFieldValue: "variant payload · 0..N ordered"
+
+# When
+semantic.expressions.SemanticWhen -> semantic.expressions.SemanticExpression: "owns · 1"
+semantic.expressions.SemanticWhen -> semantic.expressions.SemanticWhenBranch: "owns · 1..N ordered"
+semantic.expressions.SemanticWhenBranch -> semantic.ids.VariantId: "contains · 1"
+semantic.expressions.SemanticWhenBranch -> semantic.expressions.SemanticVariantExtraction: "contains · 1"
+semantic.expressions.SemanticWhenBranch -> semantic.expressions.SemanticExpression: "owns · 1"
+semantic.expressions.SemanticVariantExtraction -> semantic.ids.BindingId: "variant payload · 0..1"
+semantic.expressions.SemanticVariantExtraction -> semantic.expressions.SemanticFieldBinding: "variant payload · 0..N ordered"
+semantic.expressions.SemanticFieldBinding -> semantic.ids.FieldId: "contains · 1"
+semantic.expressions.SemanticFieldBinding -> semantic.ids.BindingId: "contains · 1"
+
+notes: {
+  label: "Semantic Program Boundaries"
+  count: "Exactly 33 own identities: 7 IDs + 12 owner structures + 14 body/expression structures"
+  owner_index: "IDs reference elements inside their owner collections; referenced elements do not duplicate their own ID"
+  field_owner: "FieldId is relative to the structural owner fields collection; VariantId is relative to an enum variants collection"
+  pipeline: "AST Pipeline does not survive; it is reduced to Semantic Expression Composition"
+  names: "Local names/aliases do not survive as resolution mechanism; SignatureSymbol is the intentional contractual exception"
+  no_runtime: "No slots, ExternalSymbolId, Provider binding, bytecode, runtime discriminant or field offset"
+}
