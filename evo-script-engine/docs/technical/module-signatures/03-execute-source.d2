@@ -1,0 +1,61 @@
+direction: right
+
+execute_source_use_case: {
+  label: "<<Use Case Module>>\ndefinitions/use_cases/execute_source.rs\n\nExecuteSource\nfor<'source, 'value, 'catalog, 'bindings> fn(\n  &'source str,\n  &'value [Value<'value>],\n  &'catalog CompilationCatalog,\n  &'bindings ApplicationBindings\n) -> ExecutionOutcome"
+}
+
+source_executor: {
+  label: "<<Agent Module>>\nagents/source_executor.rs\n\nexecute_source(...) -> ExecutionOutcome\nEXECUTE_SOURCE: ExecuteSource = execute_source"
+}
+
+lexer: {
+  label: "<<Collaborator Module>>\ncollaborators/lexer.rs\nLex · lex_source · LEX_SOURCE"
+}
+
+parser: {
+  label: "<<Collaborator Module>>\ncollaborators/parser.rs\nParse · parse_tokens · PARSE_TOKENS"
+}
+
+semantic_analyzer: {
+  label: "<<Collaborator Module>>\ncollaborators/semantic_analyzer.rs\nAnalyze · analyze_program · ANALYZE_PROGRAM"
+}
+
+bytecode_compiler: {
+  label: "<<Collaborator Module>>\ncollaborators/bytecode_compiler.rs\nLower · lower_program · LOWER_PROGRAM"
+}
+
+contextualize_compile_failure: {
+  label: "<<Tool Module>>\ntools/contextualize_compile_failure.rs\n\nContextualizeCompileFailure\ncontextualize_compile_failure(...)"
+}
+
+initializer: {
+  label: "<<Collaborator Module>>\ncollaborators/execution_initializer.rs\nInitialize · initialize_execution · INITIALIZE_EXECUTION"
+}
+
+instruction_executor: {
+  label: "<<Collaborator Module>>\ncollaborators/instruction_executor.rs\nExecuteInstruction · execute_instruction · EXECUTE_INSTRUCTION"
+}
+
+external_resolver: {
+  label: "<<Resolver Module>>\nresolvers/external_call_resolver.rs\nResolveExternalCall · resolve_external_call · RESOLVE_EXTERNAL_CALL"
+}
+
+execute_source_use_case -> source_executor: "implemented by"
+
+source_executor -> lexer: "coordinates · compile phase"
+source_executor -> parser: "coordinates · compile phase"
+source_executor -> semantic_analyzer: "coordinates · compile phase"
+source_executor -> bytecode_compiler: "coordinates · compile phase"
+source_executor -> contextualize_compile_failure: "uses on CompileFailure"
+
+source_executor -> initializer: "coordinates · execution phase"
+source_executor -> instruction_executor: "coordinates when current instruction != CallExternal"
+source_executor -> external_resolver: "resolves through when current instruction = CallExternal"
+
+notes: {
+  label: "ExecuteSource Composition\nNo Agent → Agent\nCompile signatures reused directly\nExecution signatures reused directly\nCompiledProgram local outlives VmExecution\nExecutionOutcome is owned"
+}
+
+execution_detail: {
+  label: "Execution participants use the same Tool relationships shown in 02-execute-compiled.d2"
+}
