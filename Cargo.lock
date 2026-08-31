@@ -18,6 +18,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "evo-script-engine"
+version = "0.1.0"
+dependencies = [
+ "evo-values",
+]
+
+[[package]]
 name = "evo-shell"
 version = "0.1.0"
 

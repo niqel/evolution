@@ -5,4 +5,5 @@ members = [
     "evo-query",
     "evo-fs-provider-std",
     "evo-values",
+    "evo-script-engine",
 ]

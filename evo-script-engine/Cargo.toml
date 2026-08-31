@@ -1,0 +1,10 @@
+[package]
+name = "evo-script-engine"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+evo-values = { path = "../evo-values" }
