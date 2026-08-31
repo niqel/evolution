@@ -1,0 +1,127 @@
+direction: right
+
+compiled_reused: {
+  label: "Compiled Program Data · reused"
+  CompiledProgram: { label: "<<artifact>> CompiledProgram" }
+  ConstantId: { label: "<<struct>> ConstantId" }
+  VariantDiscriminant: { label: "<<struct>> VariantDiscriminant" }
+}
+
+semantic_reused: {
+  label: "Semantic Program Data · reused"
+  FunctionId: { label: "<<struct>> FunctionId" }
+  SignatureSymbol: { label: "<<struct>> SignatureSymbol" }
+}
+
+outcome_reused: {
+  label: "Outcome / Diagnostic Data · reused"
+  ExternalCapabilityFailure: { label: "<<struct>> ExternalCapabilityFailure" }
+}
+
+evo_values: {
+  label: "evo-values · external shared owner"
+  Value: { label: "<<borrowed view>> Value<'a>" }
+  OwnedValue: { label: "<<enum>> OwnedValue" }
+}
+
+vm: {
+  label: "VM Execution Data · owner · 19 identities"
+
+  root_external: {
+    label: "Root / External Composition · 3"
+    VmExecution: { label: "<<struct>> VmExecution\n5 fields" }
+    ApplicationBindings: { label: "<<struct>> ApplicationBindings" }
+    ExternalCapability: { label: "<<alias>> ExternalCapability" }
+  }
+
+  values: {
+    label: "Runtime Value Descriptors · 2"
+    RuntimeValue: { label: "<<enum>> RuntimeValue\n17 variants" }
+    DynamicValue: { label: "<<enum>> DynamicValue\n3 variants" }
+  }
+
+  backing_refs: {
+    label: "Backing IDs / References · 6"
+    StringBackingId: { label: "<<struct>> StringBackingId" }
+    DynamicIntegerBackingId: { label: "<<struct>> DynamicIntegerBackingId" }
+    StructBackingId: { label: "<<struct>> StructBackingId" }
+    EnumBackingId: { label: "<<struct>> EnumBackingId" }
+    StringBackingRef: { label: "<<enum>> StringBackingRef\n2 variants" }
+    DynamicIntegerBackingRef: { label: "<<enum>> DynamicIntegerBackingRef\n2 variants" }
+  }
+
+  backing_data: {
+    label: "Execution Backing Data · 5"
+    ExecutionBackingStore: { label: "<<struct>> ExecutionBackingStore\n4 typed append-only stores" }
+    DynamicIntegerBacking: { label: "<<struct>> DynamicIntegerBacking" }
+    StructBacking: { label: "<<struct>> StructBacking" }
+    EnumBacking: { label: "<<struct>> EnumBacking" }
+    RuntimeEnumPayload: { label: "<<enum>> RuntimeEnumPayload\n3 variants" }
+  }
+
+  control: {
+    label: "Execution State / Control · 3"
+    SharedValueStorage: { label: "<<struct>> SharedValueStorage\nVec<Option<RuntimeValue>>" }
+    InstructionPointer: { label: "<<struct>> InstructionPointer" }
+    CallFrame: { label: "<<struct>> CallFrame\n3 fields" }
+  }
+}
+
+# VmExecution root
+vm.root_external.VmExecution -> compiled_reused.CompiledProgram: "borrows · 1"
+vm.root_external.VmExecution -> vm.root_external.ApplicationBindings: "borrows · 1"
+vm.root_external.VmExecution -> vm.control.SharedValueStorage: "owns · 1"
+vm.root_external.VmExecution -> vm.backing_data.ExecutionBackingStore: "owns · 1"
+vm.root_external.VmExecution -> vm.control.CallFrame: "owns · 1..N ordered"
+
+# Application bindings and external ABI
+vm.root_external.ApplicationBindings -> semantic_reused.SignatureSymbol: "references · 0..N"
+vm.root_external.ApplicationBindings -> vm.root_external.ExternalCapability: "owns · 0..N"
+vm.root_external.ExternalCapability -> evo_values.Value: "references · 0..N ordered"
+vm.root_external.ExternalCapability -> evo_values.OwnedValue: "references · 1"
+vm.root_external.ExternalCapability -> outcome_reused.ExternalCapabilityFailure: "references · 1"
+
+# Runtime descriptor family
+vm.values.RuntimeValue -> vm.backing_refs.StringBackingRef: "variant payload · 0..1"
+vm.values.RuntimeValue -> vm.values.DynamicValue: "variant payload · 0..1"
+vm.values.RuntimeValue -> vm.backing_refs.StructBackingId: "variant payload · 0..1"
+vm.values.RuntimeValue -> vm.backing_refs.EnumBackingId: "variant payload · 0..1"
+vm.values.DynamicValue -> vm.backing_refs.DynamicIntegerBackingRef: "variant payload · 0..1"
+
+# Compiled/execution backing references
+vm.backing_refs.StringBackingRef -> compiled_reused.ConstantId: "variant payload · 0..1"
+vm.backing_refs.StringBackingRef -> vm.backing_refs.StringBackingId: "variant payload · 0..1"
+vm.backing_refs.DynamicIntegerBackingRef -> compiled_reused.ConstantId: "variant payload · 0..1"
+vm.backing_refs.DynamicIntegerBackingRef -> vm.backing_refs.DynamicIntegerBackingId: "variant payload · 0..1"
+
+# Typed execution backing IDs
+vm.backing_refs.StringBackingId -> vm.backing_data.ExecutionBackingStore: "references · 1"
+vm.backing_refs.DynamicIntegerBackingId -> vm.backing_data.DynamicIntegerBacking: "references · 1"
+vm.backing_refs.StructBackingId -> vm.backing_data.StructBacking: "references · 1"
+vm.backing_refs.EnumBackingId -> vm.backing_data.EnumBacking: "references · 1"
+
+# Execution backing ownership
+vm.backing_data.ExecutionBackingStore -> vm.backing_data.DynamicIntegerBacking: "owns · 0..N ordered"
+vm.backing_data.ExecutionBackingStore -> vm.backing_data.StructBacking: "owns · 0..N ordered"
+vm.backing_data.ExecutionBackingStore -> vm.backing_data.EnumBacking: "owns · 0..N ordered"
+vm.backing_data.StructBacking -> vm.values.RuntimeValue: "owns · 0..N ordered"
+vm.backing_data.EnumBacking -> compiled_reused.VariantDiscriminant: "contains · 1"
+vm.backing_data.EnumBacking -> vm.backing_data.RuntimeEnumPayload: "contains · 1"
+vm.backing_data.RuntimeEnumPayload -> vm.values.RuntimeValue: "variant payload · 0..N ordered"
+
+# Shared storage and frames
+vm.control.SharedValueStorage -> vm.values.RuntimeValue: "owns · 0..N ordered"
+vm.control.CallFrame -> semantic_reused.FunctionId: "contains · 1"
+vm.control.CallFrame -> vm.control.InstructionPointer: "contains · 1"
+
+notes: {
+  label: "VM Execution Boundaries"
+  count: "Exactly 19 own VM identities"
+  root: "VmExecution has exactly 5 persistent fields: 2 immutable borrows + 3 mutable owned roots"
+  storage: "SharedValueStorage owns descriptor cells; CallFrame only describes boundaries and owns no per-frame Value collections"
+  strings: "ExecutionBackingStore also owns a typed String store of Box<str>; Box<str> is storage, not a separate technical identity"
+  refs: "String/Dynamic Integer may reference CompiledProgram constants or execution-owned backing; Struct/Enum use execution-owned typed IDs"
+  graph: "Composite backing is finite, immutable and acyclic; RuntimeValue copies descriptors, not backing"
+  frame: "CallFrame.function + InstructionPointer identify current bytecode position; frame_base is a primitive boundary, not a new identity"
+  no_state: "No current_frame, return_address, OperandStack owner, RuntimeTypeId, Provider identity or persistent Outcome lives in VmExecution"
+}
