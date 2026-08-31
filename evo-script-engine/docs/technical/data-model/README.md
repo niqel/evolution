@@ -1,6 +1,6 @@
 # Evo-Script Engine — Technical Data Model
 
-Status: TECHNICAL DATA MODEL — IN PROGRESS
+Status: TECHNICAL DATA MODEL — IN PROGRESS / OUTCOME INVENTORY ONLY REMAINS
 
 Este directorio contiene el Technical Data Model de `evo-script-engine` y sus Technical Data Diagrams.
 
@@ -28,7 +28,7 @@ VM Execution Data
 Outcome / Diagnostic Data
 ```
 
-`CompilationCatalog` no es un segundo functional input de `Compile`. `Source Text` continúa siendo el único input funcional. El catálogo es una dependencia técnica explícita y validada, construida fuera de `evo-script-engine`, necesaria para resolver contratos de shared Types y Signatures importadas sin introducir filesystem/module resolution dentro del Engine.
+`CompilationCatalog` no es un segundo functional input de `Compile`. `Source Text` continúa siendo el único input funcional; el catálogo es una dependency técnica explícita y validada construida fuera del Engine.
 
 ## `.efn` / Host Boundary
 
@@ -38,16 +38,16 @@ Host Interactive State
 `.efn` Compile / Execution Data
 ```
 
-No se introducen `Active Scope`, Host Session State, Current Provider, Use Node, Use Instruction ni `SET_SCOPE` dentro del Technical Data Model de `.efn`.
+No se introducen Active Scope, Host Session State, Current Provider, Use Node, Use Instruction ni `SET_SCOPE` dentro del Technical Data Model de `.efn`.
 
 ## Current Progress
 
 ```text
 Lexical Data                         ✅ CLOSED
 ├── Token Kind                       ✅ CLOSED — 50 variants
-├── Source Span                      ✅ CLOSED
+├── SourceSpan                       ✅ CLOSED
 ├── Token                            ✅ CLOSED
-└── Token Sequence                   ✅ CLOSED
+└── TokenSequence                    ✅ CLOSED
 
 AST Data                             ✅ CLOSED
 └── exact AST inventory              ✅ CLOSED — 31 identities
@@ -85,29 +85,25 @@ Compiled Program / Bytecode Data     ✅ CLOSED — REVALIDATED
 └── exact compiled inventory         ✅ CLOSED — 21 identities
 
 VM Execution Data                    ✅ STRUCTURAL / INVENTORY CLOSED
-├── VmExecution responsibility       ✅ CLOSED
-├── CompiledProgram relationship     ✅ CLOSED
+├── VmExecution                      ✅ CLOSED — 5 fields
 ├── ApplicationBindings              ✅ CLOSED
 ├── SharedValueStorage               ✅ CLOSED
 ├── ExecutionBackingStore            ✅ CLOSED
 ├── RuntimeValue                     ✅ CLOSED — 17 variants
 ├── DynamicValue                     ✅ CLOSED — 3 variants
 ├── typed backing identities         ✅ CLOSED
-├── backing representation           ✅ CLOSED
 ├── CallFrame                        ✅ CLOSED — 3 fields
 ├── InstructionPointer               ✅ CLOSED
 ├── stepping semantics               ✅ CLOSED
 ├── ExternalCapability ABI           ✅ CLOSED — exact Rust signature complete
 ├── Value<'a> / OwnedValue boundary  ✅ CLOSED
-├── VmExecution exact Rust root      ✅ CLOSED — 5 fields
 ├── Compiled Boundary Value Shape    ✅ CLOSED
 └── exact VM inventory               ✅ CLOSED — 19 identities
 
-Outcome / Diagnostic Data            ◉ IN PROGRESS
+Outcome / Diagnostic Data            ◉ IN PROGRESS — INVENTORY ONLY
 ├── Outcome root                     ✅ CLOSED
 │   ├── CompileOutcome               ✅ CLOSED
-│   ├── ExecutionOutcome             ✅ CLOSED
-│   └── external failure ownership   ✅ CLOSED
+│   └── ExecutionOutcome             ✅ CLOSED
 ├── CompileFailure                   ✅ CLOSED — ROOT + SUBFAMILIES
 │   ├── LexicalFailure               ✅ CLOSED — 6 variants
 │   ├── SyntaxFailure                ✅ CLOSED — 10 variants
@@ -121,18 +117,18 @@ Outcome / Diagnostic Data            ◉ IN PROGRESS
 │       ├── WhenFailure              ✅ CLOSED — 11 variants
 │       └── SignatureMismatchKind    ✅ CLOSED — 6 variants
 ├── Diagnostic provenance            ✅ CLOSED — SourceSpan / 0 new identities
-│   ├── CompileFailure span          ✅ CLOSED — mandatory SourceSpan
-│   ├── ExecutionFailure span        ✅ CLOSED — Option<SourceSpan>
+│   ├── CompileFailure span          ✅ mandatory SourceSpan
+│   ├── ExecutionFailure span        ✅ Option<SourceSpan>
 │   ├── DiagnosticAnchor             ❌ NOT NEEDED v0
-│   ├── SourceLocation identity      ❌ NOT NEEDED v0
-│   └── runtime SourceMap materialization ✅ CLOSED
+│   └── SourceLocation / SourceId    ❌ NOT NEEDED v0
 ├── ExternalCapabilityFailure        ✅ CLOSED — 1 identity / 1 field
-│   ├── code: Box<str>               ✅ CLOSED
-│   ├── lowercase snake_case         ✅ CLOSED
-│   ├── provider normalization       ✅ CLOSED
-│   └── exact ExternalCapability ABI ✅ CLOSED
-├── ExecutionFailure exact family    ← NEXT
-└── exact outcome inventory          PENDING
+│   └── code: Box<str>               ✅ CLOSED
+├── ExecutionFailure                 ✅ CLOSED — 5 own identities
+│   ├── ExecutionFailureKind         ✅ CLOSED — 4 variants
+│   ├── InvocationFailure            ✅ CLOSED — 2 variants
+│   ├── EvaluationFailure            ✅ CLOSED — 4 variants
+│   └── ExternalExecutionFailure     ✅ CLOSED — 3 variants
+└── exact Outcome inventory          ← NEXT / FINAL DATA-MODEL BLOCK
 ```
 
 ## Phase Map
@@ -161,17 +157,17 @@ EXECUTION SIDE
 CompiledProgram
     + ApplicationBindings
     + Invocation Values
-        ↓ boundary validation through CompiledValueShape
+        ↓ exact boundary validation
 VmExecution                   19 own VM identities
-        ↓ bytecode execution
-Outcome / Diagnostic Data     ◉ currently being modeled
+        ↓
+Outcome / Diagnostic Data     shapes CLOSED / inventory pending
 ```
 
 ## Compile-time vs runtime external composition
 
 ```text
 CompilationCatalog
-    = describes external semantic contracts at compile time
+    = describes semantic contracts at compile time
     = shared Types + Signatures
     = no Provider / fn pointer
 
@@ -181,7 +177,7 @@ ApplicationBindings
     = no compile-time type resolution
 ```
 
-They are intentionally distinct and are never ambient/global Engine state.
+They are intentionally distinct and never ambient/global Engine state.
 
 ## Closed compile-failure boundary
 
@@ -204,7 +200,7 @@ Semantic Analyzer
 SemanticProgram
 ```
 
-`SemanticFailure` no absorbe failures físicos de `.elib`, `.emod`, filesystem o construcción del catálogo. Esas condiciones deben resolverse antes de entregar un `CompilationCatalog` válido al Engine.
+Physical `.elib` / `.emod` / filesystem / catalog-construction failures remain outside Engine `SemanticFailure`.
 
 ## Closed diagnostic provenance boundary
 
@@ -218,9 +214,9 @@ ExecutionFailure
 └── source_span: Option<SourceSpan>
 ```
 
-No existe una identity `DiagnosticAnchor` o `SourceLocation` en v0.
+No existe `DiagnosticAnchor`, `SourceLocation` ni `SourceId` v0.
 
-Runtime materialization:
+Runtime:
 
 ```text
 CallFrame.function + InstructionPointer ordinal
@@ -228,58 +224,81 @@ CallFrame.function + InstructionPointer ordinal
 SourceMap
         ↓
 SourceSpan
-        ↓
-ExecutionFailure.source_span = Some(span)
 ```
 
-Invocation failures que ocurren antes de una `VmExecution` válida usan `source_span = None`.
+Invocation failures before a valid VM use `source_span = None`.
 
-`SourceSpan` conserva provenance técnica; line/column/snippet/path son presentación derivada por el Consumer cuando dispone del Source Text.
-
-## Closed external capability failure boundary
+## Closed external capability boundary
 
 ```rust
 struct ExternalCapabilityFailure {
     code: Box<str>,
 }
-```
 
-Exact ABI:
-
-```rust
 type ExternalCapability =
     for<'value> fn(
         &'value [Value<'value>],
     ) -> Result<OwnedValue, ExternalCapabilityFailure>;
 ```
 
-El code es una identity simbólica estable lowercase snake_case y está contextualizado por la `SignatureSymbol` que el Engine ya conoce.
+The adapter normalizes Provider/vendor failures before crossing the ABI. `MissingBinding` and `ResultContractMismatch` remain Engine-owned execution failures.
 
-El adapter de aplicación normaliza errors de Provider/vendor antes de cruzar el ABI.
+## Closed execution-failure boundary
 
-No cruzan hacia el Engine:
+Authority: [`EXECUTION_FAILURE.md`](./EXECUTION_FAILURE.md).
 
-```text
-Provider-specific error type
-Box<dyn Error>
-std::io::Error
-SourceSpan
-human message
-arbitrary details payload
+```rust
+struct ExecutionFailure {
+    kind: ExecutionFailureKind,
+    source_span: Option<SourceSpan>,
+}
+
+enum ExecutionFailureKind {
+    Compilation(CompileFailureKind),
+    Invocation(InvocationFailure),
+    Evaluation(EvaluationFailure),
+    External(ExternalExecutionFailure),
+}
 ```
 
-`MissingBinding` y `ResultContractMismatch` siguen siendo failures propios del Engine y se definirán dentro de `ExecutionFailure`.
+Exact subfamilies:
+
+```text
+InvocationFailure
+├── ArityMismatch { expected, actual }
+└── ArgumentShapeMismatch { position }
+
+EvaluationFailure
+├── Overflow
+├── DivisionByZero
+├── Conversion
+└── DynamicNumericType
+
+ExternalExecutionFailure
+├── MissingBinding { signature }
+├── CapabilityFailure { signature, failure }
+└── ResultContractMismatch { signature }
+```
+
+Provenance:
+
+```text
+Compilation → Some(CompileFailure.source_span)
+Invocation  → None
+Evaluation  → Some(current instruction span)
+External    → Some(CallExternal span)
+```
+
+VM/compiler invariant violations do not become normal execution outcomes.
 
 ## Current Documents
 
 ### Lexical Data
-
 - [`LEXICAL_DATA.md`](./LEXICAL_DATA.md)
 - [`TOKEN.md`](./TOKEN.md)
 - [`TOKEN_SEQUENCE.md`](./TOKEN_SEQUENCE.md)
 
 ### AST Data
-
 - [`AST_DATA.md`](./AST_DATA.md)
 - [`AST_TYPE_DEFINITIONS.md`](./AST_TYPE_DEFINITIONS.md)
 - [`AST_FUNCTION_DEFINITIONS.md`](./AST_FUNCTION_DEFINITIONS.md)
@@ -289,21 +308,18 @@ arbitrary details payload
 - [`AST_INVENTORY.md`](./AST_INVENTORY.md)
 
 ### Compilation Dependency Data
-
-- [`COMPILATION_DEPENDENCY_MODEL.md`](./COMPILATION_DEPENDENCY_MODEL.md) — `CompilationCatalog`, shared-Type/Signature contracts y frontera de ownership/failure con el resolver externo.
+- [`COMPILATION_DEPENDENCY_MODEL.md`](./COMPILATION_DEPENDENCY_MODEL.md)
 
 ### Semantic Program Data
-
 - [`SEMANTIC_PROGRAM_DATA.md`](./SEMANTIC_PROGRAM_DATA.md)
 - [`SEMANTIC_PROGRAM_STRUCTURE.md`](./SEMANTIC_PROGRAM_STRUCTURE.md)
 - [`SEMANTIC_EXPRESSIONS.md`](./SEMANTIC_EXPRESSIONS.md)
 - [`SEMANTIC_PROGRAM_INVENTORY.md`](./SEMANTIC_PROGRAM_INVENTORY.md)
 
 ### Compiled Program / Bytecode Data
-
-- [`COMPILED_PROGRAM_DATA.md`](./COMPILED_PROGRAM_DATA.md) — root compilado corregido y revalidado.
-- [`COMPILED_PROGRAM_INVENTORY.md`](./COMPILED_PROGRAM_INVENTORY.md) — inventario exacto: 21 identities propias, 48 Instruction variants.
-- [`COMPILED_STORAGE_DATA.md`](./COMPILED_STORAGE_DATA.md) — slots, constants y `ExternalSymbol { symbol, parameter_count, result_shape }`.
+- [`COMPILED_PROGRAM_DATA.md`](./COMPILED_PROGRAM_DATA.md)
+- [`COMPILED_PROGRAM_INVENTORY.md`](./COMPILED_PROGRAM_INVENTORY.md)
+- [`COMPILED_STORAGE_DATA.md`](./COMPILED_STORAGE_DATA.md)
 - [`COMPILED_CORE_CALL_INSTRUCTIONS.md`](./COMPILED_CORE_CALL_INSTRUCTIONS.md)
 - [`COMPILED_NUMERIC_INSTRUCTIONS.md`](./COMPILED_NUMERIC_INSTRUCTIONS.md)
 - [`COMPILED_CONTROL_FLOW.md`](./COMPILED_CONTROL_FLOW.md)
@@ -313,12 +329,11 @@ arbitrary details payload
 - [`COMPILED_COMPOSITE_INSTRUCTIONS.md`](./COMPILED_COMPOSITE_INSTRUCTIONS.md)
 - [`COMPILED_STRUCTURAL_EQUALITY.md`](./COMPILED_STRUCTURAL_EQUALITY.md)
 - [`COMPILED_SOURCE_MAP.md`](./COMPILED_SOURCE_MAP.md)
-- [`COMPILED_BOUNDARY_VALUE_SHAPE.md`](./COMPILED_BOUNDARY_VALUE_SHAPE.md) — boundary contract metadata.
+- [`COMPILED_BOUNDARY_VALUE_SHAPE.md`](./COMPILED_BOUNDARY_VALUE_SHAPE.md)
 
 ### VM Execution Data
-
-- [`VM_EXECUTION_DATA.md`](./VM_EXECUTION_DATA.md) — autoridad acumulada de VM.
-- [`VM_EXECUTION_INVENTORY.md`](./VM_EXECUTION_INVENTORY.md) — inventario exacto de 19 identities propias.
+- [`VM_EXECUTION_DATA.md`](./VM_EXECUTION_DATA.md)
+- [`VM_EXECUTION_INVENTORY.md`](./VM_EXECUTION_INVENTORY.md)
 - [`RUNTIME_VALUE_MODEL.md`](./RUNTIME_VALUE_MODEL.md)
 - [`BACKING_IDENTITY_STRATEGY.md`](./BACKING_IDENTITY_STRATEGY.md)
 - [`RUNTIME_VALUE_REPRESENTATION.md`](./RUNTIME_VALUE_REPRESENTATION.md)
@@ -332,7 +347,6 @@ arbitrary details payload
 - [`../../../../evo-values/INTERCHANGE_MODEL.md`](../../../../evo-values/INTERCHANGE_MODEL.md)
 
 ### Outcome / Diagnostic Data
-
 - [`OUTCOME_DIAGNOSTIC_DATA.md`](./OUTCOME_DIAGNOSTIC_DATA.md)
 - [`COMPILE_FAILURE.md`](./COMPILE_FAILURE.md)
 - [`LEXICAL_FAILURE.md`](./LEXICAL_FAILURE.md)
@@ -340,19 +354,13 @@ arbitrary details payload
 - [`SEMANTIC_FAILURE.md`](./SEMANTIC_FAILURE.md)
 - [`DIAGNOSTIC_PROVENANCE.md`](./DIAGNOSTIC_PROVENANCE.md)
 - [`EXTERNAL_CAPABILITY_FAILURE.md`](./EXTERNAL_CAPABILITY_FAILURE.md)
-
-### Normative language amendments used by compiled/runtime model
-
-- [`../../../../evo-script/DYNAMIC_NUMERIC_ARITHMETIC_v0.1.md`](../../../../evo-script/DYNAMIC_NUMERIC_ARITHMETIC_v0.1.md)
-- [`../../../../evo-script/COMPOSITE_EQUALITY_COMPARABILITY_v0.1.md`](../../../../evo-script/COMPOSITE_EQUALITY_COMPARABILITY_v0.1.md)
-- [`../../../../evo-script/EFN_HOST_BOUNDARY_v0.1.md`](../../../../evo-script/EFN_HOST_BOUNDARY_v0.1.md)
-- [`../../../../evo-script/EFN_TYPE_CARDINALITY_v0.1.md`](../../../../evo-script/EFN_TYPE_CARDINALITY_v0.1.md)
+- [`EXECUTION_FAILURE.md`](./EXECUTION_FAILURE.md)
 
 ## Technical Data Diagram Rule
 
 El Technical Data Diagram representa datos y artifacts, no behavioral classes.
 
-Categorías:
+Categories:
 
 ```text
 <<struct>>
@@ -362,7 +370,7 @@ Categorías:
 <<alias>>
 ```
 
-Relaciones:
+Relations:
 
 ```text
 contains
@@ -379,17 +387,16 @@ No se representan methods, inheritance, service classes ni OO interfaces fictici
 ## Next Block
 
 ```text
-ExecutionFailure exact family ← NEXT
+exact Outcome / Diagnostic inventory ← NEXT
 ```
 
-Ya no quedan placeholders dentro de `ExternalCapability` ni de provenance diagnóstica.
+Este es el último bloque del Technical Data Model. No debe introducir semántica nueva: solamente auditar aliases, own identities y reused identities de Outcome / Diagnostic Data.
 
-Después:
+Si la auditoría no revela inconsistencias:
 
 ```text
-ExecutionFailure exact family
-    ↓
-Outcome exact inventory
-    ↓
-Outcome / Diagnostic Data CLOSED
+Outcome / Diagnostic Data ✅ CLOSED
+Technical Data Model       ✅ CLOSED
 ```
+
+Después comienza la siguiente etapa metodológica: `Technical Data Diagram`.
