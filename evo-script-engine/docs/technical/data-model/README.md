@@ -17,6 +17,8 @@ Lexical Data
     ↓
 AST Data
     ↓
+Semantic Analyzer ◄──────── CompilationCatalog
+    ↓                       explicit borrowed technical dependency
 Semantic Program Data
     ↓
 Compiled Program / Bytecode Data
@@ -25,6 +27,8 @@ VM Execution Data
     ↓
 Outcome / Diagnostic Data
 ```
+
+`CompilationCatalog` no es un segundo functional input de `Compile`. `Source Text` continúa siendo el único input funcional. El catálogo es una dependencia técnica explícita y validada, construida fuera de `evo-script-engine`, necesaria para resolver contratos de shared Types y Signatures importadas sin introducir filesystem/module resolution dentro del Engine.
 
 ## `.efn` / Host Boundary
 
@@ -48,7 +52,18 @@ Lexical Data                         ✅ CLOSED
 AST Data                             ✅ CLOSED
 └── exact AST inventory              ✅ CLOSED — 31 identities
 
+Compilation Dependency Data          ✅ CLOSED — CORRECTIVE MODEL
+├── CompilationCatalog               ✅ CLOSED
+├── TypeSymbol                       ✅ CLOSED
+├── CatalogTypeRef                   ✅ CLOSED — 18 variants
+├── Catalog Type structures          ✅ CLOSED
+├── Catalog Signature structures     ✅ CLOSED
+├── explicit immutable borrow        ✅ CLOSED
+├── external catalog construction    ✅ CLOSED
+└── exact dependency inventory       ✅ CLOSED — 8 identities
+
 Semantic Program Data                ✅ CLOSED
+├── catalog contracts lower to local TypeId / SignatureId
 └── exact semantic inventory         ✅ CLOSED — 33 identities
 
 Compiled Program / Bytecode Data     ✅ CLOSED — REVALIDATED
@@ -115,6 +130,12 @@ Lexical Data                  4 identities / TokenKind 50
     ↓
 AST Data                      31 identities
     ↓
+                            CompilationCatalog
+                            8 own dependency identities
+                                   │
+                                   ▼
+Semantic Analyzer ◄────────────────┘
+    ↓
 Semantic Program Data         33 identities
     ↓
 Compiled Program Data         21 identities / Instruction 48
@@ -129,6 +150,22 @@ VmExecution                   19 own VM identities
         ↓ bytecode execution
 Outcome / Diagnostic Data     ◉ currently being modeled
 ```
+
+## Compile-time vs runtime external composition
+
+```text
+CompilationCatalog
+    = describes external semantic contracts at compile time
+    = shared Types + Signatures
+    = no Provider / fn pointer
+
+ApplicationBindings
+    = supplies executable capabilities at runtime
+    = SignatureSymbol → ExternalCapability
+    = no compile-time type resolution
+```
+
+They are intentionally distinct and are never ambient/global Engine state.
 
 ## Current Documents
 
@@ -147,6 +184,10 @@ Outcome / Diagnostic Data     ◉ currently being modeled
 - [`AST_EXPRESSIONS.md`](./AST_EXPRESSIONS.md)
 - [`AST_WHEN.md`](./AST_WHEN.md)
 - [`AST_INVENTORY.md`](./AST_INVENTORY.md)
+
+### Compilation Dependency Data
+
+- [`COMPILATION_DEPENDENCY_MODEL.md`](./COMPILATION_DEPENDENCY_MODEL.md) — `CompilationCatalog`, shared-Type/Signature contracts y frontera de ownership/failure con el resolver externo.
 
 ### Semantic Program Data
 
@@ -234,5 +275,7 @@ No se representan methods, inheritance, service classes ni OO interfaces fictici
 ```text
 SemanticFailure exact family ← NEXT
 ```
+
+La corrección `CompilationCatalog` ya proporciona al Semantic Analyzer los contratos externos que necesita para decidir esos failures sin hacer filesystem/module resolution dentro del Engine.
 
 Después de cerrar las tres subfamilias de `CompileFailure`, continuará el modelado de `ExecutionFailure`, `ExternalCapabilityFailure` y `DiagnosticAnchor` antes del inventario exacto de Outcome / Diagnostic Data.
