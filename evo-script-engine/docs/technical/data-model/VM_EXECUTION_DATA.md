@@ -346,8 +346,6 @@ Status: CLOSED
 
 Cerrado en `CALL_FRAME.md` mediante CF-001..CF-010.
 
-Representación exacta:
-
 ```rust
 struct InstructionPointer(usize);
 
@@ -369,43 +367,46 @@ frame_base = absolute beginning of frame region
 operand_base = derived, never stored
 ```
 
-Derivación:
+Internal `Call(FunctionId)` mantiene al caller sobre la `Call` y crea callee en `InstructionPointer(0)`.
+
+`CallExternal` no crea `CallFrame`.
+
+## VM-020 — InstructionPointer Stepping Semantics
+
+Status: CLOSED
+
+Cerrado en `INSTRUCTION_POINTER_STEPPING.md` mediante IP-001..IP-010.
+
+Mientras exista un frame activo:
 
 ```text
-compiled_function
-    = CompiledProgram.functions[frame.function]
-
-operand_base
-    = frame.frame_base
-    + compiled_function.parameter_count
-    + compiled_function.local_count
+0 <= ip < compiled_function.instructions.len()
 ```
 
-Internal `Call(FunctionId)`:
+No existe past-end IP normal. Todo frame nuevo comienza en `InstructionPointer(0)`.
+
+Regla de commit:
+
+> El IP solo aplica su transición después de completar exitosamente la instruction actual. En failure permanece sobre la instruction responsable.
+
+Esto no implica rollback transaccional ni resumability.
+
+Tabla cerrada:
 
 ```text
-caller.ip remains on Call
-callee.function = target
-callee.ip = InstructionPointer(0)
+ordinary success           → ip += 1
+ordinary failure           → unchanged
+Jump(target)               → ip = target
+JumpIfFalse(false)         → ip = target
+JumpIfFalse(true)          → ip += 1
+internal Call success      → caller unchanged; callee ip = 0
+internal Return success    → remove callee; caller ip += 1
+entry Return success       → execution complete
+CallExternal success       → ip += 1
+CallExternal failure       → unchanged
 ```
 
-Successful `Return` elimina el callee y avanza exactamente una instruction al caller reanudado.
-
-No se almacenan:
-
-```text
-operand_base
-parameter_count
-local_count
-max_operand_depth
-return_address
-parent frame
-caller index
-call-site field
-SourceSpan
-```
-
-`CallExternal` no crea `CallFrame`; permanece dentro del active frame actual.
+No existen `next_ip`, `return_ip`, past-end sentinel ni root-level `InstructionPointer`.
 
 ## Runtime Value / VM Data Authorities
 
@@ -415,6 +416,7 @@ SourceSpan
 - `BACKING_DATA_REPRESENTATION.md`
 - `SHARED_VALUE_STORAGE.md`
 - `CALL_FRAME.md`
+- `INSTRUCTION_POINTER_STEPPING.md`
 
 ## Current Closure
 
@@ -437,18 +439,18 @@ Shared Value Storage exact representation       ✅ CLOSED
 CallFrame exact representation                  ✅ CLOSED
 InstructionPointer identity                     ✅ CLOSED
 InstructionPointer current-instruction meaning  ✅ CLOSED
-operand_base derived / not stored               ✅ CLOSED
-caller suspended on internal Call               ✅ CLOSED
-no return-address / parent-frame fields         ✅ CLOSED
-CallExternal creates no CallFrame               ✅ CLOSED
+InstructionPointer stepping semantics           ✅ CLOSED
+active IP validity / no past-end                 ✅ CLOSED
+sequential / branch stepping                     ✅ CLOSED
+Call / Return stepping                           ✅ CLOSED
+failure preserves responsible IP                 ✅ CLOSED
 
 root InstructionPointer                         ❌ EXCLUDED
 Host / Active Scope / Current Provider          ❌ EXCLUDED
 Outcome / Diagnostic data                       ❌ SEPARATE PHASE
 
-InstructionPointer stepping semantics           ← NEXT
-ApplicationBindings exact model                 PENDING
-remaining external call mechanics               PENDING
+ApplicationBindings exact model                 ← NEXT
+remaining external call/value mechanics         PENDING
 VmExecution exact Rust root                     PENDING
 VM Execution exact inventory                    PENDING
 ```
