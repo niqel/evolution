@@ -1,6 +1,6 @@
 # Evo-Script Engine — ExternalCapability ABI
 
-Status: CLOSED — ABI SEMANTICS; EXACT `evo-values` TYPES PENDING
+Status: CLOSED — ABI VALUE TYPES CLOSED; FAILURE TYPE PENDING
 
 Este documento cierra las reglas v0 de la frontera uniforme entre `CallExternal` y una `ExternalCapability` suministrada mediante `ApplicationBindings`.
 
@@ -13,9 +13,9 @@ La autoridad deriva de:
 - `INSTRUCTION_POINTER_STEPPING.md`;
 - `TECHNICAL_DESIGN.md`, especialmente TD-008;
 - `ENGINEERING_PRINCIPLES.md`;
-- el modelo actual de `evo-values`.
+- `evo-values/INTERCHANGE_MODEL.md`.
 
-Este bloque cierra la responsabilidad, dirección de borrowing/ownership y commit semantics del ABI. La firma Rust textual final permanece pendiente únicamente de completar en `evo-values` las representaciones borrowed/owned necesarias para todo el lenguaje.
+Este bloque cierra la responsabilidad, dirección de borrowing/ownership, commit semantics y los tipos exactos de Value que cruzan el ABI. El único componente textual pendiente de la firma Rust final es el tipo exacto de failure, que pertenece a Outcome / Diagnostic Data.
 
 ## EC-001 — One uniform function-pointer ABI
 
@@ -51,7 +51,7 @@ RuntimeValue::Struct(StructBackingId)
 RuntimeValue::Enum(EnumBackingId)
 ```
 
-La VM observa/materializa temporalmente cada argumento como una representación borrowed equivalente a `Value<'a>`.
+La VM observa/materializa temporalmente cada argumento como `evo_values::Value<'a>`.
 
 ```text
 RuntimeValue
@@ -110,7 +110,7 @@ Status: CLOSED
 
 Un resultado exitoso de `CallExternal` debe sobrevivir a la invocation externa porque se convierte en un operand normal de la VM.
 
-Por tanto cruza hacia el Engine mediante una representación owned de interoperabilidad, conceptualmente `OwnedValue`.
+Por tanto cruza hacia el Engine mediante `evo_values::OwnedValue`.
 
 ```text
 ExternalCapability
@@ -180,36 +180,27 @@ Esto preserva la regla commit-after-success de `InstructionPointer`.
 
 No implica rollback de side effects externos ni resumability de la ejecución.
 
-## EC-009 — `evo-values` must provide complete borrowed and owned interchange representations
+## EC-009 — Complete borrowed and owned interchange representations
 
 Status: CLOSED
 
-La firma Rust textual final de `ExternalCapability` depende de que `evo-values` pueda representar todo Value que el lenguaje cerrado permite cruzar por esta frontera.
+El modelo exacto requerido por este ABI queda cerrado en `evo-values/INTERCHANGE_MODEL.md` mediante EV-001..EV-011.
 
-El `Value<'a>` histórico actual:
-
-```rust
-pub enum Value<'value> {
-    Text(&'value str),
-    Unsigned(u64),
-    Signed(i64),
-    Boolean(bool),
-}
-```
-
-no cubre todavía todas las familias runtime cerradas por `RuntimeValue`.
-
-Por tanto `evo-values` debe definir conceptualmente dos responsabilidades complementarias:
+La frontera utiliza exactamente:
 
 ```text
 Value<'a>
-    = borrowed/interchange view
+    = complete borrowed/interchange representation
 
 OwnedValue
-    = owned/interchange representation for ownership transfer
+    = complete owned/interchange representation
 ```
 
-La definición exacta de ambos tipos es el siguiente bloque y no reabre EC-001..EC-008.
+Ambos cubren exactamente las 17 familias semánticas de Value de Evo-Script v0.
+
+`Value<'a>` preserva borrowing donde corresponde y puede poseer únicamente estructuras temporales de descriptors necesarias para representar composites o canonicalizar temporalmente Dynamic Integer.
+
+`OwnedValue` contiene ownership completo y no contiene Rust references ni VM backing handles.
 
 ## EC-010 — Plain fn means statically composed behavior in v0
 
@@ -263,21 +254,21 @@ invoke external function pointer
         ip += 1
 ```
 
-## Architectural signature shape
+## Architectural Rust signature
 
-La forma arquitectónica cerrada es:
+Con `evo-values` ya cerrado, los tipos exactos de argumento y success result son:
 
 ```rust
 type ExternalCapability =
     for<'value> fn(
-        /* borrowed ordered argument views */
+        &'value [Value<'value>],
     ) -> Result<
-        /* one owned interchange value */,
-        /* external capability failure */,
+        OwnedValue,
+        /* external capability failure — Outcome / Diagnostic Data */,
     >;
 ```
 
-Los tipos exactos de arguments/result/failure no se fijan en este documento antes de cerrar el `evo-values` interchange model y Outcome/Diagnostic Data.
+La identity exacta del tipo de failure se definirá en Outcome / Diagnostic Data. Ese pendiente no reabre el modelo de arguments/result ni EC-001..EC-010.
 
 ## Explicitly Not Introduced
 
@@ -306,14 +297,14 @@ EC-005 owned interchange success result                   ✅ CLOSED
 EC-006 no Requester for normal one-result external call   ✅ CLOSED
 EC-007 success materializes then commits N→1              ✅ CLOSED
 EC-008 failure does not commit stack replacement          ✅ CLOSED
-EC-009 complete borrowed + owned evo-values required      ✅ CLOSED
+EC-009 exact Value<'a> + OwnedValue interchange types     ✅ CLOSED
 EC-010 plain fn = statically composed behavior v0         ✅ CLOSED
 
 ExternalCapability ABI semantics                          ✅ CLOSED
-Exact Rust ABI value types                                PENDING — depends on evo-values
+ExternalCapability argument type                          ✅ CLOSED — &[Value<'a>]
+ExternalCapability success result type                    ✅ CLOSED — OwnedValue
+ExternalCapability failure type                           PENDING — Outcome / Diagnostic Data
 
-evo-values borrowed / owned interchange model             ← NEXT
-external failure exact representation                     PENDING — Outcome / Diagnostic Data
-VmExecution exact Rust root                               PENDING
+VmExecution exact Rust root                               ← NEXT
 VM Execution exact inventory                              PENDING
 ```
