@@ -1,6 +1,6 @@
 # Evo-Script Engine — CompileFailure
 
-Status: CLOSED — ROOT FAMILY; SUBFAMILIES PENDING
+Status: CLOSED — ROOT FAMILY; SUBFAMILIES IN PROGRESS
 
 Este documento cierra la raíz técnica de `CompileFailure` para `evo-script-engine` v0.
 
@@ -113,6 +113,12 @@ Lexer
 ```
 
 Parser y Semantic Analyzer no producen `LexicalFailure`.
+
+La familia exacta está cerrada en [`LEXICAL_FAILURE.md`](./LEXICAL_FAILURE.md):
+
+```text
+LexicalFailure = 6 variants
+```
 
 ## CPF-006 — SyntaxFailure belongs only to Parser responsibility
 
@@ -257,8 +263,8 @@ CPF-009 structured Consumer-neutral representation                ✅ CLOSED
 CPF-010 one primary deterministic failure v0                      ✅ CLOSED
 
 CompileFailure root                                                ✅ CLOSED
-LexicalFailure exact family                                        ← NEXT
-SyntaxFailure exact family                                         PENDING
+LexicalFailure exact family                                        ✅ CLOSED — 6 variants
+SyntaxFailure exact family                                         ← NEXT
 SemanticFailure exact family                                       PENDING
 DiagnosticAnchor exact shape                                       PENDING
 ```
