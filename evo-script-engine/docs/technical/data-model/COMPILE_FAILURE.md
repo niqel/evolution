@@ -1,8 +1,8 @@
 # Evo-Script Engine — CompileFailure
 
-Status: CLOSED — ROOT FAMILY; SUBFAMILIES IN PROGRESS
+Status: CLOSED
 
-Este documento cierra la raíz técnica de `CompileFailure` para `evo-script-engine` v0.
+Este documento cierra la raíz técnica y las tres subfamilias exactas de `CompileFailure` para `evo-script-engine` v0.
 
 `CompileFailure` representa el failure owned transportado por:
 
@@ -45,8 +45,6 @@ No representa un error de ejecución normal ni una failure de `ExternalCapabilit
 
 Status: CLOSED
 
-`CompileFailure` separa dos responsabilidades:
-
 ```text
 kind
     = qué falló
@@ -60,8 +58,6 @@ La forma exacta del diagnostic anchor se define posteriormente.
 ## CPF-003 — Exactly three compile failure families
 
 Status: CLOSED
-
-`CompileFailureKind` posee exactamente tres variantes:
 
 ```rust
 enum CompileFailureKind {
@@ -79,7 +75,7 @@ Parser             → SyntaxFailure
 Semantic Analyzer  → SemanticFailure
 ```
 
-No se mezcla una cuarta familia genérica de compiler failure.
+No existe una cuarta familia genérica de compiler failure.
 
 ## CPF-004 — No normal BytecodeCompiler / Lowering failure variant
 
@@ -87,7 +83,7 @@ Status: CLOSED
 
 Después de `Semantic Analyzer success`, `SemanticProgram` es válido para el Bytecode Compiler conforme al Technical Data Model cerrado.
 
-Por tanto no se introduce como failure normal del lenguaje:
+No se introducen como language failures normales:
 
 ```text
 BytecodeFailure
@@ -96,25 +92,15 @@ CodeGenerationFailure
 CompilerInternalFailure
 ```
 
-Una imposibilidad al traducir un `SemanticProgram` válido representa una violación interna de invariantes / bug de implementación, no un `CompileFailure` causado por el Source Text.
+Una imposibilidad al traducir un `SemanticProgram` válido representa una violación interna de invariantes / bug de implementación.
 
 ## CPF-005 — LexicalFailure belongs only to Lexer responsibility
 
 Status: CLOSED
 
-`LexicalFailure` expresa únicamente invalidez de forma léxica que Lexer puede confirmar con información suficiente.
+`LexicalFailure` expresa únicamente invalidez de forma léxica que Lexer puede confirmar.
 
-```text
-Source Text
-    ↓
-Lexer
-    ├── TokenSequence
-    └── LexicalFailure
-```
-
-Parser y Semantic Analyzer no producen `LexicalFailure`.
-
-La familia exacta está cerrada en [`LEXICAL_FAILURE.md`](./LEXICAL_FAILURE.md):
+Autoridad especializada: [`LEXICAL_FAILURE.md`](./LEXICAL_FAILURE.md).
 
 ```text
 LexicalFailure = 6 variants
@@ -126,9 +112,7 @@ Status: CLOSED
 
 `SyntaxFailure` expresa exclusivamente invalidez sintáctica o estructural que Parser puede confirmar después de recibir Tokens léxicamente válidos.
 
-Incluye las invariantes estructurales `.efn` cuya responsabilidad ya quedó cerrada en AST Data, sin absorber identity resolution o type resolution.
-
-La familia exacta está cerrada en [`SYNTAX_FAILURE.md`](./SYNTAX_FAILURE.md):
+Autoridad especializada: [`SYNTAX_FAILURE.md`](./SYNTAX_FAILURE.md).
 
 ```text
 SyntaxFailure = 10 variants
@@ -138,9 +122,17 @@ SyntaxFailure = 10 variants
 
 Status: CLOSED
 
-`SemanticFailure` expresa exclusivamente invalidez de significado resuelto sobre un AST sintácticamente válido.
+`SemanticFailure` expresa exclusivamente invalidez de significado resuelto sobre un AST sintácticamente válido y un `CompilationCatalog` válido.
 
-Su responsabilidad incluye identity resolution, type resolution, duplicate semantic identities, graph validation y Signature resolution conforme a las reglas semánticas cerradas.
+Autoridad especializada: [`SEMANTIC_FAILURE.md`](./SEMANTIC_FAILURE.md).
+
+```text
+SemanticFailure
+├── root variants            7
+└── own technical identities 12
+```
+
+El modelo cubre resolución, declaraciones, type checking, calls, composites, `when` y Signature satisfaction sin introducir un `SystemError` universal.
 
 ## CPF-008 — CompileFailure is autonomous owned data
 
@@ -156,17 +148,16 @@ Token<'source>
 TokenSequence<'source>
 AST<'source>
 SemanticProgram working references
+CompilationCatalog references
 ```
 
-Si una failure necesita conservar texto identificado durante compilation, ese dato se materializa como ownership de outcome.
+Si una failure necesita conservar texto o identidad descriptiva, ese dato se materializa como ownership de outcome.
 
 No se introduce:
 
 ```rust
 CompileFailure<'source>
 ```
-
-sin una necesidad futura explícita.
 
 ## CPF-009 — Structured, Consumer-neutral failure data
 
@@ -190,8 +181,6 @@ struct CompileFailure {
 }
 ```
 
-Un payload textual puede existir cuando sea dato real de la failure, pero no sustituye la identity estructurada del error.
-
 ## CPF-010 — One primary deterministic failure in v0
 
 Status: CLOSED
@@ -206,7 +195,33 @@ multi-error recovery
 continue-after-error compiler model
 ```
 
-Una futura User Story de tooling multi-diagnostic puede agregar recuperación/colección sin cambiar la semántica de esta failure primaria.
+## Exact compile failure families
+
+```text
+CompileFailure
+│
+├── LexicalFailure
+│      └── 6 variants
+│
+├── SyntaxFailure
+│      └── 10 variants
+│
+└── SemanticFailure
+       ├── 7 root families
+       └── 12 own technical identities
+```
+
+La dependency externa de compile-time está cerrada en [`COMPILATION_DEPENDENCY_MODEL.md`](./COMPILATION_DEPENDENCY_MODEL.md):
+
+```text
+Source Text
+    +
+borrowed valid CompilationCatalog
+    ↓
+Semantic Analyzer
+```
+
+Failures de filesystem / `.elib` / `.emod` / construcción del catálogo permanecen fuera de `SemanticFailure` y de este `CompileOutcome` del Engine.
 
 ## Phase flow
 
@@ -228,6 +243,8 @@ Parser
     │
     ▼
 AST
+    +
+CompilationCatalog
     ↓
 Semantic Analyzer
     ├── Err(SemanticFailure)
@@ -246,12 +263,15 @@ CompiledProgram
 
 ```text
 universal compile/runtime Failure enum
+SystemError universal enum
 BytecodeFailure as normal language failure
 LoweringFailure as normal language failure
 CompileFailure<'source>
-Token / AST references inside public failure
+Token / AST / SemanticProgram / Catalog references inside public failure
+TypeId / SignatureId escaping through SemanticFailure
 preformatted message as canonical model
 Vec<Diagnostic> multi-error compile result
+physical/library/module resolution failures inside Engine SemanticFailure
 ```
 
 ## Closure
@@ -271,6 +291,8 @@ CPF-010 one primary deterministic failure v0                      ✅ CLOSED
 CompileFailure root                                                ✅ CLOSED
 LexicalFailure exact family                                        ✅ CLOSED — 6 variants
 SyntaxFailure exact family                                         ✅ CLOSED — 10 variants
-SemanticFailure exact family                                       ← NEXT
+SemanticFailure exact family                                       ✅ CLOSED — 12 own identities
+CompileFailure exact subfamilies                                   ✅ CLOSED
 DiagnosticAnchor exact shape                                       PENDING
+ExecutionFailure exact family                                      ← NEXT
 ```
