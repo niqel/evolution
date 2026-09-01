@@ -290,7 +290,17 @@ no AST Arena
 
 Dependencias: ESE-001.
 
-Implementar exactamente las 8 identities:
+Materializar primero la identity canónica reutilizada:
+
+```text
+SignatureSymbol
+```
+
+porque las shapes cerradas de Compilation Dependency Data la requieren directamente y ESE-015 debe permanecer compilable de forma independiente.
+
+`SignatureSymbol` NO cuenta como identity propia de Compilation Dependency Data. Continúa perteneciendo al inventario cerrado de Semantic Program Data.
+
+Implementar además exactamente las 8 identities propias:
 
 ```text
 TypeSymbol
@@ -303,15 +313,31 @@ CatalogSignature
 CompilationCatalog
 ```
 
+Compilation Dependency own identity count = 8.
+
 `CompilationCatalog` es explícito, validated, immutable y reusable; no filesystem I/O.
+No runtime binding.
+No ApplicationBindings.
+No Provider discovery.
+
+> Nota: `SignatureSymbol` is a Semantic Program identity but is also a prerequisite reused by Compilation Dependency Data. Because ESE-015 precedes ESE-016 and must compile independently, its physical Rust definition must be materialized in ESE-015. ESE-016 then reuses that same canonical identity while completing the remaining Semantic Program Data. This is implementation partitioning only. It does not move semantic responsibility into Compilation Dependency Data.
 
 ## ESE-016 — Semantic Program core data
 
 Dependencias: ESE-014, ESE-015.
 
-Implementar IDs, root/owner structures y semantic functions conforme a `SEMANTIC_PROGRAM_DATA.md` y documentos especializados.
+`SignatureSymbol` ya fue materializada en `ESE-015` y se reutiliza aquí; **NO duplicar**.
 
-Completar exactamente 33 semantic identities.
+Implementar las 32 identities semánticas restantes hasta completar exactamente las 33 semantic identities del inventario cerrado:
+
+```text
+SignatureSymbol pre-materialized     1
+identities semánticas restantes     32
+                                    ──
+Semantic Program total              33
+```
+
+Implementar IDs, root/owner structures y semantic functions conforme a `SEMANTIC_PROGRAM_DATA.md` y documentos especializados.
 
 No Provider identity, runtime binding, Pipeline identity ni SemanticImport.
 
