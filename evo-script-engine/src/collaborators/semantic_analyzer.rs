@@ -2452,7 +2452,7 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
             }
         }
 
-        // Analyze values and construct positional SemanticFieldValue list
+        // Analyze values and construct SemanticFieldValue list in source evaluation order
         let mut sem_fields = Vec::new();
         for f in fields {
             let f_idx = struct_meta.name_to_field_idx[f.name.lexeme];
@@ -2479,22 +2479,15 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                 });
             }
 
-            sem_fields.push((
-                f_idx,
-                SemanticFieldValue {
-                    field: FieldId(f_idx),
-                    value: val_expr,
-                },
-            ));
+            sem_fields.push(SemanticFieldValue {
+                field: FieldId(f_idx),
+                value: val_expr,
+            });
         }
-
-        // Sort by field index to ensure positional stability
-        sem_fields.sort_by_key(|(idx, _)| *idx);
-        let fields = sem_fields.into_iter().map(|(_, val)| val).collect();
 
         Ok(SemanticExpression {
             type_id: TypeId(type_id),
-            kind: SemanticExpressionKind::StructConstruction { fields },
+            kind: SemanticExpressionKind::StructConstruction { fields: sem_fields },
             span,
         })
     }
@@ -2668,18 +2661,13 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                         });
                     }
 
-                    sem_fields.push((
-                        f_idx,
-                        SemanticFieldValue {
-                            field: FieldId(f_idx),
-                            value: val_expr,
-                        },
-                    ));
+                    sem_fields.push(SemanticFieldValue {
+                        field: FieldId(f_idx),
+                        value: val_expr,
+                    });
                 }
 
-                sem_fields.sort_by_key(|(idx, _)| *idx);
-                let fields = sem_fields.into_iter().map(|(_, val)| val).collect();
-                SemanticEnumPayload::Structured { fields }
+                SemanticEnumPayload::Structured { fields: sem_fields }
             }
             _ => unreachable!(),
         };
@@ -4038,7 +4026,7 @@ fn is_valid_conversion(source_type: &SemanticType, target_native: &NativeType) -
     };
 
     if matches!(target_native, NativeType::String) {
-        // to_string: all numeric, bool, string, dynamic
+        // to_string accepts only fixed numeric and dynamic
         return matches!(
             source_native,
             NativeType::Int
@@ -4055,8 +4043,6 @@ fn is_valid_conversion(source_type: &SemanticType, target_native: &NativeType) -
                 | NativeType::Float
                 | NativeType::Float32
                 | NativeType::Float64
-                | NativeType::Bool
-                | NativeType::String
                 | NativeType::Dynamic
         );
     }
@@ -5410,8 +5396,8 @@ mod tests {
         match &main_fn.body.result.kind {
             SemanticExpressionKind::StructConstruction { fields } => {
                 assert_eq!(fields.len(), 2);
-                assert_eq!(fields[0].field.0, 0); // id is field 0
-                assert_eq!(fields[1].field.0, 1); // name is field 1
+                assert_eq!(fields[0].field.0, 1); // name is field 1 (source first)
+                assert_eq!(fields[1].field.0, 0); // id is field 0 (source second)
             }
             _ => panic!("expected StructConstruction"),
         }
@@ -5441,8 +5427,8 @@ mod tests {
             SemanticExpressionKind::EnumConstruction { payload, .. } => match payload {
                 SemanticEnumPayload::Structured { fields } => {
                     assert_eq!(fields.len(), 2);
-                    assert_eq!(fields[0].field.0, 0); // code is field 0
-                    assert_eq!(fields[1].field.0, 1); // payload is field 1
+                    assert_eq!(fields[0].field.0, 1); // payload is field 1 (source first)
+                    assert_eq!(fields[1].field.0, 0); // code is field 0 (source second)
                 }
                 _ => panic!("expected Structured payload"),
             },
@@ -5550,10 +5536,6 @@ mod tests {
     #[test]
     fn signature_transitive_dependency_materialization_ids() {
         let mut signatures = HashMap::new();
-        let sig_b = SignatureSymbol {
-            module: "dep".to_string(),
-            name: "B".to_string(),
-        };
         signatures.insert(
             SignatureSymbol {
                 module: "dep".to_string(),
@@ -5564,10 +5546,6 @@ mod tests {
                 result_type: CatalogTypeRef::Bool,
             },
         );
-        let sig_a = SignatureSymbol {
-            module: "dep".to_string(),
-            name: "A".to_string(),
-        };
         signatures.insert(
             SignatureSymbol {
                 module: "dep".to_string(),
@@ -6535,5 +6513,160 @@ mod tests {
             }
         "#;
         assert!(analyze_src(src_dynamic_call, &cat).is_ok());
+    }
+
+    #[test]
+    fn to_string_domain_restrictions() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+
+        // Numeric -> success
+        let src1 = "public fn main(int8 value) -> string { return to_string(value); }";
+        assert!(analyze_src(src1, &cat).is_ok());
+
+        // Dynamic -> success
+        let src2 = "public fn main(dynamic value) -> string { return to_string(value); }";
+        assert!(analyze_src(src2, &cat).is_ok());
+
+        // Bool -> InvalidConversion
+        let src3 = "public fn main(bool value) -> string { return to_string(value); }";
+        assert!(matches!(
+            analyze_src(src3, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::InvalidConversion { .. }
+                )),
+                ..
+            })
+        ));
+
+        // String -> InvalidConversion
+        let src4 = "public fn main(string value) -> string { return to_string(value); }";
+        assert!(matches!(
+            analyze_src(src4, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::InvalidConversion { .. }
+                )),
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn struct_construction_preserves_source_evaluation_order() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+
+        let src = r#"
+            struct Worker {
+                int age;
+                string name;
+            }
+
+            private fn get_name() -> string {
+                return "A";
+            }
+
+            private fn get_age() -> int {
+                return 10;
+            }
+
+            public fn main() -> Worker {
+                return Worker {
+                    name: get_name(),
+                    age: get_age()
+                };
+            }
+        "#;
+
+        let sem = match analyze_src(src, &cat) {
+            Ok(p) => p,
+            Err(_) => panic!("struct construction should succeed"),
+        };
+
+        let main_fn = sem.functions.last().unwrap();
+        match &main_fn.body.result.kind {
+            SemanticExpressionKind::StructConstruction { fields } => {
+                assert_eq!(fields.len(), 2);
+                assert_eq!(fields[0].field.0, 1); // FieldId(name) = 1
+                assert_eq!(fields[1].field.0, 0); // FieldId(age) = 0
+
+                match &fields[0].value.kind {
+                    SemanticExpressionKind::Call(call) => match &call.target {
+                        SemanticCallTarget::Internal(fid) => {
+                            assert_eq!(fid.0, 0);
+                        }
+                        _ => panic!("expected internal call for get_name"),
+                    },
+                    _ => panic!("expected call for get_name"),
+                }
+
+                match &fields[1].value.kind {
+                    SemanticExpressionKind::Call(call) => match &call.target {
+                        SemanticCallTarget::Internal(fid) => {
+                            assert_eq!(fid.0, 1);
+                        }
+                        _ => panic!("expected internal call for get_age"),
+                    },
+                    _ => panic!("expected call for get_age"),
+                }
+            }
+            _ => panic!("expected StructConstruction"),
+        }
+    }
+
+    #[test]
+    fn structured_enum_construction_preserves_source_evaluation_order() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+
+        let src = r#"
+            enum Event {
+                Data {
+                    int code;
+                    string message;
+                }
+            }
+
+            private fn get_name() -> string {
+                return "A";
+            }
+
+            private fn get_age() -> int {
+                return 10;
+            }
+
+            public fn main() -> Event {
+                return Event::Data {
+                    message: get_name(),
+                    code: get_age()
+                };
+            }
+        "#;
+
+        let sem = match analyze_src(src, &cat) {
+            Ok(p) => p,
+            Err(_) => panic!("structured enum construction should succeed"),
+        };
+
+        let main_fn = sem.functions.last().unwrap();
+        match &main_fn.body.result.kind {
+            SemanticExpressionKind::EnumConstruction { payload, .. } => match payload {
+                SemanticEnumPayload::Structured { fields } => {
+                    assert_eq!(fields.len(), 2);
+                    assert_eq!(fields[0].field.0, 1); // FieldId(message) = 1
+                    assert_eq!(fields[1].field.0, 0); // FieldId(code) = 0
+                }
+                _ => panic!("expected structured enum payload"),
+            },
+            _ => panic!("expected EnumConstruction"),
+        }
     }
 }
