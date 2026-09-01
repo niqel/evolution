@@ -8,3 +8,4 @@ path = "src/lib.rs"
 
 [dependencies]
 evo-values = { path = "../evo-values" }
+num-bigint = "0.4"
