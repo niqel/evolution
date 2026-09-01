@@ -262,6 +262,20 @@ impl<'a, 'source> Analyzer<'a, 'source> {
         }
     }
 
+    fn is_value_type_compatible(&self, actual_id: usize, expected_id: usize) -> bool {
+        if actual_id == expected_id {
+            return true;
+        }
+        let expected_type = &self.types[expected_id];
+        let actual_type = &self.types[actual_id];
+        if let SemanticType::Native(NativeType::Dynamic) = expected_type {
+            if let SemanticType::Native(actual_nt) = actual_type {
+                return is_numeric_native(actual_nt);
+            }
+        }
+        false
+    }
+
     // --- Step 1: Imports ---
 
     fn collect_imports(&mut self) -> Result<(), CompileFailure> {
@@ -1549,10 +1563,10 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
 
                     let val_expr = self.analyze_expression(&let_bind.value, Some(expected_type))?;
 
-                    let dynamic_type_id = self.analyzer.name_to_type["dynamic"];
-                    let is_compat =
-                        val_expr.type_id.0 == expected_type || expected_type == dynamic_type_id;
-                    if !is_compat {
+                    if !self
+                        .analyzer
+                        .is_value_type_compatible(val_expr.type_id.0, expected_type)
+                    {
                         return Err(CompileFailure {
                             kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
                                 TypeCheckingFailure::BindingInitialization {
@@ -1594,11 +1608,10 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
         let result =
             self.analyze_expression(&self.header.ast.body.result, Some(self.header.result_type))?;
 
-        let dynamic_type_id = self.analyzer.name_to_type["dynamic"];
-        let is_result_compat = result.type_id.0 == self.header.result_type
-            || self.header.result_type == dynamic_type_id;
-
-        if !is_result_compat {
+        if !self
+            .analyzer
+            .is_value_type_compatible(result.type_id.0, self.header.result_type)
+        {
             return Err(CompileFailure {
                 kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
                     TypeCheckingFailure::FunctionResult {
@@ -2019,9 +2032,22 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
             let r = self.analyze_expression(right, expected_type)?;
             let l = self.analyze_expression(left, Some(r.type_id.0))?;
             (l, r)
-        } else {
+        } else if is_left_lit && is_right_lit {
             let l = self.analyze_expression(left, expected_type)?;
             let r = self.analyze_expression(right, Some(l.type_id.0))?;
+            (l, r)
+        } else {
+            let l = self.analyze_expression(left, expected_type)?;
+            let r_expected = if let Some(exp_tid) = expected_type {
+                if exp_tid == self.analyzer.name_to_type["dynamic"] {
+                    Some(exp_tid)
+                } else {
+                    Some(l.type_id.0)
+                }
+            } else {
+                Some(l.type_id.0)
+            };
+            let r = self.analyze_expression(right, r_expected)?;
             (l, r)
         };
 
@@ -2030,12 +2056,39 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
             | BinaryOperator::Subtract
             | BinaryOperator::Multiply
             | BinaryOperator::Divide => {
-                let is_numeric = match &self.analyzer.types[left_expr.type_id.0] {
-                    SemanticType::Native(nt) => is_numeric_native(nt),
-                    _ => false,
+                let left_type = &self.analyzer.types[left_expr.type_id.0];
+                let right_type = &self.analyzer.types[right_expr.type_id.0];
+                let dynamic_id = self.analyzer.name_to_type["dynamic"];
+
+                let (is_valid, out_type) = if left_expr.type_id.0 == right_expr.type_id.0 {
+                    let is_num = match left_type {
+                        SemanticType::Native(nt) => is_numeric_native(nt),
+                        _ => false,
+                    };
+                    if !is_num {
+                        (false, 0)
+                    } else if expected_type == Some(dynamic_id) {
+                        (true, dynamic_id)
+                    } else {
+                        (true, left_expr.type_id.0)
+                    }
+                } else if left_expr.type_id.0 == dynamic_id {
+                    let is_r_num = match right_type {
+                        SemanticType::Native(nt) => is_numeric_native(nt),
+                        _ => false,
+                    };
+                    (is_r_num, dynamic_id)
+                } else if right_expr.type_id.0 == dynamic_id {
+                    let is_l_num = match left_type {
+                        SemanticType::Native(nt) => is_numeric_native(nt),
+                        _ => false,
+                    };
+                    (is_l_num, dynamic_id)
+                } else {
+                    (false, 0)
                 };
 
-                if !is_numeric || left_expr.type_id.0 != right_expr.type_id.0 {
+                if !is_valid {
                     return Err(CompileFailure {
                         kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
                             TypeCheckingFailure::ArithmeticOperator {
@@ -2051,16 +2104,6 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                         source_span: span,
                     });
                 }
-
-                let out_type = if let Some(exp_tid) = expected_type {
-                    if exp_tid == self.analyzer.name_to_type["dynamic"] {
-                        self.analyzer.name_to_type["dynamic"]
-                    } else {
-                        left_expr.type_id.0
-                    }
-                } else {
-                    left_expr.type_id.0
-                };
 
                 Ok(SemanticExpression {
                     type_id: TypeId(out_type),
@@ -2073,12 +2116,43 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                 })
             }
             BinaryOperator::Remainder => {
-                let is_integer_or_dyn = match &self.analyzer.types[left_expr.type_id.0] {
-                    SemanticType::Native(nt) => is_integer_or_dyn_native(nt),
-                    _ => false,
+                let left_type = &self.analyzer.types[left_expr.type_id.0];
+                let right_type = &self.analyzer.types[right_expr.type_id.0];
+                let dynamic_id = self.analyzer.name_to_type["dynamic"];
+
+                let (is_valid, out_type) = if left_expr.type_id.0 == right_expr.type_id.0 {
+                    if left_expr.type_id.0 == dynamic_id {
+                        (true, dynamic_id)
+                    } else {
+                        let is_int = match left_type {
+                            SemanticType::Native(nt) => is_integer_native(nt),
+                            _ => false,
+                        };
+                        if !is_int {
+                            (false, 0)
+                        } else if expected_type == Some(dynamic_id) {
+                            (true, dynamic_id)
+                        } else {
+                            (true, left_expr.type_id.0)
+                        }
+                    }
+                } else if left_expr.type_id.0 == dynamic_id {
+                    let is_r_num = match right_type {
+                        SemanticType::Native(nt) => is_numeric_native(nt),
+                        _ => false,
+                    };
+                    (is_r_num, dynamic_id)
+                } else if right_expr.type_id.0 == dynamic_id {
+                    let is_l_num = match left_type {
+                        SemanticType::Native(nt) => is_numeric_native(nt),
+                        _ => false,
+                    };
+                    (is_l_num, dynamic_id)
+                } else {
+                    (false, 0)
                 };
 
-                if !is_integer_or_dyn || left_expr.type_id.0 != right_expr.type_id.0 {
+                if !is_valid {
                     return Err(CompileFailure {
                         kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
                             TypeCheckingFailure::ArithmeticOperator {
@@ -2094,16 +2168,6 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                         source_span: span,
                     });
                 }
-
-                let out_type = if let Some(exp_tid) = expected_type {
-                    if exp_tid == self.analyzer.name_to_type["dynamic"] {
-                        self.analyzer.name_to_type["dynamic"]
-                    } else {
-                        left_expr.type_id.0
-                    }
-                } else {
-                    left_expr.type_id.0
-                };
 
                 Ok(SemanticExpression {
                     type_id: TypeId(out_type),
@@ -2342,7 +2406,10 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
             let expected_f_type = struct_meta.fields[f_idx].type_id;
             let val_expr = self.analyze_expression(&f.value, Some(expected_f_type))?;
 
-            if val_expr.type_id.0 != expected_f_type {
+            if !self
+                .analyzer
+                .is_value_type_compatible(val_expr.type_id.0, expected_f_type)
+            {
                 return Err(CompileFailure {
                     kind: CompileFailureKind::Semantic(SemanticFailure::Composite(
                         CompositeFailure::FieldTypeMismatch {
@@ -2448,7 +2515,10 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                 EnumConstruction::Associated { value, .. },
             ) => {
                 let val_expr = self.analyze_expression(value, Some(*exp_type))?;
-                if val_expr.type_id.0 != *exp_type {
+                if !self
+                    .analyzer
+                    .is_value_type_compatible(val_expr.type_id.0, *exp_type)
+                {
                     return Err(CompileFailure {
                         kind: CompileFailureKind::Semantic(SemanticFailure::Composite(
                             CompositeFailure::AssociatedPayloadTypeMismatch {
@@ -2525,7 +2595,10 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                     let exp_f_type = def_fields[f_idx].type_id;
                     let val_expr = self.analyze_expression(&f.value, Some(exp_f_type))?;
 
-                    if val_expr.type_id.0 != exp_f_type {
+                    if !self
+                        .analyzer
+                        .is_value_type_compatible(val_expr.type_id.0, exp_f_type)
+                    {
                         return Err(CompileFailure {
                             kind: CompileFailureKind::Semantic(SemanticFailure::Composite(
                                 CompositeFailure::FieldTypeMismatch {
@@ -2754,7 +2827,10 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                     }
 
                     let val_expr = self.analyze_expression(arg_expr, Some(exp_type.0))?;
-                    if val_expr.type_id.0 != exp_type.0 {
+                    if !self
+                        .analyzer
+                        .is_value_type_compatible(val_expr.type_id.0, exp_type.0)
+                    {
                         return Err(CompileFailure {
                             kind: CompileFailureKind::Semantic(SemanticFailure::Call(
                                 CallFailure::ArgumentTypeMismatch {
@@ -3018,7 +3094,10 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
             // First argument is current_expr
             match &formal_params[0] {
                 SemanticSignatureParameter::Value(exp_type) => {
-                    if current_expr.type_id.0 != exp_type.0 {
+                    if !self
+                        .analyzer
+                        .is_value_type_compatible(current_expr.type_id.0, exp_type.0)
+                    {
                         return Err(CompileFailure {
                             kind: CompileFailureKind::Semantic(SemanticFailure::Call(
                                 CallFailure::ArgumentTypeMismatch {
@@ -3076,7 +3155,10 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                         }
 
                         let val_expr = self.analyze_expression(arg_expr, Some(exp_type.0))?;
-                        if val_expr.type_id.0 != exp_type.0 {
+                        if !self
+                            .analyzer
+                            .is_value_type_compatible(val_expr.type_id.0, exp_type.0)
+                        {
                             return Err(CompileFailure {
                                 kind: CompileFailureKind::Semantic(SemanticFailure::Call(
                                     CallFailure::ArgumentTypeMismatch {
@@ -3472,7 +3554,10 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
             let res_expr = res_expr?;
 
             if let Some(comm_tid) = common_result_type {
-                if res_expr.type_id.0 != comm_tid {
+                if !self
+                    .analyzer
+                    .is_value_type_compatible(res_expr.type_id.0, comm_tid)
+                {
                     return Err(CompileFailure {
                         kind: CompileFailureKind::Semantic(SemanticFailure::When(
                             WhenFailure::BranchResultTypeMismatch {
@@ -3725,6 +3810,23 @@ fn is_numeric_native(nt: &NativeType) -> bool {
             | NativeType::Float32
             | NativeType::Float64
             | NativeType::Dynamic
+    )
+}
+
+fn is_integer_native(nt: &NativeType) -> bool {
+    matches!(
+        nt,
+        NativeType::Int
+            | NativeType::Int8
+            | NativeType::Int16
+            | NativeType::Int32
+            | NativeType::Int64
+            | NativeType::Int128
+            | NativeType::Uint8
+            | NativeType::Uint16
+            | NativeType::Uint32
+            | NativeType::Uint64
+            | NativeType::Uint128
     )
 }
 
@@ -5859,5 +5961,349 @@ mod tests {
 
         let src4 = "public fn main(float32 x) -> float32 { return 1.5 + x; }";
         assert!(analyze_src(src4, &cat).is_ok());
+    }
+
+    #[test]
+    fn dynamic_rejects_nonnumeric() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+
+        // let dynamic x = true -> BindingInitialization
+        let src1 = "public fn main() -> int { let dynamic x = true; return 0; }";
+        assert!(matches!(
+            analyze_src(src1, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::BindingInitialization { .. }
+                )),
+                ..
+            })
+        ));
+
+        // let dynamic x = "hello" -> BindingInitialization
+        let src2 = "public fn main() -> int { let dynamic x = \"hello\"; return 0; }";
+        assert!(matches!(
+            analyze_src(src2, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::BindingInitialization { .. }
+                )),
+                ..
+            })
+        ));
+
+        // fn -> dynamic { return true; } -> FunctionResult
+        let src3 = "public fn main() -> dynamic { return true; }";
+        assert!(matches!(
+            analyze_src(src3, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::FunctionResult { .. }
+                )),
+                ..
+            })
+        ));
+
+        // fn -> dynamic { return "hello"; } -> FunctionResult
+        let src4 = "public fn main() -> dynamic { return \"hello\"; }";
+        assert!(matches!(
+            analyze_src(src4, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::FunctionResult { .. }
+                )),
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn fixed_numeric_value_to_dynamic() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+
+        // int8 binding -> dynamic let
+        let src1 = "public fn main(int8 source) -> dynamic { let dynamic x = source; return x; }";
+        assert!(analyze_src(src1, &cat).is_ok());
+
+        // int8 function result -> dynamic return
+        let src2 = "public fn main(int8 value) -> dynamic { return value; }";
+        assert!(analyze_src(src2, &cat).is_ok());
+
+        // float32 binding -> dynamic let
+        let src3 =
+            "public fn main(float32 source) -> dynamic { let dynamic x = source; return x; }";
+        assert!(analyze_src(src3, &cat).is_ok());
+    }
+
+    #[test]
+    fn dynamic_call_argument() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+
+        let src1 = r#"
+            private fn consume(dynamic value) -> dynamic {
+                return value;
+            }
+            public fn main(int8 value) -> dynamic {
+                return consume(value);
+            }
+        "#;
+        assert!(analyze_src(src1, &cat).is_ok());
+
+        let src2 = r#"
+            private fn consume(dynamic value) -> dynamic {
+                return value;
+            }
+            public fn main(bool value) -> dynamic {
+                return consume(value);
+            }
+        "#;
+        assert!(matches!(
+            analyze_src(src2, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::Call(
+                    CallFailure::ArgumentTypeMismatch { .. }
+                )),
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn dynamic_pipeline_argument() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+
+        let src1 = r#"
+            private fn consume(dynamic value) -> dynamic {
+                return value;
+            }
+            public fn main(int8 value) -> dynamic {
+                return value |> consume;
+            }
+        "#;
+        assert!(analyze_src(src1, &cat).is_ok());
+    }
+
+    #[test]
+    fn dynamic_composite_fields() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+
+        // dynamic struct field <- int8 -> success
+        let src1 = r#"
+            struct Holder {
+                dynamic value;
+            }
+            public fn main(int8 source) -> Holder {
+                return Holder { value: source };
+            }
+        "#;
+        assert!(analyze_src(src1, &cat).is_ok());
+
+        // dynamic struct field <- bool -> FieldTypeMismatch
+        let src2 = r#"
+            struct Holder {
+                dynamic value;
+            }
+            public fn main() -> Holder {
+                return Holder { value: true };
+            }
+        "#;
+        assert!(matches!(
+            analyze_src(src2, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::Composite(
+                    CompositeFailure::FieldTypeMismatch { .. }
+                )),
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn dynamic_enum_payload() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+
+        // dynamic associated payload <- int8 -> success
+        let src1 = r#"
+            enum Result {
+                Value(dynamic)
+            }
+            public fn main(int8 source) -> Result {
+                return Result::Value(source);
+            }
+        "#;
+        assert!(analyze_src(src1, &cat).is_ok());
+
+        // dynamic associated payload <- bool -> AssociatedPayloadTypeMismatch
+        let src2 = r#"
+            enum Result {
+                Value(dynamic)
+            }
+            public fn main() -> Result {
+                return Result::Value(true);
+            }
+        "#;
+        assert!(matches!(
+            analyze_src(src2, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::Composite(
+                    CompositeFailure::AssociatedPayloadTypeMismatch { .. }
+                )),
+                ..
+            })
+        ));
+
+        // dynamic structured payload field <- int8 -> success
+        let src3 = r#"
+            enum Container {
+                Item { dynamic val; }
+            }
+            public fn main(int8 source) -> Container {
+                return Container::Item { val: source };
+            }
+        "#;
+        assert!(analyze_src(src3, &cat).is_ok());
+
+        // dynamic structured payload field <- bool -> FieldTypeMismatch
+        let src4 = r#"
+            enum Container {
+                Item { dynamic val; }
+            }
+            public fn main() -> Container {
+                return Container::Item { val: true };
+            }
+        "#;
+        assert!(matches!(
+            analyze_src(src4, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::Composite(
+                    CompositeFailure::FieldTypeMismatch { .. }
+                )),
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn nested_dynamic_arithmetic_trees() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+
+        // (a + b) + c
+        let src1 = "public fn main(int8 a, int8 b, int8 c) -> dynamic { return (a + b) + c; }";
+        let sem1 = match analyze_src(src1, &cat) {
+            Ok(p) => p,
+            Err(_) => panic!("(a + b) + c under dynamic should succeed"),
+        };
+        let dyn_id = sem1
+            .types
+            .iter()
+            .position(|t| matches!(t, SemanticType::Native(NativeType::Dynamic)))
+            .unwrap();
+        assert_eq!(sem1.functions[0].body.result.type_id.0, dyn_id);
+        match &sem1.functions[0].body.result.kind {
+            SemanticExpressionKind::Binary { left, right, .. } => {
+                assert_eq!(left.type_id.0, dyn_id);
+                match &left.kind {
+                    SemanticExpressionKind::Binary { .. } => {}
+                    _ => panic!("expected nested Binary"),
+                }
+                assert_ne!(right.type_id.0, dyn_id);
+            }
+            _ => panic!("expected outer Binary"),
+        }
+
+        // a + (b + c)
+        let src2 = "public fn main(int8 a, int8 b, int8 c) -> dynamic { return a + (b + c); }";
+        let sem2 = match analyze_src(src2, &cat) {
+            Ok(p) => p,
+            Err(_) => panic!("a + (b + c) under dynamic should succeed"),
+        };
+        assert_eq!(sem2.functions[0].body.result.type_id.0, dyn_id);
+        match &sem2.functions[0].body.result.kind {
+            SemanticExpressionKind::Binary { left, right, .. } => {
+                assert_ne!(left.type_id.0, dyn_id);
+                assert_eq!(right.type_id.0, dyn_id);
+                match &right.kind {
+                    SemanticExpressionKind::Binary { .. } => {}
+                    _ => panic!("expected nested Binary"),
+                }
+            }
+            _ => panic!("expected outer Binary"),
+        }
+    }
+
+    #[test]
+    fn when_numeric_fixed_branches_to_dynamic() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+
+        let src = r#"
+            enum Choice {
+                A,
+                B
+            }
+
+            public fn main(Choice choice, int8 a, int8 b) -> dynamic {
+                return when choice {
+                    Choice::A => a,
+                    Choice::B => b
+                };
+            }
+        "#;
+        let sem = match analyze_src(src, &cat) {
+            Ok(p) => p,
+            Err(_) => panic!("when branches to dynamic should succeed"),
+        };
+        let dyn_id = sem
+            .types
+            .iter()
+            .position(|t| matches!(t, SemanticType::Native(NativeType::Dynamic)))
+            .unwrap();
+        assert_eq!(sem.functions[0].body.result.type_id.0, dyn_id);
+
+        // Non-numeric branch in dynamic when fails
+        let src_err = r#"
+            enum Choice {
+                A,
+                B
+            }
+
+            public fn main(Choice choice, int8 a) -> dynamic {
+                return when choice {
+                    Choice::A => a,
+                    Choice::B => true
+                };
+            }
+        "#;
+        assert!(matches!(
+            analyze_src(src_err, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::When(
+                    WhenFailure::BranchResultTypeMismatch { .. }
+                )),
+                ..
+            })
+        ));
     }
 }
