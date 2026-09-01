@@ -1,8 +1,12 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
+use evo_values::OwnedValue;
+
 use crate::data::ast::expressions::{BinaryOperator, UnaryOperator};
 use crate::data::compilation_dependency::TypeSymbol;
+use crate::data::compiled::program::CompiledProgram;
+use crate::data::lexical::SourceSpan;
 use crate::data::semantic::SignatureSymbol;
 use crate::data::semantic::structure::NativeType;
 
@@ -259,6 +263,58 @@ pub(crate) enum SignatureMismatchKind {
 
 pub(crate) struct ExternalCapabilityFailure {
     pub(crate) code: Box<str>,
+}
+
+pub(crate) type CompileOutcome = Result<CompiledProgram, CompileFailure>;
+
+pub(crate) struct CompileFailure {
+    pub(crate) kind: CompileFailureKind,
+    pub(crate) source_span: SourceSpan,
+}
+
+pub(crate) enum CompileFailureKind {
+    Lexical(LexicalFailure),
+    Syntax(SyntaxFailure),
+    Semantic(SemanticFailure),
+}
+
+pub(crate) type ExecutionOutcome = Result<OwnedValue, ExecutionFailure>;
+
+pub(crate) struct ExecutionFailure {
+    pub(crate) kind: ExecutionFailureKind,
+    pub(crate) source_span: Option<SourceSpan>,
+}
+
+pub(crate) enum ExecutionFailureKind {
+    Compilation(CompileFailureKind),
+    Invocation(InvocationFailure),
+    Evaluation(EvaluationFailure),
+    External(ExternalExecutionFailure),
+}
+
+pub(crate) enum InvocationFailure {
+    ArityMismatch { expected: usize, actual: usize },
+    ArgumentShapeMismatch { position: usize },
+}
+
+pub(crate) enum EvaluationFailure {
+    Overflow,
+    DivisionByZero,
+    Conversion,
+    DynamicNumericType,
+}
+
+pub(crate) enum ExternalExecutionFailure {
+    MissingBinding {
+        signature: SignatureSymbol,
+    },
+    CapabilityFailure {
+        signature: SignatureSymbol,
+        failure: ExternalCapabilityFailure,
+    },
+    ResultContractMismatch {
+        signature: SignatureSymbol,
+    },
 }
 
 #[cfg(test)]
@@ -1084,5 +1140,306 @@ mod tests {
             code: Box::from("permission_denied"),
         };
         assert_eq!(&*failure.code, "permission_denied");
+    }
+
+    #[test]
+    fn compile_failure_kind_3_variants() {
+        let kind_lex = CompileFailureKind::Lexical(LexicalFailure::InvalidIdentifier);
+        match kind_lex {
+            CompileFailureKind::Lexical(LexicalFailure::InvalidIdentifier) => {}
+            _ => panic!("expected Lexical"),
+        }
+
+        let kind_syn = CompileFailureKind::Syntax(SyntaxFailure::MalformedDeclaration);
+        match kind_syn {
+            CompileFailureKind::Syntax(SyntaxFailure::MalformedDeclaration) => {}
+            _ => panic!("expected Syntax"),
+        }
+
+        let kind_sem = CompileFailureKind::Semantic(SemanticFailure::Resolution(
+            ResolutionFailure::UnknownType {
+                name: Box::from("Foo"),
+            },
+        ));
+        match kind_sem {
+            CompileFailureKind::Semantic(SemanticFailure::Resolution(
+                ResolutionFailure::UnknownType { name },
+            )) => assert_eq!(&*name, "Foo"),
+            _ => panic!("expected Semantic"),
+        }
+    }
+
+    #[test]
+    fn compile_failure_mandatory_provenance_and_zero_width() {
+        let failure_span = CompileFailure {
+            kind: CompileFailureKind::Lexical(LexicalFailure::InvalidIdentifier),
+            source_span: SourceSpan { start: 10, end: 15 },
+        };
+        assert_eq!(failure_span.source_span.start, 10);
+        assert_eq!(failure_span.source_span.end, 15);
+
+        let failure_zero_width = CompileFailure {
+            kind: CompileFailureKind::Syntax(SyntaxFailure::MissingFinalReturn),
+            source_span: SourceSpan { start: 20, end: 20 },
+        };
+        assert_eq!(failure_zero_width.source_span.start, 20);
+        assert_eq!(failure_zero_width.source_span.end, 20);
+    }
+
+    #[test]
+    fn compile_outcome_ok_and_err() {
+        use crate::data::compiled::identities::ConstantId;
+        use crate::data::compiled::instructions::Instruction;
+        use crate::data::compiled::program::CompiledFunction;
+        use crate::data::compiled::source_map::SourceMap;
+        use crate::data::compiled::storage::Constant;
+        use crate::data::semantic::ids::FunctionId;
+
+        let program = CompiledProgram {
+            functions: alloc::vec![CompiledFunction {
+                parameter_count: 0,
+                local_count: 0,
+                max_operand_depth: 1,
+                instructions: alloc::vec![
+                    Instruction::LoadConstant(ConstantId(0)),
+                    Instruction::Return,
+                ],
+            }],
+            entry_point: FunctionId(0),
+            entry_parameter_shapes: alloc::vec![],
+            constants: alloc::vec![Constant::Boolean(true)],
+            external_symbols: alloc::vec![],
+            value_shapes: alloc::vec![],
+            source_map: SourceMap {
+                functions: alloc::vec![alloc::vec![
+                    SourceSpan { start: 0, end: 5 },
+                    SourceSpan { start: 5, end: 10 },
+                ]],
+            },
+        };
+
+        let ok_outcome: CompileOutcome = Ok(program);
+        match ok_outcome {
+            Ok(p) => assert_eq!(p.functions.len(), 1),
+            Err(_) => panic!("expected Ok"),
+        }
+
+        let err_outcome: CompileOutcome = Err(CompileFailure {
+            kind: CompileFailureKind::Syntax(SyntaxFailure::MalformedExpression),
+            source_span: SourceSpan { start: 0, end: 3 },
+        });
+        match err_outcome {
+            Err(f) => assert_eq!(f.source_span.start, 0),
+            Ok(_) => panic!("expected Err"),
+        }
+    }
+
+    #[test]
+    fn invocation_failure_variants() {
+        let arity = InvocationFailure::ArityMismatch {
+            expected: 2,
+            actual: 1,
+        };
+        match arity {
+            InvocationFailure::ArityMismatch { expected, actual } => {
+                assert_eq!(expected, 2);
+                assert_eq!(actual, 1);
+            }
+            _ => panic!("expected ArityMismatch"),
+        }
+
+        let shape = InvocationFailure::ArgumentShapeMismatch { position: 0 };
+        match shape {
+            InvocationFailure::ArgumentShapeMismatch { position } => assert_eq!(position, 0),
+            _ => panic!("expected ArgumentShapeMismatch"),
+        }
+    }
+
+    #[test]
+    fn evaluation_failure_4_variants() {
+        let failures = [
+            EvaluationFailure::Overflow,
+            EvaluationFailure::DivisionByZero,
+            EvaluationFailure::Conversion,
+            EvaluationFailure::DynamicNumericType,
+        ];
+        assert_eq!(failures.len(), 4);
+
+        match failures[0] {
+            EvaluationFailure::Overflow => {}
+            _ => panic!("expected Overflow"),
+        }
+        match failures[1] {
+            EvaluationFailure::DivisionByZero => {}
+            _ => panic!("expected DivisionByZero"),
+        }
+        match failures[2] {
+            EvaluationFailure::Conversion => {}
+            _ => panic!("expected Conversion"),
+        }
+        match failures[3] {
+            EvaluationFailure::DynamicNumericType => {}
+            _ => panic!("expected DynamicNumericType"),
+        }
+    }
+
+    #[test]
+    fn external_execution_failure_3_variants() {
+        let missing = ExternalExecutionFailure::MissingBinding {
+            signature: SignatureSymbol {
+                module: "fs".to_string(),
+                name: "read".to_string(),
+            },
+        };
+        match missing {
+            ExternalExecutionFailure::MissingBinding { signature } => {
+                assert_eq!(signature.module, "fs");
+                assert_eq!(signature.name, "read");
+            }
+            _ => panic!("expected MissingBinding"),
+        }
+
+        let cap_fail = ExternalExecutionFailure::CapabilityFailure {
+            signature: SignatureSymbol {
+                module: "fs".to_string(),
+                name: "read".to_string(),
+            },
+            failure: ExternalCapabilityFailure {
+                code: Box::from("not_found"),
+            },
+        };
+        match cap_fail {
+            ExternalExecutionFailure::CapabilityFailure { signature, failure } => {
+                assert_eq!(signature.module, "fs");
+                assert_eq!(signature.name, "read");
+                assert_eq!(&*failure.code, "not_found");
+            }
+            _ => panic!("expected CapabilityFailure"),
+        }
+
+        let mismatch = ExternalExecutionFailure::ResultContractMismatch {
+            signature: SignatureSymbol {
+                module: "fs".to_string(),
+                name: "read".to_string(),
+            },
+        };
+        match mismatch {
+            ExternalExecutionFailure::ResultContractMismatch { signature } => {
+                assert_eq!(signature.module, "fs");
+                assert_eq!(signature.name, "read");
+            }
+            _ => panic!("expected ResultContractMismatch"),
+        }
+    }
+
+    #[test]
+    fn execution_failure_kind_4_variants() {
+        let comp = ExecutionFailureKind::Compilation(CompileFailureKind::Lexical(
+            LexicalFailure::InvalidIdentifier,
+        ));
+        match comp {
+            ExecutionFailureKind::Compilation(CompileFailureKind::Lexical(
+                LexicalFailure::InvalidIdentifier,
+            )) => {}
+            _ => panic!("expected Compilation"),
+        }
+
+        let inv = ExecutionFailureKind::Invocation(InvocationFailure::ArityMismatch {
+            expected: 1,
+            actual: 0,
+        });
+        match inv {
+            ExecutionFailureKind::Invocation(InvocationFailure::ArityMismatch {
+                expected,
+                actual,
+            }) => {
+                assert_eq!(expected, 1);
+                assert_eq!(actual, 0);
+            }
+            _ => panic!("expected Invocation"),
+        }
+
+        let eval = ExecutionFailureKind::Evaluation(EvaluationFailure::DivisionByZero);
+        match eval {
+            ExecutionFailureKind::Evaluation(EvaluationFailure::DivisionByZero) => {}
+            _ => panic!("expected Evaluation"),
+        }
+
+        let ext = ExternalExecutionFailure::MissingBinding {
+            signature: SignatureSymbol {
+                module: "m".to_string(),
+                name: "f".to_string(),
+            },
+        };
+        let ext_kind = ExecutionFailureKind::External(ext);
+        match ext_kind {
+            ExecutionFailureKind::External(ExternalExecutionFailure::MissingBinding {
+                signature,
+            }) => {
+                assert_eq!(signature.module, "m");
+                assert_eq!(signature.name, "f");
+            }
+            _ => panic!("expected External"),
+        }
+    }
+
+    #[test]
+    fn execution_failure_provenance_matrix() {
+        let comp_fail = ExecutionFailure {
+            kind: ExecutionFailureKind::Compilation(CompileFailureKind::Lexical(
+                LexicalFailure::InvalidIdentifier,
+            )),
+            source_span: Some(SourceSpan { start: 1, end: 2 }),
+        };
+        assert!(comp_fail.source_span.is_some());
+
+        let inv_fail = ExecutionFailure {
+            kind: ExecutionFailureKind::Invocation(InvocationFailure::ArityMismatch {
+                expected: 1,
+                actual: 0,
+            }),
+            source_span: None,
+        };
+        assert!(inv_fail.source_span.is_none());
+
+        let eval_fail = ExecutionFailure {
+            kind: ExecutionFailureKind::Evaluation(EvaluationFailure::Overflow),
+            source_span: Some(SourceSpan { start: 10, end: 15 }),
+        };
+        assert!(eval_fail.source_span.is_some());
+
+        let ext_fail = ExecutionFailure {
+            kind: ExecutionFailureKind::External(
+                ExternalExecutionFailure::ResultContractMismatch {
+                    signature: SignatureSymbol {
+                        module: "a".to_string(),
+                        name: "b".to_string(),
+                    },
+                },
+            ),
+            source_span: Some(SourceSpan { start: 20, end: 25 }),
+        };
+        assert!(ext_fail.source_span.is_some());
+    }
+
+    #[test]
+    fn execution_outcome_ok_and_err() {
+        let ok_res: ExecutionOutcome = Ok(OwnedValue::Boolean(true));
+        match ok_res {
+            Ok(OwnedValue::Boolean(b)) => assert!(b),
+            _ => panic!("expected Ok(Boolean)"),
+        }
+
+        let err_res: ExecutionOutcome = Err(ExecutionFailure {
+            kind: ExecutionFailureKind::Evaluation(EvaluationFailure::DivisionByZero),
+            source_span: Some(SourceSpan { start: 5, end: 8 }),
+        });
+        match err_res {
+            Err(f) => match f.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::DivisionByZero) => {}
+                _ => panic!("expected Evaluation DivisionByZero"),
+            },
+            Ok(_) => panic!("expected Err"),
+        }
     }
 }
