@@ -75,7 +75,7 @@ struct Analyzer<'a, 'source> {
     // Signatures
     signatures: Vec<SemanticSignature>,
     shared_sig_to_id: HashMap<SignatureSymbol, usize>,
-    name_to_signature: HashMap<String, usize>,
+    name_to_signatures: HashMap<String, Vec<usize>>,
 
     // Functions
     functions: Vec<SemanticFunction>,
@@ -164,7 +164,7 @@ impl<'a, 'source> Analyzer<'a, 'source> {
             enum_metadata: HashMap::new(),
             signatures: Vec::new(),
             shared_sig_to_id: HashMap::new(),
-            name_to_signature: HashMap::new(),
+            name_to_signatures: HashMap::new(),
             functions: Vec::new(),
             function_headers: Vec::new(),
             name_to_function: HashMap::new(),
@@ -220,11 +220,11 @@ impl<'a, 'source> Analyzer<'a, 'source> {
         // Step 5: Collect and validate function headers
         self.collect_function_headers()?;
 
-        // Step 6: Validate function call graph (recursion/cycles)
-        self.validate_function_call_graph()?;
-
-        // Step 7: Analyze function bodies
+        // Step 6: Analyze function bodies
         self.analyze_function_bodies()?;
+
+        // Step 7: Validate function call graph from resolved internal calls (recursion/cycles)
+        self.validate_function_call_graph()?;
 
         // Step 8: Identify public entry function
         let mut entry_function = None;
@@ -242,6 +242,24 @@ impl<'a, 'source> Analyzer<'a, 'source> {
             functions: std::mem::take(&mut self.functions),
             entry_function,
         })
+    }
+
+    fn is_type_equality_comparable(&self, type_id: usize) -> bool {
+        match &self.types[type_id] {
+            SemanticType::Native(nt) => !matches!(nt, NativeType::Dynamic),
+            SemanticType::Struct { fields } => fields
+                .iter()
+                .all(|f| self.is_type_equality_comparable(f.type_id.0)),
+            SemanticType::Enum { variants } => variants.iter().all(|v| match v {
+                SemanticVariant::Simple => true,
+                SemanticVariant::Associated { type_id } => {
+                    self.is_type_equality_comparable(type_id.0)
+                }
+                SemanticVariant::Structured { fields } => fields
+                    .iter()
+                    .all(|f| self.is_type_equality_comparable(f.type_id.0)),
+            }),
+        }
     }
 
     // --- Step 1: Imports ---
@@ -315,7 +333,7 @@ impl<'a, 'source> Analyzer<'a, 'source> {
                     });
                 }
 
-                let type_id = self.materialize_catalog_type(&type_sym)?;
+                let type_id = self.materialize_catalog_type(&type_sym);
                 self.name_to_type.insert(local_name.to_string(), type_id);
             }
 
@@ -339,32 +357,29 @@ impl<'a, 'source> Analyzer<'a, 'source> {
                     }
                 }
 
-                let sig_id = self.materialize_catalog_signature(&sig_sym)?;
-                self.name_to_signature
-                    .insert(local_name.to_string(), sig_id);
+                let sig_id = self.materialize_catalog_signature(&sig_sym);
+                let list = self
+                    .name_to_signatures
+                    .entry(local_name.to_string())
+                    .or_default();
+                if !list.contains(&sig_id) {
+                    list.push(sig_id);
+                }
             }
         }
         Ok(())
     }
 
-    fn materialize_catalog_type(&mut self, symbol: &TypeSymbol) -> Result<usize, CompileFailure> {
+    fn materialize_catalog_type(&mut self, symbol: &TypeSymbol) -> usize {
         if let Some(&id) = self.shared_type_to_id.get(symbol) {
-            return Ok(id);
+            return id;
         }
 
-        let cat_type = match self.catalog.types.get(symbol) {
-            Some(ct) => ct,
-            None => {
-                return Err(CompileFailure {
-                    kind: CompileFailureKind::Semantic(SemanticFailure::Resolution(
-                        ResolutionFailure::UnknownType {
-                            name: symbol.name.clone().into_boxed_str(),
-                        },
-                    )),
-                    source_span: SourceSpan { start: 0, end: 0 },
-                });
-            }
-        };
+        let cat_type = self
+            .catalog
+            .types
+            .get(symbol)
+            .expect("validated catalog invariant: type exists");
 
         let type_id = self.types.len();
         self.shared_type_to_id.insert(
@@ -390,7 +405,7 @@ impl<'a, 'source> Analyzer<'a, 'source> {
                 let mut name_to_field_idx = HashMap::new();
 
                 for (idx, field) in fields.iter().enumerate() {
-                    let field_type_id = self.resolve_catalog_type_ref(&field.type_ref)?;
+                    let field_type_id = self.resolve_catalog_type_ref(&field.type_ref);
                     sem_fields.push(SemanticField {
                         type_id: TypeId(field_type_id),
                     });
@@ -432,7 +447,7 @@ impl<'a, 'source> Analyzer<'a, 'source> {
                             name_to_variant_idx.insert(name.clone(), idx);
                         }
                         CatalogVariant::Associated { name, type_ref } => {
-                            let payload_type_id = self.resolve_catalog_type_ref(type_ref)?;
+                            let payload_type_id = self.resolve_catalog_type_ref(type_ref);
                             sem_variants.push(SemanticVariant::Associated {
                                 type_id: TypeId(payload_type_id),
                             });
@@ -448,7 +463,7 @@ impl<'a, 'source> Analyzer<'a, 'source> {
                             let mut f_name_to_idx = HashMap::new();
 
                             for (f_idx, field) in fields.iter().enumerate() {
-                                let f_type_id = self.resolve_catalog_type_ref(&field.type_ref)?;
+                                let f_type_id = self.resolve_catalog_type_ref(&field.type_ref);
                                 sem_fields.push(SemanticField {
                                     type_id: TypeId(f_type_id),
                                 });
@@ -483,14 +498,11 @@ impl<'a, 'source> Analyzer<'a, 'source> {
             }
         }
 
-        Ok(type_id)
+        type_id
     }
 
-    fn resolve_catalog_type_ref(
-        &mut self,
-        type_ref: &CatalogTypeRef,
-    ) -> Result<usize, CompileFailure> {
-        let id = match type_ref {
+    fn resolve_catalog_type_ref(&mut self, type_ref: &CatalogTypeRef) -> usize {
+        match type_ref {
             CatalogTypeRef::Int => self.name_to_type["int"],
             CatalogTypeRef::Float => self.name_to_type["float"],
             CatalogTypeRef::Bool => self.name_to_type["bool"],
@@ -508,33 +520,20 @@ impl<'a, 'source> Analyzer<'a, 'source> {
             CatalogTypeRef::Uint128 => self.name_to_type["uint128"],
             CatalogTypeRef::Float32 => self.name_to_type["float32"],
             CatalogTypeRef::Float64 => self.name_to_type["float64"],
-            CatalogTypeRef::Shared(type_sym) => self.materialize_catalog_type(type_sym)?,
-        };
-        Ok(id)
+            CatalogTypeRef::Shared(type_sym) => self.materialize_catalog_type(type_sym),
+        }
     }
 
-    fn materialize_catalog_signature(
-        &mut self,
-        symbol: &SignatureSymbol,
-    ) -> Result<usize, CompileFailure> {
+    fn materialize_catalog_signature(&mut self, symbol: &SignatureSymbol) -> usize {
         if let Some(&id) = self.shared_sig_to_id.get(symbol) {
-            return Ok(id);
+            return id;
         }
 
-        let cat_sig = match self.catalog.signatures.get(symbol) {
-            Some(cs) => cs,
-            None => {
-                return Err(CompileFailure {
-                    kind: CompileFailureKind::Semantic(SemanticFailure::Resolution(
-                        ResolutionFailure::UnknownSignature(SignatureSymbol {
-                            module: symbol.module.clone(),
-                            name: symbol.name.clone(),
-                        }),
-                    )),
-                    source_span: SourceSpan { start: 0, end: 0 },
-                });
-            }
-        };
+        let cat_sig = self
+            .catalog
+            .signatures
+            .get(symbol)
+            .expect("validated catalog invariant: signature exists");
 
         let sig_id = self.signatures.len();
         self.shared_sig_to_id.insert(
@@ -545,15 +544,25 @@ impl<'a, 'source> Analyzer<'a, 'source> {
             sig_id,
         );
 
+        // Reserve identity slot before resolving transitive dependencies
+        self.signatures.push(SemanticSignature {
+            symbol: SignatureSymbol {
+                module: symbol.module.clone(),
+                name: symbol.name.clone(),
+            },
+            parameters: Vec::new(),
+            result_type: TypeId(0),
+        });
+
         let mut parameters = Vec::new();
         for param in &cat_sig.parameters {
             match param {
                 CatalogSignatureParameter::Value(type_ref) => {
-                    let type_id = self.resolve_catalog_type_ref(type_ref)?;
+                    let type_id = self.resolve_catalog_type_ref(type_ref);
                     parameters.push(SemanticSignatureParameter::Value(TypeId(type_id)));
                 }
                 CatalogSignatureParameter::SignatureDependency(dep_sym) => {
-                    let dep_id = self.materialize_catalog_signature(dep_sym)?;
+                    let dep_id = self.materialize_catalog_signature(dep_sym);
                     parameters.push(SemanticSignatureParameter::SignatureDependency(
                         SignatureId(dep_id),
                     ));
@@ -561,18 +570,18 @@ impl<'a, 'source> Analyzer<'a, 'source> {
             }
         }
 
-        let result_type = self.resolve_catalog_type_ref(&cat_sig.result_type)?;
+        let result_type = self.resolve_catalog_type_ref(&cat_sig.result_type);
 
-        self.signatures.push(SemanticSignature {
+        self.signatures[sig_id] = SemanticSignature {
             symbol: SignatureSymbol {
                 module: symbol.module.clone(),
                 name: symbol.name.clone(),
             },
             parameters,
             result_type: TypeId(result_type),
-        });
+        };
 
-        Ok(sig_id)
+        sig_id
     }
 
     // --- Step 2: Register Local Type Shells ---
@@ -1065,22 +1074,21 @@ impl<'a, 'source> Analyzer<'a, 'source> {
                                 name: signature.name.lexeme.to_string(),
                             };
 
-                            let sig_id = match self.materialize_catalog_signature(&sig_sym) {
-                                Ok(id) => id,
-                                Err(_) => {
-                                    return Err(CompileFailure {
-                                        kind: CompileFailureKind::Semantic(
-                                            SemanticFailure::Resolution(
-                                                ResolutionFailure::UnknownSignature(sig_sym),
-                                            ),
+                            if !self.catalog.signatures.contains_key(&sig_sym) {
+                                return Err(CompileFailure {
+                                    kind: CompileFailureKind::Semantic(
+                                        SemanticFailure::Resolution(
+                                            ResolutionFailure::UnknownSignature(sig_sym),
                                         ),
-                                        source_span: SourceSpan {
-                                            start: signature.qualifier.span.start,
-                                            end: signature.name.span.end,
-                                        },
-                                    });
-                                }
-                            };
+                                    ),
+                                    source_span: SourceSpan {
+                                        start: signature.qualifier.span.start,
+                                        end: signature.name.span.end,
+                                    },
+                                });
+                            }
+
+                            let sig_id = self.materialize_catalog_signature(&sig_sym);
 
                             params.push(FormalParamMeta::SignatureDependency {
                                 name: name.lexeme.to_string(),
@@ -1098,20 +1106,20 @@ impl<'a, 'source> Analyzer<'a, 'source> {
                         module: sat_name.qualifier.lexeme.to_string(),
                         name: sat_name.name.lexeme.to_string(),
                     };
-                    let sig_id = match self.materialize_catalog_signature(&sig_sym) {
-                        Ok(id) => id,
-                        Err(_) => {
-                            return Err(CompileFailure {
-                                kind: CompileFailureKind::Semantic(SemanticFailure::Resolution(
-                                    ResolutionFailure::UnknownSignature(sig_sym),
-                                )),
-                                source_span: SourceSpan {
-                                    start: sat_name.qualifier.span.start,
-                                    end: sat_name.name.span.end,
-                                },
-                            });
-                        }
-                    };
+
+                    if !self.catalog.signatures.contains_key(&sig_sym) {
+                        return Err(CompileFailure {
+                            kind: CompileFailureKind::Semantic(SemanticFailure::Resolution(
+                                ResolutionFailure::UnknownSignature(sig_sym),
+                            )),
+                            source_span: SourceSpan {
+                                start: sat_name.qualifier.span.start,
+                                end: sat_name.name.span.end,
+                            },
+                        });
+                    }
+
+                    let sig_id = self.materialize_catalog_signature(&sig_sym);
 
                     self.validate_signature_satisfaction(
                         fn_def,
@@ -1304,106 +1312,90 @@ impl<'a, 'source> Analyzer<'a, 'source> {
         Ok(())
     }
 
-    // --- Step 6: Function Call Graph (Cycle Detection) ---
+    // --- Step 6: Analyze Function Bodies ---
+
+    fn analyze_function_bodies(&mut self) -> Result<(), CompileFailure> {
+        let headers_len = self.function_headers.len();
+        for i in 0..headers_len {
+            let func = {
+                let header = &self.function_headers[i];
+                let mut fn_analyzer = FunctionAnalyzer::new(self, header);
+                fn_analyzer.analyze_body()?
+            };
+            self.functions.push(func);
+        }
+        Ok(())
+    }
+
+    // --- Step 7: Validate Function Call Graph (Recursion/Cycles) ---
 
     fn validate_function_call_graph(&self) -> Result<(), CompileFailure> {
         let mut adj: HashMap<usize, Vec<(usize, SourceSpan)>> = HashMap::new();
 
-        for (caller_id, header) in self.function_headers.iter().enumerate() {
-            let mut calls = Vec::new();
-
-            fn collect_calls<'s>(
-                expr: &Expression<'s>,
-                name_to_func: &HashMap<String, usize>,
-                calls: &mut Vec<(usize, SourceSpan)>,
-            ) {
-                match &expr.kind {
-                    ExpressionKind::FunctionCall(call) => {
-                        if let Some(&target_fid) = name_to_func.get(call.callee.lexeme) {
-                            calls.push((target_fid, expr.span));
-                        }
-                        for arg in &call.arguments {
-                            collect_calls(arg, name_to_func, calls);
+        fn collect_internal_calls(expr: &SemanticExpression, calls: &mut Vec<(usize, SourceSpan)>) {
+            match &expr.kind {
+                SemanticExpressionKind::Call(call) => {
+                    if let SemanticCallTarget::Internal(fid) = &call.target {
+                        calls.push((fid.0, expr.span));
+                    }
+                    for arg in &call.arguments {
+                        if let SemanticArgument::Value(val) = arg {
+                            collect_internal_calls(val, calls);
                         }
                     }
-                    ExpressionKind::Pipeline(pipe) => {
-                        collect_calls(&pipe.source, name_to_func, calls);
-                        for stage in &pipe.stages {
-                            if let Some(&target_fid) = name_to_func.get(stage.callee.lexeme) {
-                                calls.push((target_fid, expr.span));
-                            }
-                            for arg in &stage.additional_arguments {
-                                collect_calls(arg, name_to_func, calls);
-                            }
-                        }
+                }
+                SemanticExpressionKind::Conversion { operand } => {
+                    collect_internal_calls(operand, calls);
+                }
+                SemanticExpressionKind::Unary { operand, .. } => {
+                    collect_internal_calls(operand, calls);
+                }
+                SemanticExpressionKind::Binary { left, right, .. } => {
+                    collect_internal_calls(left, calls);
+                    collect_internal_calls(right, calls);
+                }
+                SemanticExpressionKind::FieldAccess { receiver, .. } => {
+                    collect_internal_calls(receiver, calls);
+                }
+                SemanticExpressionKind::StructConstruction { fields } => {
+                    for f in fields {
+                        collect_internal_calls(&f.value, calls);
                     }
-                    ExpressionKind::Unary { operand, .. } => {
-                        collect_calls(operand, name_to_func, calls);
+                }
+                SemanticExpressionKind::EnumConstruction { payload, .. } => match payload {
+                    SemanticEnumPayload::Simple => {}
+                    SemanticEnumPayload::Associated { value } => {
+                        collect_internal_calls(value, calls);
                     }
-                    ExpressionKind::Binary { left, right, .. } => {
-                        collect_calls(left, name_to_func, calls);
-                        collect_calls(right, name_to_func, calls);
-                    }
-                    ExpressionKind::FieldAccess { receiver, .. } => {
-                        collect_calls(receiver, name_to_func, calls);
-                    }
-                    ExpressionKind::StructConstruction { fields, .. } => {
+                    SemanticEnumPayload::Structured { fields } => {
                         for f in fields {
-                            collect_calls(&f.value, name_to_func, calls);
+                            collect_internal_calls(&f.value, calls);
                         }
                     }
-                    ExpressionKind::EnumConstruction(ec) => match ec {
-                        EnumConstruction::Simple { .. } => {}
-                        EnumConstruction::Associated { value, .. } => {
-                            collect_calls(value, name_to_func, calls);
-                        }
-                        EnumConstruction::Structured { fields, .. } => {
-                            for f in fields {
-                                collect_calls(&f.value, name_to_func, calls);
-                            }
-                        }
-                    },
-                    ExpressionKind::When(when) => {
-                        collect_calls(&when.subject, name_to_func, calls);
-                        for branch in &when.correspondences {
-                            collect_calls(&branch.result, name_to_func, calls);
-                        }
+                },
+                SemanticExpressionKind::When(when) => {
+                    collect_internal_calls(&when.subject, calls);
+                    for branch in &when.branches {
+                        collect_internal_calls(&branch.result, calls);
                     }
-                    ExpressionKind::Literal { .. } | ExpressionKind::Identifier(_) => {}
                 }
+                SemanticExpressionKind::Literal(_) | SemanticExpressionKind::Binding(_) => {}
             }
+        }
 
-            for stmt in &header.ast.body.statements {
+        for (caller_id, func) in self.functions.iter().enumerate() {
+            let mut calls = Vec::new();
+            for stmt in &func.body.statements {
                 match stmt {
-                    BodyStatement::Let(let_bind) => {
-                        collect_calls(&let_bind.value, &self.name_to_function, &mut calls);
+                    SemanticStatement::Bind { value, .. } => {
+                        collect_internal_calls(value, &mut calls);
                     }
-                    BodyStatement::Operation(op) => match op {
-                        OperationStatement::FunctionCall(c) => {
-                            if let Some(&target_fid) = self.name_to_function.get(c.callee.lexeme) {
-                                calls.push((target_fid, c.callee.span));
-                            }
-                            for arg in &c.arguments {
-                                collect_calls(arg, &self.name_to_function, &mut calls);
-                            }
-                        }
-                        OperationStatement::Pipeline(pipe) => {
-                            collect_calls(&pipe.source, &self.name_to_function, &mut calls);
-                            for stage in &pipe.stages {
-                                if let Some(&target_fid) =
-                                    self.name_to_function.get(stage.callee.lexeme)
-                                {
-                                    calls.push((target_fid, stage.callee.span));
-                                }
-                                for arg in &stage.additional_arguments {
-                                    collect_calls(arg, &self.name_to_function, &mut calls);
-                                }
-                            }
-                        }
-                    },
+                    SemanticStatement::Operation(op) => {
+                        collect_internal_calls(op, &mut calls);
+                    }
                 }
             }
-            collect_calls(&header.ast.body.result, &self.name_to_function, &mut calls);
+            collect_internal_calls(&func.body.result, &mut calls);
             adj.insert(caller_id, calls);
         }
 
@@ -1416,7 +1408,7 @@ impl<'a, 'source> Analyzer<'a, 'source> {
         }
 
         let mut colors: HashMap<usize, Color> = HashMap::new();
-        for i in 0..self.function_headers.len() {
+        for i in 0..self.functions.len() {
             colors.insert(i, Color::White);
         }
 
@@ -1443,7 +1435,7 @@ impl<'a, 'source> Analyzer<'a, 'source> {
             None
         }
 
-        for i in 0..self.function_headers.len() {
+        for i in 0..self.functions.len() {
             if colors.get(&i) == Some(&Color::White) {
                 if let Some(cycle_span) = dfs_calls(i, &adj, &mut colors) {
                     return Err(CompileFailure {
@@ -1456,21 +1448,6 @@ impl<'a, 'source> Analyzer<'a, 'source> {
             }
         }
 
-        Ok(())
-    }
-
-    // --- Step 7: Analyze Function Bodies ---
-
-    fn analyze_function_bodies(&mut self) -> Result<(), CompileFailure> {
-        let headers_len = self.function_headers.len();
-        for i in 0..headers_len {
-            let func = {
-                let header = &self.function_headers[i];
-                let mut fn_analyzer = FunctionAnalyzer::new(self, header);
-                fn_analyzer.analyze_body()?
-            };
-            self.functions.push(func);
-        }
         Ok(())
     }
 }
@@ -1572,7 +1549,10 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
 
                     let val_expr = self.analyze_expression(&let_bind.value, Some(expected_type))?;
 
-                    if val_expr.type_id.0 != expected_type {
+                    let dynamic_type_id = self.analyzer.name_to_type["dynamic"];
+                    let is_compat =
+                        val_expr.type_id.0 == expected_type || expected_type == dynamic_type_id;
+                    if !is_compat {
                         return Err(CompileFailure {
                             kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
                                 TypeCheckingFailure::BindingInitialization {
@@ -1614,7 +1594,11 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
         let result =
             self.analyze_expression(&self.header.ast.body.result, Some(self.header.result_type))?;
 
-        if result.type_id.0 != self.header.result_type {
+        let dynamic_type_id = self.analyzer.name_to_type["dynamic"];
+        let is_result_compat = result.type_id.0 == self.header.result_type
+            || self.header.result_type == dynamic_type_id;
+
+        if !is_result_compat {
             return Err(CompileFailure {
                 kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
                     TypeCheckingFailure::FunctionResult {
@@ -1657,7 +1641,7 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
             }
             ExpressionKind::Identifier(id) => self.analyze_identifier(id),
             ExpressionKind::Unary { operator, operand } => {
-                self.analyze_unary(operator, operand, expr.span)
+                self.analyze_unary(operator, operand, expr.span, expected_type)
             }
             ExpressionKind::Binary {
                 left,
@@ -1689,7 +1673,7 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
         match kind {
             LiteralKind::Integer => {
                 let (type_id, canonical_str) =
-                    self.resolve_integer_literal(lexeme, span, expected_type)?;
+                    self.resolve_integer_literal(lexeme, span, expected_type, false)?;
                 Ok(SemanticExpression {
                     type_id: TypeId(type_id),
                     kind: SemanticExpressionKind::Literal(SemanticLiteral::Integer(canonical_str)),
@@ -1697,7 +1681,7 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                 })
             }
             LiteralKind::Floating => {
-                let type_id = if let Some(exp_tid) = expected_type {
+                let target_type = if let Some(exp_tid) = expected_type {
                     if matches!(
                         self.analyzer.types[exp_tid],
                         SemanticType::Native(
@@ -1715,19 +1699,66 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                     self.analyzer.name_to_type["float"]
                 };
 
-                let val: f64 = lexeme.parse().map_err(|_| CompileFailure {
-                    kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
-                        TypeCheckingFailure::NumericLiteralNotRepresentable {
-                            expected: clone_type_descriptor(
-                                &self.analyzer.type_descriptors[type_id],
-                            ),
-                        },
-                    )),
-                    source_span: span,
-                })?;
+                let target_native = match &self.analyzer.types[target_type] {
+                    SemanticType::Native(nt) => nt,
+                    _ => &NativeType::Float,
+                };
+
+                let val: f64 = match target_native {
+                    NativeType::Float32 => {
+                        let f: f32 = lexeme.parse().map_err(|_| CompileFailure {
+                            kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                                TypeCheckingFailure::NumericLiteralNotRepresentable {
+                                    expected: clone_type_descriptor(
+                                        &self.analyzer.type_descriptors[target_type],
+                                    ),
+                                },
+                            )),
+                            source_span: span,
+                        })?;
+                        if !f.is_finite() {
+                            return Err(CompileFailure {
+                                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                                    TypeCheckingFailure::NumericLiteralNotRepresentable {
+                                        expected: clone_type_descriptor(
+                                            &self.analyzer.type_descriptors[target_type],
+                                        ),
+                                    },
+                                )),
+                                source_span: span,
+                            });
+                        }
+                        f as f64
+                    }
+                    _ => {
+                        let f: f64 = lexeme.parse().map_err(|_| CompileFailure {
+                            kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                                TypeCheckingFailure::NumericLiteralNotRepresentable {
+                                    expected: clone_type_descriptor(
+                                        &self.analyzer.type_descriptors[target_type],
+                                    ),
+                                },
+                            )),
+                            source_span: span,
+                        })?;
+                        if !f.is_finite() {
+                            return Err(CompileFailure {
+                                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                                    TypeCheckingFailure::NumericLiteralNotRepresentable {
+                                        expected: clone_type_descriptor(
+                                            &self.analyzer.type_descriptors[target_type],
+                                        ),
+                                    },
+                                )),
+                                source_span: span,
+                            });
+                        }
+                        f
+                    }
+                };
 
                 Ok(SemanticExpression {
-                    type_id: TypeId(type_id),
+                    type_id: TypeId(target_type),
                     kind: SemanticExpressionKind::Literal(SemanticLiteral::Floating(val)),
                     span,
                 })
@@ -1758,6 +1789,7 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
         lexeme: &str,
         span: SourceSpan,
         expected_type: Option<usize>,
+        is_negative_context: bool,
     ) -> Result<(usize, String), CompileFailure> {
         let canonical_str = canonical_integer_string(lexeme);
 
@@ -1776,7 +1808,7 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
             _ => &NativeType::Int,
         };
 
-        if !is_integer_representable_in_native(&canonical_str, target_native) {
+        if !is_integer_representable_in_native(&canonical_str, target_native, is_negative_context) {
             return Err(CompileFailure {
                 kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
                     TypeCheckingFailure::NumericLiteralNotRepresentable {
@@ -1829,11 +1861,11 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
         operator: &UnaryOperator,
         operand: &Expression<'source>,
         span: SourceSpan,
+        expected_type: Option<usize>,
     ) -> Result<SemanticExpression, CompileFailure> {
-        let op_expr = self.analyze_expression(operand, None)?;
-
         match operator {
             UnaryOperator::Not => {
+                let op_expr = self.analyze_expression(operand, None)?;
                 let bool_id = self.analyzer.name_to_type["bool"];
                 if op_expr.type_id.0 != bool_id {
                     return Err(CompileFailure {
@@ -1858,6 +1890,63 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                 })
             }
             UnaryOperator::Negate => {
+                // If operand is integer literal
+                if let ExpressionKind::Literal {
+                    kind: LiteralKind::Integer,
+                    lexeme,
+                } = &operand.kind
+                {
+                    let (type_id, canonical_str) =
+                        self.resolve_integer_literal(lexeme, operand.span, expected_type, true)?;
+
+                    let is_signed_or_dyn = match &self.analyzer.types[type_id] {
+                        SemanticType::Native(nt) => is_signed_integer_or_dyn_native(nt),
+                        _ => false,
+                    };
+
+                    if !is_signed_or_dyn {
+                        return Err(CompileFailure {
+                            kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                                TypeCheckingFailure::UnaryOperator {
+                                    operator: clone_unary_operator(operator),
+                                    operand: clone_type_descriptor(
+                                        &self.analyzer.type_descriptors[type_id],
+                                    ),
+                                },
+                            )),
+                            source_span: span,
+                        });
+                    }
+
+                    let op_expr = SemanticExpression {
+                        type_id: TypeId(type_id),
+                        kind: SemanticExpressionKind::Literal(SemanticLiteral::Integer(
+                            canonical_str,
+                        )),
+                        span: operand.span,
+                    };
+
+                    let out_type = if let Some(exp_tid) = expected_type {
+                        if exp_tid == self.analyzer.name_to_type["dynamic"] {
+                            self.analyzer.name_to_type["dynamic"]
+                        } else {
+                            type_id
+                        }
+                    } else {
+                        type_id
+                    };
+
+                    return Ok(SemanticExpression {
+                        type_id: TypeId(out_type),
+                        kind: SemanticExpressionKind::Unary {
+                            operator: clone_unary_operator(operator),
+                            operand: Box::new(op_expr),
+                        },
+                        span,
+                    });
+                }
+
+                let op_expr = self.analyze_expression(operand, expected_type)?;
                 let is_signed_or_float_or_dyn = match &self.analyzer.types[op_expr.type_id.0] {
                     SemanticType::Native(nt) => matches!(
                         nt,
@@ -1889,7 +1978,16 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                     });
                 }
 
-                let out_type = op_expr.type_id.0;
+                let out_type = if let Some(exp_tid) = expected_type {
+                    if exp_tid == self.analyzer.name_to_type["dynamic"] {
+                        self.analyzer.name_to_type["dynamic"]
+                    } else {
+                        op_expr.type_id.0
+                    }
+                } else {
+                    op_expr.type_id.0
+                };
+
                 Ok(SemanticExpression {
                     type_id: TypeId(out_type),
                     kind: SemanticExpressionKind::Unary {
@@ -1910,8 +2008,22 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
         span: SourceSpan,
         expected_type: Option<usize>,
     ) -> Result<SemanticExpression, CompileFailure> {
-        let left_expr = self.analyze_expression(left, expected_type)?;
-        let right_expr = self.analyze_expression(right, Some(left_expr.type_id.0))?;
+        let is_left_lit = matches!(left.kind, ExpressionKind::Literal { .. });
+        let is_right_lit = matches!(right.kind, ExpressionKind::Literal { .. });
+
+        let (left_expr, right_expr) = if !is_left_lit && is_right_lit {
+            let l = self.analyze_expression(left, expected_type)?;
+            let r = self.analyze_expression(right, Some(l.type_id.0))?;
+            (l, r)
+        } else if is_left_lit && !is_right_lit {
+            let r = self.analyze_expression(right, expected_type)?;
+            let l = self.analyze_expression(left, Some(r.type_id.0))?;
+            (l, r)
+        } else {
+            let l = self.analyze_expression(left, expected_type)?;
+            let r = self.analyze_expression(right, Some(l.type_id.0))?;
+            (l, r)
+        };
 
         match operator {
             BinaryOperator::Add
@@ -1940,7 +2052,16 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                     });
                 }
 
-                let out_type = left_expr.type_id.0;
+                let out_type = if let Some(exp_tid) = expected_type {
+                    if exp_tid == self.analyzer.name_to_type["dynamic"] {
+                        self.analyzer.name_to_type["dynamic"]
+                    } else {
+                        left_expr.type_id.0
+                    }
+                } else {
+                    left_expr.type_id.0
+                };
+
                 Ok(SemanticExpression {
                     type_id: TypeId(out_type),
                     kind: SemanticExpressionKind::Binary {
@@ -1974,7 +2095,16 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                     });
                 }
 
-                let out_type = left_expr.type_id.0;
+                let out_type = if let Some(exp_tid) = expected_type {
+                    if exp_tid == self.analyzer.name_to_type["dynamic"] {
+                        self.analyzer.name_to_type["dynamic"]
+                    } else {
+                        left_expr.type_id.0
+                    }
+                } else {
+                    left_expr.type_id.0
+                };
+
                 Ok(SemanticExpression {
                     type_id: TypeId(out_type),
                     kind: SemanticExpressionKind::Binary {
@@ -2015,13 +2145,9 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                 })
             }
             BinaryOperator::Equal | BinaryOperator::NotEqual => {
-                let is_comparable_for_equality = match &self.analyzer.types[left_expr.type_id.0] {
-                    SemanticType::Native(nt) => match nt {
-                        NativeType::Dynamic => false, // dynamic equality requires explicit conversion
-                        _ => true,
-                    },
-                    SemanticType::Struct { .. } | SemanticType::Enum { .. } => true,
-                };
+                let is_comparable_for_equality = self
+                    .analyzer
+                    .is_type_equality_comparable(left_expr.type_id.0);
 
                 if !is_comparable_for_equality || left_expr.type_id.0 != right_expr.type_id.0 {
                     return Err(CompileFailure {
@@ -2056,11 +2182,10 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
             | BinaryOperator::LessEqual
             | BinaryOperator::GreaterEqual => {
                 let is_orderable = match &self.analyzer.types[left_expr.type_id.0] {
-                    SemanticType::Native(nt) => match nt {
-                        NativeType::Dynamic | NativeType::Bool => false,
-                        _ => true, // numeric types + string
-                    },
-                    _ => false, // struct, enum are not orderable
+                    SemanticType::Native(nt) => {
+                        is_numeric_native(nt) && !matches!(nt, NativeType::Dynamic)
+                    }
+                    _ => false, // struct, enum, string are not orderable
                 };
 
                 if !is_orderable || left_expr.type_id.0 != right_expr.type_id.0 {
@@ -2497,23 +2622,21 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
         // Candidates:
         // 1. Local function
         // 2. Signature Dependency parameter
-        // 3. Direct imported signature
+        // 3. Direct imported signatures
         let is_local_fn = self.analyzer.name_to_function.get(callee_name).copied();
         let is_sig_dep = self.name_to_sig_binding.get(callee_name).copied();
-        let is_direct_sig = self.analyzer.name_to_signature.get(callee_name).copied();
+        let direct_sigs = self
+            .analyzer
+            .name_to_signatures
+            .get(callee_name)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[]);
 
-        let mut matches = 0;
-        if is_local_fn.is_some() {
-            matches += 1;
-        }
-        if is_sig_dep.is_some() {
-            matches += 1;
-        }
-        if is_direct_sig.is_some() {
-            matches += 1;
-        }
+        let total_candidates = (if is_local_fn.is_some() { 1 } else { 0 })
+            + (if is_sig_dep.is_some() { 1 } else { 0 })
+            + direct_sigs.len();
 
-        if matches > 1 {
+        if total_candidates > 1 {
             return Err(CompileFailure {
                 kind: CompileFailureKind::Semantic(SemanticFailure::Call(
                     CallFailure::AmbiguousTarget {
@@ -2524,7 +2647,7 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
             });
         }
 
-        if matches == 0 {
+        if total_candidates == 0 {
             return Err(CompileFailure {
                 kind: CompileFailureKind::Semantic(SemanticFailure::Call(
                     CallFailure::FunctionNotFound {
@@ -2574,7 +2697,8 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                 formal_params,
                 sig.result_type.0,
             )
-        } else if let Some(sid) = is_direct_sig {
+        } else if direct_sigs.len() == 1 {
+            let sid = direct_sigs[0];
             let sig = &self.analyzer.signatures[sid];
             let formal_params: Vec<_> = sig
                 .parameters
@@ -2778,20 +2902,18 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
             // Normal function/signature stage
             let is_local_fn = self.analyzer.name_to_function.get(callee_name).copied();
             let is_sig_dep = self.name_to_sig_binding.get(callee_name).copied();
-            let is_direct_sig = self.analyzer.name_to_signature.get(callee_name).copied();
+            let direct_sigs = self
+                .analyzer
+                .name_to_signatures
+                .get(callee_name)
+                .map(|v| v.as_slice())
+                .unwrap_or(&[]);
 
-            let mut matches = 0;
-            if is_local_fn.is_some() {
-                matches += 1;
-            }
-            if is_sig_dep.is_some() {
-                matches += 1;
-            }
-            if is_direct_sig.is_some() {
-                matches += 1;
-            }
+            let total_candidates = (if is_local_fn.is_some() { 1 } else { 0 })
+                + (if is_sig_dep.is_some() { 1 } else { 0 })
+                + direct_sigs.len();
 
-            if matches > 1 {
+            if total_candidates > 1 {
                 return Err(CompileFailure {
                     kind: CompileFailureKind::Semantic(SemanticFailure::Call(
                         CallFailure::AmbiguousTarget {
@@ -2802,7 +2924,7 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                 });
             }
 
-            if matches == 0 {
+            if total_candidates == 0 {
                 return Err(CompileFailure {
                     kind: CompileFailureKind::Semantic(SemanticFailure::Call(
                         CallFailure::FunctionNotFound {
@@ -2854,7 +2976,8 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                     formal_params,
                     sig.result_type.0,
                 )
-            } else if let Some(sid) = is_direct_sig {
+            } else if direct_sigs.len() == 1 {
+                let sid = direct_sigs[0];
                 let sig = &self.analyzer.signatures[sid];
                 let formal_params: Vec<_> = sig
                     .parameters
@@ -3605,6 +3728,19 @@ fn is_numeric_native(nt: &NativeType) -> bool {
     )
 }
 
+fn is_signed_integer_or_dyn_native(nt: &NativeType) -> bool {
+    matches!(
+        nt,
+        NativeType::Int
+            | NativeType::Int8
+            | NativeType::Int16
+            | NativeType::Int32
+            | NativeType::Int64
+            | NativeType::Int128
+            | NativeType::Dynamic
+    )
+}
+
 fn is_integer_or_dyn_native(nt: &NativeType) -> bool {
     matches!(
         nt,
@@ -3623,29 +3759,67 @@ fn is_integer_or_dyn_native(nt: &NativeType) -> bool {
     )
 }
 
-fn is_integer_representable_in_native(canonical_str: &str, native: &NativeType) -> bool {
+fn is_integer_representable_in_native(
+    canonical_str: &str,
+    native: &NativeType,
+    is_negative_context: bool,
+) -> bool {
     if matches!(native, NativeType::Dynamic) {
         return true;
     }
 
     match native {
         NativeType::Int8 => {
-            canonical_str.parse::<u8>().is_ok() && canonical_str.parse::<u8>().unwrap() <= 128
+            if let Ok(val) = canonical_str.parse::<u8>() {
+                if is_negative_context {
+                    val <= 128
+                } else {
+                    val <= 127
+                }
+            } else {
+                false
+            }
         }
         NativeType::Int16 => {
-            canonical_str.parse::<u16>().is_ok() && canonical_str.parse::<u16>().unwrap() <= 32768
+            if let Ok(val) = canonical_str.parse::<u16>() {
+                if is_negative_context {
+                    val <= 32768
+                } else {
+                    val <= 32767
+                }
+            } else {
+                false
+            }
         }
         NativeType::Int | NativeType::Int32 => {
-            canonical_str.parse::<u32>().is_ok()
-                && canonical_str.parse::<u32>().unwrap() <= 2147483648
+            if let Ok(val) = canonical_str.parse::<u32>() {
+                if is_negative_context {
+                    val <= 2147483648
+                } else {
+                    val <= 2147483647
+                }
+            } else {
+                false
+            }
         }
         NativeType::Int64 => {
-            canonical_str.parse::<u64>().is_ok()
-                && canonical_str.parse::<u64>().unwrap() <= 9223372036854775808
+            if let Ok(val) = canonical_str.parse::<u64>() {
+                if is_negative_context {
+                    val <= 9223372036854775808
+                } else {
+                    val <= 9223372036854775807
+                }
+            } else {
+                false
+            }
         }
         NativeType::Int128 => {
             if let Ok(val) = canonical_str.parse::<u128>() {
-                val <= 170141183460469231731687303715884105728
+                if is_negative_context {
+                    val <= 170141183460469231731687303715884105728
+                } else {
+                    val <= 170141183460469231731687303715884105727
+                }
             } else {
                 false
             }
@@ -3776,13 +3950,12 @@ mod tests {
 
     #[test]
     fn semantic_program_ownership_independence() {
-        let cat = CompilationCatalog {
-            types: HashMap::new(),
-            signatures: HashMap::new(),
-        };
-        let src = "public fn main() -> int { return 42; }".to_string();
-
         let sem_prog = {
+            let cat = CompilationCatalog {
+                types: HashMap::new(),
+                signatures: HashMap::new(),
+            };
+            let src = "public fn main() -> int { return 42; }".to_string();
             let tokens = match lex_source(&src) {
                 Ok(t) => t,
                 Err(_) => panic!("lex failed"),
@@ -3797,7 +3970,7 @@ mod tests {
             }
         };
 
-        // AST and tokens and catalog can drop here, sem_prog is fully owned
+        // Source, catalog, tokens, and AST dropped above; sem_prog is completely usable
         assert_eq!(sem_prog.functions.len(), 1);
         assert_eq!(sem_prog.entry_function.0, 0);
     }
@@ -5217,5 +5390,474 @@ mod tests {
             },
             _ => panic!("expected Bind"),
         }
+    }
+
+    #[test]
+    fn signature_transitive_dependency_materialization_ids() {
+        let mut signatures = HashMap::new();
+        let sig_b = SignatureSymbol {
+            module: "dep".to_string(),
+            name: "B".to_string(),
+        };
+        signatures.insert(
+            SignatureSymbol {
+                module: "dep".to_string(),
+                name: "B".to_string(),
+            },
+            CatalogSignature {
+                parameters: alloc::vec![CatalogSignatureParameter::Value(CatalogTypeRef::String)],
+                result_type: CatalogTypeRef::Bool,
+            },
+        );
+        let sig_a = SignatureSymbol {
+            module: "dep".to_string(),
+            name: "A".to_string(),
+        };
+        signatures.insert(
+            SignatureSymbol {
+                module: "dep".to_string(),
+                name: "A".to_string(),
+            },
+            CatalogSignature {
+                parameters: alloc::vec![CatalogSignatureParameter::SignatureDependency(
+                    SignatureSymbol {
+                        module: "dep".to_string(),
+                        name: "B".to_string(),
+                    }
+                )],
+                result_type: CatalogTypeRef::Int,
+            },
+        );
+
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures,
+        };
+        let src = r#"
+            import dep::A;
+
+            public fn main() -> int {
+                return 0;
+            }
+        "#;
+        let sem_prog = match analyze_src(src, &cat) {
+            Ok(p) => p,
+            Err(_) => panic!("signature transitive materialization should succeed"),
+        };
+
+        assert_eq!(sem_prog.signatures.len(), 2);
+        let a_idx = sem_prog
+            .signatures
+            .iter()
+            .position(|s| s.symbol.module == "dep" && s.symbol.name == "A")
+            .expect("A must exist");
+        let b_idx = sem_prog
+            .signatures
+            .iter()
+            .position(|s| s.symbol.module == "dep" && s.symbol.name == "B")
+            .expect("B must exist");
+
+        assert_ne!(a_idx, b_idx);
+        assert_eq!(sem_prog.signatures[a_idx].symbol.module, "dep");
+        assert_eq!(sem_prog.signatures[a_idx].symbol.name, "A");
+        assert_eq!(sem_prog.signatures[b_idx].symbol.module, "dep");
+        assert_eq!(sem_prog.signatures[b_idx].symbol.name, "B");
+
+        match &sem_prog.signatures[a_idx].parameters[0] {
+            SemanticSignatureParameter::SignatureDependency(sid) => {
+                assert_eq!(sid.0, b_idx);
+            }
+            _ => panic!("expected SignatureDependency for A parameter"),
+        }
+    }
+
+    #[test]
+    fn call_graph_internal_vs_direct_sig_ambiguity_no_premature_cycle() {
+        let mut signatures = HashMap::new();
+        signatures.insert(
+            SignatureSymbol {
+                module: "ops".to_string(),
+                name: "work".to_string(),
+            },
+            CatalogSignature {
+                parameters: alloc::vec![],
+                result_type: CatalogTypeRef::Int,
+            },
+        );
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures,
+        };
+        let src = r#"
+            import ops::work;
+
+            private fn work() -> int {
+                return work();
+            }
+
+            public fn main() -> int {
+                return 0;
+            }
+        "#;
+        let res = analyze_src(src, &cat);
+        match res {
+            Err(CompileFailure {
+                kind:
+                    CompileFailureKind::Semantic(SemanticFailure::Call(CallFailure::AmbiguousTarget {
+                        name,
+                    })),
+                ..
+            }) => {
+                assert_eq!(&*name, "work");
+            }
+            other => panic!("expected AmbiguousTarget, got {:?}", other.is_ok()),
+        }
+    }
+
+    #[test]
+    fn call_multiple_direct_signatures_same_local_name() {
+        let mut signatures = HashMap::new();
+        signatures.insert(
+            SignatureSymbol {
+                module: "a".to_string(),
+                name: "save".to_string(),
+            },
+            CatalogSignature {
+                parameters: alloc::vec![],
+                result_type: CatalogTypeRef::Int,
+            },
+        );
+        signatures.insert(
+            SignatureSymbol {
+                module: "b".to_string(),
+                name: "save".to_string(),
+            },
+            CatalogSignature {
+                parameters: alloc::vec![],
+                result_type: CatalogTypeRef::Int,
+            },
+        );
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures,
+        };
+        let src = r#"
+            import a::save;
+            import b::save;
+
+            public fn main() -> int {
+                return save();
+            }
+        "#;
+        let res = analyze_src(src, &cat);
+        match res {
+            Err(CompileFailure {
+                kind:
+                    CompileFailureKind::Semantic(SemanticFailure::Call(CallFailure::AmbiguousTarget {
+                        name,
+                    })),
+                ..
+            }) => {
+                assert_eq!(&*name, "save");
+            }
+            other => panic!("expected AmbiguousTarget, got {:?}", other.is_ok()),
+        }
+    }
+
+    #[test]
+    fn order_comparison_string_forbidden() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+        let src1 = r#"
+            public fn main() -> bool {
+                return "a" < "b";
+            }
+        "#;
+        assert!(matches!(
+            analyze_src(src1, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::Comparison { .. }
+                )),
+                ..
+            })
+        ));
+
+        let src2 = r#"
+            public fn main() -> bool {
+                return "a" >= "b";
+            }
+        "#;
+        assert!(matches!(
+            analyze_src(src2, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::Comparison { .. }
+                )),
+                ..
+            })
+        ));
+
+        let src_valid = r#"
+            public fn main() -> bool {
+                return ("a" == "a") && ("a" != "b");
+            }
+        "#;
+        assert!(analyze_src(src_valid, &cat).is_ok());
+    }
+
+    #[test]
+    fn equality_comparison_composite_dynamic_forbidden() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+
+        // Direct struct with dynamic field
+        let src1 = r#"
+            struct A {
+                dynamic val;
+            }
+            public fn main(A a, A b) -> bool {
+                return a == b;
+            }
+        "#;
+        assert!(matches!(
+            analyze_src(src1, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::Comparison { .. }
+                )),
+                ..
+            })
+        ));
+
+        // Transitive struct with dynamic field
+        let src2 = r#"
+            struct Inner {
+                dynamic val;
+            }
+            struct Outer {
+                Inner inner;
+            }
+            public fn main(Outer a, Outer b) -> bool {
+                return a == b;
+            }
+        "#;
+        assert!(matches!(
+            analyze_src(src2, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::Comparison { .. }
+                )),
+                ..
+            })
+        ));
+
+        // Enum with dynamic payload
+        let src3 = r#"
+            enum State {
+                Payload(dynamic)
+            }
+            public fn main(State a, State b) -> bool {
+                return a == b;
+            }
+        "#;
+        assert!(matches!(
+            analyze_src(src3, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::Comparison { .. }
+                )),
+                ..
+            })
+        ));
+
+        // Valid struct equality
+        let src_valid = r#"
+            struct ValidA {
+                int id;
+                string name;
+            }
+            public fn main(ValidA a, ValidA b) -> bool {
+                return (a == b) && (a != b);
+            }
+        "#;
+        assert!(analyze_src(src_valid, &cat).is_ok());
+    }
+
+    #[test]
+    fn numeric_literal_signed_positive_max_and_negative_min() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+
+        // let int8 x = 127 -> success
+        let src1 = "public fn main() -> int8 { let int8 x = 127; return x; }";
+        assert!(analyze_src(src1, &cat).is_ok());
+
+        // let int8 x = 128 -> NumericLiteralNotRepresentable
+        let src2 = "public fn main() -> int8 { let int8 x = 128; return x; }";
+        assert!(matches!(
+            analyze_src(src2, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::NumericLiteralNotRepresentable { .. }
+                )),
+                ..
+            })
+        ));
+
+        // let int8 x = -128 -> success
+        let src3 = "public fn main() -> int8 { let int8 x = -128; return x; }";
+        assert!(analyze_src(src3, &cat).is_ok());
+
+        // let int8 x = -129 -> NumericLiteralNotRepresentable
+        let src4 = "public fn main() -> int8 { let int8 x = -129; return x; }";
+        assert!(matches!(
+            analyze_src(src4, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::NumericLiteralNotRepresentable { .. }
+                )),
+                ..
+            })
+        ));
+
+        // let int64 x = -100 -> success
+        let src5 = "public fn main() -> int64 { let int64 x = -100; return x; }";
+        assert!(analyze_src(src5, &cat).is_ok());
+
+        // positive int 2147483648 without larger context -> NumericLiteralNotRepresentable
+        let src6 = "public fn main() -> int { let int x = 2147483648; return x; }";
+        assert!(matches!(
+            analyze_src(src6, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::NumericLiteralNotRepresentable { .. }
+                )),
+                ..
+            })
+        ));
+
+        // let uint8 x = -1 -> UnaryOperator error
+        let src7 = "public fn main() -> uint8 { let uint8 x = -1; return x; }";
+        assert!(matches!(
+            analyze_src(src7, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::UnaryOperator { .. }
+                )),
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn floating_literal_representability_and_overflow() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+
+        let src1 = "public fn main() -> float32 { let float32 x = 1.5; return x; }";
+        assert!(analyze_src(src1, &cat).is_ok());
+
+        let src2 = "public fn main() -> float32 { let float32 x = 1e100; return x; }";
+        assert!(matches!(
+            analyze_src(src2, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::NumericLiteralNotRepresentable { .. }
+                )),
+                ..
+            })
+        ));
+
+        let src3 = "public fn main() -> float { let float x = 1e400; return x; }";
+        assert!(matches!(
+            analyze_src(src3, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::NumericLiteralNotRepresentable { .. }
+                )),
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn dynamic_context_binary_arithmetic_same_type() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+
+        // Binary arithmetic under dynamic context gets type_id: dynamic
+        let src1 = "public fn main(int8 a, int8 b) -> dynamic { return a + b; }";
+        let sem1 = match analyze_src(src1, &cat) {
+            Ok(p) => p,
+            Err(_) => panic!("binary under dynamic context should succeed"),
+        };
+        let dyn_id = sem1
+            .types
+            .iter()
+            .position(|t| matches!(t, SemanticType::Native(NativeType::Dynamic)))
+            .unwrap();
+        assert_eq!(sem1.functions[0].body.result.type_id.0, dyn_id);
+
+        // Heterogeneous fixed types fail under dynamic context
+        let src2 = "public fn main(int32 a, int64 b) -> dynamic { return a + b; }";
+        assert!(matches!(
+            analyze_src(src2, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::ArithmeticOperator { .. }
+                )),
+                ..
+            })
+        ));
+
+        // Unary under dynamic context gets type_id: dynamic
+        let src3 = "public fn main(int8 a) -> dynamic { return -a; }";
+        let sem3 = match analyze_src(src3, &cat) {
+            Ok(p) => p,
+            Err(_) => panic!("unary under dynamic context should succeed"),
+        };
+        assert_eq!(sem3.functions[0].body.result.type_id.0, dyn_id);
+
+        // Function boundary: calculate returns int8, returned to dynamic in caller
+        let src4 = r#"
+            private fn calculate(int8 a, int8 b) -> int8 {
+                return a + b;
+            }
+            public fn main(int8 a, int8 b) -> dynamic {
+                return calculate(a, b);
+            }
+        "#;
+        assert!(analyze_src(src4, &cat).is_ok());
+    }
+
+    #[test]
+    fn contextual_numeric_symmetry() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+
+        let src1 = "public fn main(int64 x) -> bool { return x == 1; }";
+        assert!(analyze_src(src1, &cat).is_ok());
+
+        let src2 = "public fn main(int64 x) -> bool { return 1 == x; }";
+        assert!(analyze_src(src2, &cat).is_ok());
+
+        let src3 = "public fn main(float32 x) -> float32 { return x + 1.5; }";
+        assert!(analyze_src(src3, &cat).is_ok());
+
+        let src4 = "public fn main(float32 x) -> float32 { return 1.5 + x; }";
+        assert!(analyze_src(src4, &cat).is_ok());
     }
 }
