@@ -257,6 +257,10 @@ pub(crate) enum SignatureMismatchKind {
     },
 }
 
+pub(crate) struct ExternalCapabilityFailure {
+    pub(crate) code: Box<str>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1072,5 +1076,13 @@ mod tests {
             },
             _ => panic!("expected ResultType"),
         }
+    }
+
+    #[test]
+    fn external_capability_failure_field() {
+        let failure = ExternalCapabilityFailure {
+            code: Box::from("permission_denied"),
+        };
+        assert_eq!(&*failure.code, "permission_denied");
     }
 }
