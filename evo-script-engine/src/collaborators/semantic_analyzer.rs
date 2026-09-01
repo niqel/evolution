@@ -2013,6 +2013,148 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
         }
     }
 
+    fn is_statically_known_floating(&self, expr: &Expression<'source>) -> bool {
+        match &expr.kind {
+            ExpressionKind::Literal { kind, .. } => matches!(kind, LiteralKind::Floating),
+            ExpressionKind::Identifier(id) => {
+                if let Some(&bid) = self.name_to_binding.get(id.lexeme) {
+                    let tid = self.bindings[bid].type_id.0;
+                    matches!(
+                        &self.analyzer.types[tid],
+                        SemanticType::Native(
+                            NativeType::Float | NativeType::Float32 | NativeType::Float64
+                        )
+                    )
+                } else {
+                    false
+                }
+            }
+            ExpressionKind::Unary { operator, operand } => match operator {
+                UnaryOperator::Negate => self.is_statically_known_floating(operand),
+                UnaryOperator::Not => false,
+            },
+            ExpressionKind::Binary {
+                left,
+                operator,
+                right,
+            } => match operator {
+                BinaryOperator::Add
+                | BinaryOperator::Subtract
+                | BinaryOperator::Multiply
+                | BinaryOperator::Divide
+                | BinaryOperator::Remainder => {
+                    self.is_statically_known_floating(left)
+                        || self.is_statically_known_floating(right)
+                }
+                _ => false,
+            },
+            ExpressionKind::FieldAccess { receiver, field } => {
+                if let ExpressionKind::Identifier(id) = &receiver.kind {
+                    if let Some(&bid) = self.name_to_binding.get(id.lexeme) {
+                        let tid = self.bindings[bid].type_id.0;
+                        if let Some(meta) = self.analyzer.struct_metadata.get(&tid) {
+                            if let Some(&f_idx) = meta.name_to_field_idx.get(field.lexeme) {
+                                let f_tid = meta.fields[f_idx].type_id;
+                                return matches!(
+                                    &self.analyzer.types[f_tid],
+                                    SemanticType::Native(
+                                        NativeType::Float
+                                            | NativeType::Float32
+                                            | NativeType::Float64
+                                    )
+                                );
+                            }
+                        }
+                    }
+                }
+                false
+            }
+            ExpressionKind::FunctionCall(call) => {
+                let callee_name = call.callee.lexeme;
+                if matches!(callee_name, "to_float" | "to_float32" | "to_float64") {
+                    return true;
+                }
+                if let Some(&fid) = self.analyzer.name_to_function.get(callee_name) {
+                    let ret_tid = self.analyzer.function_headers[fid].result_type;
+                    return matches!(
+                        &self.analyzer.types[ret_tid],
+                        SemanticType::Native(
+                            NativeType::Float | NativeType::Float32 | NativeType::Float64
+                        )
+                    );
+                }
+                if let Some(sigs) = self.analyzer.name_to_signatures.get(callee_name) {
+                    if sigs.len() == 1 {
+                        let sid = sigs[0];
+                        let ret_tid = self.analyzer.signatures[sid].result_type.0;
+                        return matches!(
+                            &self.analyzer.types[ret_tid],
+                            SemanticType::Native(
+                                NativeType::Float | NativeType::Float32 | NativeType::Float64
+                            )
+                        );
+                    }
+                }
+                if let Some(&sbid) = self.name_to_sig_binding.get(callee_name) {
+                    let sid = self.signature_bindings[sbid].signature.0;
+                    let ret_tid = self.analyzer.signatures[sid].result_type.0;
+                    return matches!(
+                        &self.analyzer.types[ret_tid],
+                        SemanticType::Native(
+                            NativeType::Float | NativeType::Float32 | NativeType::Float64
+                        )
+                    );
+                }
+                false
+            }
+            ExpressionKind::Pipeline(pipe) => {
+                if let Some(last_stage) = pipe.stages.last() {
+                    let callee_name = last_stage.callee.lexeme;
+                    if matches!(callee_name, "to_float" | "to_float32" | "to_float64") {
+                        return true;
+                    }
+                    if let Some(&fid) = self.analyzer.name_to_function.get(callee_name) {
+                        let ret_tid = self.analyzer.function_headers[fid].result_type;
+                        return matches!(
+                            &self.analyzer.types[ret_tid],
+                            SemanticType::Native(
+                                NativeType::Float | NativeType::Float32 | NativeType::Float64
+                            )
+                        );
+                    }
+                    if let Some(sigs) = self.analyzer.name_to_signatures.get(callee_name) {
+                        if sigs.len() == 1 {
+                            let sid = sigs[0];
+                            let ret_tid = self.analyzer.signatures[sid].result_type.0;
+                            return matches!(
+                                &self.analyzer.types[ret_tid],
+                                SemanticType::Native(
+                                    NativeType::Float | NativeType::Float32 | NativeType::Float64
+                                )
+                            );
+                        }
+                    }
+                    if let Some(&sbid) = self.name_to_sig_binding.get(callee_name) {
+                        let sid = self.signature_bindings[sbid].signature.0;
+                        let ret_tid = self.analyzer.signatures[sid].result_type.0;
+                        return matches!(
+                            &self.analyzer.types[ret_tid],
+                            SemanticType::Native(
+                                NativeType::Float | NativeType::Float32 | NativeType::Float64
+                            )
+                        );
+                    }
+                }
+                false
+            }
+            ExpressionKind::When(when) => when
+                .correspondences
+                .iter()
+                .any(|c| self.is_statically_known_floating(&c.result)),
+            _ => false,
+        }
+    }
+
     fn analyze_binary(
         &mut self,
         left: &Expression<'source>,
@@ -2120,7 +2262,23 @@ impl<'analyzer, 'a, 'source> FunctionAnalyzer<'analyzer, 'a, 'source> {
                 let right_type = &self.analyzer.types[right_expr.type_id.0];
                 let dynamic_id = self.analyzer.name_to_type["dynamic"];
 
-                let (is_valid, out_type) = if left_expr.type_id.0 == right_expr.type_id.0 {
+                let left_is_floating = matches!(
+                    left_type,
+                    SemanticType::Native(
+                        NativeType::Float | NativeType::Float32 | NativeType::Float64
+                    )
+                ) || self.is_statically_known_floating(left);
+
+                let right_is_floating = matches!(
+                    right_type,
+                    SemanticType::Native(
+                        NativeType::Float | NativeType::Float32 | NativeType::Float64
+                    )
+                ) || self.is_statically_known_floating(right);
+
+                let (is_valid, out_type) = if left_is_floating || right_is_floating {
+                    (false, 0)
+                } else if left_expr.type_id.0 == right_expr.type_id.0 {
                     if left_expr.type_id.0 == dynamic_id {
                         (true, dynamic_id)
                     } else {
@@ -6305,5 +6463,118 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn dynamic_remainder_domain_and_floating_rejection() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+
+        // A — Exact normative case: 10.0 % 4.0 -> ArithmeticOperator
+        let src_a = "public fn main() -> dynamic { return 10.0 % 4.0; }";
+        assert!(matches!(
+            analyze_src(src_a, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::ArithmeticOperator { .. }
+                )),
+                ..
+            })
+        ));
+
+        // B — float32 bindings -> ArithmeticOperator
+        let src_b = "public fn main(float32 a, float32 b) -> dynamic { return a % b; }";
+        assert!(matches!(
+            analyze_src(src_b, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::ArithmeticOperator { .. }
+                )),
+                ..
+            })
+        ));
+
+        // C — Scientific floating literals -> ArithmeticOperator
+        let src_c = "public fn main() -> dynamic { return 1e10 % 2e3; }";
+        assert!(matches!(
+            analyze_src(src_c, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::ArithmeticOperator { .. }
+                )),
+                ..
+            })
+        ));
+
+        // D — Unary floating -> ArithmeticOperator
+        let src_d = "public fn main() -> dynamic { return -10.0 % 4.0; }";
+        assert!(matches!(
+            analyze_src(src_d, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::ArithmeticOperator { .. }
+                )),
+                ..
+            })
+        ));
+
+        // E — Nested known-floating expression -> ArithmeticOperator
+        let src_e = "public fn main() -> dynamic { return (1.0 + 2.0) % 3.0; }";
+        assert!(matches!(
+            analyze_src(src_e, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::ArithmeticOperator { .. }
+                )),
+                ..
+            })
+        ));
+
+        // F — Fixed integer under dynamic -> success and result.type_id == dynamic
+        let src_f = "public fn main(int8 a, int8 b) -> dynamic { return a % b; }";
+        let sem_f = match analyze_src(src_f, &cat) {
+            Ok(p) => p,
+            Err(_) => panic!("fixed integer remainder under dynamic should succeed"),
+        };
+        let dyn_id = sem_f
+            .types
+            .iter()
+            .position(|t| matches!(t, SemanticType::Native(NativeType::Dynamic)))
+            .unwrap();
+        assert_eq!(sem_f.functions[0].body.result.type_id.0, dyn_id);
+
+        // G — Integer literals under dynamic -> success
+        let src_g = "public fn main() -> dynamic { return 10 % 3; }";
+        assert!(analyze_src(src_g, &cat).is_ok());
+
+        // H — True dynamic operands -> success
+        let src_h = "public fn main(dynamic a, dynamic b) -> dynamic { return a % b; }";
+        assert!(analyze_src(src_h, &cat).is_ok());
+
+        // I — Dynamic plus fixed integer -> success
+        let src_i = "public fn main(dynamic a, int8 b) -> dynamic { return a % b; }";
+        assert!(analyze_src(src_i, &cat).is_ok());
+
+        // J — Dynamic plus fixed float -> ArithmeticOperator
+        let src_j = "public fn main(dynamic a, float32 b) -> dynamic { return a % b; }";
+        assert!(matches!(
+            analyze_src(src_j, &cat),
+            Err(CompileFailure {
+                kind: CompileFailureKind::Semantic(SemanticFailure::TypeChecking(
+                    TypeCheckingFailure::ArithmeticOperator { .. }
+                )),
+                ..
+            })
+        ));
+
+        // (a + b) % c with int8 under dynamic -> success and result.type_id == dynamic
+        let src_k = "public fn main(int8 a, int8 b, int8 c) -> dynamic { return (a + b) % c; }";
+        let sem_k = match analyze_src(src_k, &cat) {
+            Ok(p) => p,
+            Err(_) => panic!("(a + b) % c under dynamic should succeed"),
+        };
+        assert_eq!(sem_k.functions[0].body.result.type_id.0, dyn_id);
     }
 }
