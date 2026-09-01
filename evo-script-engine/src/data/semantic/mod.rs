@@ -1,5 +1,9 @@
 use alloc::string::String;
 
+pub(crate) mod expressions;
+pub(crate) mod ids;
+pub(crate) mod structure;
+
 #[derive(PartialEq, Eq, Hash)]
 pub(crate) struct SignatureSymbol {
     pub(crate) module: String,
