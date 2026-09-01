@@ -1,3 +1,4 @@
+#[derive(Clone, Copy)]
 pub(crate) struct ConstantId(pub(crate) usize);
 pub(crate) struct ExternalSymbolId(pub(crate) usize);
 pub(crate) struct CompiledValueShapeId(pub(crate) usize);
@@ -48,6 +49,12 @@ mod tests {
         assert_eq!(iidx.0, 5);
         assert_eq!(fidx.0, 6);
         assert_eq!(vdisc.0, 7);
+
+        // ConstantId Copy semantics verification
+        let original = ConstantId(7);
+        let copied = original;
+        assert_eq!(original.0, 7);
+        assert_eq!(copied.0, 7);
     }
 
     #[test]
