@@ -888,20 +888,17 @@ impl<'a, 'c> FunctionEmitter<'a, 'c> {
                         // Fallback branch: subject is on top of stack
                         match &branch.extraction {
                             SemanticVariantExtraction::Simple => {
-                                self.emit(Instruction::Discard, branch.result.span);
+                                self.emit(Instruction::Discard, span);
                             }
                             SemanticVariantExtraction::Associated { binding } => {
-                                self.emit(Instruction::ExtractEnumAssociated, branch.result.span);
+                                self.emit(Instruction::ExtractEnumAssociated, span);
                                 let slot_idx = match self.binding_to_slot[&binding.0] {
                                     Slot::Local(l) => l,
                                     Slot::Parameter(_) => {
                                         panic!("extraction cannot be parameter slot")
                                     }
                                 };
-                                self.emit(
-                                    Instruction::StoreLocal(LocalSlot(slot_idx)),
-                                    branch.result.span,
-                                );
+                                self.emit(Instruction::StoreLocal(LocalSlot(slot_idx)), span);
                             }
                             SemanticVariantExtraction::Structured { fields } => {
                                 let field_indices: Vec<FieldIndex> =
@@ -910,7 +907,7 @@ impl<'a, 'c> FunctionEmitter<'a, 'c> {
                                     Instruction::ExtractEnumStructured {
                                         fields: field_indices,
                                     },
-                                    branch.result.span,
+                                    span,
                                 );
                                 // Store in reverse order because stack is LIFO
                                 for f_binding in fields.iter().rev() {
@@ -921,10 +918,7 @@ impl<'a, 'c> FunctionEmitter<'a, 'c> {
                                             panic!("extraction cannot be parameter slot")
                                         }
                                     };
-                                    self.emit(
-                                        Instruction::StoreLocal(LocalSlot(slot_idx)),
-                                        branch.result.span,
-                                    );
+                                    self.emit(Instruction::StoreLocal(LocalSlot(slot_idx)), span);
                                 }
                             }
                         }
@@ -938,27 +932,24 @@ impl<'a, 'c> FunctionEmitter<'a, 'c> {
                         // Non-last branch: TestVariant consumes subject and pushes [subject, match_bool]
                         self.emit(
                             Instruction::TestVariant(VariantDiscriminant(branch.variant.0)),
-                            branch.result.span,
+                            span,
                         );
-                        let jump_next = self.emit_placeholder_jump_if_false(branch.result.span);
+                        let jump_next = self.emit_placeholder_jump_if_false(span);
 
                         // Match branch: subject is on top of stack
                         match &branch.extraction {
                             SemanticVariantExtraction::Simple => {
-                                self.emit(Instruction::Discard, branch.result.span);
+                                self.emit(Instruction::Discard, span);
                             }
                             SemanticVariantExtraction::Associated { binding } => {
-                                self.emit(Instruction::ExtractEnumAssociated, branch.result.span);
+                                self.emit(Instruction::ExtractEnumAssociated, span);
                                 let slot_idx = match self.binding_to_slot[&binding.0] {
                                     Slot::Local(l) => l,
                                     Slot::Parameter(_) => {
                                         panic!("extraction cannot be parameter slot")
                                     }
                                 };
-                                self.emit(
-                                    Instruction::StoreLocal(LocalSlot(slot_idx)),
-                                    branch.result.span,
-                                );
+                                self.emit(Instruction::StoreLocal(LocalSlot(slot_idx)), span);
                             }
                             SemanticVariantExtraction::Structured { fields } => {
                                 let field_indices: Vec<FieldIndex> =
@@ -967,7 +958,7 @@ impl<'a, 'c> FunctionEmitter<'a, 'c> {
                                     Instruction::ExtractEnumStructured {
                                         fields: field_indices,
                                     },
-                                    branch.result.span,
+                                    span,
                                 );
                                 for f_binding in fields.iter().rev() {
                                     let slot_idx = match self.binding_to_slot[&f_binding.binding.0]
@@ -977,10 +968,7 @@ impl<'a, 'c> FunctionEmitter<'a, 'c> {
                                             panic!("extraction cannot be parameter slot")
                                         }
                                     };
-                                    self.emit(
-                                        Instruction::StoreLocal(LocalSlot(slot_idx)),
-                                        branch.result.span,
-                                    );
+                                    self.emit(Instruction::StoreLocal(LocalSlot(slot_idx)), span);
                                 }
                             }
                         }
@@ -991,7 +979,7 @@ impl<'a, 'c> FunctionEmitter<'a, 'c> {
                             branch.result.span,
                         );
 
-                        let jump_end = self.emit_placeholder_jump(branch.result.span);
+                        let jump_end = self.emit_placeholder_jump(span);
                         jump_ends.push(jump_end);
 
                         let next_label = self.instructions.len();
@@ -1902,5 +1890,102 @@ mod tests {
         for span in &compiled.source_map.functions[0] {
             assert!(span.end >= span.start);
         }
+    }
+
+    #[test]
+    fn when_source_map_provenance_exact_spans() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+        let src = r#"
+            enum Status {
+                Ready,
+                Failed
+            }
+
+            public fn main(Status status) -> int {
+                return when status {
+                    Status::Ready => 10,
+                    Status::Failed => 20
+                };
+            }
+        "#;
+        let tokens = lex_source(src).unwrap_or_else(|_| panic!("lexing failed"));
+        let ast = parse_tokens(&tokens, src).unwrap_or_else(|_| panic!("parsing failed"));
+        let sem = analyze_program(&ast, &cat).unwrap_or_else(|_| panic!("analysis failed"));
+        let when_span = sem.functions[0].body.result.span;
+        let compiled = lower_program(&sem);
+
+        let main_fn = &compiled.functions[0];
+        let spans = &compiled.source_map.functions[0];
+
+        // 0: LoadParameter(0) -> status parameter span
+        // 1: TestVariant(0) -> when_span
+        // 2: JumpIfFalse -> when_span
+        // 3: Discard -> when_span
+        // 4: LoadConstant(10) -> span of 10
+        // 5: Jump(end) -> when_span
+        // 6: Discard -> when_span
+        // 7: LoadConstant(20) -> span of 20
+        // 8: Return -> return result expression span (when_span)
+        assert_eq!(spans[1], when_span);
+        assert_eq!(spans[2], when_span);
+        assert_eq!(spans[3], when_span);
+        assert_ne!(spans[4], when_span);
+        assert_eq!(spans[5], when_span);
+        assert_eq!(spans[6], when_span);
+        assert_ne!(spans[7], when_span);
+        assert_eq!(spans[8], when_span);
+    }
+
+    #[test]
+    fn when_extraction_source_map_provenance_associated_and_structured() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+        let src = r#"
+            enum Result {
+                Value(int),
+                Data { int code; string msg; },
+                Empty
+            }
+
+            public fn main(Result res) -> int {
+                return when res {
+                    Result::Value(int v) => v + 1,
+                    Result::Data { code: int c; msg: string m; } => c,
+                    Result::Empty => 0
+                };
+            }
+        "#;
+        let tokens = lex_source(src).unwrap_or_else(|_| panic!("lexing failed"));
+        let ast = parse_tokens(&tokens, src).unwrap_or_else(|_| panic!("parsing failed"));
+        let sem = analyze_program(&ast, &cat).unwrap_or_else(|_| panic!("analysis failed"));
+        let when_span = sem.functions[0].body.result.span;
+        let compiled = lower_program(&sem);
+
+        let main_fn = &compiled.functions[0];
+        let spans = &compiled.source_map.functions[0];
+
+        // Find ExtractEnumAssociated and StoreLocal
+        let extract_assoc_pos = main_fn
+            .instructions
+            .iter()
+            .position(|i| matches!(i, Instruction::ExtractEnumAssociated))
+            .unwrap();
+        assert_eq!(spans[extract_assoc_pos], when_span);
+        assert_eq!(spans[extract_assoc_pos + 1], when_span); // StoreLocal for associated extraction
+
+        // Find ExtractEnumStructured and StoreLocals
+        let extract_struct_pos = main_fn
+            .instructions
+            .iter()
+            .position(|i| matches!(i, Instruction::ExtractEnumStructured { .. }))
+            .unwrap();
+        assert_eq!(spans[extract_struct_pos], when_span);
+        assert_eq!(spans[extract_struct_pos + 1], when_span); // StoreLocal 1
+        assert_eq!(spans[extract_struct_pos + 2], when_span); // StoreLocal 2
     }
 }
