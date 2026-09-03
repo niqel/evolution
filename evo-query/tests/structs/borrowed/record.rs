@@ -9,11 +9,11 @@ fn record_borrowed_fields() {
     let fields = [
         Field {
             name: "name",
-            value: Value::Text(name),
+            value: Value::String(name),
         },
         Field {
             name: "size",
-            value: Value::Unsigned(20),
+            value: Value::Uint64(20),
         },
     ];
 
@@ -21,7 +21,7 @@ fn record_borrowed_fields() {
 
     assert_eq!(record.fields.len(), 2);
     assert_eq!(record.fields[0].name, "name");
-    assert_eq!(record.fields[0].value, Value::Text("hola.txt"));
+    assert_eq!(record.fields[0].value, Value::String("hola.txt"));
     assert_eq!(record.fields[1].name, "size");
-    assert_eq!(record.fields[1].value, Value::Unsigned(20));
+    assert_eq!(record.fields[1].value, Value::Uint64(20));
 }

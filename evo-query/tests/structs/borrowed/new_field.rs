@@ -8,13 +8,13 @@ use evo_values::definitions::value::Value;
 fn new_field_literal() {
     let field = NewField {
         name: "fixed_label",
-        expression: ValueExpression::Literal(Value::Text("system")),
+        expression: ValueExpression::Literal(Value::String("system")),
     };
 
     assert_eq!(field.name, "fixed_label");
     assert_eq!(
         field.expression,
-        ValueExpression::Literal(Value::Text("system"))
+        ValueExpression::Literal(Value::String("system"))
     );
 }
 
@@ -45,9 +45,9 @@ fn new_field_pipeline() {
 #[test]
 fn new_field_concat() {
     let parts = [
-        ValueExpression::Literal(Value::Text("hello")),
-        ValueExpression::Literal(Value::Text(" ")),
-        ValueExpression::Literal(Value::Text("world")),
+        ValueExpression::Literal(Value::String("hello")),
+        ValueExpression::Literal(Value::String(" ")),
+        ValueExpression::Literal(Value::String("world")),
     ];
 
     let field = NewField {
@@ -59,9 +59,9 @@ fn new_field_concat() {
     match field.expression {
         ValueExpression::Concat(args) => {
             assert_eq!(args.len(), 3);
-            assert_eq!(args[0], ValueExpression::Literal(Value::Text("hello")));
-            assert_eq!(args[1], ValueExpression::Literal(Value::Text(" ")));
-            assert_eq!(args[2], ValueExpression::Literal(Value::Text("world")));
+            assert_eq!(args[0], ValueExpression::Literal(Value::String("hello")));
+            assert_eq!(args[1], ValueExpression::Literal(Value::String(" ")));
+            assert_eq!(args[2], ValueExpression::Literal(Value::String("world")));
         }
         _ => panic!("expected ValueExpression::Concat"),
     }
@@ -71,19 +71,19 @@ fn new_field_concat() {
 fn new_field_equality_and_difference() {
     let left = NewField {
         name: "tag",
-        expression: ValueExpression::Literal(Value::Text("prod")),
+        expression: ValueExpression::Literal(Value::String("prod")),
     };
     let right = NewField {
         name: "tag",
-        expression: ValueExpression::Literal(Value::Text("prod")),
+        expression: ValueExpression::Literal(Value::String("prod")),
     };
     let different_name = NewField {
         name: "env",
-        expression: ValueExpression::Literal(Value::Text("prod")),
+        expression: ValueExpression::Literal(Value::String("prod")),
     };
     let different_expr = NewField {
         name: "tag",
-        expression: ValueExpression::Literal(Value::Text("dev")),
+        expression: ValueExpression::Literal(Value::String("dev")),
     };
 
     assert_eq!(left, right);
@@ -92,12 +92,12 @@ fn new_field_equality_and_difference() {
 }
 
 #[test]
-fn new_field_copy() {
+fn new_field_clone() {
     let original = NewField {
         name: "tag",
-        expression: ValueExpression::Literal(Value::Text("prod")),
+        expression: ValueExpression::Literal(Value::String("prod")),
     };
-    let copied = original;
+    let copied = original.clone();
 
     assert_eq!(original, copied);
 }

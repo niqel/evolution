@@ -19,10 +19,10 @@ fn selection_field() {
 fn selection_new() {
     let new_field = NewField {
         name: "greeting",
-        expression: ValueExpression::Literal(Value::Text("hello")),
+        expression: ValueExpression::Literal(Value::String("hello")),
     };
 
-    let selection = Selection::New(new_field);
+    let selection = Selection::New(new_field.clone());
 
     assert_eq!(selection, Selection::New(new_field));
 
@@ -31,7 +31,7 @@ fn selection_new() {
             assert_eq!(inner.name, "greeting");
             assert_eq!(
                 inner.expression,
-                ValueExpression::Literal(Value::Text("hello"))
+                ValueExpression::Literal(Value::String("hello"))
             );
         }
         _ => panic!("expected Selection::New"),
@@ -46,15 +46,15 @@ fn selection_equality_and_difference() {
 
     let new_a = Selection::New(NewField {
         name: "total",
-        expression: ValueExpression::Literal(Value::Unsigned(100)),
+        expression: ValueExpression::Literal(Value::Uint64(100)),
     });
     let new_b = Selection::New(NewField {
         name: "total",
-        expression: ValueExpression::Literal(Value::Unsigned(100)),
+        expression: ValueExpression::Literal(Value::Uint64(100)),
     });
     let new_c = Selection::New(NewField {
         name: "count",
-        expression: ValueExpression::Literal(Value::Unsigned(100)),
+        expression: ValueExpression::Literal(Value::Uint64(100)),
     });
 
     assert_eq!(field_a, field_b);
@@ -66,9 +66,9 @@ fn selection_equality_and_difference() {
 }
 
 #[test]
-fn selection_copy() {
+fn selection_clone() {
     let original = Selection::Field("name");
-    let copied = original;
+    let copied = original.clone();
 
     assert_eq!(original, copied);
 
@@ -76,7 +76,7 @@ fn selection_copy() {
         name: "status",
         expression: ValueExpression::Literal(Value::Boolean(true)),
     });
-    let copied_new = original_new;
+    let copied_new = original_new.clone();
 
     assert_eq!(original_new, copied_new);
 }

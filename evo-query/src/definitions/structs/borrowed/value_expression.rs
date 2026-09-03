@@ -4,7 +4,7 @@ use super::replace_expression::ReplaceExpression;
 use super::substring_expression::SubstringExpression;
 use evo_values::definitions::value::Value;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ValueExpression<'expression> {
     Literal(Value<'expression>),
     Pipeline(&'expression [IterationOperation<'expression>]),

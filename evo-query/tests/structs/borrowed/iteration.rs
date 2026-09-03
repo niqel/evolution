@@ -21,7 +21,7 @@ fn iteration_ordered_pipeline() {
 
     assert_eq!(iteration.operations.len(), 3);
 
-    match iteration.operations[0] {
+    match &iteration.operations[0] {
         IterationOperation::Select(selected_fields) => {
             assert_eq!(selected_fields.len(), 2);
             assert_eq!(selected_fields[0], Selection::Field("name"));
@@ -70,7 +70,7 @@ fn iteration_filter_skip_take_order() {
     let filter_expr = ConditionExpression::Condition(condition);
 
     let operations = [
-        IterationOperation::Filter(filter_expr),
+        IterationOperation::Filter(filter_expr.clone()),
         IterationOperation::Skip(10),
         IterationOperation::Take(5),
     ];

@@ -10,7 +10,7 @@ use evo_query::definitions::use_cases::iterate as iterate_use_case;
 use evo_values::definitions::value::Value;
 
 fn receive(construction: Construction<'_>) -> Flow {
-    assert_eq!(construction, Construction::Value(Value::Unsigned(42)));
+    assert_eq!(construction, Construction::Value(Value::Uint64(42)));
     Flow::Continue
 }
 
@@ -21,7 +21,7 @@ fn fake_iterate_success<'iteration>(
     assert_eq!(iteration.operations.len(), 1);
     assert_eq!(iteration.operations[0], IterationOperation::Take(1));
 
-    let flow = request(Construction::Value(Value::Unsigned(42)));
+    let flow = request(Construction::Value(Value::Uint64(42)));
     assert_eq!(flow, Flow::Continue);
 
     Ok(())
@@ -38,7 +38,7 @@ fn fake_iterate_field_not_found<'iteration>(
     iteration: Iteration<'iteration>,
     _request: construction_requester::Request,
 ) -> Result<(), iterate_contract::Error<'iteration>> {
-    match iteration.operations[0] {
+    match &iteration.operations[0] {
         IterationOperation::Select(selections) => match selections[1] {
             Selection::Field(name) => Err(iterate_contract::Error::FieldNotFound(name)),
             _ => panic!("expected Selection::Field"),

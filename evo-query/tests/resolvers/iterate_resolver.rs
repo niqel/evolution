@@ -13,7 +13,7 @@ use evo_query::resolvers::iterate_resolver;
 use evo_values::definitions::value::Value;
 
 fn receive(construction: Construction<'_>) -> Flow {
-    assert_eq!(construction, Construction::Value(Value::Unsigned(42)));
+    assert_eq!(construction, Construction::Value(Value::Uint64(42)));
     Flow::Continue
 }
 
@@ -24,7 +24,7 @@ fn fake_contract_success<'iteration>(
     assert_eq!(iteration.operations.len(), 1);
     assert_eq!(iteration.operations[0], IterationOperation::Take(1));
 
-    let flow = request(Construction::Value(Value::Unsigned(42)));
+    let flow = request(Construction::Value(Value::Uint64(42)));
     assert_eq!(flow, Flow::Continue);
 
     Ok(())
@@ -41,7 +41,7 @@ fn fake_contract_field_not_found<'iteration>(
     iteration: Iteration<'iteration>,
     _request: construction_requester::Request,
 ) -> Result<(), iterate_contract::Error<'iteration>> {
-    match iteration.operations[0] {
+    match &iteration.operations[0] {
         IterationOperation::Select(selections) => match selections[1] {
             Selection::Field(name) => Err(iterate_contract::Error::FieldNotFound(name)),
             _ => panic!("expected Selection::Field"),
@@ -54,7 +54,7 @@ fn fake_contract_comparison_type_mismatch<'iteration>(
     iteration: Iteration<'iteration>,
     _request: construction_requester::Request,
 ) -> Result<(), iterate_contract::Error<'iteration>> {
-    match iteration.operations[0] {
+    match &iteration.operations[0] {
         IterationOperation::Filter(ConditionExpression::Condition(condition)) => Err(
             iterate_contract::Error::ComparisonTypeMismatch(condition.field),
         ),
@@ -66,7 +66,7 @@ fn fake_contract_external_type_incompatible<'iteration>(
     iteration: Iteration<'iteration>,
     _request: construction_requester::Request,
 ) -> Result<(), iterate_contract::Error<'iteration>> {
-    match iteration.operations[0] {
+    match &iteration.operations[0] {
         IterationOperation::Select(selections) => match selections[0] {
             Selection::Field(name) => Err(iterate_contract::Error::ExternalTypeIncompatible(name)),
             _ => panic!("expected Selection::Field"),
@@ -166,7 +166,7 @@ fn iterate_resolver_translates_comparison_type_mismatch() {
     let condition = Condition {
         field: "size",
         operator: ConditionOperator::GreaterThan,
-        value: Value::Text("hello"),
+        value: Value::String("hello"),
     };
     let operations = [IterationOperation::Filter(ConditionExpression::Condition(
         condition,

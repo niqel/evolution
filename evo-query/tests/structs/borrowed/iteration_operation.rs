@@ -10,13 +10,13 @@ fn iteration_operation_filter() {
     let condition = Condition {
         field: "name",
         operator: ConditionOperator::Equal,
-        value: Value::Text("config.evo"),
+        value: Value::String("config.evo"),
     };
 
     let expression = ConditionExpression::Condition(condition);
-    let operation = IterationOperation::Filter(expression);
+    let operation = IterationOperation::Filter(expression.clone());
 
-    assert_eq!(operation, IterationOperation::Filter(expression));
+    assert_eq!(operation, IterationOperation::Filter(expression.clone()));
     assert_ne!(operation, IterationOperation::ToValue);
 
     match operation {
@@ -32,18 +32,18 @@ fn iteration_operation_filter_and_expression() {
     let a = ConditionExpression::Condition(Condition {
         field: "name",
         operator: ConditionOperator::Equal,
-        value: Value::Text("config.evo"),
+        value: Value::String("config.evo"),
     });
 
     let b = ConditionExpression::Condition(Condition {
         field: "size",
         operator: ConditionOperator::GreaterThan,
-        value: Value::Unsigned(1024),
+        value: Value::Uint64(1024),
     });
 
-    let expressions = [a, b];
+    let expressions = [a.clone(), b.clone()];
     let expression = ConditionExpression::And(&expressions);
-    let operation = IterationOperation::Filter(expression);
+    let operation = IterationOperation::Filter(expression.clone());
 
     match operation {
         IterationOperation::Filter(ConditionExpression::And(children)) => {
@@ -60,13 +60,13 @@ fn iteration_operation_filter_grouped_expression() {
     let a = ConditionExpression::Condition(Condition {
         field: "name",
         operator: ConditionOperator::Equal,
-        value: Value::Text("config.evo"),
+        value: Value::String("config.evo"),
     });
 
     let b = ConditionExpression::Condition(Condition {
         field: "size",
         operator: ConditionOperator::GreaterThan,
-        value: Value::Unsigned(1024),
+        value: Value::Uint64(1024),
     });
 
     let c = ConditionExpression::Condition(Condition {
@@ -75,11 +75,11 @@ fn iteration_operation_filter_grouped_expression() {
         value: Value::Boolean(true),
     });
 
-    let and_children = [a, b];
+    let and_children = [a.clone(), b.clone()];
     let and_expression = ConditionExpression::And(&and_children);
-    let or_children = [and_expression, c];
+    let or_children = [and_expression, c.clone()];
     let expression = ConditionExpression::Or(&or_children);
-    let operation = IterationOperation::Filter(expression);
+    let operation = IterationOperation::Filter(expression.clone());
 
     match operation {
         IterationOperation::Filter(ConditionExpression::Or(children)) => {
@@ -181,36 +181,36 @@ fn iteration_operation_unit_variants() {
 }
 
 #[test]
-fn iteration_operation_copy() {
+fn iteration_operation_clone() {
     let selections = [Selection::Field("name")];
     let original = IterationOperation::Select(&selections);
-    let copied = original;
+    let copied = original.clone();
 
     assert_eq!(original, copied);
 
     let original_to_value = IterationOperation::ToValue;
-    let copied_to_value = original_to_value;
+    let copied_to_value = original_to_value.clone();
 
     assert_eq!(original_to_value, copied_to_value);
 
     let condition = Condition {
         field: "name",
         operator: ConditionOperator::Equal,
-        value: Value::Text("config.evo"),
+        value: Value::String("config.evo"),
     };
     let expression = ConditionExpression::Condition(condition);
     let original_filter = IterationOperation::Filter(expression);
-    let copied_filter = original_filter;
+    let copied_filter = original_filter.clone();
 
     assert_eq!(original_filter, copied_filter);
 
     let original_take = IterationOperation::Take(15);
-    let copied_take = original_take;
+    let copied_take = original_take.clone();
 
     assert_eq!(original_take, copied_take);
 
     let original_skip = IterationOperation::Skip(25);
-    let copied_skip = original_skip;
+    let copied_skip = original_skip.clone();
 
     assert_eq!(original_skip, copied_skip);
 }

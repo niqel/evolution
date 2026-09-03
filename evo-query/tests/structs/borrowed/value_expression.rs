@@ -9,23 +9,23 @@ use evo_values::definitions::value::Value;
 
 #[test]
 fn value_expression_literal_text() {
-    let expr = ValueExpression::Literal(Value::Text("sample"));
+    let expr = ValueExpression::Literal(Value::String("sample"));
 
-    assert_eq!(expr, ValueExpression::Literal(Value::Text("sample")));
+    assert_eq!(expr, ValueExpression::Literal(Value::String("sample")));
     match expr {
-        ValueExpression::Literal(Value::Text(text)) => assert_eq!(text, "sample"),
-        _ => panic!("expected ValueExpression::Literal(Value::Text)"),
+        ValueExpression::Literal(Value::String(text)) => assert_eq!(text, "sample"),
+        _ => panic!("expected ValueExpression::Literal(Value::String)"),
     }
 }
 
 #[test]
 fn value_expression_literal_unsigned() {
-    let expr = ValueExpression::Literal(Value::Unsigned(42));
+    let expr = ValueExpression::Literal(Value::Uint64(42));
 
-    assert_eq!(expr, ValueExpression::Literal(Value::Unsigned(42)));
+    assert_eq!(expr, ValueExpression::Literal(Value::Uint64(42)));
     match expr {
-        ValueExpression::Literal(Value::Unsigned(n)) => assert_eq!(n, 42),
-        _ => panic!("expected ValueExpression::Literal(Value::Unsigned)"),
+        ValueExpression::Literal(Value::Uint64(n)) => assert_eq!(n, 42),
+        _ => panic!("expected ValueExpression::Literal(Value::Uint64)"),
     }
 }
 
@@ -52,8 +52,8 @@ fn value_expression_pipeline() {
 #[test]
 fn value_expression_concat() {
     let args = [
-        ValueExpression::Literal(Value::Text("prefix_")),
-        ValueExpression::Literal(Value::Text("suffix")),
+        ValueExpression::Literal(Value::String("prefix_")),
+        ValueExpression::Literal(Value::String("suffix")),
     ];
 
     let expr = ValueExpression::Concat(&args);
@@ -61,8 +61,8 @@ fn value_expression_concat() {
     match expr {
         ValueExpression::Concat(items) => {
             assert_eq!(items.len(), 2);
-            assert_eq!(items[0], ValueExpression::Literal(Value::Text("prefix_")));
-            assert_eq!(items[1], ValueExpression::Literal(Value::Text("suffix")));
+            assert_eq!(items[0], ValueExpression::Literal(Value::String("prefix_")));
+            assert_eq!(items[1], ValueExpression::Literal(Value::String("suffix")));
         }
         _ => panic!("expected ValueExpression::Concat"),
     }
@@ -70,14 +70,14 @@ fn value_expression_concat() {
 
 #[test]
 fn value_expression_concat_preserves_argument_order() {
-    let a = ValueExpression::Literal(Value::Text("first"));
-    let b = ValueExpression::Literal(Value::Text("second"));
-    let c = ValueExpression::Literal(Value::Text("third"));
+    let a = ValueExpression::Literal(Value::String("first"));
+    let b = ValueExpression::Literal(Value::String("second"));
+    let c = ValueExpression::Literal(Value::String("third"));
 
-    let args_in_order = [a, b, c];
+    let args_in_order = [a.clone(), b.clone(), c.clone()];
     let expr_in_order = ValueExpression::Concat(&args_in_order);
 
-    let args_reversed = [c, b, a];
+    let args_reversed = [c.clone(), b.clone(), a.clone()];
     let expr_reversed = ValueExpression::Concat(&args_reversed);
 
     assert_ne!(expr_in_order, expr_reversed);
@@ -93,18 +93,18 @@ fn value_expression_concat_preserves_argument_order() {
 }
 
 #[test]
-fn value_expression_copy() {
-    let original = ValueExpression::Literal(Value::Text("test"));
-    let copied = original;
+fn value_expression_clone() {
+    let original = ValueExpression::Literal(Value::String("test"));
+    let copied = original.clone();
 
     assert_eq!(original, copied);
 }
 
 #[test]
 fn value_expression_inequality() {
-    let lit_a = ValueExpression::Literal(Value::Text("a"));
-    let lit_b = ValueExpression::Literal(Value::Text("b"));
-    let args = [lit_a];
+    let lit_a = ValueExpression::Literal(Value::String("a"));
+    let lit_b = ValueExpression::Literal(Value::String("b"));
+    let args = [lit_a.clone()];
     let concat_a = ValueExpression::Concat(&args);
 
     assert_ne!(lit_a, lit_b);
@@ -127,7 +127,7 @@ fn select_new_field_from_concat_expression() {
 
     let concat_arguments = [
         ValueExpression::Pipeline(&name_operations),
-        ValueExpression::Literal(Value::Text(" ")),
+        ValueExpression::Literal(Value::String(" ")),
         ValueExpression::Pipeline(&last_name_operations),
     ];
 
@@ -160,7 +160,7 @@ fn select_new_field_from_concat_expression() {
                                 _ => panic!("expected Pipeline for first argument"),
                             }
 
-                            assert_eq!(args[1], ValueExpression::Literal(Value::Text(" ")));
+                            assert_eq!(args[1], ValueExpression::Literal(Value::String(" ")));
 
                             match args[2] {
                                 ValueExpression::Pipeline(ops) => {
@@ -186,9 +186,9 @@ fn select_new_field_from_concat_expression() {
 
 #[test]
 fn value_expression_substring_can_be_constructed() {
-    let text = ValueExpression::Literal(Value::Text("México"));
-    let start = ValueExpression::Literal(Value::Unsigned(1));
-    let length = ValueExpression::Literal(Value::Unsigned(3));
+    let text = ValueExpression::Literal(Value::String("México"));
+    let start = ValueExpression::Literal(Value::Uint64(1));
+    let length = ValueExpression::Literal(Value::Uint64(3));
     let substring_expr = SubstringExpression {
         text: &text,
         start: &start,
@@ -209,7 +209,7 @@ fn value_expression_substring_can_be_constructed() {
 
 #[test]
 fn value_expression_len_can_be_constructed() {
-    let text = ValueExpression::Literal(Value::Text("México"));
+    let text = ValueExpression::Literal(Value::String("México"));
     let len_expr = LenExpression { text: &text };
     let expr = ValueExpression::Len(len_expr);
 
@@ -224,9 +224,9 @@ fn value_expression_len_can_be_constructed() {
 
 #[test]
 fn value_expression_replace_can_be_constructed() {
-    let text = ValueExpression::Literal(Value::Text("one two one"));
-    let from = ValueExpression::Literal(Value::Text("one"));
-    let to = ValueExpression::Literal(Value::Text("1"));
+    let text = ValueExpression::Literal(Value::String("one two one"));
+    let from = ValueExpression::Literal(Value::String("one"));
+    let to = ValueExpression::Literal(Value::String("1"));
     let replace_expr = ReplaceExpression {
         text: &text,
         from: &from,
@@ -247,10 +247,10 @@ fn value_expression_replace_can_be_constructed() {
 
 #[test]
 fn value_expressions_can_be_nested() {
-    let part1 = ValueExpression::Literal(Value::Text("Gustavo"));
-    let part2 = ValueExpression::Literal(Value::Text(" "));
-    let part3 = ValueExpression::Literal(Value::Text("Melendez"));
-    let parts = [part1, part2, part3];
+    let part1 = ValueExpression::Literal(Value::String("Gustavo"));
+    let part2 = ValueExpression::Literal(Value::String(" "));
+    let part3 = ValueExpression::Literal(Value::String("Melendez"));
+    let parts = [part1.clone(), part2.clone(), part3.clone()];
     let concat_expr = ValueExpression::Concat(&parts);
     let len_expr = LenExpression { text: &concat_expr };
     let nested = ValueExpression::Len(len_expr);

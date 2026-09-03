@@ -11,12 +11,12 @@ use evo_query::definitions::structs::owned::flow::Flow;
 use evo_values::definitions::value::Value;
 
 fn receive_construction_continue(construction: Construction<'_>) -> Flow {
-    assert_eq!(construction, Construction::Value(Value::Unsigned(1)));
+    assert_eq!(construction, Construction::Value(Value::Uint64(1)));
     Flow::Continue
 }
 
 fn receive_construction_stop(construction: Construction<'_>) -> Flow {
-    assert_eq!(construction, Construction::Value(Value::Unsigned(1)));
+    assert_eq!(construction, Construction::Value(Value::Uint64(1)));
     Flow::Stop
 }
 
@@ -27,7 +27,7 @@ fn fake_iterate_success<'iteration>(
     assert_eq!(iteration.operations.len(), 2);
     assert_eq!(iteration.operations[1], IterationOperation::Take(1));
 
-    let flow = request(Construction::Value(Value::Unsigned(1)));
+    let flow = request(Construction::Value(Value::Uint64(1)));
     assert_eq!(flow, Flow::Continue);
 
     Ok(())
@@ -40,7 +40,7 @@ fn fake_iterate_handles_stop<'iteration>(
     assert_eq!(iteration.operations.len(), 1);
     assert_eq!(iteration.operations[0], IterationOperation::Take(1));
 
-    let flow = request(Construction::Value(Value::Unsigned(1)));
+    let flow = request(Construction::Value(Value::Uint64(1)));
     assert_eq!(flow, Flow::Stop);
 
     Ok(())
@@ -57,15 +57,15 @@ fn fake_iterate_multiple_results<'iteration>(
     _iteration: Iteration<'iteration>,
     request: construction_requester::Request,
 ) -> Result<(), iterate::Error<'iteration>> {
-    let flow_1 = request(Construction::Value(Value::Unsigned(1)));
+    let flow_1 = request(Construction::Value(Value::Uint64(1)));
     if flow_1 == Flow::Stop {
         return Ok(());
     }
-    let flow_2 = request(Construction::Value(Value::Unsigned(2)));
+    let flow_2 = request(Construction::Value(Value::Uint64(2)));
     if flow_2 == Flow::Stop {
         return Ok(());
     }
-    let _flow_3 = request(Construction::Value(Value::Unsigned(3)));
+    let _flow_3 = request(Construction::Value(Value::Uint64(3)));
     Ok(())
 }
 
@@ -73,11 +73,11 @@ fn fake_iterate_stop_prevents_subsequent_results<'iteration>(
     _iteration: Iteration<'iteration>,
     request: construction_requester::Request,
 ) -> Result<(), iterate::Error<'iteration>> {
-    let flow_1 = request(Construction::Value(Value::Unsigned(1)));
+    let flow_1 = request(Construction::Value(Value::Uint64(1)));
     if flow_1 == Flow::Stop {
         return Ok(());
     }
-    let flow_2 = request(Construction::Value(Value::Unsigned(2)));
+    let flow_2 = request(Construction::Value(Value::Uint64(2)));
     if flow_2 == Flow::Stop {
         return Ok(());
     }
@@ -109,7 +109,7 @@ fn field_not_found<'iteration>(
     iteration: Iteration<'iteration>,
     _request: construction_requester::Request,
 ) -> Result<(), iterate::Error<'iteration>> {
-    match iteration.operations[0] {
+    match &iteration.operations[0] {
         IterationOperation::Select(selections) => match selections[1] {
             Selection::Field(name) => Err(iterate::Error::FieldNotFound(name)),
             _ => panic!("expected Selection::Field"),
@@ -122,7 +122,7 @@ fn comparison_type_mismatch<'iteration>(
     iteration: Iteration<'iteration>,
     _request: construction_requester::Request,
 ) -> Result<(), iterate::Error<'iteration>> {
-    match iteration.operations[0] {
+    match &iteration.operations[0] {
         IterationOperation::Filter(ConditionExpression::Condition(condition)) => {
             Err(iterate::Error::ComparisonTypeMismatch(condition.field))
         }
@@ -134,7 +134,7 @@ fn external_type_incompatible<'iteration>(
     iteration: Iteration<'iteration>,
     _request: construction_requester::Request,
 ) -> Result<(), iterate::Error<'iteration>> {
-    match iteration.operations[0] {
+    match &iteration.operations[0] {
         IterationOperation::Select(selections) => match selections[0] {
             Selection::Field(name) => Err(iterate::Error::ExternalTypeIncompatible(name)),
             _ => panic!("expected Selection::Field"),
@@ -217,8 +217,8 @@ fn iterate_contract_stop_prevents_next_result() {
 
     let contract: iterate::Iterate = fake_iterate_stop_prevents_subsequent_results;
     let result = contract(iteration, |construction| match construction {
-        Construction::Value(Value::Unsigned(1)) => Flow::Continue,
-        Construction::Value(Value::Unsigned(2)) => Flow::Stop,
+        Construction::Value(Value::Uint64(1)) => Flow::Continue,
+        Construction::Value(Value::Uint64(2)) => Flow::Stop,
         _ => panic!("unexpected construction"),
     });
 
@@ -291,7 +291,7 @@ fn iterate_contract_comparison_type_mismatch_error() {
     let condition = Condition {
         field: "size",
         operator: ConditionOperator::GreaterThan,
-        value: Value::Text("hello"),
+        value: Value::String("hello"),
     };
     let operations = [IterationOperation::Filter(ConditionExpression::Condition(
         condition,

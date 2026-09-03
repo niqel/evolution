@@ -2,7 +2,7 @@ use super::between_condition::BetweenCondition;
 use super::condition::Condition;
 use super::in_condition::InCondition;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ConditionExpression<'condition> {
     Condition(Condition<'condition>),
     Between(BetweenCondition<'condition>),

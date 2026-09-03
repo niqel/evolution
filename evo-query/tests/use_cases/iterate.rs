@@ -19,7 +19,7 @@ fn contract_success<'iteration>(
     assert_eq!(iteration.operations.len(), 1);
     assert_eq!(iteration.operations[0], IterationOperation::Take(1));
 
-    let flow = request(Construction::Value(Value::Unsigned(42)));
+    let flow = request(Construction::Value(Value::Uint64(42)));
     assert_eq!(flow, Flow::Continue);
 
     Ok(())
