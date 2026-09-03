@@ -6669,4 +6669,318 @@ mod tests {
             _ => panic!("expected EnumConstruction"),
         }
     }
+
+    #[test]
+    fn declaration_invalid_naming_convention_variant() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+        let src = "enum State { bad_variant } public fn main() -> int { return 0; }";
+        let err = unwrap_err(analyze_src(src, &cat));
+        match err.kind {
+            CompileFailureKind::Semantic(SemanticFailure::Declaration(
+                DeclarationFailure::InvalidNamingConvention { role },
+            )) => match role {
+                SemanticNameRole::Variant => {}
+                _ => panic!("expected Variant role"),
+            },
+            _ => panic!("expected InvalidNamingConvention"),
+        }
+    }
+
+    #[test]
+    fn declaration_invalid_naming_convention_function() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+        let src = "public fn Main() -> int { return 0; }";
+        let err = unwrap_err(analyze_src(src, &cat));
+        match err.kind {
+            CompileFailureKind::Semantic(SemanticFailure::Declaration(
+                DeclarationFailure::InvalidNamingConvention { role },
+            )) => match role {
+                SemanticNameRole::Function => {}
+                _ => panic!("expected Function role"),
+            },
+            _ => panic!("expected InvalidNamingConvention"),
+        }
+    }
+
+    #[test]
+    fn declaration_invalid_naming_convention_binding() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+        let src = "public fn main(int BadParam) -> int { return 0; }";
+        let err = unwrap_err(analyze_src(src, &cat));
+        match err.kind {
+            CompileFailureKind::Semantic(SemanticFailure::Declaration(
+                DeclarationFailure::InvalidNamingConvention { role },
+            )) => match role {
+                SemanticNameRole::Binding => {}
+                _ => panic!("expected Binding role"),
+            },
+            _ => panic!("expected InvalidNamingConvention"),
+        }
+    }
+
+    #[test]
+    fn declaration_invalid_naming_convention_signature_alias() {
+        let mut signatures = HashMap::new();
+        signatures.insert(
+            SignatureSymbol {
+                module: "svc".to_string(),
+                name: "op".to_string(),
+            },
+            CatalogSignature {
+                parameters: alloc::vec![],
+                result_type: CatalogTypeRef::Int,
+            },
+        );
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures,
+        };
+        let src = "import svc::op as BadAlias; public fn main() -> int { return 0; }";
+        let err = unwrap_err(analyze_src(src, &cat));
+        match err.kind {
+            CompileFailureKind::Semantic(SemanticFailure::Declaration(
+                DeclarationFailure::InvalidNamingConvention { role },
+            )) => match role {
+                SemanticNameRole::SignatureAlias => {}
+                _ => panic!("expected SignatureAlias role"),
+            },
+            _ => panic!("expected InvalidNamingConvention"),
+        }
+    }
+
+    #[test]
+    fn declaration_invalid_naming_convention_signature_dependency() {
+        let mut signatures = HashMap::new();
+        signatures.insert(
+            SignatureSymbol {
+                module: "svc".to_string(),
+                name: "Op".to_string(),
+            },
+            CatalogSignature {
+                parameters: alloc::vec![],
+                result_type: CatalogTypeRef::Int,
+            },
+        );
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures,
+        };
+        let src = "public fn main(svc::Op BadDep) -> int { return 0; }";
+        let err = unwrap_err(analyze_src(src, &cat));
+        match err.kind {
+            CompileFailureKind::Semantic(SemanticFailure::Declaration(
+                DeclarationFailure::InvalidNamingConvention { role },
+            )) => match role {
+                SemanticNameRole::SignatureDependency => {}
+                _ => panic!("expected SignatureDependency role"),
+            },
+            _ => panic!("expected InvalidNamingConvention"),
+        }
+    }
+
+    #[test]
+    fn when_variant_not_found() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+        let src = "enum State { Ready } public fn main(State s) -> int { return when s { State::Unknown => 1 }; }";
+        let err = unwrap_err(analyze_src(src, &cat));
+        match err.kind {
+            CompileFailureKind::Semantic(SemanticFailure::When(WhenFailure::VariantNotFound {
+                variant,
+            })) => {
+                assert_eq!(&*variant, "Unknown");
+            }
+            _ => panic!("expected VariantNotFound"),
+        }
+    }
+
+    #[test]
+    fn when_payload_shape_mismatch() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+        let src = "enum State { Ready, Payload(int) } public fn main(State s) -> int { return when s { State::Ready(int x) => 1, State::Payload(int x) => 2 }; }";
+        let err = unwrap_err(analyze_src(src, &cat));
+        match err.kind {
+            CompileFailureKind::Semantic(SemanticFailure::When(
+                WhenFailure::PayloadShapeMismatch { expected, actual },
+            )) => match (expected, actual) {
+                (EnumPayloadShape::Simple, EnumPayloadShape::Associated) => {}
+                _ => panic!("expected Simple and Associated"),
+            },
+            _ => panic!("expected PayloadShapeMismatch"),
+        }
+    }
+
+    #[test]
+    fn when_duplicate_field() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+        let src = "enum State { Item { int code; string msg; } } public fn main(State s) -> int { return when s { State::Item { code: int c; code: int c2; } => c }; }";
+        let err = unwrap_err(analyze_src(src, &cat));
+        match err.kind {
+            CompileFailureKind::Semantic(SemanticFailure::When(WhenFailure::DuplicateField {
+                field,
+            })) => {
+                assert_eq!(&*field, "code");
+            }
+            _ => panic!("expected DuplicateField"),
+        }
+    }
+
+    #[test]
+    fn when_field_not_found() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+        let src = "enum State { Item { int code; } } public fn main(State s) -> int { return when s { State::Item { unknown: int u; } => u }; }";
+        let err = unwrap_err(analyze_src(src, &cat));
+        match err.kind {
+            CompileFailureKind::Semantic(SemanticFailure::When(WhenFailure::FieldNotFound {
+                field,
+            })) => {
+                assert_eq!(&*field, "unknown");
+            }
+            _ => panic!("expected FieldNotFound"),
+        }
+    }
+
+    #[test]
+    fn when_missing_field() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+        let src = "enum State { Item { int code; string msg; } } public fn main(State s) -> int { return when s { State::Item { code: int c; } => c }; }";
+        let err = unwrap_err(analyze_src(src, &cat));
+        match err.kind {
+            CompileFailureKind::Semantic(SemanticFailure::When(WhenFailure::MissingField {
+                field,
+            })) => {
+                assert_eq!(&*field, "msg");
+            }
+            _ => panic!("expected MissingField"),
+        }
+    }
+
+    #[test]
+    fn signature_mismatch_parameter_kind() {
+        let mut signatures = HashMap::new();
+        signatures.insert(
+            SignatureSymbol {
+                module: "svc".to_string(),
+                name: "calc".to_string(),
+            },
+            CatalogSignature {
+                parameters: alloc::vec![CatalogSignatureParameter::Value(CatalogTypeRef::Int)],
+                result_type: CatalogTypeRef::Int,
+            },
+        );
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures,
+        };
+        let src = "public fn calc(svc::calc dep) -> int : svc::calc { return 0; }";
+        let err = unwrap_err(analyze_src(src, &cat));
+        match err.kind {
+            CompileFailureKind::Semantic(SemanticFailure::SignatureMismatch {
+                mismatch, ..
+            }) => match mismatch {
+                SignatureMismatchKind::ParameterKind {
+                    position,
+                    expected,
+                    actual,
+                } => {
+                    assert_eq!(position, 0);
+                    match (expected, actual) {
+                        (
+                            SemanticArgumentKind::Value,
+                            SemanticArgumentKind::SignatureDependency,
+                        ) => {}
+                        _ => panic!("expected Value and SignatureDependency"),
+                    }
+                }
+                _ => panic!("expected ParameterKind mismatch"),
+            },
+            _ => panic!("expected SignatureMismatch"),
+        }
+    }
+
+    #[test]
+    fn signature_mismatch_signature_dependency() {
+        let mut signatures = HashMap::new();
+        signatures.insert(
+            SignatureSymbol {
+                module: "svc".to_string(),
+                name: "DepA".to_string(),
+            },
+            CatalogSignature {
+                parameters: alloc::vec![],
+                result_type: CatalogTypeRef::Bool,
+            },
+        );
+        signatures.insert(
+            SignatureSymbol {
+                module: "svc".to_string(),
+                name: "DepB".to_string(),
+            },
+            CatalogSignature {
+                parameters: alloc::vec![],
+                result_type: CatalogTypeRef::Bool,
+            },
+        );
+        signatures.insert(
+            SignatureSymbol {
+                module: "svc".to_string(),
+                name: "runner".to_string(),
+            },
+            CatalogSignature {
+                parameters: alloc::vec![CatalogSignatureParameter::SignatureDependency(
+                    SignatureSymbol {
+                        module: "svc".to_string(),
+                        name: "DepA".to_string(),
+                    },
+                )],
+                result_type: CatalogTypeRef::Int,
+            },
+        );
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures,
+        };
+        let src = "public fn runner(svc::DepB dep) -> int : svc::runner { return 0; }";
+        let err = unwrap_err(analyze_src(src, &cat));
+        match err.kind {
+            CompileFailureKind::Semantic(SemanticFailure::SignatureMismatch {
+                mismatch, ..
+            }) => match mismatch {
+                SignatureMismatchKind::SignatureDependency {
+                    position,
+                    expected,
+                    actual,
+                } => {
+                    assert_eq!(position, 0);
+                    assert_eq!(expected.name, "DepA");
+                    assert_eq!(actual.name, "DepB");
+                }
+                _ => panic!("expected SignatureDependency mismatch"),
+            },
+            _ => panic!("expected SignatureMismatch"),
+        }
+    }
 }
