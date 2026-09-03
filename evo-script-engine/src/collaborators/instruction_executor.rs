@@ -4,20 +4,16 @@ use alloc::vec;
 use alloc::vec::Vec;
 use num_bigint::{BigInt, Sign};
 
-use crate::data::compiled::boundary::CompiledValueShape;
 use crate::data::compiled::equality::{
     CompositeEqualityPlan, EnumEqualityPayloadPlan, EqualityRule,
 };
 use crate::data::compiled::identities::{
-    ConstantId, FieldIndex, InstructionIndex, LocalSlot, NumericKind, ParameterSlot,
-    VariantDiscriminant,
+    ConstantId, FieldIndex, InstructionIndex, NumericKind, VariantDiscriminant,
 };
 use crate::data::compiled::instructions::Instruction;
 use crate::data::compiled::program::CompiledProgram;
 use crate::data::compiled::storage::{Constant, DynamicConstant};
-use crate::data::failures::{
-    EvaluationFailure, ExecutionFailure, ExecutionFailureKind, InvocationFailure,
-};
+use crate::data::failures::{EvaluationFailure, ExecutionFailure, ExecutionFailureKind};
 use crate::data::semantic::ids::FunctionId;
 use crate::data::vm::backing::{
     DynamicIntegerBacking, EnumBacking, ExecutionBackingStore, RuntimeEnumPayload, StructBacking,
@@ -80,16 +76,65 @@ fn pop_operand(execution: &mut VmExecution) -> RuntimeValue {
 }
 
 fn push_operand(execution: &mut VmExecution, val: RuntimeValue) {
+    let frame = execution
+        .call_frames
+        .last()
+        .expect("active CallFrame must exist");
+    let function = execution
+        .compiled_program
+        .functions
+        .get(frame.function.0)
+        .expect("CallFrame function must exist");
+    let operand_base = frame.frame_base + function.parameter_count + function.local_count;
+    let current_depth = execution.value_storage.cells.len() - operand_base;
+
+    assert!(
+        current_depth < function.max_operand_depth,
+        "Operand stack depth {} exceeded max_operand_depth {}",
+        current_depth,
+        function.max_operand_depth
+    );
+
     execution.value_storage.cells.push(Some(val));
 }
 
 fn advance_ip(execution: &mut VmExecution) {
-    execution
+    let frame = execution
         .call_frames
         .last_mut()
-        .expect("active CallFrame must exist")
-        .instruction_pointer
-        .0 += 1;
+        .expect("active CallFrame must exist");
+    let function = execution
+        .compiled_program
+        .functions
+        .get(frame.function.0)
+        .expect("CallFrame function must exist");
+    let next_ip = frame.instruction_pointer.0 + 1;
+    assert!(
+        next_ip < function.instructions.len(),
+        "InstructionPointer advance {} out of bounds for instruction count {}",
+        next_ip,
+        function.instructions.len()
+    );
+    frame.instruction_pointer = InstructionPointer(next_ip);
+}
+
+fn jump_ip(execution: &mut VmExecution, target: usize) {
+    let frame = execution
+        .call_frames
+        .last_mut()
+        .expect("active CallFrame must exist");
+    let function = execution
+        .compiled_program
+        .functions
+        .get(frame.function.0)
+        .expect("CallFrame function must exist");
+    assert!(
+        target < function.instructions.len(),
+        "Jump target {} out of bounds for instruction count {}",
+        target,
+        function.instructions.len()
+    );
+    frame.instruction_pointer = InstructionPointer(target);
 }
 
 fn resolve_string<'a>(
@@ -247,6 +292,86 @@ fn convert_f64_to_target(f: f64, target: &NumericKind) -> Result<RuntimeValue, (
     }
 }
 
+fn convert_bigint_to_f32(bigint: &BigInt) -> Result<RuntimeValue, ()> {
+    if *bigint == BigInt::from(0) {
+        return Ok(RuntimeValue::Float32(0.0));
+    }
+    let is_negative = bigint.sign() == Sign::Minus;
+    let magnitude = if is_negative {
+        -bigint.clone()
+    } else {
+        bigint.clone()
+    };
+    let total_bits = magnitude.bits();
+
+    // Max finite f32 exponent is 127: total_bits - 1 <= 127 => total_bits <= 128
+    if total_bits > 128 {
+        return Err(());
+    }
+
+    let p = 24u64;
+    let (mantissa_u32, shift) = if total_bits <= p {
+        let val = u32::try_from(&magnitude).map_err(|_| ())?;
+        (val, 0i32)
+    } else {
+        let shift = (total_bits - p) as usize;
+        let mask = (BigInt::from(1) << shift) - BigInt::from(1);
+        if (&magnitude & &mask) != BigInt::from(0) {
+            return Err(());
+        }
+        let shifted = &magnitude >> shift;
+        let val = u32::try_from(&shifted).map_err(|_| ())?;
+        (val, shift as i32)
+    };
+
+    let f = (mantissa_u32 as f32) * 2.0f32.powi(shift);
+    if !f.is_finite() {
+        return Err(());
+    }
+    let res = if is_negative { -f } else { f };
+    Ok(RuntimeValue::Float32(res))
+}
+
+fn convert_bigint_to_f64(bigint: &BigInt) -> Result<RuntimeValue, ()> {
+    if *bigint == BigInt::from(0) {
+        return Ok(RuntimeValue::Float64(0.0));
+    }
+    let is_negative = bigint.sign() == Sign::Minus;
+    let magnitude = if is_negative {
+        -bigint.clone()
+    } else {
+        bigint.clone()
+    };
+    let total_bits = magnitude.bits();
+
+    // Max finite f64 exponent is 1023: total_bits - 1 <= 1023 => total_bits <= 1024
+    if total_bits > 1024 {
+        return Err(());
+    }
+
+    let p = 53u64;
+    let (mantissa_u64, shift) = if total_bits <= p {
+        let val = u64::try_from(&magnitude).map_err(|_| ())?;
+        (val, 0i32)
+    } else {
+        let shift = (total_bits - p) as usize;
+        let mask = (BigInt::from(1) << shift) - BigInt::from(1);
+        if (&magnitude & &mask) != BigInt::from(0) {
+            return Err(());
+        }
+        let shifted = &magnitude >> shift;
+        let val = u64::try_from(&shifted).map_err(|_| ())?;
+        (val, shift as i32)
+    };
+
+    let f = (mantissa_u64 as f64) * 2.0f64.powi(shift);
+    if !f.is_finite() {
+        return Err(());
+    }
+    let res = if is_negative { -f } else { f };
+    Ok(RuntimeValue::Float64(res))
+}
+
 fn is_same_numeric_kind(a: &NumericKind, b: &NumericKind) -> bool {
     matches!(
         (a, b),
@@ -265,11 +390,37 @@ fn is_same_numeric_kind(a: &NumericKind, b: &NumericKind) -> bool {
     )
 }
 
+fn assert_runtime_value_matches_kind(val: &RuntimeValue, kind: &NumericKind) {
+    let matches = match (kind, val) {
+        (NumericKind::Int8, RuntimeValue::Int8(_)) => true,
+        (NumericKind::Int16, RuntimeValue::Int16(_)) => true,
+        (NumericKind::Int32, RuntimeValue::Int32(_)) => true,
+        (NumericKind::Int64, RuntimeValue::Int64(_)) => true,
+        (NumericKind::Int128, RuntimeValue::Int128(_)) => true,
+
+        (NumericKind::Uint8, RuntimeValue::Uint8(_)) => true,
+        (NumericKind::Uint16, RuntimeValue::Uint16(_)) => true,
+        (NumericKind::Uint32, RuntimeValue::Uint32(_)) => true,
+        (NumericKind::Uint64, RuntimeValue::Uint64(_)) => true,
+        (NumericKind::Uint128, RuntimeValue::Uint128(_)) => true,
+
+        (NumericKind::Float32, RuntimeValue::Float32(_)) => true,
+        (NumericKind::Float64, RuntimeValue::Float64(_)) => true,
+
+        _ => false,
+    };
+    assert!(
+        matches,
+        "convert_fixed_numeric: runtime value family does not match source NumericKind"
+    );
+}
+
 fn convert_fixed_numeric(
     val: RuntimeValue,
     source: &NumericKind,
     target: &NumericKind,
 ) -> Result<RuntimeValue, ()> {
+    assert_runtime_value_matches_kind(&val, source);
     if is_same_numeric_kind(source, target) {
         return Ok(val);
     }
@@ -321,20 +472,8 @@ fn convert_dynamic_numeric(
                     let val = u128::try_from(&bigint).map_err(|_| ())?;
                     convert_u128_to_target(val, target)
                 }
-                NumericKind::Float32 => {
-                    if let Ok(val) = i128::try_from(&bigint) {
-                        convert_i128_to_target(val, &NumericKind::Float32)
-                    } else {
-                        Err(())
-                    }
-                }
-                NumericKind::Float64 => {
-                    if let Ok(val) = i128::try_from(&bigint) {
-                        convert_i128_to_target(val, &NumericKind::Float64)
-                    } else {
-                        Err(())
-                    }
-                }
+                NumericKind::Float32 => convert_bigint_to_f32(&bigint),
+                NumericKind::Float64 => convert_bigint_to_f64(&bigint),
             }
         }
     }
@@ -433,12 +572,25 @@ fn evaluate_composite_equality(
             };
             let left_enum = &backing.enums[left_id.0];
             let right_enum = &backing.enums[right_id.0];
+
+            assert!(
+                left_enum.variant.0 < variants.len(),
+                "left enum variant discriminant {} out of bounds for variants len {}",
+                left_enum.variant.0,
+                variants.len()
+            );
+            assert!(
+                right_enum.variant.0 < variants.len(),
+                "right enum variant discriminant {} out of bounds for variants len {}",
+                right_enum.variant.0,
+                variants.len()
+            );
+
             if left_enum.variant.0 != right_enum.variant.0 {
                 return false;
             }
-            let variant_plan = variants
-                .get(left_enum.variant.0)
-                .expect("Variant plan must exist for variant discriminant");
+
+            let variant_plan = &variants[left_enum.variant.0];
             match (variant_plan, &left_enum.payload, &right_enum.payload) {
                 (
                     EnumEqualityPayloadPlan::Simple,
@@ -455,8 +607,16 @@ fn evaluate_composite_equality(
                     RuntimeEnumPayload::Structured { fields: l_fields },
                     RuntimeEnumPayload::Structured { fields: r_fields },
                 ) => {
-                    assert_eq!(l_fields.len(), fields.len());
-                    assert_eq!(r_fields.len(), fields.len());
+                    assert_eq!(
+                        l_fields.len(),
+                        fields.len(),
+                        "Structured payload cardinality mismatch with plan"
+                    );
+                    assert_eq!(
+                        r_fields.len(),
+                        fields.len(),
+                        "Structured payload cardinality mismatch with plan"
+                    );
                     for (idx, rule) in fields.iter().enumerate() {
                         if !evaluate_equality_rule(
                             l_fields[idx],
@@ -474,6 +634,41 @@ fn evaluate_composite_equality(
             }
         }
     }
+}
+
+fn validate_and_reorder_fields(
+    field_order: &[FieldIndex],
+    evaluated_operands: Vec<RuntimeValue>,
+) -> Box<[RuntimeValue]> {
+    let n = field_order.len();
+    assert_eq!(
+        evaluated_operands.len(),
+        n,
+        "evaluated operands count must match field_order len"
+    );
+
+    let mut canonical_fields: Vec<Option<RuntimeValue>> = (0..n).map(|_| None).collect();
+
+    for (eval_idx, field_dest) in field_order.iter().enumerate() {
+        assert!(
+            field_dest.0 < n,
+            "field_dest index {} out of bounds for composite size {}",
+            field_dest.0,
+            n
+        );
+        assert!(
+            canonical_fields[field_dest.0].is_none(),
+            "duplicate field_dest index {} in field_order",
+            field_dest.0
+        );
+        canonical_fields[field_dest.0] = Some(evaluated_operands[eval_idx]);
+    }
+
+    let mut result = Vec::with_capacity(n);
+    for slot in canonical_fields {
+        result.push(slot.expect("missing field_dest in field_order permutation"));
+    }
+    result.into_boxed_slice()
 }
 
 pub fn execute_instruction<'compiled, 'bindings>(
@@ -554,6 +749,12 @@ pub fn execute_instruction<'compiled, 'bindings>(
         }
 
         Instruction::LoadParameter(slot) => {
+            assert!(
+                slot.0 < function.parameter_count,
+                "LoadParameter slot {} out of bounds for parameter_count {}",
+                slot.0,
+                function.parameter_count
+            );
             let abs_cell = frame_base + slot.0;
             let val = execution.value_storage.cells[abs_cell]
                 .expect("Parameter cell must contain Some(RuntimeValue)");
@@ -563,6 +764,12 @@ pub fn execute_instruction<'compiled, 'bindings>(
         }
 
         Instruction::LoadLocal(slot) => {
+            assert!(
+                slot.0 < function.local_count,
+                "LoadLocal slot {} out of bounds for local_count {}",
+                slot.0,
+                function.local_count
+            );
             let abs_cell = frame_base + function.parameter_count + slot.0;
             let val = execution.value_storage.cells[abs_cell]
                 .expect("Local cell must contain Some(RuntimeValue)");
@@ -572,6 +779,12 @@ pub fn execute_instruction<'compiled, 'bindings>(
         }
 
         Instruction::StoreLocal(slot) => {
+            assert!(
+                slot.0 < function.local_count,
+                "StoreLocal slot {} out of bounds for local_count {}",
+                slot.0,
+                function.local_count
+            );
             let abs_cell = frame_base + function.parameter_count + slot.0;
             assert!(
                 execution.value_storage.cells[abs_cell].is_none(),
@@ -585,6 +798,9 @@ pub fn execute_instruction<'compiled, 'bindings>(
 
         // Calls — 2
         Instruction::Call(target_id) => {
+            let caller_operand_base = frame_base + function.parameter_count + function.local_count;
+            let caller_operand_depth = execution.value_storage.cells.len() - caller_operand_base;
+
             let target_func = execution
                 .compiled_program
                 .functions
@@ -593,7 +809,22 @@ pub fn execute_instruction<'compiled, 'bindings>(
 
             let param_count = target_func.parameter_count;
             let local_count = target_func.local_count;
+
+            assert!(
+                caller_operand_depth >= param_count,
+                "Insufficient caller operand depth {} for target parameter_count {}",
+                caller_operand_depth,
+                param_count
+            );
+
             let callee_frame_base = execution.value_storage.cells.len() - param_count;
+
+            for i in 0..param_count {
+                assert!(
+                    execution.value_storage.cells[callee_frame_base + i].is_some(),
+                    "Callee parameter cell must contain Some(RuntimeValue)"
+                );
+            }
 
             for _ in 0..local_count {
                 execution.value_storage.cells.push(None);
@@ -688,10 +919,20 @@ pub fn execute_instruction<'compiled, 'bindings>(
                 }
 
                 (NumericKind::Float32, RuntimeValue::Float32(l), RuntimeValue::Float32(r)) => {
-                    Some(RuntimeValue::Float32(l + r))
+                    let sum = l + r;
+                    if sum.is_finite() {
+                        Some(RuntimeValue::Float32(sum))
+                    } else {
+                        None
+                    }
                 }
                 (NumericKind::Float64, RuntimeValue::Float64(l), RuntimeValue::Float64(r)) => {
-                    Some(RuntimeValue::Float64(l + r))
+                    let sum = l + r;
+                    if sum.is_finite() {
+                        Some(RuntimeValue::Float64(sum))
+                    } else {
+                        None
+                    }
                 }
 
                 _ => panic!("Add: operand family mismatch with NumericKind"),
@@ -747,10 +988,20 @@ pub fn execute_instruction<'compiled, 'bindings>(
                 }
 
                 (NumericKind::Float32, RuntimeValue::Float32(l), RuntimeValue::Float32(r)) => {
-                    Some(RuntimeValue::Float32(l - r))
+                    let diff = l - r;
+                    if diff.is_finite() {
+                        Some(RuntimeValue::Float32(diff))
+                    } else {
+                        None
+                    }
                 }
                 (NumericKind::Float64, RuntimeValue::Float64(l), RuntimeValue::Float64(r)) => {
-                    Some(RuntimeValue::Float64(l - r))
+                    let diff = l - r;
+                    if diff.is_finite() {
+                        Some(RuntimeValue::Float64(diff))
+                    } else {
+                        None
+                    }
                 }
 
                 _ => panic!("Subtract: operand family mismatch with NumericKind"),
@@ -806,10 +1057,20 @@ pub fn execute_instruction<'compiled, 'bindings>(
                 }
 
                 (NumericKind::Float32, RuntimeValue::Float32(l), RuntimeValue::Float32(r)) => {
-                    Some(RuntimeValue::Float32(l * r))
+                    let prod = l * r;
+                    if prod.is_finite() {
+                        Some(RuntimeValue::Float32(prod))
+                    } else {
+                        None
+                    }
                 }
                 (NumericKind::Float64, RuntimeValue::Float64(l), RuntimeValue::Float64(r)) => {
-                    Some(RuntimeValue::Float64(l * r))
+                    let prod = l * r;
+                    if prod.is_finite() {
+                        Some(RuntimeValue::Float64(prod))
+                    } else {
+                        None
+                    }
                 }
 
                 _ => panic!("Multiply: operand family mismatch with NumericKind"),
@@ -929,14 +1190,24 @@ pub fn execute_instruction<'compiled, 'bindings>(
                     if r == 0.0 || r == -0.0 {
                         Err(EvaluationFailure::DivisionByZero)
                     } else {
-                        Ok(RuntimeValue::Float32(l / r))
+                        let quotient = l / r;
+                        if quotient.is_finite() {
+                            Ok(RuntimeValue::Float32(quotient))
+                        } else {
+                            Err(EvaluationFailure::Overflow)
+                        }
                     }
                 }
                 (NumericKind::Float64, RuntimeValue::Float64(l), RuntimeValue::Float64(r)) => {
                     if r == 0.0 || r == -0.0 {
                         Err(EvaluationFailure::DivisionByZero)
                     } else {
-                        Ok(RuntimeValue::Float64(l / r))
+                        let quotient = l / r;
+                        if quotient.is_finite() {
+                            Ok(RuntimeValue::Float64(quotient))
+                        } else {
+                            Err(EvaluationFailure::Overflow)
+                        }
                     }
                 }
 
@@ -1423,20 +1694,36 @@ pub fn execute_instruction<'compiled, 'bindings>(
                     Ok(None)
                 }
                 (RuntimeDynamicValue::Float32(l), RuntimeDynamicValue::Float32(r)) => {
-                    push_operand(
-                        execution,
-                        RuntimeValue::Dynamic(RuntimeDynamicValue::Float32(l + r)),
-                    );
-                    advance_ip(execution);
-                    Ok(None)
+                    let sum = l + r;
+                    if sum.is_finite() {
+                        push_operand(
+                            execution,
+                            RuntimeValue::Dynamic(RuntimeDynamicValue::Float32(sum)),
+                        );
+                        advance_ip(execution);
+                        Ok(None)
+                    } else {
+                        Err(make_evaluation_failure(
+                            execution,
+                            EvaluationFailure::Overflow,
+                        ))
+                    }
                 }
                 (RuntimeDynamicValue::Float64(l), RuntimeDynamicValue::Float64(r)) => {
-                    push_operand(
-                        execution,
-                        RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(l + r)),
-                    );
-                    advance_ip(execution);
-                    Ok(None)
+                    let sum = l + r;
+                    if sum.is_finite() {
+                        push_operand(
+                            execution,
+                            RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(sum)),
+                        );
+                        advance_ip(execution);
+                        Ok(None)
+                    } else {
+                        Err(make_evaluation_failure(
+                            execution,
+                            EvaluationFailure::Overflow,
+                        ))
+                    }
                 }
                 _ => Err(make_evaluation_failure(
                     execution,
@@ -1482,20 +1769,36 @@ pub fn execute_instruction<'compiled, 'bindings>(
                     Ok(None)
                 }
                 (RuntimeDynamicValue::Float32(l), RuntimeDynamicValue::Float32(r)) => {
-                    push_operand(
-                        execution,
-                        RuntimeValue::Dynamic(RuntimeDynamicValue::Float32(l - r)),
-                    );
-                    advance_ip(execution);
-                    Ok(None)
+                    let diff = l - r;
+                    if diff.is_finite() {
+                        push_operand(
+                            execution,
+                            RuntimeValue::Dynamic(RuntimeDynamicValue::Float32(diff)),
+                        );
+                        advance_ip(execution);
+                        Ok(None)
+                    } else {
+                        Err(make_evaluation_failure(
+                            execution,
+                            EvaluationFailure::Overflow,
+                        ))
+                    }
                 }
                 (RuntimeDynamicValue::Float64(l), RuntimeDynamicValue::Float64(r)) => {
-                    push_operand(
-                        execution,
-                        RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(l - r)),
-                    );
-                    advance_ip(execution);
-                    Ok(None)
+                    let diff = l - r;
+                    if diff.is_finite() {
+                        push_operand(
+                            execution,
+                            RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(diff)),
+                        );
+                        advance_ip(execution);
+                        Ok(None)
+                    } else {
+                        Err(make_evaluation_failure(
+                            execution,
+                            EvaluationFailure::Overflow,
+                        ))
+                    }
                 }
                 _ => Err(make_evaluation_failure(
                     execution,
@@ -1541,20 +1844,36 @@ pub fn execute_instruction<'compiled, 'bindings>(
                     Ok(None)
                 }
                 (RuntimeDynamicValue::Float32(l), RuntimeDynamicValue::Float32(r)) => {
-                    push_operand(
-                        execution,
-                        RuntimeValue::Dynamic(RuntimeDynamicValue::Float32(l * r)),
-                    );
-                    advance_ip(execution);
-                    Ok(None)
+                    let prod = l * r;
+                    if prod.is_finite() {
+                        push_operand(
+                            execution,
+                            RuntimeValue::Dynamic(RuntimeDynamicValue::Float32(prod)),
+                        );
+                        advance_ip(execution);
+                        Ok(None)
+                    } else {
+                        Err(make_evaluation_failure(
+                            execution,
+                            EvaluationFailure::Overflow,
+                        ))
+                    }
                 }
                 (RuntimeDynamicValue::Float64(l), RuntimeDynamicValue::Float64(r)) => {
-                    push_operand(
-                        execution,
-                        RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(l * r)),
-                    );
-                    advance_ip(execution);
-                    Ok(None)
+                    let prod = l * r;
+                    if prod.is_finite() {
+                        push_operand(
+                            execution,
+                            RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(prod)),
+                        );
+                        advance_ip(execution);
+                        Ok(None)
+                    } else {
+                        Err(make_evaluation_failure(
+                            execution,
+                            EvaluationFailure::Overflow,
+                        ))
+                    }
                 }
                 _ => Err(make_evaluation_failure(
                     execution,
@@ -1613,12 +1932,20 @@ pub fn execute_instruction<'compiled, 'bindings>(
                             EvaluationFailure::DivisionByZero,
                         ))
                     } else {
-                        push_operand(
-                            execution,
-                            RuntimeValue::Dynamic(RuntimeDynamicValue::Float32(l / r)),
-                        );
-                        advance_ip(execution);
-                        Ok(None)
+                        let quotient = l / r;
+                        if quotient.is_finite() {
+                            push_operand(
+                                execution,
+                                RuntimeValue::Dynamic(RuntimeDynamicValue::Float32(quotient)),
+                            );
+                            advance_ip(execution);
+                            Ok(None)
+                        } else {
+                            Err(make_evaluation_failure(
+                                execution,
+                                EvaluationFailure::Overflow,
+                            ))
+                        }
                     }
                 }
                 (RuntimeDynamicValue::Float64(l), RuntimeDynamicValue::Float64(r)) => {
@@ -1628,12 +1955,20 @@ pub fn execute_instruction<'compiled, 'bindings>(
                             EvaluationFailure::DivisionByZero,
                         ))
                     } else {
-                        push_operand(
-                            execution,
-                            RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(l / r)),
-                        );
-                        advance_ip(execution);
-                        Ok(None)
+                        let quotient = l / r;
+                        if quotient.is_finite() {
+                            push_operand(
+                                execution,
+                                RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(quotient)),
+                            );
+                            advance_ip(execution);
+                            Ok(None)
+                        } else {
+                            Err(make_evaluation_failure(
+                                execution,
+                                EvaluationFailure::Overflow,
+                            ))
+                        }
                     }
                 }
                 _ => Err(make_evaluation_failure(
@@ -1699,15 +2034,17 @@ pub fn execute_instruction<'compiled, 'bindings>(
 
         // Control flow — 4
         Instruction::Jump(target) => {
-            execution
-                .call_frames
-                .last_mut()
-                .expect("active CallFrame")
-                .instruction_pointer = InstructionPointer(target.0);
+            jump_ip(execution, target.0);
             Ok(None)
         }
 
         Instruction::JumpIfFalse(target) => {
+            assert!(
+                target.0 < function.instructions.len(),
+                "JumpIfFalse target {} out of bounds for instruction count {}",
+                target.0,
+                function.instructions.len()
+            );
             let operand = pop_operand(execution);
             let condition = match operand {
                 RuntimeValue::Boolean(b) => b,
@@ -1715,11 +2052,7 @@ pub fn execute_instruction<'compiled, 'bindings>(
             };
 
             if !condition {
-                execution
-                    .call_frames
-                    .last_mut()
-                    .expect("active CallFrame")
-                    .instruction_pointer = InstructionPointer(target.0);
+                jump_ip(execution, target.0);
             } else {
                 advance_ip(execution);
             }
@@ -1733,6 +2066,14 @@ pub fn execute_instruction<'compiled, 'bindings>(
         }
 
         Instruction::Return => {
+            let operand_base = frame_base + function.parameter_count + function.local_count;
+            let operand_depth = execution.value_storage.cells.len() - operand_base;
+            assert_eq!(
+                operand_depth, 1,
+                "Return requires exactly one operand on the stack, found depth {}",
+                operand_depth
+            );
+
             let result = pop_operand(execution);
 
             if execution.call_frames.len() > 1 {
@@ -1932,14 +2273,11 @@ pub fn execute_instruction<'compiled, 'bindings>(
             }
             evaluated.reverse();
 
-            let mut canonical_fields = vec![RuntimeValue::Boolean(false); n];
-            for (eval_idx, field_dest) in field_order.iter().enumerate() {
-                canonical_fields[field_dest.0] = evaluated[eval_idx];
-            }
+            let canonical_fields = validate_and_reorder_fields(field_order, evaluated);
 
             let id = StructBackingId(execution.backing_store.structs.len());
             execution.backing_store.structs.push(StructBacking {
-                fields: canonical_fields.into_boxed_slice(),
+                fields: canonical_fields,
             });
 
             push_operand(execution, RuntimeValue::Struct(id));
@@ -1996,16 +2334,13 @@ pub fn execute_instruction<'compiled, 'bindings>(
             }
             evaluated.reverse();
 
-            let mut canonical_fields = vec![RuntimeValue::Boolean(false); n];
-            for (eval_idx, field_dest) in field_order.iter().enumerate() {
-                canonical_fields[field_dest.0] = evaluated[eval_idx];
-            }
+            let canonical_fields = validate_and_reorder_fields(field_order, evaluated);
 
             let id = EnumBackingId(execution.backing_store.enums.len());
             execution.backing_store.enums.push(EnumBacking {
                 variant: VariantDiscriminant(variant.0),
                 payload: RuntimeEnumPayload::Structured {
-                    fields: canonical_fields.into_boxed_slice(),
+                    fields: canonical_fields,
                 },
             });
 
@@ -2109,8 +2444,10 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
+    use crate::data::compiled::boundary::CompiledValueShape;
     use crate::data::compiled::identities::{
-        CompiledValueShapeId, ConstantId, ExternalSymbolId, InstructionIndex,
+        CompiledValueShapeId, ConstantId, ExternalSymbolId, InstructionIndex, LocalSlot,
+        ParameterSlot,
     };
     use crate::data::compiled::instructions::Instruction;
     use crate::data::compiled::program::CompiledFunction;
@@ -2134,7 +2471,10 @@ mod tests {
                 parameter_count: 0,
                 local_count: 0,
                 max_operand_depth: 2,
-                instructions: vec![Instruction::LoadConstant(ConstantId(0))],
+                instructions: vec![
+                    Instruction::LoadConstant(ConstantId(0)),
+                    Instruction::Return,
+                ],
             }],
             entry_point: FunctionId(0),
             entry_parameter_shapes: Vec::new(),
@@ -2142,7 +2482,10 @@ mod tests {
             external_symbols: Vec::new(),
             value_shapes: vec![CompiledValueShape::Int32],
             source_map: SourceMap {
-                functions: vec![vec![SourceSpan { start: 0, end: 5 }]],
+                functions: vec![vec![
+                    SourceSpan { start: 0, end: 5 },
+                    SourceSpan { start: 5, end: 10 },
+                ]],
             },
         };
         let bindings = ApplicationBindings {
@@ -2408,5 +2751,574 @@ mod tests {
         };
 
         let _ = execute_instruction(&mut execution);
+    }
+
+    // Regression tests for Correction 01:
+
+    #[test]
+    #[should_panic(
+        expected = "convert_fixed_numeric: runtime value family does not match source NumericKind"
+    )]
+    fn regression_convert_numeric_identity_validates_runtime_value() {
+        let _ = convert_fixed_numeric(
+            RuntimeValue::Boolean(true),
+            &NumericKind::Int32,
+            &NumericKind::Int32,
+        );
+    }
+
+    #[test]
+    fn regression_big_dynamic_integer_exact_to_float() {
+        // 2^200 -> Float64 succeeds
+        let big_2_200 = BigInt::from(1) << 200;
+        let res_f64 = convert_bigint_to_f64(&big_2_200);
+        assert!(res_f64.is_ok());
+        match res_f64.unwrap() {
+            RuntimeValue::Float64(f) => {
+                assert!(f.is_finite());
+                assert_eq!(f, 2.0f64.powi(200));
+            }
+            _ => panic!("expected Float64"),
+        }
+
+        // -2^200 -> Float64 succeeds
+        let neg_big_2_200 = -big_2_200.clone();
+        let res_neg_f64 = convert_bigint_to_f64(&neg_big_2_200);
+        assert!(res_neg_f64.is_ok());
+        match res_neg_f64.unwrap() {
+            RuntimeValue::Float64(f) => {
+                assert!(f.is_finite());
+                assert_eq!(f, -2.0f64.powi(200));
+            }
+            _ => panic!("expected Float64"),
+        }
+
+        // (2^200) + 1 -> Float64 conversion error
+        let big_2_200_plus_1 = big_2_200 + BigInt::from(1);
+        let res_plus_1 = convert_bigint_to_f64(&big_2_200_plus_1);
+        assert!(res_plus_1.is_err());
+
+        // 2^127 -> Float32 succeeds
+        let big_2_127 = BigInt::from(1) << 127;
+        let res_f32 = convert_bigint_to_f32(&big_2_127);
+        assert!(res_f32.is_ok());
+        match res_f32.unwrap() {
+            RuntimeValue::Float32(f) => {
+                assert!(f.is_finite());
+                assert_eq!(f, 2.0f32.powi(127));
+            }
+            _ => panic!("expected Float32"),
+        }
+
+        // 2^128 -> Float32 conversion error (exceeds finite f32)
+        let big_2_128 = BigInt::from(1) << 128;
+        let res_f32_overflow = convert_bigint_to_f32(&big_2_128);
+        assert!(res_f32_overflow.is_err());
+    }
+
+    #[test]
+    fn regression_fixed_float_overflow() {
+        let program = CompiledProgram {
+            functions: vec![CompiledFunction {
+                parameter_count: 0,
+                local_count: 0,
+                max_operand_depth: 2,
+                instructions: vec![
+                    Instruction::LoadConstant(ConstantId(0)),
+                    Instruction::LoadConstant(ConstantId(1)),
+                    Instruction::Multiply(NumericKind::Float32),
+                ],
+            }],
+            entry_point: FunctionId(0),
+            entry_parameter_shapes: Vec::new(),
+            constants: vec![Constant::Float32(f32::MAX), Constant::Float32(2.0)],
+            external_symbols: Vec::new(),
+            value_shapes: vec![CompiledValueShape::Float32],
+            source_map: SourceMap {
+                functions: vec![vec![
+                    SourceSpan { start: 0, end: 1 },
+                    SourceSpan { start: 1, end: 2 },
+                    SourceSpan { start: 2, end: 3 },
+                ]],
+            },
+        };
+        let bindings = ApplicationBindings {
+            capabilities: HashMap::new(),
+        };
+
+        let mut execution = VmExecution {
+            compiled_program: &program,
+            application_bindings: &bindings,
+            value_storage: SharedValueStorage { cells: Vec::new() },
+            backing_store: ExecutionBackingStore {
+                strings: Vec::new(),
+                dynamic_integers: Vec::new(),
+                structs: Vec::new(),
+                enums: Vec::new(),
+            },
+            call_frames: vec![CallFrame {
+                function: FunctionId(0),
+                instruction_pointer: InstructionPointer(0),
+                frame_base: 0,
+            }],
+        };
+
+        let _ = execute_instruction(&mut execution);
+        let _ = execute_instruction(&mut execution);
+        let err = match execute_instruction(&mut execution) {
+            Ok(_) => panic!("overflow should fail"),
+            Err(e) => e,
+        };
+        assert_eq!(execution.call_frames[0].instruction_pointer.0, 2);
+        match err.kind {
+            ExecutionFailureKind::Evaluation(EvaluationFailure::Overflow) => {}
+            _ => panic!("expected Overflow failure"),
+        }
+        assert_eq!(err.source_span, Some(SourceSpan { start: 2, end: 3 }));
+    }
+
+    #[test]
+    fn regression_dynamic_float_overflow() {
+        let program = CompiledProgram {
+            functions: vec![CompiledFunction {
+                parameter_count: 0,
+                local_count: 0,
+                max_operand_depth: 2,
+                instructions: vec![
+                    Instruction::LoadConstant(ConstantId(0)),
+                    Instruction::LoadConstant(ConstantId(1)),
+                    Instruction::DynamicAdd,
+                ],
+            }],
+            entry_point: FunctionId(0),
+            entry_parameter_shapes: Vec::new(),
+            constants: vec![
+                Constant::Dynamic(DynamicConstant::Float64(f64::MAX)),
+                Constant::Dynamic(DynamicConstant::Float64(f64::MAX)),
+            ],
+            external_symbols: Vec::new(),
+            value_shapes: Vec::new(),
+            source_map: SourceMap {
+                functions: vec![vec![
+                    SourceSpan { start: 0, end: 1 },
+                    SourceSpan { start: 1, end: 2 },
+                    SourceSpan { start: 2, end: 3 },
+                ]],
+            },
+        };
+        let bindings = ApplicationBindings {
+            capabilities: HashMap::new(),
+        };
+
+        let mut execution = VmExecution {
+            compiled_program: &program,
+            application_bindings: &bindings,
+            value_storage: SharedValueStorage { cells: Vec::new() },
+            backing_store: ExecutionBackingStore {
+                strings: Vec::new(),
+                dynamic_integers: Vec::new(),
+                structs: Vec::new(),
+                enums: Vec::new(),
+            },
+            call_frames: vec![CallFrame {
+                function: FunctionId(0),
+                instruction_pointer: InstructionPointer(0),
+                frame_base: 0,
+            }],
+        };
+
+        let _ = execute_instruction(&mut execution);
+        let _ = execute_instruction(&mut execution);
+        let err = match execute_instruction(&mut execution) {
+            Ok(_) => panic!("dynamic float overflow should fail"),
+            Err(e) => e,
+        };
+        match err.kind {
+            ExecutionFailureKind::Evaluation(EvaluationFailure::Overflow) => {}
+            _ => panic!("expected Overflow failure"),
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "LoadParameter slot 1 out of bounds for parameter_count 1")]
+    fn regression_invalid_parameter_slot_panics() {
+        let program = CompiledProgram {
+            functions: vec![CompiledFunction {
+                parameter_count: 1,
+                local_count: 0,
+                max_operand_depth: 1,
+                instructions: vec![Instruction::LoadParameter(ParameterSlot(1))],
+            }],
+            entry_point: FunctionId(0),
+            entry_parameter_shapes: Vec::new(),
+            constants: Vec::new(),
+            external_symbols: Vec::new(),
+            value_shapes: Vec::new(),
+            source_map: SourceMap {
+                functions: vec![vec![SourceSpan { start: 0, end: 1 }]],
+            },
+        };
+        let bindings = ApplicationBindings {
+            capabilities: HashMap::new(),
+        };
+
+        let mut execution = VmExecution {
+            compiled_program: &program,
+            application_bindings: &bindings,
+            value_storage: SharedValueStorage {
+                cells: vec![Some(RuntimeValue::Int32(1))],
+            },
+            backing_store: ExecutionBackingStore {
+                strings: Vec::new(),
+                dynamic_integers: Vec::new(),
+                structs: Vec::new(),
+                enums: Vec::new(),
+            },
+            call_frames: vec![CallFrame {
+                function: FunctionId(0),
+                instruction_pointer: InstructionPointer(0),
+                frame_base: 0,
+            }],
+        };
+
+        let _ = execute_instruction(&mut execution);
+    }
+
+    #[test]
+    #[should_panic(expected = "LoadLocal slot 2 out of bounds for local_count 1")]
+    fn regression_invalid_local_slot_panics() {
+        let program = CompiledProgram {
+            functions: vec![CompiledFunction {
+                parameter_count: 0,
+                local_count: 1,
+                max_operand_depth: 1,
+                instructions: vec![Instruction::LoadLocal(LocalSlot(2))],
+            }],
+            entry_point: FunctionId(0),
+            entry_parameter_shapes: Vec::new(),
+            constants: Vec::new(),
+            external_symbols: Vec::new(),
+            value_shapes: Vec::new(),
+            source_map: SourceMap {
+                functions: vec![vec![SourceSpan { start: 0, end: 1 }]],
+            },
+        };
+        let bindings = ApplicationBindings {
+            capabilities: HashMap::new(),
+        };
+
+        let mut execution = VmExecution {
+            compiled_program: &program,
+            application_bindings: &bindings,
+            value_storage: SharedValueStorage {
+                cells: vec![Some(RuntimeValue::Int32(1))],
+            },
+            backing_store: ExecutionBackingStore {
+                strings: Vec::new(),
+                dynamic_integers: Vec::new(),
+                structs: Vec::new(),
+                enums: Vec::new(),
+            },
+            call_frames: vec![CallFrame {
+                function: FunctionId(0),
+                instruction_pointer: InstructionPointer(0),
+                frame_base: 0,
+            }],
+        };
+
+        let _ = execute_instruction(&mut execution);
+    }
+
+    #[test]
+    #[should_panic(expected = "Insufficient caller operand depth 0 for target parameter_count 1")]
+    fn regression_call_insufficient_operand_arguments_panics() {
+        let program = CompiledProgram {
+            functions: vec![
+                CompiledFunction {
+                    parameter_count: 0,
+                    local_count: 0,
+                    max_operand_depth: 2,
+                    instructions: vec![Instruction::Call(FunctionId(1))],
+                },
+                CompiledFunction {
+                    parameter_count: 1,
+                    local_count: 0,
+                    max_operand_depth: 1,
+                    instructions: vec![Instruction::Return],
+                },
+            ],
+            entry_point: FunctionId(0),
+            entry_parameter_shapes: Vec::new(),
+            constants: Vec::new(),
+            external_symbols: Vec::new(),
+            value_shapes: Vec::new(),
+            source_map: SourceMap {
+                functions: vec![
+                    vec![SourceSpan { start: 0, end: 1 }],
+                    vec![SourceSpan { start: 1, end: 2 }],
+                ],
+            },
+        };
+        let bindings = ApplicationBindings {
+            capabilities: HashMap::new(),
+        };
+
+        let mut execution = VmExecution {
+            compiled_program: &program,
+            application_bindings: &bindings,
+            value_storage: SharedValueStorage { cells: Vec::new() },
+            backing_store: ExecutionBackingStore {
+                strings: Vec::new(),
+                dynamic_integers: Vec::new(),
+                structs: Vec::new(),
+                enums: Vec::new(),
+            },
+            call_frames: vec![CallFrame {
+                function: FunctionId(0),
+                instruction_pointer: InstructionPointer(0),
+                frame_base: 0,
+            }],
+        };
+
+        let _ = execute_instruction(&mut execution);
+    }
+
+    #[test]
+    #[should_panic(expected = "Operand stack depth 1 exceeded max_operand_depth 1")]
+    fn regression_max_operand_depth_exceeded_panics() {
+        let program = CompiledProgram {
+            functions: vec![CompiledFunction {
+                parameter_count: 0,
+                local_count: 0,
+                max_operand_depth: 1,
+                instructions: vec![
+                    Instruction::LoadConstant(ConstantId(0)),
+                    Instruction::LoadConstant(ConstantId(0)),
+                ],
+            }],
+            entry_point: FunctionId(0),
+            entry_parameter_shapes: Vec::new(),
+            constants: vec![Constant::Int32(1)],
+            external_symbols: Vec::new(),
+            value_shapes: vec![CompiledValueShape::Int32],
+            source_map: SourceMap {
+                functions: vec![vec![
+                    SourceSpan { start: 0, end: 1 },
+                    SourceSpan { start: 1, end: 2 },
+                ]],
+            },
+        };
+        let bindings = ApplicationBindings {
+            capabilities: HashMap::new(),
+        };
+
+        let mut execution = VmExecution {
+            compiled_program: &program,
+            application_bindings: &bindings,
+            value_storage: SharedValueStorage { cells: Vec::new() },
+            backing_store: ExecutionBackingStore {
+                strings: Vec::new(),
+                dynamic_integers: Vec::new(),
+                structs: Vec::new(),
+                enums: Vec::new(),
+            },
+            call_frames: vec![CallFrame {
+                function: FunctionId(0),
+                instruction_pointer: InstructionPointer(0),
+                frame_base: 0,
+            }],
+        };
+
+        let _ = execute_instruction(&mut execution);
+        let _ = execute_instruction(&mut execution); // should panic on second push
+    }
+
+    #[test]
+    #[should_panic(expected = "Jump target 99 out of bounds for instruction count 1")]
+    fn regression_invalid_jump_target_panics() {
+        let program = CompiledProgram {
+            functions: vec![CompiledFunction {
+                parameter_count: 0,
+                local_count: 0,
+                max_operand_depth: 1,
+                instructions: vec![Instruction::Jump(InstructionIndex(99))],
+            }],
+            entry_point: FunctionId(0),
+            entry_parameter_shapes: Vec::new(),
+            constants: Vec::new(),
+            external_symbols: Vec::new(),
+            value_shapes: Vec::new(),
+            source_map: SourceMap {
+                functions: vec![vec![SourceSpan { start: 0, end: 1 }]],
+            },
+        };
+        let bindings = ApplicationBindings {
+            capabilities: HashMap::new(),
+        };
+
+        let mut execution = VmExecution {
+            compiled_program: &program,
+            application_bindings: &bindings,
+            value_storage: SharedValueStorage { cells: Vec::new() },
+            backing_store: ExecutionBackingStore {
+                strings: Vec::new(),
+                dynamic_integers: Vec::new(),
+                structs: Vec::new(),
+                enums: Vec::new(),
+            },
+            call_frames: vec![CallFrame {
+                function: FunctionId(0),
+                instruction_pointer: InstructionPointer(0),
+                frame_base: 0,
+            }],
+        };
+
+        let _ = execute_instruction(&mut execution);
+    }
+
+    #[test]
+    #[should_panic(expected = "InstructionPointer advance 1 out of bounds for instruction count 1")]
+    fn regression_past_end_advance_panics() {
+        let program = CompiledProgram {
+            functions: vec![CompiledFunction {
+                parameter_count: 0,
+                local_count: 0,
+                max_operand_depth: 1,
+                instructions: vec![Instruction::LoadConstant(ConstantId(0))],
+            }],
+            entry_point: FunctionId(0),
+            entry_parameter_shapes: Vec::new(),
+            constants: vec![Constant::Int32(1)],
+            external_symbols: Vec::new(),
+            value_shapes: vec![CompiledValueShape::Int32],
+            source_map: SourceMap {
+                functions: vec![vec![SourceSpan { start: 0, end: 1 }]],
+            },
+        };
+        let bindings = ApplicationBindings {
+            capabilities: HashMap::new(),
+        };
+
+        let mut execution = VmExecution {
+            compiled_program: &program,
+            application_bindings: &bindings,
+            value_storage: SharedValueStorage { cells: Vec::new() },
+            backing_store: ExecutionBackingStore {
+                strings: Vec::new(),
+                dynamic_integers: Vec::new(),
+                structs: Vec::new(),
+                enums: Vec::new(),
+            },
+            call_frames: vec![CallFrame {
+                function: FunctionId(0),
+                instruction_pointer: InstructionPointer(0),
+                frame_base: 0,
+            }],
+        };
+
+        let _ = execute_instruction(&mut execution);
+    }
+
+    #[test]
+    #[should_panic(expected = "Return requires exactly one operand on the stack, found depth 2")]
+    fn regression_return_with_multiple_operands_panics() {
+        let program = CompiledProgram {
+            functions: vec![CompiledFunction {
+                parameter_count: 0,
+                local_count: 0,
+                max_operand_depth: 2,
+                instructions: vec![
+                    Instruction::LoadConstant(ConstantId(0)),
+                    Instruction::LoadConstant(ConstantId(0)),
+                    Instruction::Return,
+                ],
+            }],
+            entry_point: FunctionId(0),
+            entry_parameter_shapes: Vec::new(),
+            constants: vec![Constant::Int32(1)],
+            external_symbols: Vec::new(),
+            value_shapes: vec![CompiledValueShape::Int32],
+            source_map: SourceMap {
+                functions: vec![vec![
+                    SourceSpan { start: 0, end: 1 },
+                    SourceSpan { start: 1, end: 2 },
+                    SourceSpan { start: 2, end: 3 },
+                ]],
+            },
+        };
+        let bindings = ApplicationBindings {
+            capabilities: HashMap::new(),
+        };
+
+        let mut execution = VmExecution {
+            compiled_program: &program,
+            application_bindings: &bindings,
+            value_storage: SharedValueStorage { cells: Vec::new() },
+            backing_store: ExecutionBackingStore {
+                strings: Vec::new(),
+                dynamic_integers: Vec::new(),
+                structs: Vec::new(),
+                enums: Vec::new(),
+            },
+            call_frames: vec![CallFrame {
+                function: FunctionId(0),
+                instruction_pointer: InstructionPointer(0),
+                frame_base: 0,
+            }],
+        };
+
+        let _ = execute_instruction(&mut execution);
+        let _ = execute_instruction(&mut execution);
+        let _ = execute_instruction(&mut execution);
+    }
+
+    #[test]
+    #[should_panic(expected = "duplicate field_dest index 0 in field_order")]
+    fn regression_duplicate_field_order_panics() {
+        let field_order = vec![FieldIndex(0), FieldIndex(0)];
+        let operands = vec![RuntimeValue::Int32(1), RuntimeValue::Int32(2)];
+        let _ = validate_and_reorder_fields(&field_order, operands);
+    }
+
+    #[test]
+    #[should_panic(expected = "left enum variant discriminant 5 out of bounds for variants len 1")]
+    fn regression_invalid_enum_equality_discriminant_panics() {
+        let backing = ExecutionBackingStore {
+            strings: Vec::new(),
+            dynamic_integers: Vec::new(),
+            structs: Vec::new(),
+            enums: vec![
+                EnumBacking {
+                    variant: VariantDiscriminant(5),
+                    payload: RuntimeEnumPayload::Simple,
+                },
+                EnumBacking {
+                    variant: VariantDiscriminant(0),
+                    payload: RuntimeEnumPayload::Simple,
+                },
+            ],
+        };
+        let program = CompiledProgram {
+            functions: Vec::new(),
+            entry_point: FunctionId(0),
+            entry_parameter_shapes: Vec::new(),
+            constants: Vec::new(),
+            external_symbols: Vec::new(),
+            value_shapes: Vec::new(),
+            source_map: SourceMap {
+                functions: Vec::new(),
+            },
+        };
+        let plan = CompositeEqualityPlan::Enum {
+            variants: vec![EnumEqualityPayloadPlan::Simple],
+        };
+
+        let _ = evaluate_composite_equality(
+            RuntimeValue::Enum(EnumBackingId(0)),
+            RuntimeValue::Enum(EnumBackingId(1)),
+            &plan,
+            &program,
+            &backing,
+        );
     }
 }
