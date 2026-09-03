@@ -3321,4 +3321,196 @@ mod tests {
             &backing,
         );
     }
+
+    #[test]
+    fn fixed_integer_overflow_addition() {
+        let program = CompiledProgram {
+            functions: vec![CompiledFunction {
+                parameter_count: 0,
+                local_count: 0,
+                max_operand_depth: 2,
+                instructions: vec![
+                    Instruction::LoadConstant(ConstantId(0)),
+                    Instruction::LoadConstant(ConstantId(1)),
+                    Instruction::Add(NumericKind::Int8),
+                ],
+            }],
+            entry_point: FunctionId(0),
+            entry_parameter_shapes: Vec::new(),
+            constants: vec![Constant::Int8(127), Constant::Int8(1)],
+            external_symbols: Vec::new(),
+            value_shapes: vec![CompiledValueShape::Int8],
+            source_map: SourceMap {
+                functions: vec![vec![
+                    SourceSpan { start: 0, end: 1 },
+                    SourceSpan { start: 1, end: 2 },
+                    SourceSpan { start: 2, end: 3 },
+                ]],
+            },
+        };
+        let bindings = ApplicationBindings {
+            capabilities: HashMap::new(),
+        };
+
+        let mut execution = VmExecution {
+            compiled_program: &program,
+            application_bindings: &bindings,
+            value_storage: SharedValueStorage { cells: Vec::new() },
+            backing_store: ExecutionBackingStore {
+                strings: Vec::new(),
+                dynamic_integers: Vec::new(),
+                structs: Vec::new(),
+                enums: Vec::new(),
+            },
+            call_frames: vec![CallFrame {
+                function: FunctionId(0),
+                instruction_pointer: InstructionPointer(0),
+                frame_base: 0,
+            }],
+        };
+
+        let _ = execute_instruction(&mut execution);
+        let _ = execute_instruction(&mut execution);
+
+        let err = match execute_instruction(&mut execution) {
+            Ok(_) => panic!("overflow should fail"),
+            Err(e) => e,
+        };
+        match err.kind {
+            ExecutionFailureKind::Evaluation(EvaluationFailure::Overflow) => {}
+            _ => panic!("expected Overflow failure"),
+        }
+        assert_eq!(execution.call_frames[0].instruction_pointer.0, 2);
+    }
+
+    #[test]
+    fn fixed_float_division_by_zero() {
+        let program = CompiledProgram {
+            functions: vec![CompiledFunction {
+                parameter_count: 0,
+                local_count: 0,
+                max_operand_depth: 2,
+                instructions: vec![
+                    Instruction::LoadConstant(ConstantId(0)),
+                    Instruction::LoadConstant(ConstantId(1)),
+                    Instruction::Divide(NumericKind::Float32),
+                ],
+            }],
+            entry_point: FunctionId(0),
+            entry_parameter_shapes: Vec::new(),
+            constants: vec![Constant::Float32(1.0), Constant::Float32(0.0)],
+            external_symbols: Vec::new(),
+            value_shapes: vec![CompiledValueShape::Float32],
+            source_map: SourceMap {
+                functions: vec![vec![
+                    SourceSpan { start: 0, end: 1 },
+                    SourceSpan { start: 1, end: 2 },
+                    SourceSpan { start: 2, end: 3 },
+                ]],
+            },
+        };
+        let bindings = ApplicationBindings {
+            capabilities: HashMap::new(),
+        };
+
+        let mut execution = VmExecution {
+            compiled_program: &program,
+            application_bindings: &bindings,
+            value_storage: SharedValueStorage { cells: Vec::new() },
+            backing_store: ExecutionBackingStore {
+                strings: Vec::new(),
+                dynamic_integers: Vec::new(),
+                structs: Vec::new(),
+                enums: Vec::new(),
+            },
+            call_frames: vec![CallFrame {
+                function: FunctionId(0),
+                instruction_pointer: InstructionPointer(0),
+                frame_base: 0,
+            }],
+        };
+
+        let _ = execute_instruction(&mut execution);
+        let _ = execute_instruction(&mut execution);
+
+        let err = match execute_instruction(&mut execution) {
+            Ok(_) => panic!("float division by zero should fail"),
+            Err(e) => e,
+        };
+        match err.kind {
+            ExecutionFailureKind::Evaluation(EvaluationFailure::DivisionByZero) => {}
+            _ => panic!("expected DivisionByZero failure"),
+        }
+        assert_eq!(execution.call_frames[0].instruction_pointer.0, 2);
+    }
+
+    #[test]
+    fn dynamic_integer_division_by_zero() {
+        let program = CompiledProgram {
+            functions: vec![CompiledFunction {
+                parameter_count: 0,
+                local_count: 0,
+                max_operand_depth: 2,
+                instructions: vec![
+                    Instruction::LoadConstant(ConstantId(0)),
+                    Instruction::LoadConstant(ConstantId(1)),
+                    Instruction::DynamicDivide,
+                ],
+            }],
+            entry_point: FunctionId(0),
+            entry_parameter_shapes: Vec::new(),
+            constants: vec![
+                Constant::Dynamic(DynamicConstant::Integer {
+                    negative: false,
+                    magnitude: vec![10],
+                }),
+                Constant::Dynamic(DynamicConstant::Integer {
+                    negative: false,
+                    magnitude: Vec::new(),
+                }),
+            ],
+            external_symbols: Vec::new(),
+            value_shapes: vec![CompiledValueShape::Dynamic],
+            source_map: SourceMap {
+                functions: vec![vec![
+                    SourceSpan { start: 0, end: 1 },
+                    SourceSpan { start: 1, end: 2 },
+                    SourceSpan { start: 2, end: 3 },
+                ]],
+            },
+        };
+        let bindings = ApplicationBindings {
+            capabilities: HashMap::new(),
+        };
+
+        let mut execution = VmExecution {
+            compiled_program: &program,
+            application_bindings: &bindings,
+            value_storage: SharedValueStorage { cells: Vec::new() },
+            backing_store: ExecutionBackingStore {
+                strings: Vec::new(),
+                dynamic_integers: Vec::new(),
+                structs: Vec::new(),
+                enums: Vec::new(),
+            },
+            call_frames: vec![CallFrame {
+                function: FunctionId(0),
+                instruction_pointer: InstructionPointer(0),
+                frame_base: 0,
+            }],
+        };
+
+        let _ = execute_instruction(&mut execution);
+        let _ = execute_instruction(&mut execution);
+
+        let err = match execute_instruction(&mut execution) {
+            Ok(_) => panic!("dynamic integer division by zero should fail"),
+            Err(e) => e,
+        };
+        match err.kind {
+            ExecutionFailureKind::Evaluation(EvaluationFailure::DivisionByZero) => {}
+            _ => panic!("expected DivisionByZero failure"),
+        }
+        assert_eq!(execution.call_frames[0].instruction_pointer.0, 2);
+    }
 }
