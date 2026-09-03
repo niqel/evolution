@@ -109,4 +109,104 @@ mod tests {
             Ok(_) => panic!("expected semantic failure, got Ok"),
         }
     }
+
+    #[test]
+    fn compile_with_catalog_signatures_and_types_integration() {
+        use crate::data::compilation_dependency::{
+            CatalogField, CatalogSignature, CatalogSignatureParameter, CatalogType, CatalogTypeRef,
+            TypeSymbol,
+        };
+        use crate::data::semantic::SignatureSymbol;
+        use alloc::string::ToString;
+        use alloc::vec;
+
+        let mut types = HashMap::new();
+        types.insert(
+            TypeSymbol {
+                module: "geo".to_string(),
+                name: "Point".to_string(),
+            },
+            CatalogType::Struct {
+                fields: vec![
+                    CatalogField {
+                        name: "x".to_string(),
+                        type_ref: CatalogTypeRef::Float,
+                    },
+                    CatalogField {
+                        name: "y".to_string(),
+                        type_ref: CatalogTypeRef::Float,
+                    },
+                ],
+            },
+        );
+
+        let mut signatures = HashMap::new();
+        signatures.insert(
+            SignatureSymbol {
+                module: "math".to_string(),
+                name: "sin".to_string(),
+            },
+            CatalogSignature {
+                parameters: vec![CatalogSignatureParameter::Value(CatalogTypeRef::Float)],
+                result_type: CatalogTypeRef::Float,
+            },
+        );
+
+        let catalog = CompilationCatalog { types, signatures };
+        let src = r#"
+            import geo::Point;
+            import math::sin;
+
+            public fn calculate(Point p) -> float {
+                return sin(p.x);
+            }
+        "#;
+
+        let outcome = COMPILE(src, &catalog);
+        match outcome {
+            Ok(compiled) => {
+                assert_eq!(compiled.external_symbols.len(), 1);
+                assert_eq!(compiled.external_symbols[0].symbol.module, "math");
+                assert_eq!(compiled.external_symbols[0].symbol.name, "sin");
+                assert_eq!(compiled.entry_parameter_shapes.len(), 1);
+                assert_eq!(compiled.functions.len(), 1);
+                assert_eq!(
+                    compiled.source_map.functions[0].len(),
+                    compiled.functions[0].instructions.len()
+                );
+            }
+            Err(_) => panic!("expected catalog-dependent compilation to succeed"),
+        }
+    }
+
+    #[test]
+    fn compile_composite_enums_and_when_integration() {
+        let catalog = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+        let src = r#"
+            enum Status {
+                Active,
+                Pending(int)
+            }
+
+            public fn check(Status s) -> int {
+                return when s {
+                    Status::Active => 1,
+                    Status::Pending(int code) => code
+                };
+            }
+        "#;
+
+        let outcome = COMPILE(src, &catalog);
+        match outcome {
+            Ok(compiled) => {
+                assert_eq!(compiled.entry_parameter_shapes.len(), 1);
+                assert!(!compiled.value_shapes.is_empty());
+                assert_eq!(compiled.functions[0].parameter_count, 1);
+            }
+            Err(_) => panic!("expected enum/when compilation to succeed"),
+        }
+    }
 }
