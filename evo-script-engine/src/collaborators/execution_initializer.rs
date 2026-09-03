@@ -217,4 +217,59 @@ mod tests {
         }
         assert!(err.source_span.is_none());
     }
+
+    #[test]
+    fn entry_point_non_zero_frame_initialization() {
+        let mut program = make_test_program();
+        program.functions.push(CompiledFunction {
+            parameter_count: 0,
+            local_count: 1,
+            max_operand_depth: 2,
+            instructions: Vec::new(),
+        });
+        program.entry_point = FunctionId(1);
+        program.entry_parameter_shapes = Vec::new();
+
+        let bindings = ApplicationBindings {
+            capabilities: HashMap::new(),
+        };
+        let execution = match initialize_execution(&program, &[], &bindings) {
+            Ok(exec) => exec,
+            Err(_) => panic!("should initialize with non-zero entry point"),
+        };
+
+        assert_eq!(execution.call_frames.len(), 1);
+        assert_eq!(execution.call_frames[0].function.0, 1);
+        assert_eq!(execution.call_frames[0].instruction_pointer.0, 0);
+        assert_eq!(execution.call_frames[0].frame_base, 0);
+        assert_eq!(execution.value_storage.cells.len(), 1);
+        assert!(execution.value_storage.cells[0].is_none());
+    }
+
+    #[test]
+    fn multiple_arguments_second_argument_shape_mismatch() {
+        let mut program = make_test_program();
+        program.functions[0].parameter_count = 2;
+        program.value_shapes.push(CompiledValueShape::String);
+        program.entry_parameter_shapes.push(CompiledValueShapeId(1));
+
+        let bindings = ApplicationBindings {
+            capabilities: HashMap::new(),
+        };
+        let args = [Value::Int32(10), Value::Boolean(false)];
+
+        let err = match initialize_execution(&program, &args, &bindings) {
+            Ok(_) => panic!("should fail on second argument"),
+            Err(e) => e,
+        };
+        match err.kind {
+            ExecutionFailureKind::Invocation(InvocationFailure::ArgumentShapeMismatch {
+                position,
+            }) => {
+                assert_eq!(position, 1);
+            }
+            _ => panic!("expected ArgumentShapeMismatch at position 1"),
+        }
+        assert!(err.source_span.is_none());
+    }
 }
