@@ -182,9 +182,7 @@ mod tests {
     use std::collections::HashMap;
 
     use crate::data::compiled::boundary::CompiledValueShape;
-    use crate::data::compiled::identities::{
-        CompiledValueShapeId, ConstantId, ExternalSymbolId, InstructionIndex,
-    };
+    use crate::data::compiled::identities::{CompiledValueShapeId, ConstantId, ExternalSymbolId};
     use crate::data::compiled::instructions::Instruction;
     use crate::data::compiled::program::{CompiledFunction, CompiledProgram};
     use crate::data::compiled::source_map::SourceMap;
@@ -195,7 +193,7 @@ mod tests {
     use crate::data::vm::backing::ExecutionBackingStore;
     use crate::data::vm::bindings::ApplicationBindings;
     use crate::data::vm::state::{CallFrame, SharedValueStorage};
-    use crate::data::vm::values::RuntimeValue;
+    use crate::data::vm::values::{RuntimeValue, StringBackingRef};
     use evo_values::{OwnedValue, Value};
 
     #[test]
@@ -724,5 +722,101 @@ mod tests {
         };
 
         let _ = resolve_external_call(&mut execution);
+    }
+
+    #[test]
+    fn successful_external_call_with_preexisting_stack_operands_and_string_result() {
+        fn string_capability<'value>(
+            args: &'value [Value<'value>],
+        ) -> Result<OwnedValue, ExternalCapabilityFailure> {
+            assert_eq!(args.len(), 1);
+            match &args[0] {
+                Value::Int32(n) => Ok(OwnedValue::String(Box::from(alloc::format!("num_{n}")))),
+                _ => panic!("expected Int32"),
+            }
+        }
+
+        let symbol = SignatureSymbol {
+            module: "Fmt".to_string(),
+            name: "Num".to_string(),
+        };
+
+        let program = CompiledProgram {
+            functions: vec![CompiledFunction {
+                parameter_count: 0,
+                local_count: 0,
+                max_operand_depth: 3,
+                instructions: vec![
+                    Instruction::LoadConstant(ConstantId(0)),
+                    Instruction::LoadConstant(ConstantId(1)),
+                    Instruction::CallExternal(ExternalSymbolId(0)),
+                    Instruction::Return,
+                ],
+            }],
+            entry_point: FunctionId(0),
+            entry_parameter_shapes: Vec::new(),
+            constants: vec![Constant::Int32(999), Constant::Int32(42)],
+            external_symbols: vec![ExternalSymbol {
+                symbol: SignatureSymbol {
+                    module: "Fmt".to_string(),
+                    name: "Num".to_string(),
+                },
+                parameter_count: 1,
+                result_shape: CompiledValueShapeId(0),
+            }],
+            value_shapes: vec![CompiledValueShape::String],
+            source_map: SourceMap {
+                functions: vec![vec![
+                    SourceSpan { start: 0, end: 1 },
+                    SourceSpan { start: 1, end: 2 },
+                    SourceSpan { start: 2, end: 3 },
+                    SourceSpan { start: 3, end: 4 },
+                ]],
+            },
+        };
+
+        let mut bindings = ApplicationBindings {
+            capabilities: HashMap::new(),
+        };
+        bindings.capabilities.insert(symbol, string_capability);
+
+        // Pre-existing operand (Int32(999)) + external arg (Int32(42))
+        let mut execution = VmExecution {
+            compiled_program: &program,
+            application_bindings: &bindings,
+            value_storage: SharedValueStorage {
+                cells: vec![
+                    Some(RuntimeValue::Int32(999)),
+                    Some(RuntimeValue::Int32(42)),
+                ],
+            },
+            backing_store: ExecutionBackingStore {
+                strings: Vec::new(),
+                dynamic_integers: Vec::new(),
+                structs: Vec::new(),
+                enums: Vec::new(),
+            },
+            call_frames: vec![CallFrame {
+                function: FunctionId(0),
+                instruction_pointer: InstructionPointer(2),
+                frame_base: 0,
+            }],
+        };
+
+        let result = resolve_external_call(&mut execution);
+        assert!(result.is_ok());
+        assert_eq!(execution.call_frames[0].instruction_pointer.0, 3);
+        // Should have 2 cells: pre-existing 999 + new string result
+        assert_eq!(execution.value_storage.cells.len(), 2);
+        match execution.value_storage.cells[0] {
+            Some(RuntimeValue::Int32(v)) => assert_eq!(v, 999),
+            _ => panic!("expected preserved base cell Int32(999)"),
+        }
+        match execution.value_storage.cells[1] {
+            Some(RuntimeValue::String(StringBackingRef::Execution(id))) => {
+                assert_eq!(execution.backing_store.strings[id.0].as_ref(), "num_42");
+            }
+            _ => panic!("expected ExecutionString result cell"),
+        }
     }
 }
