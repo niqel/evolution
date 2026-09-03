@@ -4,6 +4,7 @@ use evo_query::definitions::structs::borrowed::between_condition::BetweenConditi
 use evo_query::definitions::structs::borrowed::condition::Condition;
 use evo_query::definitions::structs::borrowed::condition_expression::ConditionExpression;
 use evo_query::definitions::structs::borrowed::construction::Construction;
+use evo_query::definitions::structs::borrowed::field::Field;
 use evo_query::definitions::structs::borrowed::in_condition::InCondition;
 use evo_query::definitions::structs::borrowed::iteration::Iteration;
 use evo_query::definitions::structs::borrowed::iteration_operation::IterationOperation;
@@ -124,8 +125,8 @@ fn check_record_fields_and_continue(construction: Construction<'_>) -> Flow {
 
             let kind_field = record.fields.iter().find(|f| f.name == "kind").unwrap();
             match kind_field.value {
-                Value::Text("file") => SEEN_FILE.store(true, Ordering::SeqCst),
-                Value::Text("directory") => SEEN_DIR.store(true, Ordering::SeqCst),
+                Value::String("file") => SEEN_FILE.store(true, Ordering::SeqCst),
+                Value::String("directory") => SEEN_DIR.store(true, Ordering::SeqCst),
                 _ => {}
             }
         }
@@ -138,13 +139,13 @@ fn check_file_size_and_continue(construction: Construction<'_>) -> Flow {
     match construction {
         Construction::Record(record) => {
             let name_field = record.fields.iter().find(|f| f.name == "name").unwrap();
-            if name_field.value == Value::Text("data.bin") {
+            if name_field.value == Value::String("data.bin") {
                 let kind_field = record.fields.iter().find(|f| f.name == "kind").unwrap();
-                assert_eq!(kind_field.value, Value::Text("file"));
+                assert_eq!(kind_field.value, Value::String("file"));
 
                 let size_field = record.fields.iter().find(|f| f.name == "size");
                 assert!(size_field.is_some());
-                if let Value::Unsigned(size) = size_field.unwrap().value {
+                if let Value::Uint64(size) = size_field.unwrap().value {
                     FOUND_SIZE.store(size as usize, Ordering::SeqCst);
                 }
             }
@@ -158,9 +159,9 @@ fn check_dir_no_size_and_continue(construction: Construction<'_>) -> Flow {
     match construction {
         Construction::Record(record) => {
             let name_field = record.fields.iter().find(|f| f.name == "name").unwrap();
-            if name_field.value == Value::Text("subdir") {
+            if name_field.value == Value::String("subdir") {
                 let kind_field = record.fields.iter().find(|f| f.name == "kind").unwrap();
-                assert_eq!(kind_field.value, Value::Text("directory"));
+                assert_eq!(kind_field.value, Value::String("directory"));
 
                 let size_field = record.fields.iter().find(|f| f.name == "size");
                 if size_field.is_none() {
@@ -176,13 +177,15 @@ fn check_dir_no_size_and_continue(construction: Construction<'_>) -> Flow {
 fn collect_names_and_continue(construction: Construction<'_>) -> Flow {
     if let Construction::Record(record) = construction {
         RECORD_COUNT.fetch_add(1, Ordering::SeqCst);
-        if let Some(name_field) = record.fields.iter().find(|f| f.name == "name") {
-            if let Value::Text(name) = name_field.value {
-                RECEIVED_NAMES
-                    .lock()
-                    .unwrap_or_else(|p| p.into_inner())
-                    .push(name.to_string());
-            }
+        if let Some(Field {
+            value: Value::String(name),
+            ..
+        }) = record.fields.iter().find(|f| f.name == "name")
+        {
+            RECEIVED_NAMES
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .push(name.to_string());
         }
     }
     Flow::Continue
@@ -191,21 +194,25 @@ fn collect_names_and_continue(construction: Construction<'_>) -> Flow {
 fn collect_names_and_indices_and_continue(construction: Construction<'_>) -> Flow {
     if let Construction::Record(record) = construction {
         RECORD_COUNT.fetch_add(1, Ordering::SeqCst);
-        if let Some(name_field) = record.fields.iter().find(|f| f.name == "name") {
-            if let Value::Text(name) = name_field.value {
-                RECEIVED_NAMES
-                    .lock()
-                    .unwrap_or_else(|p| p.into_inner())
-                    .push(name.to_string());
-            }
+        if let Some(Field {
+            value: Value::String(name),
+            ..
+        }) = record.fields.iter().find(|f| f.name == "name")
+        {
+            RECEIVED_NAMES
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .push(name.to_string());
         }
-        if let Some(index_field) = record.fields.iter().find(|f| f.name == "index") {
-            if let Value::Unsigned(idx) = index_field.value {
-                RECEIVED_INDICES
-                    .lock()
-                    .unwrap_or_else(|p| p.into_inner())
-                    .push(idx);
-            }
+        if let Some(Field {
+            value: Value::Uint64(idx),
+            ..
+        }) = record.fields.iter().find(|f| f.name == "index")
+        {
+            RECEIVED_INDICES
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .push(*idx);
         }
     }
     Flow::Continue
@@ -225,7 +232,7 @@ fn collect_field_names_and_continue(construction: Construction<'_>) -> Flow {
 
 fn collect_text_values_and_continue(construction: Construction<'_>) -> Flow {
     match construction {
-        Construction::Value(Value::Text(text)) => {
+        Construction::Value(Value::String(text)) => {
             RECORD_COUNT.fetch_add(1, Ordering::SeqCst);
             RECEIVED_TEXT_VALUES
                 .lock()
@@ -239,7 +246,7 @@ fn collect_text_values_and_continue(construction: Construction<'_>) -> Flow {
 
 fn collect_unsigned_values_and_continue(construction: Construction<'_>) -> Flow {
     match construction {
-        Construction::Value(Value::Unsigned(val)) => {
+        Construction::Value(Value::Uint64(val)) => {
             RECORD_COUNT.fetch_add(1, Ordering::SeqCst);
             RECEIVED_UNSIGNED_VALUES
                 .lock()
@@ -253,7 +260,7 @@ fn collect_unsigned_values_and_continue(construction: Construction<'_>) -> Flow 
 
 fn collect_signed_values_and_continue(construction: Construction<'_>) -> Flow {
     match construction {
-        Construction::Value(Value::Signed(val)) => {
+        Construction::Value(Value::Int64(val)) => {
             RECORD_COUNT.fetch_add(1, Ordering::SeqCst);
             RECEIVED_SIGNED_VALUES
                 .lock()
@@ -430,7 +437,7 @@ fn iterator_filter_simple_equal_text() {
     let condition = Condition {
         field: "name",
         operator: ConditionOperator::Equal,
-        value: Value::Text("one.txt"),
+        value: Value::String("one.txt"),
     };
     let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
     let operations = [filter];
@@ -453,7 +460,7 @@ fn iterator_filter_kind() {
     let condition = Condition {
         field: "kind",
         operator: ConditionOperator::Equal,
-        value: Value::Text("file"),
+        value: Value::String("file"),
     };
     let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
     let operations = [filter];
@@ -477,7 +484,7 @@ fn iterator_filter_contains() {
     let condition = Condition {
         field: "name",
         operator: ConditionOperator::Contains,
-        value: Value::Text(".txt"),
+        value: Value::String(".txt"),
     };
     let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
     let operations = [filter];
@@ -503,7 +510,7 @@ fn iterator_filter_starts_with() {
     let condition = Condition {
         field: "name",
         operator: ConditionOperator::StartsWith,
-        value: Value::Text("pre_"),
+        value: Value::String("pre_"),
     };
     let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
     let operations = [filter];
@@ -529,7 +536,7 @@ fn iterator_filter_ends_with() {
     let condition = Condition {
         field: "name",
         operator: ConditionOperator::EndsWith,
-        value: Value::Text(".log"),
+        value: Value::String(".log"),
     };
     let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
     let operations = [filter];
@@ -554,7 +561,7 @@ fn iterator_filter_size_greater_than() {
     let condition = Condition {
         field: "size",
         operator: ConditionOperator::GreaterThan,
-        value: Value::Unsigned(10),
+        value: Value::Uint64(10),
     };
     let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
     let operations = [filter];
@@ -578,7 +585,7 @@ fn iterator_filter_index_less_than() {
     let condition = Condition {
         field: "index",
         operator: ConditionOperator::LessThan,
-        value: Value::Unsigned(1),
+        value: Value::Uint64(1),
     };
     let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
     let operations = [filter];
@@ -601,8 +608,8 @@ fn iterator_filter_between_inclusive() {
 
     let between = BetweenCondition {
         field: "size",
-        lower: Value::Unsigned(10),
-        upper: Value::Unsigned(20),
+        lower: Value::Uint64(10),
+        upper: Value::Uint64(20),
     };
     let filter = IterationOperation::Filter(ConditionExpression::Between(between));
     let operations = [filter];
@@ -623,7 +630,7 @@ fn iterator_filter_in() {
     std::fs::write("three.txt", b"3").unwrap();
     std::fs::write("four.txt", b"4").unwrap();
 
-    let candidates = [Value::Text("one.txt"), Value::Text("three.txt")];
+    let candidates = [Value::String("one.txt"), Value::String("three.txt")];
     let in_condition = InCondition {
         field: "name",
         values: &candidates,
@@ -651,7 +658,7 @@ fn iterator_filter_not() {
     let inner = ConditionExpression::Condition(Condition {
         field: "name",
         operator: ConditionOperator::Equal,
-        value: Value::Text("one.txt"),
+        value: Value::String("one.txt"),
     });
     let filter = IterationOperation::Filter(ConditionExpression::Not(&inner));
     let operations = [filter];
@@ -675,12 +682,12 @@ fn iterator_filter_and() {
     let a = ConditionExpression::Condition(Condition {
         field: "name",
         operator: ConditionOperator::EndsWith,
-        value: Value::Text(".txt"),
+        value: Value::String(".txt"),
     });
     let b = ConditionExpression::Condition(Condition {
         field: "size",
         operator: ConditionOperator::GreaterThan,
-        value: Value::Unsigned(5),
+        value: Value::Uint64(5),
     });
     let children = [a, b];
     let filter = IterationOperation::Filter(ConditionExpression::And(&children));
@@ -705,12 +712,12 @@ fn iterator_filter_or() {
     let a = ConditionExpression::Condition(Condition {
         field: "name",
         operator: ConditionOperator::Equal,
-        value: Value::Text("one.txt"),
+        value: Value::String("one.txt"),
     });
     let b = ConditionExpression::Condition(Condition {
         field: "name",
         operator: ConditionOperator::Equal,
-        value: Value::Text("two.txt"),
+        value: Value::String("two.txt"),
     });
     let children = [a, b];
     let filter = IterationOperation::Filter(ConditionExpression::Or(&children));
@@ -771,12 +778,12 @@ fn iterator_multiple_filters() {
     let filter_1 = IterationOperation::Filter(ConditionExpression::Condition(Condition {
         field: "name",
         operator: ConditionOperator::EndsWith,
-        value: Value::Text(".txt"),
+        value: Value::String(".txt"),
     }));
     let filter_2 = IterationOperation::Filter(ConditionExpression::Condition(Condition {
         field: "size",
         operator: ConditionOperator::GreaterThan,
-        value: Value::Unsigned(5),
+        value: Value::Uint64(5),
     }));
     let operations = [filter_1, filter_2];
     let iteration = Iteration {
@@ -797,7 +804,7 @@ fn iterator_filter_field_not_found() {
     let condition = Condition {
         field: "unknown",
         operator: ConditionOperator::Equal,
-        value: Value::Text("x"),
+        value: Value::String("x"),
     };
     let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
     let operations = [filter];
@@ -820,7 +827,7 @@ fn iterator_filter_size_absent_on_directory_returns_field_not_found() {
     let condition = Condition {
         field: "size",
         operator: ConditionOperator::GreaterThan,
-        value: Value::Unsigned(0),
+        value: Value::Uint64(0),
     };
     let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
     let operations = [filter];
@@ -840,7 +847,7 @@ fn iterator_filter_type_mismatch() {
     let condition = Condition {
         field: "name",
         operator: ConditionOperator::GreaterThan,
-        value: Value::Unsigned(1),
+        value: Value::Uint64(1),
     };
     let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
     let operations = [filter];
@@ -863,7 +870,7 @@ fn iterator_filter_signed_unsigned_no_coercion() {
     let condition = Condition {
         field: "size",
         operator: ConditionOperator::Equal,
-        value: Value::Signed(10),
+        value: Value::Int64(10),
     };
     let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
     let operations = [filter];
@@ -888,7 +895,7 @@ fn iterator_filter_flow_stop_after_filter() {
     let condition = Condition {
         field: "name",
         operator: ConditionOperator::EndsWith,
-        value: Value::Text(".txt"),
+        value: Value::String(".txt"),
     };
     let filter = IterationOperation::Filter(ConditionExpression::Condition(condition));
     let operations = [filter];
@@ -1057,7 +1064,7 @@ fn iterator_filter_then_skip() {
     let condition = Condition {
         field: "name",
         operator: ConditionOperator::EndsWith,
-        value: Value::Text(".txt"),
+        value: Value::String(".txt"),
     };
     let ops = [
         IterationOperation::Filter(ConditionExpression::Condition(condition)),
@@ -1081,7 +1088,7 @@ fn iterator_skip_then_filter() {
     let condition = Condition {
         field: "name",
         operator: ConditionOperator::EndsWith,
-        value: Value::Text(".txt"),
+        value: Value::String(".txt"),
     };
     let ops = [
         IterationOperation::Skip(2),
@@ -1105,7 +1112,7 @@ fn iterator_filter_then_take() {
     let condition = Condition {
         field: "name",
         operator: ConditionOperator::EndsWith,
-        value: Value::Text(".txt"),
+        value: Value::String(".txt"),
     };
     let ops = [
         IterationOperation::Filter(ConditionExpression::Condition(condition)),
@@ -1128,7 +1135,7 @@ fn iterator_take_then_filter() {
     let condition = Condition {
         field: "name",
         operator: ConditionOperator::EndsWith,
-        value: Value::Text(".txt"),
+        value: Value::String(".txt"),
     };
     let ops = [
         IterationOperation::Take(1),
@@ -1185,7 +1192,7 @@ fn iterator_filter_skip_take_pipeline() {
     let condition = Condition {
         field: "name",
         operator: ConditionOperator::EndsWith,
-        value: Value::Text(".txt"),
+        value: Value::String(".txt"),
     };
     let ops = [
         IterationOperation::Filter(ConditionExpression::Condition(condition)),
@@ -1328,7 +1335,7 @@ fn iterator_filter_then_select() {
     let filter = IterationOperation::Filter(ConditionExpression::Condition(Condition {
         field: "kind",
         operator: ConditionOperator::Equal,
-        value: Value::Text("file"),
+        value: Value::String("file"),
     }));
     let selections = [Selection::Field("name")];
     let select = IterationOperation::Select(&selections);
@@ -1353,7 +1360,7 @@ fn iterator_select_then_filter_valid() {
     let filter = IterationOperation::Filter(ConditionExpression::Condition(Condition {
         field: "kind",
         operator: ConditionOperator::Equal,
-        value: Value::Text("file"),
+        value: Value::String("file"),
     }));
     let ops = [select, filter];
     let iteration = Iteration { operations: &ops };
@@ -1378,7 +1385,7 @@ fn iterator_select_then_filter_removed_field_returns_field_not_found() {
     let filter = IterationOperation::Filter(ConditionExpression::Condition(Condition {
         field: "kind",
         operator: ConditionOperator::Equal,
-        value: Value::Text("file"),
+        value: Value::String("file"),
     }));
     let ops = [select, filter];
     let iteration = Iteration { operations: &ops };
@@ -1395,7 +1402,7 @@ fn iterator_filter_field_before_remove_succeeds() {
     let filter = IterationOperation::Filter(ConditionExpression::Condition(Condition {
         field: "kind",
         operator: ConditionOperator::Equal,
-        value: Value::Text("file"),
+        value: Value::String("file"),
     }));
     let selections = [Selection::Field("name")];
     let select = IterationOperation::Select(&selections);
@@ -1541,7 +1548,7 @@ fn iterator_filter_skip_select_take_pipeline() {
     let filter = IterationOperation::Filter(ConditionExpression::Condition(Condition {
         field: "name",
         operator: ConditionOperator::EndsWith,
-        value: Value::Text(".txt"),
+        value: Value::String(".txt"),
     }));
     let skip = IterationOperation::Skip(1);
     let selections = [Selection::Field("name")];
@@ -1698,7 +1705,7 @@ fn iterator_filter_then_select_then_to_value() {
     let filter = IterationOperation::Filter(ConditionExpression::Condition(Condition {
         field: "kind",
         operator: ConditionOperator::Equal,
-        value: Value::Text("file"),
+        value: Value::String("file"),
     }));
     let selections = [Selection::Field("name")];
     let select = IterationOperation::Select(&selections);
@@ -1835,7 +1842,7 @@ fn iterator_to_value_then_filter_returns_provider_incompatible_before_running() 
     let condition = Condition {
         field: "name",
         operator: ConditionOperator::Equal,
-        value: Value::Text("file.txt"),
+        value: Value::String("file.txt"),
     };
     let ops = [
         IterationOperation::ToValue,
@@ -1893,7 +1900,7 @@ fn iterator_new_literal_text() {
 
     let new_field = NewField {
         name: "label",
-        expression: ValueExpression::Literal(Value::Text("hello")),
+        expression: ValueExpression::Literal(Value::String("hello")),
     };
     let selections = [Selection::New(new_field)];
     let ops = [
@@ -1915,7 +1922,7 @@ fn iterator_new_literal_unsigned() {
 
     let new_field = NewField {
         name: "count",
-        expression: ValueExpression::Literal(Value::Unsigned(42)),
+        expression: ValueExpression::Literal(Value::Uint64(42)),
     };
     let selections = [Selection::New(new_field)];
     let ops = [
@@ -1937,7 +1944,7 @@ fn iterator_new_literal_signed() {
 
     let new_field = NewField {
         name: "delta",
-        expression: ValueExpression::Literal(Value::Signed(-5)),
+        expression: ValueExpression::Literal(Value::Int64(-5)),
     };
     let selections = [Selection::New(new_field)];
     let ops = [
@@ -2152,7 +2159,7 @@ fn iterator_new_pipeline_filter_returns_provider_incompatible_before_running() {
     let condition = Condition {
         field: "name",
         operator: ConditionOperator::Equal,
-        value: Value::Text("x"),
+        value: Value::String("x"),
     };
     let inner_ops = [
         IterationOperation::Filter(ConditionExpression::Condition(condition)),
@@ -2249,7 +2256,7 @@ fn iterator_new_pipeline_count_returns_provider_incompatible_before_running() {
 fn iterator_new_pipeline_select_new_returns_provider_incompatible_before_running() {
     let deep_new = NewField {
         name: "deep",
-        expression: ValueExpression::Literal(Value::Unsigned(1)),
+        expression: ValueExpression::Literal(Value::Uint64(1)),
     };
     let inner_sels = [Selection::New(deep_new)];
     let inner_ops = [
@@ -2274,8 +2281,8 @@ fn new_concat_expression() {
     std::fs::write("file.txt", b"1").unwrap();
 
     let args = [
-        ValueExpression::Literal(Value::Text("hello")),
-        ValueExpression::Literal(Value::Text(" world")),
+        ValueExpression::Literal(Value::String("hello")),
+        ValueExpression::Literal(Value::String(" world")),
     ];
     let new_field = NewField {
         name: "c",
@@ -2323,9 +2330,9 @@ fn concat_multiple_literals() {
     std::fs::write("file.txt", b"1").unwrap();
 
     let args = [
-        ValueExpression::Literal(Value::Text("a")),
-        ValueExpression::Literal(Value::Text("b")),
-        ValueExpression::Literal(Value::Text("c")),
+        ValueExpression::Literal(Value::String("a")),
+        ValueExpression::Literal(Value::String("b")),
+        ValueExpression::Literal(Value::String("c")),
     ];
     let new_field = NewField {
         name: "c",
@@ -2357,7 +2364,7 @@ fn concat_pipeline_field_and_literal() {
 
     let args = [
         ValueExpression::Pipeline(&name_pipeline),
-        ValueExpression::Literal(Value::Text(".bak")),
+        ValueExpression::Literal(Value::String(".bak")),
     ];
     let new_field = NewField {
         name: "c",
@@ -2382,8 +2389,8 @@ fn concat_unicode() {
     std::fs::write("file.txt", b"1").unwrap();
 
     let args = [
-        ValueExpression::Literal(Value::Text("¡Hola, ")),
-        ValueExpression::Literal(Value::Text("Mundo! 🌍")),
+        ValueExpression::Literal(Value::String("¡Hola, ")),
+        ValueExpression::Literal(Value::String("Mundo! 🌍")),
     ];
     let new_field = NewField {
         name: "c",
@@ -2410,9 +2417,9 @@ fn concat_nested_substring() {
     let (_guard, _lock) = CurrentDirGuard::new("concat_nested_substring");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let text = ValueExpression::Literal(Value::Text("México"));
-    let start = ValueExpression::Literal(Value::Unsigned(1));
-    let length = ValueExpression::Literal(Value::Unsigned(3));
+    let text = ValueExpression::Literal(Value::String("México"));
+    let start = ValueExpression::Literal(Value::Uint64(1));
+    let length = ValueExpression::Literal(Value::Uint64(3));
     let sub = SubstringExpression {
         text: &text,
         start: &start,
@@ -2420,7 +2427,7 @@ fn concat_nested_substring() {
     };
 
     let args = [
-        ValueExpression::Literal(Value::Text("prefix_")),
+        ValueExpression::Literal(Value::String("prefix_")),
         ValueExpression::Substring(sub),
     ];
     let new_field = NewField {
@@ -2446,8 +2453,8 @@ fn concat_type_mismatch() {
     std::fs::write("file.txt", b"1").unwrap();
 
     let args = [
-        ValueExpression::Literal(Value::Text("a")),
-        ValueExpression::Literal(Value::Unsigned(1)),
+        ValueExpression::Literal(Value::String("a")),
+        ValueExpression::Literal(Value::Uint64(1)),
     ];
     let new_field = NewField {
         name: "c",
@@ -2466,7 +2473,7 @@ fn new_len_expression() {
     let (_guard, _lock) = CurrentDirGuard::new("new_len_expression");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let text = ValueExpression::Literal(Value::Text("hello"));
+    let text = ValueExpression::Literal(Value::String("hello"));
     let len_expr = LenExpression { text: &text };
     let new_field = NewField {
         name: "l",
@@ -2490,7 +2497,7 @@ fn len_unicode() {
     let (_guard, _lock) = CurrentDirGuard::new("len_unicode");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let text = ValueExpression::Literal(Value::Text("México"));
+    let text = ValueExpression::Literal(Value::String("México"));
     let len_expr = LenExpression { text: &text };
     let new_field = NewField {
         name: "l",
@@ -2544,8 +2551,8 @@ fn len_of_concat() {
     std::fs::write("file.txt", b"1").unwrap();
 
     let concat_args = [
-        ValueExpression::Literal(Value::Text("abc")),
-        ValueExpression::Literal(Value::Text("def")),
+        ValueExpression::Literal(Value::String("abc")),
+        ValueExpression::Literal(Value::String("def")),
     ];
     let text = ValueExpression::Concat(&concat_args);
     let len_expr = LenExpression { text: &text };
@@ -2571,7 +2578,7 @@ fn len_type_mismatch() {
     let (_guard, _lock) = CurrentDirGuard::new("len_type_mismatch");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let text = ValueExpression::Literal(Value::Unsigned(123));
+    let text = ValueExpression::Literal(Value::Uint64(123));
     let len_expr = LenExpression { text: &text };
     let new_field = NewField {
         name: "l",
@@ -2590,9 +2597,9 @@ fn new_substring_expression() {
     let (_guard, _lock) = CurrentDirGuard::new("new_substring_expression");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let text = ValueExpression::Literal(Value::Text("hello"));
-    let start = ValueExpression::Literal(Value::Unsigned(1));
-    let length = ValueExpression::Literal(Value::Unsigned(3));
+    let text = ValueExpression::Literal(Value::String("hello"));
+    let start = ValueExpression::Literal(Value::Uint64(1));
+    let length = ValueExpression::Literal(Value::Uint64(3));
     let sub = SubstringExpression {
         text: &text,
         start: &start,
@@ -2620,9 +2627,9 @@ fn substring_unicode() {
     let (_guard, _lock) = CurrentDirGuard::new("substring_unicode");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let text = ValueExpression::Literal(Value::Text("México"));
-    let start = ValueExpression::Literal(Value::Unsigned(1));
-    let length = ValueExpression::Literal(Value::Unsigned(3));
+    let text = ValueExpression::Literal(Value::String("México"));
+    let start = ValueExpression::Literal(Value::Uint64(1));
+    let length = ValueExpression::Literal(Value::Uint64(3));
     let sub = SubstringExpression {
         text: &text,
         start: &start,
@@ -2656,8 +2663,8 @@ fn substring_pipeline_field() {
         IterationOperation::ToValue,
     ];
     let text = ValueExpression::Pipeline(&name_pipeline);
-    let start = ValueExpression::Literal(Value::Unsigned(0));
-    let length = ValueExpression::Literal(Value::Unsigned(4));
+    let start = ValueExpression::Literal(Value::Uint64(0));
+    let length = ValueExpression::Literal(Value::Uint64(4));
     let sub = SubstringExpression {
         text: &text,
         start: &start,
@@ -2685,9 +2692,9 @@ fn substring_zero_length() {
     let (_guard, _lock) = CurrentDirGuard::new("substring_zero_length");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let text = ValueExpression::Literal(Value::Text("hello"));
-    let start = ValueExpression::Literal(Value::Unsigned(1));
-    let length = ValueExpression::Literal(Value::Unsigned(0));
+    let text = ValueExpression::Literal(Value::String("hello"));
+    let start = ValueExpression::Literal(Value::Uint64(1));
+    let length = ValueExpression::Literal(Value::Uint64(0));
     let sub = SubstringExpression {
         text: &text,
         start: &start,
@@ -2715,9 +2722,9 @@ fn substring_out_of_bounds() {
     let (_guard, _lock) = CurrentDirGuard::new("substring_out_of_bounds");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let text = ValueExpression::Literal(Value::Text("hello"));
-    let start = ValueExpression::Literal(Value::Unsigned(10));
-    let length = ValueExpression::Literal(Value::Unsigned(1));
+    let text = ValueExpression::Literal(Value::String("hello"));
+    let start = ValueExpression::Literal(Value::Uint64(10));
+    let length = ValueExpression::Literal(Value::Uint64(1));
     let sub = SubstringExpression {
         text: &text,
         start: &start,
@@ -2740,9 +2747,9 @@ fn substring_start_type_mismatch() {
     let (_guard, _lock) = CurrentDirGuard::new("substring_start_type_mismatch");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let text = ValueExpression::Literal(Value::Text("hello"));
-    let start = ValueExpression::Literal(Value::Text("0"));
-    let length = ValueExpression::Literal(Value::Unsigned(1));
+    let text = ValueExpression::Literal(Value::String("hello"));
+    let start = ValueExpression::Literal(Value::String("0"));
+    let length = ValueExpression::Literal(Value::Uint64(1));
     let sub = SubstringExpression {
         text: &text,
         start: &start,
@@ -2765,9 +2772,9 @@ fn substring_length_type_mismatch() {
     let (_guard, _lock) = CurrentDirGuard::new("substring_length_type_mismatch");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let text = ValueExpression::Literal(Value::Text("hello"));
-    let start = ValueExpression::Literal(Value::Unsigned(0));
-    let length = ValueExpression::Literal(Value::Text("1"));
+    let text = ValueExpression::Literal(Value::String("hello"));
+    let start = ValueExpression::Literal(Value::Uint64(0));
+    let length = ValueExpression::Literal(Value::String("1"));
     let sub = SubstringExpression {
         text: &text,
         start: &start,
@@ -2790,9 +2797,9 @@ fn substring_text_type_mismatch() {
     let (_guard, _lock) = CurrentDirGuard::new("substring_text_type_mismatch");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let text = ValueExpression::Literal(Value::Unsigned(123));
-    let start = ValueExpression::Literal(Value::Unsigned(0));
-    let length = ValueExpression::Literal(Value::Unsigned(1));
+    let text = ValueExpression::Literal(Value::Uint64(123));
+    let start = ValueExpression::Literal(Value::Uint64(0));
+    let length = ValueExpression::Literal(Value::Uint64(1));
     let sub = SubstringExpression {
         text: &text,
         start: &start,
@@ -2816,12 +2823,12 @@ fn substring_of_concat() {
     std::fs::write("file.txt", b"1").unwrap();
 
     let concat_args = [
-        ValueExpression::Literal(Value::Text("abc")),
-        ValueExpression::Literal(Value::Text("def")),
+        ValueExpression::Literal(Value::String("abc")),
+        ValueExpression::Literal(Value::String("def")),
     ];
     let text = ValueExpression::Concat(&concat_args);
-    let start = ValueExpression::Literal(Value::Unsigned(2));
-    let length = ValueExpression::Literal(Value::Unsigned(3));
+    let start = ValueExpression::Literal(Value::Uint64(2));
+    let length = ValueExpression::Literal(Value::Uint64(3));
     let sub = SubstringExpression {
         text: &text,
         start: &start,
@@ -2849,9 +2856,9 @@ fn new_replace_expression() {
     let (_guard, _lock) = CurrentDirGuard::new("new_replace_expression");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let text = ValueExpression::Literal(Value::Text("hello world"));
-    let from = ValueExpression::Literal(Value::Text("world"));
-    let to = ValueExpression::Literal(Value::Text("there"));
+    let text = ValueExpression::Literal(Value::String("hello world"));
+    let from = ValueExpression::Literal(Value::String("world"));
+    let to = ValueExpression::Literal(Value::String("there"));
     let rep = ReplaceExpression {
         text: &text,
         from: &from,
@@ -2879,9 +2886,9 @@ fn replace_multiple() {
     let (_guard, _lock) = CurrentDirGuard::new("replace_multiple");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let text = ValueExpression::Literal(Value::Text("banana"));
-    let from = ValueExpression::Literal(Value::Text("a"));
-    let to = ValueExpression::Literal(Value::Text("o"));
+    let text = ValueExpression::Literal(Value::String("banana"));
+    let from = ValueExpression::Literal(Value::String("a"));
+    let to = ValueExpression::Literal(Value::String("o"));
     let rep = ReplaceExpression {
         text: &text,
         from: &from,
@@ -2909,9 +2916,9 @@ fn replace_unicode() {
     let (_guard, _lock) = CurrentDirGuard::new("replace_unicode");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let text = ValueExpression::Literal(Value::Text("árbol verde"));
-    let from = ValueExpression::Literal(Value::Text("árbol"));
-    let to = ValueExpression::Literal(Value::Text("bosque"));
+    let text = ValueExpression::Literal(Value::String("árbol verde"));
+    let from = ValueExpression::Literal(Value::String("árbol"));
+    let to = ValueExpression::Literal(Value::String("bosque"));
     let rep = ReplaceExpression {
         text: &text,
         from: &from,
@@ -2939,9 +2946,9 @@ fn replace_to_empty() {
     let (_guard, _lock) = CurrentDirGuard::new("replace_to_empty");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let text = ValueExpression::Literal(Value::Text("hello world"));
-    let from = ValueExpression::Literal(Value::Text(" world"));
-    let to = ValueExpression::Literal(Value::Text(""));
+    let text = ValueExpression::Literal(Value::String("hello world"));
+    let from = ValueExpression::Literal(Value::String(" world"));
+    let to = ValueExpression::Literal(Value::String(""));
     let rep = ReplaceExpression {
         text: &text,
         from: &from,
@@ -2969,9 +2976,9 @@ fn replace_empty_pattern() {
     let (_guard, _lock) = CurrentDirGuard::new("replace_empty_pattern");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let text = ValueExpression::Literal(Value::Text("hello"));
-    let from = ValueExpression::Literal(Value::Text(""));
-    let to = ValueExpression::Literal(Value::Text("x"));
+    let text = ValueExpression::Literal(Value::String("hello"));
+    let from = ValueExpression::Literal(Value::String(""));
+    let to = ValueExpression::Literal(Value::String("x"));
     let rep = ReplaceExpression {
         text: &text,
         from: &from,
@@ -2994,9 +3001,9 @@ fn replace_text_type_mismatch() {
     let (_guard, _lock) = CurrentDirGuard::new("replace_text_type_mismatch");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let text = ValueExpression::Literal(Value::Unsigned(1));
-    let from = ValueExpression::Literal(Value::Text("a"));
-    let to = ValueExpression::Literal(Value::Text("b"));
+    let text = ValueExpression::Literal(Value::Uint64(1));
+    let from = ValueExpression::Literal(Value::String("a"));
+    let to = ValueExpression::Literal(Value::String("b"));
     let rep = ReplaceExpression {
         text: &text,
         from: &from,
@@ -3019,9 +3026,9 @@ fn replace_from_type_mismatch() {
     let (_guard, _lock) = CurrentDirGuard::new("replace_from_type_mismatch");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let text = ValueExpression::Literal(Value::Text("hello"));
-    let from = ValueExpression::Literal(Value::Unsigned(1));
-    let to = ValueExpression::Literal(Value::Text("b"));
+    let text = ValueExpression::Literal(Value::String("hello"));
+    let from = ValueExpression::Literal(Value::Uint64(1));
+    let to = ValueExpression::Literal(Value::String("b"));
     let rep = ReplaceExpression {
         text: &text,
         from: &from,
@@ -3044,9 +3051,9 @@ fn replace_to_type_mismatch() {
     let (_guard, _lock) = CurrentDirGuard::new("replace_to_type_mismatch");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let text = ValueExpression::Literal(Value::Text("hello"));
-    let from = ValueExpression::Literal(Value::Text("h"));
-    let to = ValueExpression::Literal(Value::Unsigned(1));
+    let text = ValueExpression::Literal(Value::String("hello"));
+    let from = ValueExpression::Literal(Value::String("h"));
+    let to = ValueExpression::Literal(Value::Uint64(1));
     let rep = ReplaceExpression {
         text: &text,
         from: &from,
@@ -3070,12 +3077,12 @@ fn replace_of_concat() {
     std::fs::write("file.txt", b"1").unwrap();
 
     let concat_args = [
-        ValueExpression::Literal(Value::Text("hello")),
-        ValueExpression::Literal(Value::Text(" world")),
+        ValueExpression::Literal(Value::String("hello")),
+        ValueExpression::Literal(Value::String(" world")),
     ];
     let text = ValueExpression::Concat(&concat_args);
-    let from = ValueExpression::Literal(Value::Text("world"));
-    let to = ValueExpression::Literal(Value::Text("earth"));
+    let from = ValueExpression::Literal(Value::String("world"));
+    let to = ValueExpression::Literal(Value::String("earth"));
     let rep = ReplaceExpression {
         text: &text,
         from: &from,
@@ -3104,9 +3111,9 @@ fn nesting_len_of_concat() {
     std::fs::write("file.txt", b"1").unwrap();
 
     let concat_args = [
-        ValueExpression::Literal(Value::Text("a")),
-        ValueExpression::Literal(Value::Text("b")),
-        ValueExpression::Literal(Value::Text("c")),
+        ValueExpression::Literal(Value::String("a")),
+        ValueExpression::Literal(Value::String("b")),
+        ValueExpression::Literal(Value::String("c")),
     ];
     let text = ValueExpression::Concat(&concat_args);
     let len_expr = LenExpression { text: &text };
@@ -3132,18 +3139,18 @@ fn nesting_concat_of_substring_and_replace() {
     let (_guard, _lock) = CurrentDirGuard::new("nesting_concat_of_substring_and_replace");
     std::fs::write("file.txt", b"1").unwrap();
 
-    let sub_text = ValueExpression::Literal(Value::Text("abc"));
-    let sub_start = ValueExpression::Literal(Value::Unsigned(0));
-    let sub_length = ValueExpression::Literal(Value::Unsigned(2));
+    let sub_text = ValueExpression::Literal(Value::String("abc"));
+    let sub_start = ValueExpression::Literal(Value::Uint64(0));
+    let sub_length = ValueExpression::Literal(Value::Uint64(2));
     let sub = SubstringExpression {
         text: &sub_text,
         start: &sub_start,
         length: &sub_length,
     };
 
-    let rep_text = ValueExpression::Literal(Value::Text("xyz"));
-    let rep_from = ValueExpression::Literal(Value::Text("x"));
-    let rep_to = ValueExpression::Literal(Value::Text("w"));
+    let rep_text = ValueExpression::Literal(Value::String("xyz"));
+    let rep_from = ValueExpression::Literal(Value::String("x"));
+    let rep_to = ValueExpression::Literal(Value::String("w"));
     let rep = ReplaceExpression {
         text: &rep_text,
         from: &rep_from,
@@ -3177,12 +3184,12 @@ fn nesting_substring_of_concat() {
     std::fs::write("file.txt", b"1").unwrap();
 
     let concat_args = [
-        ValueExpression::Literal(Value::Text("foo")),
-        ValueExpression::Literal(Value::Text("bar")),
+        ValueExpression::Literal(Value::String("foo")),
+        ValueExpression::Literal(Value::String("bar")),
     ];
     let text = ValueExpression::Concat(&concat_args);
-    let start = ValueExpression::Literal(Value::Unsigned(1));
-    let length = ValueExpression::Literal(Value::Unsigned(4));
+    let start = ValueExpression::Literal(Value::Uint64(1));
+    let length = ValueExpression::Literal(Value::Uint64(4));
     let sub = SubstringExpression {
         text: &text,
         start: &start,
@@ -3211,12 +3218,12 @@ fn nesting_replace_of_concat() {
     std::fs::write("file.txt", b"1").unwrap();
 
     let concat_args = [
-        ValueExpression::Literal(Value::Text("hello")),
-        ValueExpression::Literal(Value::Text(" friend")),
+        ValueExpression::Literal(Value::String("hello")),
+        ValueExpression::Literal(Value::String(" friend")),
     ];
     let text = ValueExpression::Concat(&concat_args);
-    let from = ValueExpression::Literal(Value::Text("friend"));
-    let to = ValueExpression::Literal(Value::Text("world"));
+    let from = ValueExpression::Literal(Value::String("friend"));
+    let to = ValueExpression::Literal(Value::String("world"));
     let rep = ReplaceExpression {
         text: &text,
         from: &from,
@@ -3245,9 +3252,9 @@ fn multiple_new_fields_in_same_select_coexist() {
     std::fs::write("file.txt", b"1").unwrap();
 
     let concat_args = [
-        ValueExpression::Literal(Value::Text("hello")),
-        ValueExpression::Literal(Value::Text(" ")),
-        ValueExpression::Literal(Value::Text("world")),
+        ValueExpression::Literal(Value::String("hello")),
+        ValueExpression::Literal(Value::String(" ")),
+        ValueExpression::Literal(Value::String("world")),
     ];
     let field_a = NewField {
         name: "a",
@@ -3255,9 +3262,9 @@ fn multiple_new_fields_in_same_select_coexist() {
     };
 
     let rep = ReplaceExpression {
-        text: &ValueExpression::Literal(Value::Text("banana")),
-        from: &ValueExpression::Literal(Value::Text("a")),
-        to: &ValueExpression::Literal(Value::Text("o")),
+        text: &ValueExpression::Literal(Value::String("banana")),
+        from: &ValueExpression::Literal(Value::String("a")),
+        to: &ValueExpression::Literal(Value::String("o")),
     };
     let field_b = NewField {
         name: "b",
@@ -3274,9 +3281,9 @@ fn multiple_new_fields_in_same_select_coexist() {
                 RECORD_COUNT.fetch_add(1, Ordering::SeqCst);
                 assert_eq!(record.fields.len(), 2);
                 assert_eq!(record.fields[0].name, "a");
-                assert_eq!(record.fields[0].value, Value::Text("hello world"));
+                assert_eq!(record.fields[0].value, Value::String("hello world"));
                 assert_eq!(record.fields[1].name, "b");
-                assert_eq!(record.fields[1].value, Value::Text("bonono"));
+                assert_eq!(record.fields[1].value, Value::String("bonono"));
             }
             _ => panic!("expected record construction"),
         }
@@ -3293,8 +3300,8 @@ fn select_posterior_reads_field_from_previous_select() {
     std::fs::write("file.txt", b"1").unwrap();
 
     let concat_args = [
-        ValueExpression::Literal(Value::Text("file")),
-        ValueExpression::Literal(Value::Text(".txt")),
+        ValueExpression::Literal(Value::String("file")),
+        ValueExpression::Literal(Value::String(".txt")),
     ];
     let select1_fields = [Selection::New(NewField {
         name: "full",
@@ -3332,8 +3339,8 @@ fn select_new_concat_then_to_value() {
     std::fs::write("file.txt", b"1").unwrap();
 
     let concat_args = [
-        ValueExpression::Literal(Value::Text("pre_")),
-        ValueExpression::Literal(Value::Text("fix")),
+        ValueExpression::Literal(Value::String("pre_")),
+        ValueExpression::Literal(Value::String("fix")),
     ];
     let selections = [Selection::New(NewField {
         name: "label",
@@ -3357,8 +3364,8 @@ fn select_new_concat_then_last() {
     std::fs::write("file.txt", b"1").unwrap();
 
     let concat_args = [
-        ValueExpression::Literal(Value::Text("item_")),
-        ValueExpression::Literal(Value::Text("val")),
+        ValueExpression::Literal(Value::String("item_")),
+        ValueExpression::Literal(Value::String("val")),
     ];
     let selections = [Selection::New(NewField {
         name: "label",
@@ -3384,7 +3391,7 @@ fn iterator_select_solo_new() {
 
     let new_field = NewField {
         name: "a",
-        expression: ValueExpression::Literal(Value::Unsigned(1)),
+        expression: ValueExpression::Literal(Value::Uint64(1)),
     };
     let selections = [Selection::New(new_field)];
     let ops = [IterationOperation::Select(&selections)];
@@ -3404,7 +3411,7 @@ fn iterator_select_new_then_to_value() {
 
     let new_field = NewField {
         name: "a",
-        expression: ValueExpression::Literal(Value::Unsigned(1)),
+        expression: ValueExpression::Literal(Value::Uint64(1)),
     };
     let selections = [Selection::New(new_field)];
     let ops = [
@@ -3428,11 +3435,11 @@ fn iterator_filter_then_select_new() {
     let filter = IterationOperation::Filter(ConditionExpression::Condition(Condition {
         field: "kind",
         operator: ConditionOperator::Equal,
-        value: Value::Text("file"),
+        value: Value::String("file"),
     }));
     let new_field = NewField {
         name: "a",
-        expression: ValueExpression::Literal(Value::Unsigned(1)),
+        expression: ValueExpression::Literal(Value::Uint64(1)),
     };
     let selections = [Selection::New(new_field)];
     let select = IterationOperation::Select(&selections);
@@ -3477,7 +3484,7 @@ fn iterator_same_select_new_cannot_see_previous_new() {
 
     let new_a = NewField {
         name: "a",
-        expression: ValueExpression::Literal(Value::Unsigned(1)),
+        expression: ValueExpression::Literal(Value::Uint64(1)),
     };
     let inner_sels = [Selection::Field("a")];
     let inner_ops = [
@@ -3503,7 +3510,7 @@ fn iterator_second_select_can_see_new_from_first_select() {
 
     let new_a = NewField {
         name: "a",
-        expression: ValueExpression::Literal(Value::Unsigned(1)),
+        expression: ValueExpression::Literal(Value::Uint64(1)),
     };
     let sel_a = [Selection::New(new_a)];
 
@@ -3538,11 +3545,11 @@ fn iterator_multiple_new_preserve_selection_order() {
 
     let new_a = NewField {
         name: "a",
-        expression: ValueExpression::Literal(Value::Unsigned(1)),
+        expression: ValueExpression::Literal(Value::Uint64(1)),
     };
     let new_b = NewField {
         name: "b",
-        expression: ValueExpression::Literal(Value::Unsigned(2)),
+        expression: ValueExpression::Literal(Value::Uint64(2)),
     };
     let selections = [
         Selection::New(new_a),
@@ -3569,7 +3576,7 @@ fn iterator_flow_stop_after_select_new() {
 
     let new_field = NewField {
         name: "custom",
-        expression: ValueExpression::Literal(Value::Text("test")),
+        expression: ValueExpression::Literal(Value::String("test")),
     };
     let selections = [Selection::New(new_field)];
     let ops = [IterationOperation::Select(&selections)];
@@ -3589,7 +3596,7 @@ fn iterator_skip_take_with_select_new() {
 
     let new_field = NewField {
         name: "custom",
-        expression: ValueExpression::Literal(Value::Unsigned(100)),
+        expression: ValueExpression::Literal(Value::Uint64(100)),
     };
     let selections = [Selection::New(new_field)];
     let ops = [
@@ -3640,7 +3647,7 @@ fn iterator_filter_then_first() {
     let filter = IterationOperation::Filter(ConditionExpression::Condition(Condition {
         field: "kind",
         operator: ConditionOperator::Equal,
-        value: Value::Text("file"),
+        value: Value::String("file"),
     }));
     let ops = [filter, IterationOperation::First];
     let iteration = Iteration { operations: &ops };
@@ -3672,9 +3679,9 @@ fn iterator_first_then_filter() {
     let filter = IterationOperation::Filter(ConditionExpression::Condition(Condition {
         field: "name",
         operator: ConditionOperator::Equal,
-        value: Value::Text(&second_name),
+        value: Value::String(&second_name),
     }));
-    let ops = [IterationOperation::First, filter];
+    let ops = [IterationOperation::First, filter.clone()];
     let iteration = Iteration { operations: &ops };
 
     let result = ITERATE(iteration, count_and_continue);
@@ -3828,7 +3835,7 @@ fn iterator_filter_then_last() {
     let filter = IterationOperation::Filter(ConditionExpression::Condition(Condition {
         field: "kind",
         operator: ConditionOperator::Equal,
-        value: Value::Text("file"),
+        value: Value::String("file"),
     }));
     let ops = [filter, IterationOperation::Last];
     let iteration = Iteration { operations: &ops };
@@ -3860,7 +3867,7 @@ fn iterator_last_then_filter() {
     let filter = IterationOperation::Filter(ConditionExpression::Condition(Condition {
         field: "name",
         operator: ConditionOperator::Equal,
-        value: Value::Text(&first_name),
+        value: Value::String(&first_name),
     }));
     let ops = [IterationOperation::Last, filter];
     let result = ITERATE(Iteration { operations: &ops }, count_and_continue);
@@ -3871,7 +3878,7 @@ fn iterator_last_then_filter() {
     let filter_last = IterationOperation::Filter(ConditionExpression::Condition(Condition {
         field: "name",
         operator: ConditionOperator::Equal,
-        value: Value::Text(&last_name),
+        value: Value::String(&last_name),
     }));
     let ops2 = [IterationOperation::Last, filter_last];
     let result2 = ITERATE(Iteration { operations: &ops2 }, count_and_continue);
@@ -3998,7 +4005,7 @@ fn iterator_last_preserves_new_field() {
 
     let new_field = NewField {
         name: "custom",
-        expression: ValueExpression::Literal(Value::Unsigned(99)),
+        expression: ValueExpression::Literal(Value::Uint64(99)),
     };
     let selections = [Selection::New(new_field)];
     let ops = [
@@ -4067,7 +4074,7 @@ fn iterator_filter_then_count() {
     let filter = IterationOperation::Filter(ConditionExpression::Condition(Condition {
         field: "kind",
         operator: ConditionOperator::Equal,
-        value: Value::Text("file"),
+        value: Value::String("file"),
     }));
     let ops = [filter, IterationOperation::Count];
     let iteration = Iteration { operations: &ops };
@@ -4293,7 +4300,7 @@ fn iterator_count_then_filter_incompatible_before_filesystem() {
     let filter = IterationOperation::Filter(ConditionExpression::Condition(Condition {
         field: "name",
         operator: ConditionOperator::Equal,
-        value: Value::Text("1.txt"),
+        value: Value::String("1.txt"),
     }));
     let ops = [IterationOperation::Count, filter];
     let iteration = Iteration { operations: &ops };

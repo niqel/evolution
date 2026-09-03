@@ -21,27 +21,28 @@ use evo_values::text::substring::SUBSTRING;
 
 #[derive(Clone, Debug)]
 enum OwnedValue {
-    Text(String),
-    Unsigned(u64),
-    Signed(i64),
+    String(String),
+    Uint64(u64),
+    Int64(i64),
     Boolean(bool),
 }
 
 impl OwnedValue {
-    fn from_borrowed(value: Value<'_>) -> Self {
+    fn from_borrowed(value: &Value<'_>) -> Self {
         match value {
-            Value::Text(t) => OwnedValue::Text(t.to_string()),
-            Value::Unsigned(u) => OwnedValue::Unsigned(u),
-            Value::Signed(s) => OwnedValue::Signed(s),
-            Value::Boolean(b) => OwnedValue::Boolean(b),
+            Value::String(t) => OwnedValue::String(t.to_string()),
+            Value::Uint64(u) => OwnedValue::Uint64(*u),
+            Value::Int64(s) => OwnedValue::Int64(*s),
+            Value::Boolean(b) => OwnedValue::Boolean(*b),
+            _ => panic!("unsupported value family in fs provider"),
         }
     }
 
     fn as_borrowed(&self) -> Value<'_> {
         match self {
-            OwnedValue::Text(t) => Value::Text(t.as_str()),
-            OwnedValue::Unsigned(u) => Value::Unsigned(*u),
-            OwnedValue::Signed(s) => Value::Signed(*s),
+            OwnedValue::String(t) => Value::String(t.as_str()),
+            OwnedValue::Uint64(u) => Value::Uint64(*u),
+            OwnedValue::Int64(s) => Value::Int64(*s),
             OwnedValue::Boolean(b) => Value::Boolean(*b),
         }
     }
@@ -54,10 +55,10 @@ struct OwnedField {
 }
 
 impl OwnedField {
-    fn from_borrowed(field: Field<'_>) -> Self {
+    fn from_borrowed(field: &Field<'_>) -> Self {
         OwnedField {
             name: field.name.to_string(),
-            value: OwnedValue::from_borrowed(field.value),
+            value: OwnedValue::from_borrowed(&field.value),
         }
     }
 
@@ -82,11 +83,11 @@ impl OwnedConstruction {
                 let fields = record
                     .fields
                     .iter()
-                    .map(|f| OwnedField::from_borrowed(*f))
+                    .map(OwnedField::from_borrowed)
                     .collect();
                 OwnedConstruction::Record(fields)
             }
-            Construction::Value(val) => OwnedConstruction::Value(OwnedValue::from_borrowed(val)),
+            Construction::Value(val) => OwnedConstruction::Value(OwnedValue::from_borrowed(&val)),
         }
     }
 }
@@ -100,7 +101,7 @@ enum EvaluatedValue<'item> {
 impl<'item> EvaluatedValue<'item> {
     fn as_borrowed(&self) -> Value<'_> {
         match self {
-            EvaluatedValue::Borrowed(v) => *v,
+            EvaluatedValue::Borrowed(v) => v.clone(),
             EvaluatedValue::Owned(owned) => owned.as_borrowed(),
         }
     }
@@ -122,8 +123,11 @@ enum StageState {
     Count { count: u64 },
 }
 
-fn find_field<'field>(record: &Record<'field>, field_name: &str) -> Option<Field<'field>> {
-    record.fields.iter().find(|f| f.name == field_name).copied()
+fn find_field<'a, 'field>(
+    record: &'a Record<'field>,
+    field_name: &str,
+) -> Option<&'a Field<'field>> {
+    record.fields.iter().find(|f| f.name == field_name)
 }
 
 fn matches_condition<'iteration>(
@@ -134,43 +138,43 @@ fn matches_condition<'iteration>(
         .ok_or(iterate_contract::Error::FieldNotFound(condition.field))?;
 
     match condition.operator {
-        ConditionOperator::Equal => match (field.value, condition.value) {
-            (Value::Text(actual), Value::Text(expected)) => Ok(actual == expected),
-            (Value::Unsigned(actual), Value::Unsigned(expected)) => Ok(actual == expected),
-            (Value::Signed(actual), Value::Signed(expected)) => Ok(actual == expected),
+        ConditionOperator::Equal => match (&field.value, &condition.value) {
+            (Value::String(actual), Value::String(expected)) => Ok(actual == expected),
+            (Value::Uint64(actual), Value::Uint64(expected)) => Ok(actual == expected),
+            (Value::Int64(actual), Value::Int64(expected)) => Ok(actual == expected),
             (Value::Boolean(actual), Value::Boolean(expected)) => Ok(actual == expected),
             _ => Err(iterate_contract::Error::ComparisonTypeMismatch(
                 condition.field,
             )),
         },
-        ConditionOperator::GreaterThan => match (field.value, condition.value) {
-            (Value::Unsigned(actual), Value::Unsigned(expected)) => Ok(actual > expected),
-            (Value::Signed(actual), Value::Signed(expected)) => Ok(actual > expected),
+        ConditionOperator::GreaterThan => match (&field.value, &condition.value) {
+            (Value::Uint64(actual), Value::Uint64(expected)) => Ok(actual > expected),
+            (Value::Int64(actual), Value::Int64(expected)) => Ok(actual > expected),
             _ => Err(iterate_contract::Error::ComparisonTypeMismatch(
                 condition.field,
             )),
         },
-        ConditionOperator::LessThan => match (field.value, condition.value) {
-            (Value::Unsigned(actual), Value::Unsigned(expected)) => Ok(actual < expected),
-            (Value::Signed(actual), Value::Signed(expected)) => Ok(actual < expected),
+        ConditionOperator::LessThan => match (&field.value, &condition.value) {
+            (Value::Uint64(actual), Value::Uint64(expected)) => Ok(actual < expected),
+            (Value::Int64(actual), Value::Int64(expected)) => Ok(actual < expected),
             _ => Err(iterate_contract::Error::ComparisonTypeMismatch(
                 condition.field,
             )),
         },
-        ConditionOperator::Contains => match (field.value, condition.value) {
-            (Value::Text(actual), Value::Text(expected)) => Ok(actual.contains(expected)),
+        ConditionOperator::Contains => match (&field.value, &condition.value) {
+            (Value::String(actual), Value::String(expected)) => Ok(actual.contains(expected)),
             _ => Err(iterate_contract::Error::ComparisonTypeMismatch(
                 condition.field,
             )),
         },
-        ConditionOperator::StartsWith => match (field.value, condition.value) {
-            (Value::Text(actual), Value::Text(expected)) => Ok(actual.starts_with(expected)),
+        ConditionOperator::StartsWith => match (&field.value, &condition.value) {
+            (Value::String(actual), Value::String(expected)) => Ok(actual.starts_with(expected)),
             _ => Err(iterate_contract::Error::ComparisonTypeMismatch(
                 condition.field,
             )),
         },
-        ConditionOperator::EndsWith => match (field.value, condition.value) {
-            (Value::Text(actual), Value::Text(expected)) => Ok(actual.ends_with(expected)),
+        ConditionOperator::EndsWith => match (&field.value, &condition.value) {
+            (Value::String(actual), Value::String(expected)) => Ok(actual.ends_with(expected)),
             _ => Err(iterate_contract::Error::ComparisonTypeMismatch(
                 condition.field,
             )),
@@ -185,11 +189,11 @@ fn matches_between<'iteration>(
     let field = find_field(record, between.field)
         .ok_or(iterate_contract::Error::FieldNotFound(between.field))?;
 
-    match (field.value, between.lower, between.upper) {
-        (Value::Unsigned(actual), Value::Unsigned(lower), Value::Unsigned(upper)) => {
+    match (&field.value, &between.lower, &between.upper) {
+        (Value::Uint64(actual), Value::Uint64(lower), Value::Uint64(upper)) => {
             Ok(lower <= actual && actual <= upper)
         }
-        (Value::Signed(actual), Value::Signed(lower), Value::Signed(upper)) => {
+        (Value::Int64(actual), Value::Int64(lower), Value::Int64(upper)) => {
             Ok(lower <= actual && actual <= upper)
         }
         _ => Err(iterate_contract::Error::ComparisonTypeMismatch(
@@ -211,18 +215,18 @@ fn matches_in<'iteration>(
 
     let mut is_matched = false;
     for value in in_condition.values {
-        match (field.value, *value) {
-            (Value::Text(actual), Value::Text(candidate)) => {
+        match (&field.value, value) {
+            (Value::String(actual), Value::String(candidate)) => {
                 if actual == candidate {
                     is_matched = true;
                 }
             }
-            (Value::Unsigned(actual), Value::Unsigned(candidate)) => {
+            (Value::Uint64(actual), Value::Uint64(candidate)) => {
                 if actual == candidate {
                     is_matched = true;
                 }
             }
-            (Value::Signed(actual), Value::Signed(candidate)) => {
+            (Value::Int64(actual), Value::Int64(candidate)) => {
                 if actual == candidate {
                     is_matched = true;
                 }
@@ -305,7 +309,7 @@ where
                             let field = current_slice
                                 .iter()
                                 .find(|f| f.name == *field_name)
-                                .copied()
+                                .cloned()
                                 .ok_or(iterate_contract::Error::FieldNotFound(field_name))?;
                             next_fields.push(field);
                         }
@@ -327,7 +331,7 @@ where
                 if current_slice.len() != 1 {
                     return Err(iterate_contract::Error::ToValueRequiresSingleField);
                 }
-                current_value = Some(current_slice[0].value);
+                current_value = Some(current_slice[0].value.clone());
             }
             _ => return Err(iterate_contract::Error::ProviderIncompatible),
         }
@@ -344,7 +348,7 @@ where
     'iteration: 'item,
 {
     match expression {
-        ValueExpression::Literal(value) => Ok(EvaluatedValue::Borrowed(*value)),
+        ValueExpression::Literal(value) => Ok(EvaluatedValue::Borrowed(value.clone())),
         ValueExpression::Pipeline(operations) => {
             let val = evaluate_value_pipeline(operations, input_fields)?;
             Ok(EvaluatedValue::Borrowed(val))
@@ -359,19 +363,19 @@ where
             let mut parts: Vec<&str> = Vec::with_capacity(temp_evaluated.len());
             for eval in &temp_evaluated {
                 match eval.as_borrowed() {
-                    Value::Text(t) => parts.push(t),
+                    Value::String(t) => parts.push(t),
                     _ => return Err(iterate_contract::Error::TextExpected),
                 }
             }
             let result = CONCAT(&parts);
-            Ok(EvaluatedValue::Owned(OwnedValue::Text(result)))
+            Ok(EvaluatedValue::Owned(OwnedValue::String(result)))
         }
         ValueExpression::Len(len_expr) => {
             let eval = evaluate_value_expression(len_expr.text, input_fields)?;
             match eval.as_borrowed() {
-                Value::Text(t) => {
+                Value::String(t) => {
                     let count = LEN(t);
-                    Ok(EvaluatedValue::Borrowed(Value::Unsigned(count as u64)))
+                    Ok(EvaluatedValue::Borrowed(Value::Uint64(count as u64)))
                 }
                 _ => Err(iterate_contract::Error::TextExpected),
             }
@@ -382,11 +386,11 @@ where
             let length_eval = evaluate_value_expression(substring_expr.length, input_fields)?;
 
             let start_u64 = match start_eval.as_borrowed() {
-                Value::Unsigned(u) => u,
+                Value::Uint64(u) => u,
                 _ => return Err(iterate_contract::Error::UnsignedExpected),
             };
             let length_u64 = match length_eval.as_borrowed() {
-                Value::Unsigned(u) => u,
+                Value::Uint64(u) => u,
                 _ => return Err(iterate_contract::Error::UnsignedExpected),
             };
 
@@ -396,15 +400,15 @@ where
                 .map_err(|_| iterate_contract::Error::SubstringOutOfBounds)?;
 
             match text_eval {
-                EvaluatedValue::Borrowed(Value::Text(s)) => {
+                EvaluatedValue::Borrowed(Value::String(s)) => {
                     let slice = SUBSTRING(s, start_usize, length_usize)
                         .map_err(|_| iterate_contract::Error::SubstringOutOfBounds)?;
-                    Ok(EvaluatedValue::Borrowed(Value::Text(slice)))
+                    Ok(EvaluatedValue::Borrowed(Value::String(slice)))
                 }
-                EvaluatedValue::Owned(OwnedValue::Text(ref s)) => {
+                EvaluatedValue::Owned(OwnedValue::String(ref s)) => {
                     let slice = SUBSTRING(s.as_str(), start_usize, length_usize)
                         .map_err(|_| iterate_contract::Error::SubstringOutOfBounds)?;
-                    Ok(EvaluatedValue::Owned(OwnedValue::Text(slice.to_string())))
+                    Ok(EvaluatedValue::Owned(OwnedValue::String(slice.to_string())))
                 }
                 _ => Err(iterate_contract::Error::TextExpected),
             }
@@ -415,15 +419,15 @@ where
             let to_eval = evaluate_value_expression(replace_expr.to, input_fields)?;
 
             let text_str = match text_eval.as_borrowed() {
-                Value::Text(s) => s,
+                Value::String(s) => s,
                 _ => return Err(iterate_contract::Error::TextExpected),
             };
             let from_str = match from_eval.as_borrowed() {
-                Value::Text(s) => s,
+                Value::String(s) => s,
                 _ => return Err(iterate_contract::Error::TextExpected),
             };
             let to_str = match to_eval.as_borrowed() {
-                Value::Text(s) => s,
+                Value::String(s) => s,
                 _ => return Err(iterate_contract::Error::TextExpected),
             };
 
@@ -433,7 +437,7 @@ where
                 }
             })?;
 
-            Ok(EvaluatedValue::Owned(OwnedValue::Text(replaced)))
+            Ok(EvaluatedValue::Owned(OwnedValue::String(replaced)))
         }
     }
 }
@@ -478,11 +482,10 @@ where
                                 .fields
                                 .iter()
                                 .find(|f| f.name == *field_name)
-                                .copied()
                                 .ok_or(iterate_contract::Error::FieldNotFound(field_name))?;
                             evaluated_fields.push(EvaluatedField {
                                 name: field.name,
-                                value: EvaluatedValue::Borrowed(field.value),
+                                value: EvaluatedValue::Borrowed(field.value.clone()),
                             });
                         }
                         Selection::New(new_field) => {
@@ -520,7 +523,7 @@ where
                 if record.fields.len() != 1 {
                     return Err(iterate_contract::Error::ToValueRequiresSingleField);
                 }
-                let value = record.fields[0].value;
+                let value = record.fields[0].value.clone();
                 process_item_from(
                     stage_index + 1,
                     operations,
@@ -665,7 +668,7 @@ fn finalize_from<'iteration>(
                 stage_index + 1,
                 operations,
                 stages,
-                Construction::Value(Value::Unsigned(count)),
+                Construction::Value(Value::Uint64(count)),
                 request,
             )?;
 
@@ -832,19 +835,19 @@ pub fn iterate<'iteration>(
 
         let index_field = Field {
             name: "index",
-            value: Value::Unsigned(index as u64),
+            value: Value::Uint64(index as u64),
         };
         let name_field = Field {
             name: "name",
-            value: Value::Text(name_str),
+            value: Value::String(name_str),
         };
         let path_field = Field {
             name: "path",
-            value: Value::Text(path_str),
+            value: Value::String(path_str),
         };
         let kind_field = Field {
             name: "kind",
-            value: Value::Text(kind_str),
+            value: Value::String(kind_str),
         };
 
         let flow = if file_type.is_file() {
@@ -853,7 +856,7 @@ pub fn iterate<'iteration>(
                 .map_err(|_| iterate_contract::Error::Unavailable)?;
             let size_field = Field {
                 name: "size",
-                value: Value::Unsigned(metadata.len()),
+                value: Value::Uint64(metadata.len()),
             };
             let fields = [index_field, name_field, path_field, kind_field, size_field];
             let record = Record { fields: &fields };
