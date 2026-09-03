@@ -1917,7 +1917,7 @@ mod tests {
         let when_span = sem.functions[0].body.result.span;
         let compiled = lower_program(&sem);
 
-        let main_fn = &compiled.functions[0];
+        let _main_fn = &compiled.functions[0];
         let spans = &compiled.source_map.functions[0];
 
         // 0: LoadParameter(0) -> status parameter span
@@ -1987,5 +1987,134 @@ mod tests {
         assert_eq!(spans[extract_struct_pos], when_span);
         assert_eq!(spans[extract_struct_pos + 1], when_span); // StoreLocal 1
         assert_eq!(spans[extract_struct_pos + 2], when_span); // StoreLocal 2
+    }
+
+    #[test]
+    fn numeric_conversions_and_dynamic_conversion_lowering() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+        let src = r#"
+            public fn main(int8 a, dynamic d) -> int64 {
+                let int64 c1 = to_int64(a);
+                let int32 c2 = to_int32(d);
+                return c1;
+            }
+        "#;
+        let compiled = compile_src(src, &cat);
+        let main_fn = &compiled.functions[0];
+
+        assert!(main_fn.instructions.iter().any(|i| matches!(
+            i,
+            Instruction::ConvertNumeric {
+                source: NumericKind::Int8,
+                target: NumericKind::Int64,
+            }
+        )));
+
+        assert!(
+            main_fn
+                .instructions
+                .iter()
+                .any(|i| matches!(i, Instruction::ConvertDynamic(NumericKind::Int32)))
+        );
+    }
+
+    #[test]
+    fn boolean_not_and_string_equality_lowering() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+        let src = r#"
+            public fn main(bool flag, string s1, string s2) -> bool {
+                let bool r1 = !flag;
+                let bool r2 = s1 == s2;
+                let bool r3 = s1 != s2;
+                return r1 && r2 && r3;
+            }
+        "#;
+        let compiled = compile_src(src, &cat);
+        let main_fn = &compiled.functions[0];
+
+        assert!(
+            main_fn
+                .instructions
+                .iter()
+                .any(|i| matches!(i, Instruction::NotBoolean))
+        );
+        assert!(
+            main_fn
+                .instructions
+                .iter()
+                .any(|i| matches!(i, Instruction::EqualString))
+        );
+        assert!(
+            main_fn
+                .instructions
+                .iter()
+                .any(|i| matches!(i, Instruction::NotEqualString))
+        );
+    }
+
+    #[test]
+    fn simple_and_associated_enum_construction_lowering() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+        let src = r#"
+            enum Status {
+                Active,
+                WithId(int)
+            }
+
+            public fn main() -> Status {
+                let Status s1 = Status::Active;
+                let Status s2 = Status::WithId(42);
+                return s1;
+            }
+        "#;
+        let compiled = compile_src(src, &cat);
+        let main_fn = &compiled.functions[0];
+
+        assert!(
+            main_fn
+                .instructions
+                .iter()
+                .any(|i| matches!(i, Instruction::ConstructEnumSimple(VariantDiscriminant(0))))
+        );
+        assert!(main_fn.instructions.iter().any(|i| matches!(
+            i,
+            Instruction::ConstructEnumAssociated(VariantDiscriminant(1))
+        )));
+    }
+
+    #[test]
+    fn composite_not_equal_plan_generation() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+        let src = r#"
+            struct Point {
+                int x;
+                int y;
+            }
+
+            public fn main(Point a, Point b) -> bool {
+                return a != b;
+            }
+        "#;
+        let compiled = compile_src(src, &cat);
+        let main_fn = &compiled.functions[0];
+
+        assert!(
+            main_fn
+                .instructions
+                .iter()
+                .any(|i| matches!(i, Instruction::NotEqualComposite(_)))
+        );
     }
 }
