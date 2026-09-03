@@ -2668,4 +2668,130 @@ mod tests {
             _ => panic!("expected InvalidThisUsage"),
         }
     }
+
+    #[test]
+    fn parse_eof_provenance_empty_source() {
+        let source = "";
+        let tokens: Vec<Token> = vec![];
+        let err = unwrap_err(parse_tokens(&tokens, source));
+        match err.kind {
+            CompileFailureKind::Syntax(SyntaxFailure::MissingPublicFunction) => {
+                assert_eq!(err.source_span, SourceSpan { start: 0, end: 0 });
+            }
+            _ => panic!("expected MissingPublicFunction"),
+        }
+    }
+
+    #[test]
+    fn parse_unary_operators() {
+        let source = "public fn run() -> bool { return !flag; }";
+        let tokens_not = vec![
+            make_token(TokenKind::Public, "public", 0, 6),
+            make_token(TokenKind::Fn, "fn", 7, 9),
+            make_token(TokenKind::Identifier, "run", 10, 13),
+            make_token(TokenKind::LeftParenthesis, "(", 13, 14),
+            make_token(TokenKind::RightParenthesis, ")", 14, 15),
+            make_token(TokenKind::ReturnType, "->", 16, 18),
+            make_token(TokenKind::Identifier, "bool", 19, 23),
+            make_token(TokenKind::LeftBrace, "{", 24, 25),
+            make_token(TokenKind::Return, "return", 26, 32),
+            make_token(TokenKind::Not, "!", 33, 34),
+            make_token(TokenKind::Identifier, "flag", 34, 38),
+            make_token(TokenKind::Semicolon, ";", 38, 39),
+            make_token(TokenKind::RightBrace, "}", 40, 41),
+        ];
+        let p_not = unwrap_ok(parse_tokens(&tokens_not, source));
+        match &p_not.declarations[0] {
+            Declaration::Function(f) => match &f.body.result.kind {
+                ExpressionKind::Unary { operator, operand } => {
+                    assert!(matches!(operator, UnaryOperator::Not));
+                    match &operand.kind {
+                        ExpressionKind::Identifier(id) => assert_eq!(id.lexeme, "flag"),
+                        _ => panic!("expected Identifier operand"),
+                    }
+                }
+                _ => panic!("expected Unary Not"),
+            },
+            _ => panic!("expected Function"),
+        }
+
+        let source_neg = "public fn run() -> int { return -10; }";
+        let tokens_neg = vec![
+            make_token(TokenKind::Public, "public", 0, 6),
+            make_token(TokenKind::Fn, "fn", 7, 9),
+            make_token(TokenKind::Identifier, "run", 10, 13),
+            make_token(TokenKind::LeftParenthesis, "(", 13, 14),
+            make_token(TokenKind::RightParenthesis, ")", 14, 15),
+            make_token(TokenKind::ReturnType, "->", 16, 18),
+            make_token(TokenKind::Identifier, "int", 19, 22),
+            make_token(TokenKind::LeftBrace, "{", 23, 24),
+            make_token(TokenKind::Return, "return", 25, 31),
+            make_token(TokenKind::Minus, "-", 32, 33),
+            make_token(TokenKind::IntegerLiteral, "10", 33, 35),
+            make_token(TokenKind::Semicolon, ";", 35, 36),
+            make_token(TokenKind::RightBrace, "}", 37, 38),
+        ];
+        let p_neg = unwrap_ok(parse_tokens(&tokens_neg, source_neg));
+        match &p_neg.declarations[0] {
+            Declaration::Function(f) => match &f.body.result.kind {
+                ExpressionKind::Unary { operator, operand } => {
+                    assert!(matches!(operator, UnaryOperator::Negate));
+                    match &operand.kind {
+                        ExpressionKind::Literal { lexeme, kind } => {
+                            assert_eq!(*lexeme, "10");
+                            assert!(matches!(kind, LiteralKind::Integer));
+                        }
+                        _ => panic!("expected IntegerLiteral operand"),
+                    }
+                }
+                _ => panic!("expected Unary Negate"),
+            },
+            _ => panic!("expected Function"),
+        }
+    }
+
+    #[test]
+    fn parse_associated_enum_construction() {
+        let source = "public fn run() -> Status { return Status::Assoc(42); }";
+        let tokens = vec![
+            make_token(TokenKind::Public, "public", 0, 6),
+            make_token(TokenKind::Fn, "fn", 7, 9),
+            make_token(TokenKind::Identifier, "run", 10, 13),
+            make_token(TokenKind::LeftParenthesis, "(", 13, 14),
+            make_token(TokenKind::RightParenthesis, ")", 14, 15),
+            make_token(TokenKind::ReturnType, "->", 16, 18),
+            make_token(TokenKind::Identifier, "Status", 19, 25),
+            make_token(TokenKind::LeftBrace, "{", 26, 27),
+            make_token(TokenKind::Return, "return", 28, 34),
+            make_token(TokenKind::Identifier, "Status", 35, 41),
+            make_token(TokenKind::Qualification, "::", 41, 43),
+            make_token(TokenKind::Identifier, "Assoc", 43, 48),
+            make_token(TokenKind::LeftParenthesis, "(", 48, 49),
+            make_token(TokenKind::IntegerLiteral, "42", 49, 51),
+            make_token(TokenKind::RightParenthesis, ")", 51, 52),
+            make_token(TokenKind::Semicolon, ";", 52, 53),
+            make_token(TokenKind::RightBrace, "}", 54, 55),
+        ];
+        let p = unwrap_ok(parse_tokens(&tokens, source));
+        match &p.declarations[0] {
+            Declaration::Function(f) => match &f.body.result.kind {
+                ExpressionKind::EnumConstruction(EnumConstruction::Associated {
+                    variant,
+                    value,
+                }) => {
+                    assert_eq!(variant.qualifier.lexeme, "Status");
+                    assert_eq!(variant.name.lexeme, "Assoc");
+                    match &value.kind {
+                        ExpressionKind::Literal { lexeme, kind } => {
+                            assert_eq!(*lexeme, "42");
+                            assert!(matches!(kind, LiteralKind::Integer));
+                        }
+                        _ => panic!("expected Literal value"),
+                    }
+                }
+                _ => panic!("expected EnumConstruction::Associated"),
+            },
+            _ => panic!("expected Function"),
+        }
+    }
 }
