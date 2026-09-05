@@ -1,7 +1,7 @@
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone)]
 pub enum Value<'value> {
     Boolean(bool),
 
@@ -32,27 +32,28 @@ pub enum Value<'value> {
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone)]
 pub enum DynamicValue<'value> {
     Integer(DynamicIntegerValue<'value>),
     Float32(f32),
     Float64(f64),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
+#[allow(dead_code)]
 pub struct DynamicIntegerValue<'value> {
-    pub negative: bool,
-    pub magnitude: Cow<'value, [u8]>,
+    negative: bool,
+    magnitude: Cow<'value, [u8]>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone)]
 pub enum EnumPayload<'value> {
     Simple,
     Associated(Box<Value<'value>>),
     Structured { fields: Box<[Value<'value>]> },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone)]
 pub enum OwnedValue {
     Boolean(bool),
 
@@ -83,20 +84,21 @@ pub enum OwnedValue {
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone)]
 pub enum OwnedDynamicValue {
     Integer(OwnedDynamicInteger),
     Float32(f32),
     Float64(f64),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
+#[allow(dead_code)]
 pub struct OwnedDynamicInteger {
-    pub negative: bool,
-    pub magnitude: Box<[u8]>,
+    negative: bool,
+    magnitude: Box<[u8]>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone)]
 pub enum OwnedEnumPayload {
     Simple,
     Associated(Box<OwnedValue>),

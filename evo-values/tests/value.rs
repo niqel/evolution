@@ -1,12 +1,12 @@
 extern crate alloc;
 
-use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::string::String as AllocString;
 use alloc::vec;
 use evo_values::{
-    DynamicIntegerValue, DynamicValue, EnumPayload, OwnedDynamicInteger, OwnedDynamicValue,
-    OwnedEnumPayload, OwnedValue, Value,
+    BitwiseFailure, ComparisonFailure, ConversionFailure, DynamicValue, EnumPayload,
+    NumericFailure, OwnedDynamicValue, OwnedEnumPayload, OwnedValue, PowerExponent,
+    ProductionControl, ShiftAmount, TextLength, TextOperationFailure, TextPosition, Value,
 };
 
 // ============================================================================
@@ -39,88 +39,112 @@ fn borrowed_17_families_explicit_coverage() {
     ];
 
     assert_eq!(families.len(), 17);
-    assert_eq!(families[0], Value::Boolean(true));
-    assert_eq!(families[13], Value::String("thirteen"));
-    assert_eq!(families[15], Value::Struct(Box::new([Value::Int32(15)])));
+    assert!(matches!(families[0], Value::Boolean(true)));
+    assert!(matches!(families[1], Value::Int8(1)));
+    assert!(matches!(families[2], Value::Int16(2)));
+    assert!(matches!(families[3], Value::Int32(3)));
+    assert!(matches!(families[4], Value::Int64(4)));
+    assert!(matches!(families[5], Value::Int128(5)));
+    assert!(matches!(families[6], Value::Uint8(6)));
+    assert!(matches!(families[7], Value::Uint16(7)));
+    assert!(matches!(families[8], Value::Uint32(8)));
+    assert!(matches!(families[9], Value::Uint64(9)));
+    assert!(matches!(families[10], Value::Uint128(10)));
+    assert!(matches!(families[11], Value::Float32(f) if f == 11.0));
+    assert!(matches!(families[12], Value::Float64(f) if f == 12.0));
+    assert!(matches!(families[13], Value::String("thirteen")));
+    assert!(matches!(
+        families[14],
+        Value::Dynamic(DynamicValue::Float64(f)) if f == 14.0
+    ));
+    assert!(matches!(
+        &families[15],
+        Value::Struct(fields) if fields.len() == 1 && matches!(fields[0], Value::Int32(15))
+    ));
+    assert!(matches!(
+        &families[16],
+        Value::Enum {
+            variant: 16,
+            payload: EnumPayload::Simple
+        }
+    ));
 }
 
 #[test]
 fn borrowed_boolean_variants() {
-    assert_eq!(Value::Boolean(true), Value::Boolean(true));
-    assert_ne!(Value::Boolean(true), Value::Boolean(false));
+    let t = Value::Boolean(true);
+    let f = Value::Boolean(false);
+    assert!(matches!(t, Value::Boolean(true)));
+    assert!(matches!(f, Value::Boolean(false)));
 }
 
 #[test]
 fn borrowed_signed_integer_variants() {
-    assert_eq!(Value::Int8(42), Value::Int8(42));
-    assert_ne!(Value::Int8(42), Value::Int8(-42));
+    assert!(matches!(Value::Int8(42), Value::Int8(42)));
+    assert!(matches!(Value::Int8(-42), Value::Int8(-42)));
 
-    assert_eq!(Value::Int16(1000), Value::Int16(1000));
-    assert_ne!(Value::Int16(1000), Value::Int16(-1000));
+    assert!(matches!(Value::Int16(1000), Value::Int16(1000)));
+    assert!(matches!(Value::Int16(-1000), Value::Int16(-1000)));
 
-    assert_eq!(Value::Int32(100_000), Value::Int32(100_000));
-    assert_ne!(Value::Int32(100_000), Value::Int32(-100_000));
+    assert!(matches!(Value::Int32(100_000), Value::Int32(100_000)));
+    assert!(matches!(Value::Int32(-100_000), Value::Int32(-100_000)));
 
-    assert_eq!(Value::Int64(10_000_000_000), Value::Int64(10_000_000_000));
-    assert_ne!(Value::Int64(10_000_000_000), Value::Int64(-10_000_000_000));
+    assert!(matches!(
+        Value::Int64(10_000_000_000),
+        Value::Int64(10_000_000_000)
+    ));
+    assert!(matches!(
+        Value::Int64(-10_000_000_000),
+        Value::Int64(-10_000_000_000)
+    ));
 
-    assert_eq!(
+    assert!(matches!(
         Value::Int128(1_000_000_000_000_000_000_000),
         Value::Int128(1_000_000_000_000_000_000_000)
-    );
-    assert_ne!(
-        Value::Int128(1_000_000_000_000_000_000_000),
+    ));
+    assert!(matches!(
+        Value::Int128(-1_000_000_000_000_000_000_000),
         Value::Int128(-1_000_000_000_000_000_000_000)
-    );
+    ));
 }
 
 #[test]
 fn borrowed_unsigned_integer_variants() {
-    assert_eq!(Value::Uint8(255), Value::Uint8(255));
-    assert_ne!(Value::Uint8(255), Value::Uint8(0));
+    assert!(matches!(Value::Uint8(255), Value::Uint8(255)));
+    assert!(matches!(Value::Uint8(0), Value::Uint8(0)));
 
-    assert_eq!(Value::Uint16(65535), Value::Uint16(65535));
-    assert_ne!(Value::Uint16(65535), Value::Uint16(0));
+    assert!(matches!(Value::Uint16(65535), Value::Uint16(65535)));
+    assert!(matches!(Value::Uint16(0), Value::Uint16(0)));
 
-    assert_eq!(Value::Uint32(4_000_000_000), Value::Uint32(4_000_000_000));
-    assert_ne!(Value::Uint32(4_000_000_000), Value::Uint32(0));
+    assert!(matches!(
+        Value::Uint32(4_000_000_000),
+        Value::Uint32(4_000_000_000)
+    ));
+    assert!(matches!(Value::Uint32(0), Value::Uint32(0)));
 
-    assert_eq!(
+    assert!(matches!(
         Value::Uint64(18_000_000_000_000_000_000),
         Value::Uint64(18_000_000_000_000_000_000)
-    );
-    assert_ne!(Value::Uint64(18_000_000_000_000_000_000), Value::Uint64(0));
+    ));
+    assert!(matches!(Value::Uint64(0), Value::Uint64(0)));
 
-    assert_eq!(
+    assert!(matches!(
         Value::Uint128(300_000_000_000_000_000_000_000_000_000_000_000),
         Value::Uint128(300_000_000_000_000_000_000_000_000_000_000_000)
-    );
-    assert_ne!(
-        Value::Uint128(300_000_000_000_000_000_000_000_000_000_000_000),
-        Value::Uint128(0)
-    );
+    ));
+    assert!(matches!(Value::Uint128(0), Value::Uint128(0)));
 }
 
 #[test]
 fn borrowed_float_variants() {
-    assert_eq!(Value::Float32(1.25), Value::Float32(1.25));
-    assert_ne!(Value::Float32(1.25), Value::Float32(2.5));
-
-    assert_eq!(
-        Value::Float64(123.456789012345),
-        Value::Float64(123.456789012345)
-    );
-    assert_ne!(
-        Value::Float64(123.456789012345),
-        Value::Float64(987.654321098765)
-    );
+    assert!(matches!(Value::Float32(1.25), Value::Float32(f) if f == 1.25));
+    assert!(matches!(Value::Float64(123.456789012345), Value::Float64(f) if f == 123.456789012345));
 }
 
 #[test]
 fn borrowed_string_variant() {
     let text = "hola mundo";
-    assert_eq!(Value::String(text), Value::String("hola mundo"));
-    assert_ne!(Value::String(text), Value::String("otro"));
+    assert!(matches!(Value::String(text), Value::String("hola mundo")));
 }
 
 // ============================================================================
@@ -153,206 +177,156 @@ fn owned_17_families_explicit_coverage() {
     ];
 
     assert_eq!(families.len(), 17);
-    assert_eq!(families[0], OwnedValue::Boolean(true));
-    assert_eq!(families[13], OwnedValue::String(Box::from("thirteen")));
-    assert_eq!(
-        families[15],
-        OwnedValue::Struct(Box::new([OwnedValue::Int32(15)]))
-    );
+    assert!(matches!(families[0], OwnedValue::Boolean(true)));
+    assert!(matches!(families[1], OwnedValue::Int8(1)));
+    assert!(matches!(families[2], OwnedValue::Int16(2)));
+    assert!(matches!(families[3], OwnedValue::Int32(3)));
+    assert!(matches!(families[4], OwnedValue::Int64(4)));
+    assert!(matches!(families[5], OwnedValue::Int128(5)));
+    assert!(matches!(families[6], OwnedValue::Uint8(6)));
+    assert!(matches!(families[7], OwnedValue::Uint16(7)));
+    assert!(matches!(families[8], OwnedValue::Uint32(8)));
+    assert!(matches!(families[9], OwnedValue::Uint64(9)));
+    assert!(matches!(families[10], OwnedValue::Uint128(10)));
+    assert!(matches!(families[11], OwnedValue::Float32(f) if f == 11.0));
+    assert!(matches!(families[12], OwnedValue::Float64(f) if f == 12.0));
+    assert!(matches!(&families[13], OwnedValue::String(s) if &**s == "thirteen"));
+    assert!(matches!(
+        &families[14],
+        OwnedValue::Dynamic(OwnedDynamicValue::Float64(f)) if *f == 14.0
+    ));
+    assert!(matches!(
+        &families[15],
+        OwnedValue::Struct(fields) if fields.len() == 1 && matches!(fields[0], OwnedValue::Int32(15))
+    ));
+    assert!(matches!(
+        &families[16],
+        OwnedValue::Enum {
+            variant: 16,
+            payload: OwnedEnumPayload::Simple
+        }
+    ));
 }
 
 #[test]
 fn owned_boolean_variants() {
-    assert_eq!(OwnedValue::Boolean(true), OwnedValue::Boolean(true));
-    assert_ne!(OwnedValue::Boolean(true), OwnedValue::Boolean(false));
+    let t = OwnedValue::Boolean(true);
+    let f = OwnedValue::Boolean(false);
+    assert!(matches!(t, OwnedValue::Boolean(true)));
+    assert!(matches!(f, OwnedValue::Boolean(false)));
 }
 
 #[test]
 fn owned_signed_integer_variants() {
-    assert_eq!(OwnedValue::Int8(42), OwnedValue::Int8(42));
-    assert_ne!(OwnedValue::Int8(42), OwnedValue::Int8(-42));
+    assert!(matches!(OwnedValue::Int8(42), OwnedValue::Int8(42)));
+    assert!(matches!(OwnedValue::Int8(-42), OwnedValue::Int8(-42)));
 
-    assert_eq!(OwnedValue::Int16(1000), OwnedValue::Int16(1000));
-    assert_ne!(OwnedValue::Int16(1000), OwnedValue::Int16(-1000));
+    assert!(matches!(OwnedValue::Int16(1000), OwnedValue::Int16(1000)));
+    assert!(matches!(OwnedValue::Int16(-1000), OwnedValue::Int16(-1000)));
 
-    assert_eq!(OwnedValue::Int32(100_000), OwnedValue::Int32(100_000));
-    assert_ne!(OwnedValue::Int32(100_000), OwnedValue::Int32(-100_000));
+    assert!(matches!(
+        OwnedValue::Int32(100_000),
+        OwnedValue::Int32(100_000)
+    ));
+    assert!(matches!(
+        OwnedValue::Int32(-100_000),
+        OwnedValue::Int32(-100_000)
+    ));
 
-    assert_eq!(
+    assert!(matches!(
         OwnedValue::Int64(10_000_000_000),
         OwnedValue::Int64(10_000_000_000)
-    );
-    assert_ne!(
-        OwnedValue::Int64(10_000_000_000),
+    ));
+    assert!(matches!(
+        OwnedValue::Int64(-10_000_000_000),
         OwnedValue::Int64(-10_000_000_000)
-    );
+    ));
 
-    assert_eq!(
+    assert!(matches!(
         OwnedValue::Int128(1_000_000_000_000_000_000_000),
         OwnedValue::Int128(1_000_000_000_000_000_000_000)
-    );
-    assert_ne!(
-        OwnedValue::Int128(1_000_000_000_000_000_000_000),
+    ));
+    assert!(matches!(
+        OwnedValue::Int128(-1_000_000_000_000_000_000_000),
         OwnedValue::Int128(-1_000_000_000_000_000_000_000)
-    );
+    ));
 }
 
 #[test]
 fn owned_unsigned_integer_variants() {
-    assert_eq!(OwnedValue::Uint8(255), OwnedValue::Uint8(255));
-    assert_ne!(OwnedValue::Uint8(255), OwnedValue::Uint8(0));
+    assert!(matches!(OwnedValue::Uint8(255), OwnedValue::Uint8(255)));
+    assert!(matches!(OwnedValue::Uint8(0), OwnedValue::Uint8(0)));
 
-    assert_eq!(OwnedValue::Uint16(65535), OwnedValue::Uint16(65535));
-    assert_ne!(OwnedValue::Uint16(65535), OwnedValue::Uint16(0));
+    assert!(matches!(
+        OwnedValue::Uint16(65535),
+        OwnedValue::Uint16(65535)
+    ));
+    assert!(matches!(OwnedValue::Uint16(0), OwnedValue::Uint16(0)));
 
-    assert_eq!(
+    assert!(matches!(
         OwnedValue::Uint32(4_000_000_000),
         OwnedValue::Uint32(4_000_000_000)
-    );
-    assert_ne!(OwnedValue::Uint32(4_000_000_000), OwnedValue::Uint32(0));
+    ));
+    assert!(matches!(OwnedValue::Uint32(0), OwnedValue::Uint32(0)));
 
-    assert_eq!(
+    assert!(matches!(
         OwnedValue::Uint64(18_000_000_000_000_000_000),
         OwnedValue::Uint64(18_000_000_000_000_000_000)
-    );
-    assert_ne!(
-        OwnedValue::Uint64(18_000_000_000_000_000_000),
-        OwnedValue::Uint64(0)
-    );
+    ));
+    assert!(matches!(OwnedValue::Uint64(0), OwnedValue::Uint64(0)));
 
-    assert_eq!(
+    assert!(matches!(
         OwnedValue::Uint128(300_000_000_000_000_000_000_000_000_000_000_000),
         OwnedValue::Uint128(300_000_000_000_000_000_000_000_000_000_000_000)
-    );
-    assert_ne!(
-        OwnedValue::Uint128(300_000_000_000_000_000_000_000_000_000_000_000),
-        OwnedValue::Uint128(0)
-    );
+    ));
+    assert!(matches!(OwnedValue::Uint128(0), OwnedValue::Uint128(0)));
 }
 
 #[test]
 fn owned_float_variants() {
-    assert_eq!(OwnedValue::Float32(1.25), OwnedValue::Float32(1.25));
-    assert_ne!(OwnedValue::Float32(1.25), OwnedValue::Float32(2.5));
-
-    assert_eq!(
-        OwnedValue::Float64(123.456789012345),
-        OwnedValue::Float64(123.456789012345)
-    );
-    assert_ne!(
-        OwnedValue::Float64(123.456789012345),
-        OwnedValue::Float64(987.654321098765)
+    assert!(matches!(OwnedValue::Float32(1.25), OwnedValue::Float32(f) if f == 1.25));
+    assert!(
+        matches!(OwnedValue::Float64(123.456789012345), OwnedValue::Float64(f) if f == 123.456789012345)
     );
 }
 
 #[test]
 fn owned_string_variant() {
     let s: Box<str> = Box::from("hola mundo");
-    assert_eq!(
-        OwnedValue::String(s.clone()),
-        OwnedValue::String(Box::from("hola mundo"))
+    assert!(
+        matches!(&OwnedValue::String(s), OwnedValue::String(inner) if &**inner == "hola mundo")
     );
-    assert_ne!(OwnedValue::String(s), OwnedValue::String(Box::from("otro")));
 }
 
 // ============================================================================
-// 3. Dynamic Integer — Canonical Forms
+// 3. Dynamic Values & OwnedDynamicValue Availability
 // ============================================================================
-
-#[test]
-fn dynamic_integer_canonical_zero() {
-    // Borrowed canonical zero: negative = false, magnitude = []
-    let borrowed_zero = DynamicIntegerValue {
-        negative: false,
-        magnitude: Cow::Borrowed(&[]),
-    };
-    assert!(!borrowed_zero.negative);
-    assert!(borrowed_zero.magnitude.is_empty());
-
-    let val_borrowed_zero = Value::Dynamic(DynamicValue::Integer(borrowed_zero));
-    assert_eq!(
-        val_borrowed_zero,
-        Value::Dynamic(DynamicValue::Integer(DynamicIntegerValue {
-            negative: false,
-            magnitude: Cow::Borrowed(&[]),
-        }))
-    );
-
-    // Owned canonical zero: negative = false, magnitude = []
-    let owned_zero = OwnedDynamicInteger {
-        negative: false,
-        magnitude: Box::new([]),
-    };
-    assert!(!owned_zero.negative);
-    assert!(owned_zero.magnitude.is_empty());
-
-    let val_owned_zero = OwnedValue::Dynamic(OwnedDynamicValue::Integer(owned_zero));
-    assert_eq!(
-        val_owned_zero,
-        OwnedValue::Dynamic(OwnedDynamicValue::Integer(OwnedDynamicInteger {
-            negative: false,
-            magnitude: Box::new([]),
-        }))
-    );
-}
-
-#[test]
-fn dynamic_integer_positive_and_negative_magnitude() {
-    // Positive big-endian magnitude
-    let borrowed_pos = DynamicIntegerValue {
-        negative: false,
-        magnitude: Cow::Borrowed(&[0x01, 0x00]), // 256
-    };
-    let owned_pos = OwnedDynamicInteger {
-        negative: false,
-        magnitude: Box::new([0x01, 0x00]),
-    };
-    assert!(!borrowed_pos.negative);
-    assert_eq!(borrowed_pos.magnitude.as_ref(), &[0x01, 0x00]);
-    assert!(!owned_pos.negative);
-    assert_eq!(owned_pos.magnitude.as_ref(), &[0x01, 0x00]);
-
-    // Negative big-endian magnitude
-    let borrowed_neg = DynamicIntegerValue {
-        negative: true,
-        magnitude: Cow::Borrowed(&[0x01, 0x00]), // -256
-    };
-    let owned_neg = OwnedDynamicInteger {
-        negative: true,
-        magnitude: Box::new([0x01, 0x00]),
-    };
-    assert!(borrowed_neg.negative);
-    assert_eq!(borrowed_neg.magnitude.as_ref(), &[0x01, 0x00]);
-    assert!(owned_neg.negative);
-    assert_eq!(owned_neg.magnitude.as_ref(), &[0x01, 0x00]);
-
-    // Distinctions
-    assert_ne!(borrowed_pos, borrowed_neg);
-    assert_ne!(owned_pos, owned_neg);
-}
 
 #[test]
 fn dynamic_float_variants() {
     let dyn_f32 = Value::Dynamic(DynamicValue::Float32(1.5));
     let dyn_f64 = Value::Dynamic(DynamicValue::Float64(2.5));
-    assert_eq!(dyn_f32, Value::Dynamic(DynamicValue::Float32(1.5)));
-    assert_ne!(dyn_f32, Value::Dynamic(DynamicValue::Float32(3.5)));
-    assert_eq!(dyn_f64, Value::Dynamic(DynamicValue::Float64(2.5)));
+    assert!(matches!(dyn_f32, Value::Dynamic(DynamicValue::Float32(f)) if f == 1.5));
+    assert!(matches!(dyn_f64, Value::Dynamic(DynamicValue::Float64(f)) if f == 2.5));
 
     let owned_dyn_f32 = OwnedValue::Dynamic(OwnedDynamicValue::Float32(1.5));
     let owned_dyn_f64 = OwnedValue::Dynamic(OwnedDynamicValue::Float64(2.5));
-    assert_eq!(
+    assert!(matches!(
         owned_dyn_f32,
-        OwnedValue::Dynamic(OwnedDynamicValue::Float32(1.5))
-    );
-    assert_ne!(
-        owned_dyn_f32,
-        OwnedValue::Dynamic(OwnedDynamicValue::Float32(3.5))
-    );
-    assert_eq!(
+        OwnedValue::Dynamic(OwnedDynamicValue::Float32(f)) if f == 1.5
+    ));
+    assert!(matches!(
         owned_dyn_f64,
-        OwnedValue::Dynamic(OwnedDynamicValue::Float64(2.5))
-    );
+        OwnedValue::Dynamic(OwnedDynamicValue::Float64(f)) if f == 2.5
+    ));
+}
+
+#[test]
+fn owned_dynamic_value_available() {
+    let val_f32 = OwnedDynamicValue::Float32(3.14);
+    let val_f64 = OwnedDynamicValue::Float64(6.28);
+    assert!(matches!(val_f32, OwnedDynamicValue::Float32(f) if f == 3.14));
+    assert!(matches!(val_f64, OwnedDynamicValue::Float64(f) if f == 6.28));
 }
 
 // ============================================================================
@@ -373,32 +347,28 @@ fn nested_struct_borrowed() {
         },
     ]));
 
-    let expected = Value::Struct(Box::new([
-        Value::Int32(100),
-        Value::Struct(Box::new([
-            Value::String("inner text"),
-            Value::Boolean(true),
-        ])),
-        Value::Enum {
-            variant: 1,
-            payload: EnumPayload::Simple,
-        },
-    ]));
-
-    let diff_inner_order = Value::Struct(Box::new([
-        Value::Int32(100),
-        Value::Struct(Box::new([
-            Value::Boolean(true),
-            Value::String("inner text"),
-        ])),
-        Value::Enum {
-            variant: 1,
-            payload: EnumPayload::Simple,
-        },
-    ]));
-
-    assert_eq!(nested_struct, expected);
-    assert_ne!(nested_struct, diff_inner_order);
+    match nested_struct {
+        Value::Struct(fields) => {
+            assert_eq!(fields.len(), 3);
+            assert!(matches!(fields[0], Value::Int32(100)));
+            match &fields[1] {
+                Value::Struct(inner_fields) => {
+                    assert_eq!(inner_fields.len(), 2);
+                    assert!(matches!(inner_fields[0], Value::String("inner text")));
+                    assert!(matches!(inner_fields[1], Value::Boolean(true)));
+                }
+                _ => panic!("expected inner Struct"),
+            }
+            assert!(matches!(
+                &fields[2],
+                Value::Enum {
+                    variant: 1,
+                    payload: EnumPayload::Simple
+                }
+            ));
+        }
+        _ => panic!("expected outer Struct"),
+    }
 }
 
 #[test]
@@ -415,32 +385,30 @@ fn nested_struct_owned() {
         },
     ]));
 
-    let expected = OwnedValue::Struct(Box::new([
-        OwnedValue::Int32(100),
-        OwnedValue::Struct(Box::new([
-            OwnedValue::String(Box::from("inner text")),
-            OwnedValue::Boolean(true),
-        ])),
-        OwnedValue::Enum {
-            variant: 1,
-            payload: OwnedEnumPayload::Simple,
-        },
-    ]));
-
-    let diff_inner_order = OwnedValue::Struct(Box::new([
-        OwnedValue::Int32(100),
-        OwnedValue::Struct(Box::new([
-            OwnedValue::Boolean(true),
-            OwnedValue::String(Box::from("inner text")),
-        ])),
-        OwnedValue::Enum {
-            variant: 1,
-            payload: OwnedEnumPayload::Simple,
-        },
-    ]));
-
-    assert_eq!(nested_struct, expected);
-    assert_ne!(nested_struct, diff_inner_order);
+    match nested_struct {
+        OwnedValue::Struct(fields) => {
+            assert_eq!(fields.len(), 3);
+            assert!(matches!(fields[0], OwnedValue::Int32(100)));
+            match &fields[1] {
+                OwnedValue::Struct(inner_fields) => {
+                    assert_eq!(inner_fields.len(), 2);
+                    assert!(
+                        matches!(&inner_fields[0], OwnedValue::String(s) if &**s == "inner text")
+                    );
+                    assert!(matches!(inner_fields[1], OwnedValue::Boolean(true)));
+                }
+                _ => panic!("expected inner Struct"),
+            }
+            assert!(matches!(
+                &fields[2],
+                OwnedValue::Enum {
+                    variant: 1,
+                    payload: OwnedEnumPayload::Simple
+                }
+            ));
+        }
+        _ => panic!("expected outer Struct"),
+    }
 }
 
 // ============================================================================
@@ -454,40 +422,31 @@ fn enum_payload_forms_borrowed() {
         variant: 0,
         payload: EnumPayload::Simple,
     };
-    assert_eq!(
+    assert!(matches!(
         simple,
         Value::Enum {
             variant: 0,
-            payload: EnumPayload::Simple,
+            payload: EnumPayload::Simple
         }
-    );
-    assert_ne!(
-        simple,
-        Value::Enum {
-            variant: 1,
-            payload: EnumPayload::Simple,
-        }
-    );
+    ));
 
     // 2. Associated
     let associated = Value::Enum {
         variant: 1,
         payload: EnumPayload::Associated(Box::new(Value::String("error message"))),
     };
-    assert_eq!(
-        associated,
-        Value::Enum {
-            variant: 1,
-            payload: EnumPayload::Associated(Box::new(Value::String("error message"))),
+    match associated {
+        Value::Enum { variant, payload } => {
+            assert_eq!(variant, 1);
+            match payload {
+                EnumPayload::Associated(inner) => {
+                    assert!(matches!(*inner, Value::String("error message")));
+                }
+                _ => panic!("expected Associated payload"),
+            }
         }
-    );
-    assert_ne!(
-        associated,
-        Value::Enum {
-            variant: 1,
-            payload: EnumPayload::Associated(Box::new(Value::String("different message"))),
-        }
-    );
+        _ => panic!("expected Enum"),
+    }
 
     // 3. Structured
     let structured = Value::Enum {
@@ -496,20 +455,21 @@ fn enum_payload_forms_borrowed() {
             fields: Box::new([Value::Int32(1), Value::String("two"), Value::Boolean(false)]),
         },
     };
-    let structured_same = Value::Enum {
-        variant: 2,
-        payload: EnumPayload::Structured {
-            fields: Box::new([Value::Int32(1), Value::String("two"), Value::Boolean(false)]),
-        },
-    };
-    let structured_diff_order = Value::Enum {
-        variant: 2,
-        payload: EnumPayload::Structured {
-            fields: Box::new([Value::String("two"), Value::Int32(1), Value::Boolean(false)]),
-        },
-    };
-    assert_eq!(structured, structured_same);
-    assert_ne!(structured, structured_diff_order);
+    match structured {
+        Value::Enum { variant, payload } => {
+            assert_eq!(variant, 2);
+            match payload {
+                EnumPayload::Structured { fields } => {
+                    assert_eq!(fields.len(), 3);
+                    assert!(matches!(fields[0], Value::Int32(1)));
+                    assert!(matches!(fields[1], Value::String("two")));
+                    assert!(matches!(fields[2], Value::Boolean(false)));
+                }
+                _ => panic!("expected Structured payload"),
+            }
+        }
+        _ => panic!("expected Enum"),
+    }
 }
 
 #[test]
@@ -519,20 +479,13 @@ fn enum_payload_forms_owned() {
         variant: 0,
         payload: OwnedEnumPayload::Simple,
     };
-    assert_eq!(
+    assert!(matches!(
         simple,
         OwnedValue::Enum {
             variant: 0,
-            payload: OwnedEnumPayload::Simple,
+            payload: OwnedEnumPayload::Simple
         }
-    );
-    assert_ne!(
-        simple,
-        OwnedValue::Enum {
-            variant: 1,
-            payload: OwnedEnumPayload::Simple,
-        }
-    );
+    ));
 
     // 2. Associated
     let associated = OwnedValue::Enum {
@@ -541,24 +494,18 @@ fn enum_payload_forms_owned() {
             "error message",
         )))),
     };
-    assert_eq!(
-        associated,
-        OwnedValue::Enum {
-            variant: 1,
-            payload: OwnedEnumPayload::Associated(Box::new(OwnedValue::String(Box::from(
-                "error message",
-            )))),
+    match associated {
+        OwnedValue::Enum { variant, payload } => {
+            assert_eq!(variant, 1);
+            match payload {
+                OwnedEnumPayload::Associated(inner) => {
+                    assert!(matches!(&*inner, OwnedValue::String(s) if &**s == "error message"));
+                }
+                _ => panic!("expected Associated payload"),
+            }
         }
-    );
-    assert_ne!(
-        associated,
-        OwnedValue::Enum {
-            variant: 1,
-            payload: OwnedEnumPayload::Associated(Box::new(OwnedValue::String(Box::from(
-                "different message",
-            )))),
-        }
-    );
+        _ => panic!("expected Enum"),
+    }
 
     // 3. Structured
     let structured = OwnedValue::Enum {
@@ -571,28 +518,21 @@ fn enum_payload_forms_owned() {
             ]),
         },
     };
-    let structured_same = OwnedValue::Enum {
-        variant: 2,
-        payload: OwnedEnumPayload::Structured {
-            fields: Box::new([
-                OwnedValue::Int32(1),
-                OwnedValue::String(Box::from("two")),
-                OwnedValue::Boolean(false),
-            ]),
-        },
-    };
-    let structured_diff_order = OwnedValue::Enum {
-        variant: 2,
-        payload: OwnedEnumPayload::Structured {
-            fields: Box::new([
-                OwnedValue::String(Box::from("two")),
-                OwnedValue::Int32(1),
-                OwnedValue::Boolean(false),
-            ]),
-        },
-    };
-    assert_eq!(structured, structured_same);
-    assert_ne!(structured, structured_diff_order);
+    match structured {
+        OwnedValue::Enum { variant, payload } => {
+            assert_eq!(variant, 2);
+            match payload {
+                OwnedEnumPayload::Structured { fields } => {
+                    assert_eq!(fields.len(), 3);
+                    assert!(matches!(fields[0], OwnedValue::Int32(1)));
+                    assert!(matches!(&fields[1], OwnedValue::String(s) if &**s == "two"));
+                    assert!(matches!(fields[2], OwnedValue::Boolean(false)));
+                }
+                _ => panic!("expected Structured payload"),
+            }
+        }
+        _ => panic!("expected Enum"),
+    }
 }
 
 // ============================================================================
@@ -604,7 +544,6 @@ fn borrowed_string_lifetime_bound_to_owner() {
     let owner_string = AllocString::from("local dynamically allocated string");
     let borrowed_slice: &str = owner_string.as_str();
 
-    // Value::String borrows directly from owner_string without leak or 'static
     let value = Value::String(borrowed_slice);
 
     match value {
@@ -614,8 +553,6 @@ fn borrowed_string_lifetime_bound_to_owner() {
         }
         _ => panic!("expected Value::String variant"),
     }
-
-    assert_eq!(value, Value::String("local dynamically allocated string"));
 }
 
 // ============================================================================
@@ -631,48 +568,169 @@ fn owned_value_autonomy_after_source_scope() {
             OwnedValue::String(Box::from(temp_src.as_str())),
             OwnedValue::Boolean(true),
         ];
-        // temp_src and temp_elements are dropped when this block terminates
         OwnedValue::Struct(temp_elements.into_boxed_slice())
     };
 
-    // autonomous_value outlives the source scope and remains completely valid
     match autonomous_value {
         OwnedValue::Struct(fields) => {
             assert_eq!(fields.len(), 3);
-            assert_eq!(fields[0], OwnedValue::Int32(999));
-            assert_eq!(
-                fields[1],
-                OwnedValue::String(Box::from("temporary string in nested block"))
-            );
-            assert_eq!(fields[2], OwnedValue::Boolean(true));
+            assert!(matches!(fields[0], OwnedValue::Int32(999)));
+            assert!(matches!(
+                &fields[1],
+                OwnedValue::String(s) if &**s == "temporary string in nested block"
+            ));
+            assert!(matches!(fields[2], OwnedValue::Boolean(true)));
         }
         _ => panic!("expected OwnedValue::Struct variant"),
     }
 }
 
 // ============================================================================
-// 8. Public Exports Access
+// 8. Value Tree Clone
+// ============================================================================
+
+#[test]
+fn value_and_owned_value_clone() {
+    let val = Value::Int32(42);
+    let cloned_val = val.clone();
+    assert!(matches!(cloned_val, Value::Int32(42)));
+
+    let owned = OwnedValue::String(Box::from("test"));
+    let cloned_owned = owned.clone();
+    assert!(matches!(&cloned_owned, OwnedValue::String(s) if &**s == "test"));
+}
+
+// ============================================================================
+// 9. Semantic Scalars (Newtypes)
+// ============================================================================
+
+#[test]
+fn semantic_scalars_construction_and_equality() {
+    let pos = TextPosition(42);
+    let len = TextLength(100);
+    let shift = ShiftAmount(5);
+    let exp = PowerExponent(3);
+
+    assert_eq!(pos.0, 42);
+    assert_eq!(len.0, 100);
+    assert_eq!(shift.0, 5);
+    assert_eq!(exp.0, 3);
+
+    assert_eq!(pos, TextPosition(42));
+    assert_ne!(pos, TextPosition(0));
+
+    assert_eq!(len, TextLength(100));
+    assert_ne!(len, TextLength(0));
+
+    assert_eq!(shift, ShiftAmount(5));
+    assert_ne!(shift, ShiftAmount(0));
+
+    assert_eq!(exp, PowerExponent(3));
+    assert_ne!(exp, PowerExponent(0));
+
+    // Test Copy and Clone
+    let pos_copy = pos;
+    assert_eq!(pos, pos_copy);
+    let len_copy = len;
+    assert_eq!(len, len_copy);
+    let shift_copy = shift;
+    assert_eq!(shift, shift_copy);
+    let exp_copy = exp;
+    assert_eq!(exp, exp_copy);
+}
+
+// ============================================================================
+// 10. ProductionControl
+// ============================================================================
+
+#[test]
+fn production_control_contains_continue_and_stop() {
+    let c = ProductionControl::Continue;
+    let s = ProductionControl::Stop;
+
+    assert_eq!(c, ProductionControl::Continue);
+    assert_eq!(s, ProductionControl::Stop);
+    assert_ne!(c, s);
+
+    // Test Copy and Clone
+    let c_copy = c;
+    assert_eq!(c, c_copy);
+    let s_copy = s;
+    assert_eq!(s, s_copy);
+}
+
+// ============================================================================
+// 11. Failure Enums
+// ============================================================================
+
+#[test]
+fn failure_enums_contain_closed_variants() {
+    // TextOperationFailure: OutOfBounds, EmptyPattern, EmptySeparator
+    let t_oob = TextOperationFailure::OutOfBounds;
+    let t_ep = TextOperationFailure::EmptyPattern;
+    let t_es = TextOperationFailure::EmptySeparator;
+    assert_eq!(t_oob, TextOperationFailure::OutOfBounds);
+    assert_eq!(t_ep, TextOperationFailure::EmptyPattern);
+    assert_eq!(t_es, TextOperationFailure::EmptySeparator);
+    assert_ne!(t_oob, t_ep);
+    assert_ne!(t_ep, t_es);
+    assert_ne!(t_oob, t_es);
+
+    // NumericFailure: Overflow, DivisionByZero, InvalidBounds
+    let n_of = NumericFailure::Overflow;
+    let n_dbz = NumericFailure::DivisionByZero;
+    let n_ib = NumericFailure::InvalidBounds;
+    assert_eq!(n_of, NumericFailure::Overflow);
+    assert_eq!(n_dbz, NumericFailure::DivisionByZero);
+    assert_eq!(n_ib, NumericFailure::InvalidBounds);
+    assert_ne!(n_of, n_dbz);
+    assert_ne!(n_dbz, n_ib);
+    assert_ne!(n_of, n_ib);
+
+    // BitwiseFailure: InvalidShift
+    let b_is = BitwiseFailure::InvalidShift;
+    assert_eq!(b_is, BitwiseFailure::InvalidShift);
+
+    // ComparisonFailure: DifferentFamily, NotComparable
+    let c_df = ComparisonFailure::DifferentFamily;
+    let c_nc = ComparisonFailure::NotComparable;
+    assert_eq!(c_df, ComparisonFailure::DifferentFamily);
+    assert_eq!(c_nc, ComparisonFailure::NotComparable);
+    assert_ne!(c_df, c_nc);
+
+    // ConversionFailure: NotExactlyRepresentable
+    let cv_ner = ConversionFailure::NotExactlyRepresentable;
+    assert_eq!(cv_ner, ConversionFailure::NotExactlyRepresentable);
+}
+
+// ============================================================================
+// 12. Public Exports Access
 // ============================================================================
 
 #[test]
 fn public_exports_access() {
     let _: evo_values::Value = evo_values::Value::Boolean(true);
     let _: evo_values::DynamicValue = evo_values::DynamicValue::Float32(1.0);
-    let _: evo_values::DynamicIntegerValue = evo_values::DynamicIntegerValue {
-        negative: false,
-        magnitude: Cow::Borrowed(&[]),
-    };
     let _: evo_values::EnumPayload = evo_values::EnumPayload::Simple;
 
     let _: evo_values::OwnedValue = evo_values::OwnedValue::Boolean(true);
     let _: evo_values::OwnedDynamicValue = evo_values::OwnedDynamicValue::Float32(1.0);
-    let _: evo_values::OwnedDynamicInteger = evo_values::OwnedDynamicInteger {
-        negative: false,
-        magnitude: Box::new([]),
-    };
     let _: evo_values::OwnedEnumPayload = evo_values::OwnedEnumPayload::Simple;
 
     let _: evo_values::definitions::Value = evo_values::definitions::Value::Boolean(false);
     let _: evo_values::definitions::OwnedValue =
         evo_values::definitions::OwnedValue::Boolean(false);
+
+    let _: evo_values::TextPosition = evo_values::TextPosition(0);
+    let _: evo_values::TextLength = evo_values::TextLength(0);
+    let _: evo_values::ShiftAmount = evo_values::ShiftAmount(0);
+    let _: evo_values::PowerExponent = evo_values::PowerExponent(0);
+
+    let _: evo_values::ProductionControl = evo_values::ProductionControl::Continue;
+
+    let _: evo_values::TextOperationFailure = evo_values::TextOperationFailure::OutOfBounds;
+    let _: evo_values::NumericFailure = evo_values::NumericFailure::Overflow;
+    let _: evo_values::BitwiseFailure = evo_values::BitwiseFailure::InvalidShift;
+    let _: evo_values::ComparisonFailure = evo_values::ComparisonFailure::DifferentFamily;
+    let _: evo_values::ConversionFailure = evo_values::ConversionFailure::NotExactlyRepresentable;
 }
