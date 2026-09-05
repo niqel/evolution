@@ -1,6 +1,7 @@
 use evo_values::NumericFailure;
 use evo_values::definitions::numeric::{
-    Abs, Add, Divide, Multiply, Negate, Pow, Remainder, Subtract,
+    Abs, Add, Divide, IntegerClamp, IntegerMax, IntegerMin, Multiply, Negate, Pow, Remainder,
+    Subtract,
 };
 use evo_values::definitions::scalars::PowerExponent;
 use evo_values::numeric::*;
@@ -424,4 +425,210 @@ fn test_function_pointer_contracts() {
 
     let op_pow: Pow<u128> = POW_U128;
     assert_eq!(op_pow(10, PowerExponent(3)), Ok(1000));
+}
+
+// ============================================================================
+// 10. Min tests for all 10 widths
+// ============================================================================
+
+macro_rules! test_min_signed {
+    ($test_name:ident, $fn_name:ident, $const_name:ident, $t:ty) => {
+        #[test]
+        fn $test_name() {
+            assert_eq!($fn_name(2, 5), 2);
+            assert_eq!($fn_name(5, 2), 2);
+            assert_eq!($fn_name(5, 5), 5);
+            assert_eq!($fn_name(-5, 5), -5);
+            assert_eq!($fn_name(5, -5), -5);
+            assert_eq!($fn_name(<$t>::MIN, <$t>::MAX), <$t>::MIN);
+            assert_eq!($fn_name(<$t>::MAX, <$t>::MIN), <$t>::MIN);
+
+            let op: IntegerMin<$t> = $const_name;
+            assert_eq!(op(10, 20), 10);
+        }
+    };
+}
+
+test_min_signed!(test_min_i8, min_i8, MIN_I8, i8);
+test_min_signed!(test_min_i16, min_i16, MIN_I16, i16);
+test_min_signed!(test_min_i32, min_i32, MIN_I32, i32);
+test_min_signed!(test_min_i64, min_i64, MIN_I64, i64);
+test_min_signed!(test_min_i128, min_i128, MIN_I128, i128);
+
+macro_rules! test_min_unsigned {
+    ($test_name:ident, $fn_name:ident, $const_name:ident, $t:ty) => {
+        #[test]
+        fn $test_name() {
+            assert_eq!($fn_name(2, 5), 2);
+            assert_eq!($fn_name(5, 2), 2);
+            assert_eq!($fn_name(5, 5), 5);
+            assert_eq!($fn_name(0, <$t>::MAX), 0);
+            assert_eq!($fn_name(<$t>::MAX, 0), 0);
+
+            let op: IntegerMin<$t> = $const_name;
+            assert_eq!(op(10, 20), 10);
+        }
+    };
+}
+
+test_min_unsigned!(test_min_u8, min_u8, MIN_U8, u8);
+test_min_unsigned!(test_min_u16, min_u16, MIN_U16, u16);
+test_min_unsigned!(test_min_u32, min_u32, MIN_U32, u32);
+test_min_unsigned!(test_min_u64, min_u64, MIN_U64, u64);
+test_min_unsigned!(test_min_u128, min_u128, MIN_U128, u128);
+
+// ============================================================================
+// 11. Max tests for all 10 widths
+// ============================================================================
+
+macro_rules! test_max_signed {
+    ($test_name:ident, $fn_name:ident, $const_name:ident, $t:ty) => {
+        #[test]
+        fn $test_name() {
+            assert_eq!($fn_name(2, 5), 5);
+            assert_eq!($fn_name(5, 2), 5);
+            assert_eq!($fn_name(5, 5), 5);
+            assert_eq!($fn_name(-5, 5), 5);
+            assert_eq!($fn_name(5, -5), 5);
+            assert_eq!($fn_name(<$t>::MIN, <$t>::MAX), <$t>::MAX);
+            assert_eq!($fn_name(<$t>::MAX, <$t>::MIN), <$t>::MAX);
+
+            let op: IntegerMax<$t> = $const_name;
+            assert_eq!(op(10, 20), 20);
+        }
+    };
+}
+
+test_max_signed!(test_max_i8, max_i8, MAX_I8, i8);
+test_max_signed!(test_max_i16, max_i16, MAX_I16, i16);
+test_max_signed!(test_max_i32, max_i32, MAX_I32, i32);
+test_max_signed!(test_max_i64, max_i64, MAX_I64, i64);
+test_max_signed!(test_max_i128, max_i128, MAX_I128, i128);
+
+macro_rules! test_max_unsigned {
+    ($test_name:ident, $fn_name:ident, $const_name:ident, $t:ty) => {
+        #[test]
+        fn $test_name() {
+            assert_eq!($fn_name(2, 5), 5);
+            assert_eq!($fn_name(5, 2), 5);
+            assert_eq!($fn_name(5, 5), 5);
+            assert_eq!($fn_name(0, <$t>::MAX), <$t>::MAX);
+            assert_eq!($fn_name(<$t>::MAX, 0), <$t>::MAX);
+
+            let op: IntegerMax<$t> = $const_name;
+            assert_eq!(op(10, 20), 20);
+        }
+    };
+}
+
+test_max_unsigned!(test_max_u8, max_u8, MAX_U8, u8);
+test_max_unsigned!(test_max_u16, max_u16, MAX_U16, u16);
+test_max_unsigned!(test_max_u32, max_u32, MAX_U32, u32);
+test_max_unsigned!(test_max_u64, max_u64, MAX_U64, u64);
+test_max_unsigned!(test_max_u128, max_u128, MAX_U128, u128);
+
+// ============================================================================
+// 12. Clamp tests for all 10 widths
+// ============================================================================
+
+macro_rules! test_clamp_signed {
+    ($test_name:ident, $fn_name:ident, $const_name:ident, $t:ty) => {
+        #[test]
+        fn $test_name() {
+            // Within, below, above
+            assert_eq!($fn_name(5, 0, 10), Ok(5));
+            assert_eq!($fn_name(-5, 0, 10), Ok(0));
+            assert_eq!($fn_name(20, 0, 10), Ok(10));
+
+            // Equals minimum, equals maximum
+            assert_eq!($fn_name(0, 0, 10), Ok(0));
+            assert_eq!($fn_name(10, 0, 10), Ok(10));
+
+            // Minimum == maximum
+            assert_eq!($fn_name(100, 7, 7), Ok(7));
+            assert_eq!($fn_name(-100, 7, 7), Ok(7));
+            assert_eq!($fn_name(7, 7, 7), Ok(7));
+
+            // Boundaries
+            assert_eq!($fn_name(<$t>::MIN, -10, 10), Ok(-10));
+            assert_eq!($fn_name(<$t>::MAX, -10, 10), Ok(10));
+            assert_eq!($fn_name(0, <$t>::MIN, <$t>::MAX), Ok(0));
+
+            // Invalid bounds
+            assert_eq!($fn_name(5, 10, 0), Err(NumericFailure::InvalidBounds));
+            assert_eq!(
+                $fn_name(0, <$t>::MAX, <$t>::MIN),
+                Err(NumericFailure::InvalidBounds)
+            );
+
+            // Function pointer binding
+            let op: IntegerClamp<$t> = $const_name;
+            assert_eq!(op(5, 0, 10), Ok(5));
+        }
+    };
+}
+
+test_clamp_signed!(test_clamp_i8, clamp_i8, CLAMP_I8, i8);
+test_clamp_signed!(test_clamp_i16, clamp_i16, CLAMP_I16, i16);
+test_clamp_signed!(test_clamp_i32, clamp_i32, CLAMP_I32, i32);
+test_clamp_signed!(test_clamp_i64, clamp_i64, CLAMP_I64, i64);
+test_clamp_signed!(test_clamp_i128, clamp_i128, CLAMP_I128, i128);
+
+macro_rules! test_clamp_unsigned {
+    ($test_name:ident, $fn_name:ident, $const_name:ident, $t:ty) => {
+        #[test]
+        fn $test_name() {
+            // Within, below, above
+            assert_eq!($fn_name(5, 2, 10), Ok(5));
+            assert_eq!($fn_name(1, 2, 10), Ok(2));
+            assert_eq!($fn_name(20, 2, 10), Ok(10));
+
+            // Equals minimum, equals maximum
+            assert_eq!($fn_name(2, 2, 10), Ok(2));
+            assert_eq!($fn_name(10, 2, 10), Ok(10));
+
+            // Minimum == maximum
+            assert_eq!($fn_name(100, 7, 7), Ok(7));
+            assert_eq!($fn_name(0, 7, 7), Ok(7));
+            assert_eq!($fn_name(7, 7, 7), Ok(7));
+
+            // Boundaries
+            assert_eq!($fn_name(0, 10, 100), Ok(10));
+            assert_eq!($fn_name(<$t>::MAX, 10, 100), Ok(100));
+            assert_eq!($fn_name(50, 0, <$t>::MAX), Ok(50));
+
+            // Invalid bounds
+            assert_eq!($fn_name(5, 10, 2), Err(NumericFailure::InvalidBounds));
+            assert_eq!(
+                $fn_name(0, <$t>::MAX, 0),
+                Err(NumericFailure::InvalidBounds)
+            );
+
+            // Function pointer binding
+            let op: IntegerClamp<$t> = $const_name;
+            assert_eq!(op(5, 2, 10), Ok(5));
+        }
+    };
+}
+
+test_clamp_unsigned!(test_clamp_u8, clamp_u8, CLAMP_U8, u8);
+test_clamp_unsigned!(test_clamp_u16, clamp_u16, CLAMP_U16, u16);
+test_clamp_unsigned!(test_clamp_u32, clamp_u32, CLAMP_U32, u32);
+test_clamp_unsigned!(test_clamp_u64, clamp_u64, CLAMP_U64, u64);
+test_clamp_unsigned!(test_clamp_u128, clamp_u128, CLAMP_U128, u128);
+
+// ============================================================================
+// 13. Min, Max, Clamp function pointer contracts & public surface
+// ============================================================================
+
+#[test]
+fn test_min_max_clamp_function_pointer_contracts() {
+    let min_op: IntegerMin<i32> = MIN_I32;
+    assert_eq!(min_op(10, 20), 10);
+
+    let max_op: IntegerMax<u64> = MAX_U64;
+    assert_eq!(max_op(10, 20), 20);
+
+    let clamp_op: IntegerClamp<i128> = CLAMP_I128;
+    assert_eq!(clamp_op(5, 0, 10), Ok(5));
 }

@@ -1,6 +1,9 @@
 pub mod abs;
 pub mod add;
+pub mod clamp;
 pub mod divide;
+pub mod max;
+pub mod min;
 pub mod multiply;
 pub mod negate;
 pub mod pow;
@@ -9,7 +12,10 @@ pub mod subtract;
 
 pub use abs::Abs;
 pub use add::Add;
+pub use clamp::IntegerClamp;
 pub use divide::Divide;
+pub use max::IntegerMax;
+pub use min::IntegerMin;
 pub use multiply::Multiply;
 pub use negate::Negate;
 pub use pow::Pow;
