@@ -364,3 +364,47 @@ pub(crate) fn dynamic_integer_to_f64(
     let bits = sign_bit | biased_exp | mantissa;
     Ok(f64::from_bits(bits))
 }
+
+// ============================================================================
+// 6. Dynamic Integer -> Decimal String Helper
+// ============================================================================
+
+pub(crate) fn dynamic_integer_to_decimal(
+    negative: bool,
+    magnitude: &[u8],
+) -> alloc::string::String {
+    let first_non_zero = match magnitude.iter().position(|&b| b != 0) {
+        Some(pos) => pos,
+        None => return alloc::string::String::from("0"),
+    };
+    let mag = &magnitude[first_non_zero..];
+    if mag.is_empty() {
+        return alloc::string::String::from("0");
+    }
+
+    let mut num = alloc::vec::Vec::from(mag);
+    let mut digits = alloc::vec::Vec::new();
+
+    let mut start = 0;
+    while start < num.len() {
+        let mut rem = 0u16;
+        for i in start..num.len() {
+            let cur = (rem << 8) | (num[i] as u16);
+            num[i] = (cur / 10) as u8;
+            rem = cur % 10;
+        }
+        digits.push((b'0' + rem as u8) as char);
+        while start < num.len() && num[start] == 0 {
+            start += 1;
+        }
+    }
+
+    let mut s = alloc::string::String::with_capacity(digits.len() + if negative { 1 } else { 0 });
+    if negative {
+        s.push('-');
+    }
+    for &ch in digits.iter().rev() {
+        s.push(ch);
+    }
+    s
+}

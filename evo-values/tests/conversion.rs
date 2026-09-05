@@ -1911,3 +1911,443 @@ fn test_dynamic_function_pointer_contracts() {
     assert_eq!(b_f64(&sample_b), Ok(1.0));
     assert_eq!(o_f64(&sample_o), Ok(1.0));
 }
+
+// ============================================================================
+// TASK-EV-016 ToString Tests
+// ============================================================================
+
+use evo_values::definitions::conversion::{
+    BooleanToString, DynamicToString, FloatToString, IntegerToString, OwnedDynamicToString,
+    StringToString,
+};
+
+#[test]
+fn test_to_string_boolean() {
+    assert_eq!(boolean_to_string(true), "true");
+    assert_eq!(boolean_to_string(false), "false");
+    assert_eq!(to_string_from_bool(true), "true");
+    assert_eq!(to_string_from_bool(false), "false");
+
+    let op: BooleanToString = BOOLEAN_TO_STRING;
+    assert_eq!(op(true), "true");
+    assert_eq!(op(false), "false");
+}
+
+#[test]
+fn test_to_string_string_identity() {
+    let empty = "";
+    assert_eq!(string_to_string(empty), "");
+    assert_eq!(empty.as_ptr(), string_to_string(empty).as_ptr());
+
+    let ascii = "hello world";
+    let res_ascii = string_to_string(ascii);
+    assert_eq!(res_ascii, "hello world");
+    assert_eq!(ascii.as_ptr(), res_ascii.as_ptr());
+    assert_eq!(ascii.len(), res_ascii.len());
+
+    let unicode = "こんにちは世界 🦀";
+    let res_unicode = string_to_string(unicode);
+    assert_eq!(res_unicode, "こんにちは世界 🦀");
+    assert_eq!(unicode.as_ptr(), res_unicode.as_ptr());
+
+    let op: StringToString = STRING_TO_STRING;
+    assert_eq!(op(ascii).as_ptr(), ascii.as_ptr());
+}
+
+#[test]
+fn test_to_string_fixed_integer_all_ten_families() {
+    // i8
+    assert_eq!(to_string_from_i8(0), "0");
+    assert_eq!(to_string_from_i8(42), "42");
+    assert_eq!(to_string_from_i8(-42), "-42");
+    assert_eq!(to_string_from_i8(i8::MIN), "-128");
+    assert_eq!(to_string_from_i8(i8::MAX), "127");
+
+    // i16
+    assert_eq!(to_string_from_i16(0), "0");
+    assert_eq!(to_string_from_i16(420), "420");
+    assert_eq!(to_string_from_i16(-420), "-420");
+    assert_eq!(to_string_from_i16(i16::MIN), "-32768");
+    assert_eq!(to_string_from_i16(i16::MAX), "32767");
+
+    // i32
+    assert_eq!(to_string_from_i32(0), "0");
+    assert_eq!(to_string_from_i32(4200), "4200");
+    assert_eq!(to_string_from_i32(-4200), "-4200");
+    assert_eq!(to_string_from_i32(i32::MIN), "-2147483648");
+    assert_eq!(to_string_from_i32(i32::MAX), "2147483647");
+
+    // i64
+    assert_eq!(to_string_from_i64(0), "0");
+    assert_eq!(to_string_from_i64(42000), "42000");
+    assert_eq!(to_string_from_i64(-42000), "-42000");
+    assert_eq!(to_string_from_i64(i64::MIN), "-9223372036854775808");
+    assert_eq!(to_string_from_i64(i64::MAX), "9223372036854775807");
+
+    // i128
+    assert_eq!(to_string_from_i128(0), "0");
+    assert_eq!(to_string_from_i128(420000), "420000");
+    assert_eq!(to_string_from_i128(-420000), "-420000");
+    assert_eq!(
+        to_string_from_i128(i128::MIN),
+        "-170141183460469231731687303715884105728"
+    );
+    assert_eq!(
+        to_string_from_i128(i128::MAX),
+        "170141183460469231731687303715884105727"
+    );
+
+    // u8
+    assert_eq!(to_string_from_u8(0), "0");
+    assert_eq!(to_string_from_u8(42), "42");
+    assert_eq!(to_string_from_u8(u8::MAX), "255");
+
+    // u16
+    assert_eq!(to_string_from_u16(0), "0");
+    assert_eq!(to_string_from_u16(420), "420");
+    assert_eq!(to_string_from_u16(u16::MAX), "65535");
+
+    // u32
+    assert_eq!(to_string_from_u32(0), "0");
+    assert_eq!(to_string_from_u32(4200), "4200");
+    assert_eq!(to_string_from_u32(u32::MAX), "4294967295");
+
+    // u64
+    assert_eq!(to_string_from_u64(0), "0");
+    assert_eq!(to_string_from_u64(42000), "42000");
+    assert_eq!(to_string_from_u64(u64::MAX), "18446744073709551615");
+
+    // u128
+    assert_eq!(to_string_from_u128(0), "0");
+    assert_eq!(to_string_from_u128(420000), "420000");
+    assert_eq!(
+        to_string_from_u128(u128::MAX),
+        "340282366920938463463374607431768211455"
+    );
+}
+
+#[test]
+fn test_to_string_fixed_float() {
+    // f32
+    assert_eq!(to_string_from_f32(0.0f32), "0");
+    assert_eq!(to_string_from_f32(-0.0f32), "-0");
+    assert_eq!(to_string_from_f32(42.5f32), "42.5");
+    assert_eq!(to_string_from_f32(-42.5f32), "-42.5");
+    assert_eq!(to_string_from_f32(1.25f32), "1.25");
+    assert_eq!(to_string_from_f32(f32::NAN), "NaN");
+    assert_eq!(to_string_from_f32(f32::INFINITY), "inf");
+    assert_eq!(to_string_from_f32(f32::NEG_INFINITY), "-inf");
+
+    // f64
+    assert_eq!(to_string_from_f64(0.0f64), "0");
+    assert_eq!(to_string_from_f64(-0.0f64), "-0");
+    assert_eq!(to_string_from_f64(42.5f64), "42.5");
+    assert_eq!(to_string_from_f64(-42.5f64), "-42.5");
+    assert_eq!(to_string_from_f64(1.25f64), "1.25");
+    assert_eq!(to_string_from_f64(f64::NAN), "NaN");
+    assert_eq!(to_string_from_f64(f64::INFINITY), "inf");
+    assert_eq!(to_string_from_f64(f64::NEG_INFINITY), "-inf");
+}
+
+#[test]
+fn test_to_string_dynamic_integer() {
+    // 0 -> "0"
+    let (b0, o0) = make_dyn_int(false, &[]);
+    assert_eq!(to_string_from_dynamic(&b0), "0");
+    assert_eq!(to_string_from_owned_dynamic(&o0), "0");
+
+    // 1 -> "1"
+    let (b1, o1) = make_dyn_int(false, &[1]);
+    assert_eq!(to_string_from_dynamic(&b1), "1");
+    assert_eq!(to_string_from_owned_dynamic(&o1), "1");
+
+    // -1 -> "-1"
+    let (bn1, on1) = make_dyn_int(true, &[1]);
+    assert_eq!(to_string_from_dynamic(&bn1), "-1");
+    assert_eq!(to_string_from_owned_dynamic(&on1), "-1");
+
+    // 255 -> "255"
+    let (b255, o255) = make_dyn_int(false, &[255]);
+    assert_eq!(to_string_from_dynamic(&b255), "255");
+    assert_eq!(to_string_from_owned_dynamic(&o255), "255");
+
+    // 256 -> "256"
+    let (b256, o256) = make_dyn_int(false, &[1, 0]);
+    assert_eq!(to_string_from_dynamic(&b256), "256");
+    assert_eq!(to_string_from_owned_dynamic(&o256), "256");
+
+    // 65535 -> "65535"
+    let (b65535, o65535) = make_dyn_int(false, &[255, 255]);
+    assert_eq!(to_string_from_dynamic(&b65535), "65535");
+    assert_eq!(to_string_from_owned_dynamic(&o65535), "65535");
+
+    // 65536 -> "65536"
+    let (b65536, o65536) = make_dyn_int(false, &[1, 0, 0]);
+    assert_eq!(to_string_from_dynamic(&b65536), "65536");
+    assert_eq!(to_string_from_owned_dynamic(&o65536), "65536");
+
+    // exactly u128::MAX
+    let (b_u128max, o_u128max) = make_dyn_int(false, &[0xFF; 16]);
+    assert_eq!(
+        to_string_from_dynamic(&b_u128max),
+        "340282366920938463463374607431768211455"
+    );
+    assert_eq!(
+        to_string_from_owned_dynamic(&o_u128max),
+        "340282366920938463463374607431768211455"
+    );
+
+    // negative u128::MAX
+    let (bn_u128max, on_u128max) = make_dyn_int(true, &[0xFF; 16]);
+    assert_eq!(
+        to_string_from_dynamic(&bn_u128max),
+        "-340282366920938463463374607431768211455"
+    );
+    assert_eq!(
+        to_string_from_owned_dynamic(&on_u128max),
+        "-340282366920938463463374607431768211455"
+    );
+
+    // u128::MAX + 1 (2^128)
+    let mag_2_128 = power_of_two_mag(128);
+    let (b_2_128, o_2_128) = make_dyn_int(false, &mag_2_128);
+    assert_eq!(
+        to_string_from_dynamic(&b_2_128),
+        "340282366920938463463374607431768211456"
+    );
+    assert_eq!(
+        to_string_from_owned_dynamic(&o_2_128),
+        "340282366920938463463374607431768211456"
+    );
+
+    // negative 2^128
+    let (bn_2_128, on_2_128) = make_dyn_int(true, &mag_2_128);
+    assert_eq!(
+        to_string_from_dynamic(&bn_2_128),
+        "-340282366920938463463374607431768211456"
+    );
+    assert_eq!(
+        to_string_from_owned_dynamic(&on_2_128),
+        "-340282366920938463463374607431768211456"
+    );
+
+    // 20-byte magnitude: 2^159
+    let mag_2_159 = power_of_two_mag(159);
+    assert_eq!(mag_2_159.len(), 20);
+    let (b_20, o_20) = make_dyn_int(false, &mag_2_159);
+    assert_eq!(
+        to_string_from_dynamic(&b_20),
+        "730750818665451459101842416358141509827966271488"
+    );
+    assert_eq!(
+        to_string_from_owned_dynamic(&o_20),
+        "730750818665451459101842416358141509827966271488"
+    );
+
+    // negative 2^159
+    let (bn_20, on_20) = make_dyn_int(true, &mag_2_159);
+    assert_eq!(
+        to_string_from_dynamic(&bn_20),
+        "-730750818665451459101842416358141509827966271488"
+    );
+    assert_eq!(
+        to_string_from_owned_dynamic(&on_20),
+        "-730750818665451459101842416358141509827966271488"
+    );
+
+    // 20-byte magnitude: 2^160 - 1 (20 bytes of 0xFF)
+    let mag_20_max = [0xFFu8; 20];
+    let (b_20_max, o_20_max) = make_dyn_int(false, &mag_20_max);
+    assert_eq!(
+        to_string_from_dynamic(&b_20_max),
+        "1461501637330902918203684832716283019655932542975"
+    );
+    assert_eq!(
+        to_string_from_owned_dynamic(&o_20_max),
+        "1461501637330902918203684832716283019655932542975"
+    );
+
+    // 64-byte magnitude: 2^511
+    let mag_2_511 = power_of_two_mag(511);
+    assert_eq!(mag_2_511.len(), 64);
+    let (b_64, o_64) = make_dyn_int(false, &mag_2_511);
+    assert_eq!(
+        to_string_from_dynamic(&b_64),
+        "6703903964971298549787012499102923063739682910296196688861780721860882015036773488400937149083451713845015929093243025426876941405973284973216824503042048"
+    );
+    assert_eq!(
+        to_string_from_owned_dynamic(&o_64),
+        "6703903964971298549787012499102923063739682910296196688861780721860882015036773488400937149083451713845015929093243025426876941405973284973216824503042048"
+    );
+
+    // negative 2^511
+    let (bn_64, on_64) = make_dyn_int(true, &mag_2_511);
+    assert_eq!(
+        to_string_from_dynamic(&bn_64),
+        "-6703903964971298549787012499102923063739682910296196688861780721860882015036773488400937149083451713845015929093243025426876941405973284973216824503042048"
+    );
+    assert_eq!(
+        to_string_from_owned_dynamic(&on_64),
+        "-6703903964971298549787012499102923063739682910296196688861780721860882015036773488400937149083451713845015929093243025426876941405973284973216824503042048"
+    );
+
+    // 64-byte magnitude: 2^512 - 1 (64 bytes of 0xFF)
+    let mag_64_max = [0xFFu8; 64];
+    let (b_64_max, o_64_max) = make_dyn_int(false, &mag_64_max);
+    assert_eq!(
+        to_string_from_dynamic(&b_64_max),
+        "13407807929942597099574024998205846127479365820592393377723561443721764030073546976801874298166903427690031858186486050853753882811946569946433649006084095"
+    );
+    assert_eq!(
+        to_string_from_owned_dynamic(&o_64_max),
+        "13407807929942597099574024998205846127479365820592393377723561443721764030073546976801874298166903427690031858186486050853753882811946569946433649006084095"
+    );
+
+    // Canonical zero guarantees "0", never "-0"
+    let (b_zero_neg, o_zero_neg) = make_dyn_int(true, &[]);
+    assert_eq!(to_string_from_dynamic(&b_zero_neg), "0");
+    assert_eq!(to_string_from_owned_dynamic(&o_zero_neg), "0");
+}
+
+#[test]
+fn test_to_string_dynamic_float() {
+    let (b_f32, o_f32) = make_dyn_f32(42.5);
+    assert_eq!(to_string_from_dynamic(&b_f32), "42.5");
+    assert_eq!(to_string_from_owned_dynamic(&o_f32), "42.5");
+
+    let (b_f64, o_f64) = make_dyn_f64(42.5);
+    assert_eq!(to_string_from_dynamic(&b_f64), "42.5");
+    assert_eq!(to_string_from_owned_dynamic(&o_f64), "42.5");
+
+    let (b_nan32, o_nan32) = make_dyn_f32(f32::NAN);
+    assert_eq!(to_string_from_dynamic(&b_nan32), "NaN");
+    assert_eq!(to_string_from_owned_dynamic(&o_nan32), "NaN");
+
+    let (b_nan64, o_nan64) = make_dyn_f64(f64::NAN);
+    assert_eq!(to_string_from_dynamic(&b_nan64), "NaN");
+    assert_eq!(to_string_from_owned_dynamic(&o_nan64), "NaN");
+
+    let (b_inf32, o_inf32) = make_dyn_f32(f32::INFINITY);
+    assert_eq!(to_string_from_dynamic(&b_inf32), "inf");
+    assert_eq!(to_string_from_owned_dynamic(&o_inf32), "inf");
+
+    let (b_ninf32, o_ninf32) = make_dyn_f32(f32::NEG_INFINITY);
+    assert_eq!(to_string_from_dynamic(&b_ninf32), "-inf");
+    assert_eq!(to_string_from_owned_dynamic(&o_ninf32), "-inf");
+
+    let (b_inf64, o_inf64) = make_dyn_f64(f64::INFINITY);
+    assert_eq!(to_string_from_dynamic(&b_inf64), "inf");
+    assert_eq!(to_string_from_owned_dynamic(&o_inf64), "inf");
+
+    let (b_ninf64, o_ninf64) = make_dyn_f64(f64::NEG_INFINITY);
+    assert_eq!(to_string_from_dynamic(&b_ninf64), "-inf");
+    assert_eq!(to_string_from_owned_dynamic(&o_ninf64), "-inf");
+
+    let (bp0_32, op0_32) = make_dyn_f32(0.0f32);
+    assert_eq!(to_string_from_dynamic(&bp0_32), "0");
+    assert_eq!(to_string_from_owned_dynamic(&op0_32), "0");
+
+    let (bn0_32, on0_32) = make_dyn_f32(-0.0f32);
+    assert_eq!(to_string_from_dynamic(&bn0_32), "-0");
+    assert_eq!(to_string_from_owned_dynamic(&on0_32), "-0");
+
+    let (bp0_64, op0_64) = make_dyn_f64(0.0f64);
+    assert_eq!(to_string_from_dynamic(&bp0_64), "0");
+    assert_eq!(to_string_from_owned_dynamic(&op0_64), "0");
+
+    let (bn0_64, on0_64) = make_dyn_f64(-0.0f64);
+    assert_eq!(to_string_from_dynamic(&bn0_64), "-0");
+    assert_eq!(to_string_from_owned_dynamic(&on0_64), "-0");
+}
+
+#[test]
+fn test_to_string_borrowed_owned_parity() {
+    let test_values: Vec<(DynamicValue<'_>, OwnedDynamicValue)> = alloc::vec![
+        make_dyn_int(false, &[]),
+        make_dyn_int(false, &[0]),
+        make_dyn_int(false, &[1]),
+        make_dyn_int(true, &[1]),
+        make_dyn_int(false, &[42]),
+        make_dyn_int(true, &[42]),
+        make_dyn_int(false, &[0xFF; 16]),
+        make_dyn_int(true, &[0xFF; 16]),
+        make_dyn_int(false, &[0xFF; 64]),
+        make_dyn_int(true, &[0xFF; 64]),
+        make_dyn_f32(0.0),
+        make_dyn_f32(-0.0),
+        make_dyn_f32(42.5),
+        make_dyn_f32(-42.5),
+        make_dyn_f32(f32::NAN),
+        make_dyn_f32(f32::INFINITY),
+        make_dyn_f32(f32::NEG_INFINITY),
+        make_dyn_f64(0.0),
+        make_dyn_f64(-0.0),
+        make_dyn_f64(42.5),
+        make_dyn_f64(-42.5),
+        make_dyn_f64(f64::NAN),
+        make_dyn_f64(f64::INFINITY),
+        make_dyn_f64(f64::NEG_INFINITY),
+    ];
+
+    for (b, o) in &test_values {
+        assert_eq!(to_string_from_dynamic(b), to_string_from_owned_dynamic(o));
+    }
+}
+
+#[test]
+fn test_to_string_function_pointer_contracts() {
+    let bool_op: BooleanToString = BOOLEAN_TO_STRING;
+    let string_op: StringToString = STRING_TO_STRING;
+
+    assert_eq!(bool_op(true), "true");
+    assert_eq!(string_op("test"), "test");
+
+    let int_i8: IntegerToString<i8> = TO_STRING_FROM_I8;
+    let int_i16: IntegerToString<i16> = TO_STRING_FROM_I16;
+    let int_i32: IntegerToString<i32> = TO_STRING_FROM_I32;
+    let int_i64: IntegerToString<i64> = TO_STRING_FROM_I64;
+    let int_i128: IntegerToString<i128> = TO_STRING_FROM_I128;
+
+    let int_u8: IntegerToString<u8> = TO_STRING_FROM_U8;
+    let int_u16: IntegerToString<u16> = TO_STRING_FROM_U16;
+    let int_u32: IntegerToString<u32> = TO_STRING_FROM_U32;
+    let int_u64: IntegerToString<u64> = TO_STRING_FROM_U64;
+    let int_u128: IntegerToString<u128> = TO_STRING_FROM_U128;
+
+    assert_eq!(int_i8(1), "1");
+    assert_eq!(int_i16(1), "1");
+    assert_eq!(int_i32(1), "1");
+    assert_eq!(int_i64(1), "1");
+    assert_eq!(int_i128(1), "1");
+
+    assert_eq!(int_u8(1), "1");
+    assert_eq!(int_u16(1), "1");
+    assert_eq!(int_u32(1), "1");
+    assert_eq!(int_u64(1), "1");
+    assert_eq!(int_u128(1), "1");
+
+    let float_f32: FloatToString<f32> = TO_STRING_FROM_F32;
+    let float_f64: FloatToString<f64> = TO_STRING_FROM_F64;
+
+    assert_eq!(float_f32(1.5), "1.5");
+    assert_eq!(float_f64(1.5), "1.5");
+
+    let dyn_int_op: DynamicIntegerToString = TO_STRING_FROM_DYNAMIC_INTEGER;
+    let owned_dyn_int_op: OwnedDynamicIntegerToString = TO_STRING_FROM_OWNED_DYNAMIC_INTEGER;
+
+    let (dyn_int_b, dyn_int_o) = make_dyn_int(false, &[42]);
+    match dyn_int_b {
+        DynamicValue::Integer(ref val) => assert_eq!(dyn_int_op(val), "42"),
+        _ => panic!("expected Integer"),
+    }
+    match dyn_int_o {
+        OwnedDynamicValue::Integer(ref val) => assert_eq!(owned_dyn_int_op(val), "42"),
+        _ => panic!("expected Integer"),
+    }
+
+    let dyn_op: DynamicToString = TO_STRING_FROM_DYNAMIC;
+    let owned_dyn_op: OwnedDynamicToString = TO_STRING_FROM_OWNED_DYNAMIC;
+
+    assert_eq!(dyn_op(&dyn_int_b), "42");
+    assert_eq!(owned_dyn_op(&dyn_int_o), "42");
+}
