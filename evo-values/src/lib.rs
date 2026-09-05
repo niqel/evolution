@@ -5,6 +5,7 @@ extern crate alloc;
 pub mod boolean;
 pub mod definitions;
 pub mod materialize_owned;
+pub mod numeric;
 pub mod text;
 
 pub use definitions::control::ProductionControl;
