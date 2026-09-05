@@ -1,7 +1,9 @@
 use evo_values::NumericFailure;
 use evo_values::definitions::numeric::{
-    Abs, Add, Divide, IntegerClamp, IntegerMax, IntegerMin, Multiply, Negate, Pow, Remainder,
-    Subtract,
+    Abs, Add, Divide, FloatAbs, FloatAdd, FloatCeil, FloatClamp, FloatDivide, FloatFloor,
+    FloatFract, FloatIsFinite, FloatIsInfinite, FloatIsNan, FloatMax, FloatMin, FloatMultiply,
+    FloatNegate, FloatRemainder, FloatRound, FloatSubtract, FloatTrunc, IntegerClamp, IntegerMax,
+    IntegerMin, Multiply, Negate, Pow, Remainder, Subtract,
 };
 use evo_values::definitions::scalars::PowerExponent;
 use evo_values::numeric::*;
@@ -631,4 +633,655 @@ fn test_min_max_clamp_function_pointer_contracts() {
 
     let clamp_op: IntegerClamp<i128> = CLAMP_I128;
     assert_eq!(clamp_op(5, 0, 10), Ok(5));
+}
+
+// ============================================================================
+// 14. Float Negate tests (f32, f64)
+// ============================================================================
+
+#[test]
+fn test_float_negate_f32() {
+    assert_eq!(negate_f32(5.5), -5.5);
+    assert_eq!(negate_f32(-5.5), 5.5);
+    assert_eq!(negate_f32(0.0), -0.0);
+    assert_eq!(negate_f32(-0.0), 0.0);
+    assert_eq!(negate_f32(f32::INFINITY), f32::NEG_INFINITY);
+    assert_eq!(negate_f32(f32::NEG_INFINITY), f32::INFINITY);
+    assert!(negate_f32(f32::NAN).is_nan());
+
+    let op: FloatNegate<f32> = NEGATE_F32;
+    assert_eq!(op(10.0), -10.0);
+}
+
+#[test]
+fn test_float_negate_f64() {
+    assert_eq!(negate_f64(5.5), -5.5);
+    assert_eq!(negate_f64(-5.5), 5.5);
+    assert_eq!(negate_f64(0.0), -0.0);
+    assert_eq!(negate_f64(-0.0), 0.0);
+    assert_eq!(negate_f64(f64::INFINITY), f64::NEG_INFINITY);
+    assert_eq!(negate_f64(f64::NEG_INFINITY), f64::INFINITY);
+    assert!(negate_f64(f64::NAN).is_nan());
+
+    let op: FloatNegate<f64> = NEGATE_F64;
+    assert_eq!(op(10.0), -10.0);
+}
+
+// ============================================================================
+// 15. Float Add tests (f32, f64)
+// ============================================================================
+
+#[test]
+fn test_float_add_f32() {
+    assert_eq!(add_f32(1.5, 2.5), 4.0);
+    assert_eq!(add_f32(-1.5, 2.5), 1.0);
+    assert_eq!(add_f32(0.0, -0.0), 0.0);
+    assert_eq!(add_f32(f32::MAX, f32::MAX), f32::INFINITY);
+    assert_eq!(add_f32(f32::INFINITY, 1.0), f32::INFINITY);
+    assert!(add_f32(f32::INFINITY, f32::NEG_INFINITY).is_nan());
+    assert!(add_f32(f32::NAN, 1.0).is_nan());
+
+    let op: FloatAdd<f32> = ADD_F32;
+    assert_eq!(op(1.0, 2.0), 3.0);
+}
+
+#[test]
+fn test_float_add_f64() {
+    assert_eq!(add_f64(1.5, 2.5), 4.0);
+    assert_eq!(add_f64(-1.5, 2.5), 1.0);
+    assert_eq!(add_f64(0.0, -0.0), 0.0);
+    assert_eq!(add_f64(f64::MAX, f64::MAX), f64::INFINITY);
+    assert_eq!(add_f64(f64::INFINITY, 1.0), f64::INFINITY);
+    assert!(add_f64(f64::INFINITY, f64::NEG_INFINITY).is_nan());
+    assert!(add_f64(f64::NAN, 1.0).is_nan());
+
+    let op: FloatAdd<f64> = ADD_F64;
+    assert_eq!(op(1.0, 2.0), 3.0);
+}
+
+// ============================================================================
+// 16. Float Subtract tests (f32, f64)
+// ============================================================================
+
+#[test]
+fn test_float_subtract_f32() {
+    assert_eq!(subtract_f32(5.5, 2.5), 3.0);
+    assert_eq!(subtract_f32(2.5, 5.5), -3.0);
+    assert_eq!(subtract_f32(0.0, 0.0), 0.0);
+    assert_eq!(subtract_f32(-f32::MAX, f32::MAX), f32::NEG_INFINITY);
+    assert!(subtract_f32(f32::INFINITY, f32::INFINITY).is_nan());
+    assert!(subtract_f32(f32::NAN, 1.0).is_nan());
+
+    let op: FloatSubtract<f32> = SUBTRACT_F32;
+    assert_eq!(op(10.0, 4.0), 6.0);
+}
+
+#[test]
+fn test_float_subtract_f64() {
+    assert_eq!(subtract_f64(5.5, 2.5), 3.0);
+    assert_eq!(subtract_f64(2.5, 5.5), -3.0);
+    assert_eq!(subtract_f64(0.0, 0.0), 0.0);
+    assert_eq!(subtract_f64(-f64::MAX, f64::MAX), f64::NEG_INFINITY);
+    assert!(subtract_f64(f64::INFINITY, f64::INFINITY).is_nan());
+    assert!(subtract_f64(f64::NAN, 1.0).is_nan());
+
+    let op: FloatSubtract<f64> = SUBTRACT_F64;
+    assert_eq!(op(10.0, 4.0), 6.0);
+}
+
+// ============================================================================
+// 17. Float Multiply tests (f32, f64)
+// ============================================================================
+
+#[test]
+fn test_float_multiply_f32() {
+    assert_eq!(multiply_f32(2.5, 4.0), 10.0);
+    assert_eq!(multiply_f32(-2.5, 4.0), -10.0);
+    assert_eq!(multiply_f32(-2.5, -4.0), 10.0);
+    assert_eq!(multiply_f32(0.0, 100.0), 0.0);
+    assert_eq!(multiply_f32(f32::MAX, 2.0), f32::INFINITY);
+    assert!(multiply_f32(0.0, f32::INFINITY).is_nan());
+    assert!(multiply_f32(f32::NAN, 2.0).is_nan());
+
+    let op: FloatMultiply<f32> = MULTIPLY_F32;
+    assert_eq!(op(3.0, 4.0), 12.0);
+}
+
+#[test]
+fn test_float_multiply_f64() {
+    assert_eq!(multiply_f64(2.5, 4.0), 10.0);
+    assert_eq!(multiply_f64(-2.5, 4.0), -10.0);
+    assert_eq!(multiply_f64(-2.5, -4.0), 10.0);
+    assert_eq!(multiply_f64(0.0, 100.0), 0.0);
+    assert_eq!(multiply_f64(f64::MAX, 2.0), f64::INFINITY);
+    assert!(multiply_f64(0.0, f64::INFINITY).is_nan());
+    assert!(multiply_f64(f64::NAN, 2.0).is_nan());
+
+    let op: FloatMultiply<f64> = MULTIPLY_F64;
+    assert_eq!(op(3.0, 4.0), 12.0);
+}
+
+// ============================================================================
+// 18. Float Divide tests (f32, f64)
+// ============================================================================
+
+#[test]
+fn test_float_divide_f32() {
+    assert_eq!(divide_f32(10.0, 2.0), 5.0);
+    assert_eq!(divide_f32(1.0, 0.0), f32::INFINITY);
+    assert_eq!(divide_f32(-1.0, 0.0), f32::NEG_INFINITY);
+    assert!(divide_f32(0.0, 0.0).is_nan());
+    assert!(divide_f32(f32::INFINITY, f32::INFINITY).is_nan());
+    assert!(divide_f32(f32::NAN, 2.0).is_nan());
+
+    let op: FloatDivide<f32> = DIVIDE_F32;
+    assert_eq!(op(20.0, 4.0), 5.0);
+}
+
+#[test]
+fn test_float_divide_f64() {
+    assert_eq!(divide_f64(10.0, 2.0), 5.0);
+    assert_eq!(divide_f64(1.0, 0.0), f64::INFINITY);
+    assert_eq!(divide_f64(-1.0, 0.0), f64::NEG_INFINITY);
+    assert!(divide_f64(0.0, 0.0).is_nan());
+    assert!(divide_f64(f64::INFINITY, f64::INFINITY).is_nan());
+    assert!(divide_f64(f64::NAN, 2.0).is_nan());
+
+    let op: FloatDivide<f64> = DIVIDE_F64;
+    assert_eq!(op(20.0, 4.0), 5.0);
+}
+
+// ============================================================================
+// 19. Float Remainder tests (f32, f64)
+// ============================================================================
+
+#[test]
+fn test_float_remainder_f32() {
+    assert_eq!(remainder_f32(7.5, 2.5), 0.0);
+    assert_eq!(remainder_f32(7.0, 2.5), 2.0);
+    assert_eq!(remainder_f32(-7.0, 2.5), -2.0);
+    assert_eq!(remainder_f32(7.0, -2.5), 2.0);
+    assert!(remainder_f32(7.0, 0.0).is_nan());
+    assert!(remainder_f32(f32::NAN, 2.0).is_nan());
+
+    let op: FloatRemainder<f32> = REMAINDER_F32;
+    assert_eq!(op(7.0, 2.5), 2.0);
+}
+
+#[test]
+fn test_float_remainder_f64() {
+    assert_eq!(remainder_f64(7.5, 2.5), 0.0);
+    assert_eq!(remainder_f64(7.0, 2.5), 2.0);
+    assert_eq!(remainder_f64(-7.0, 2.5), -2.0);
+    assert_eq!(remainder_f64(7.0, -2.5), 2.0);
+    assert!(remainder_f64(7.0, 0.0).is_nan());
+    assert!(remainder_f64(f64::NAN, 2.0).is_nan());
+
+    let op: FloatRemainder<f64> = REMAINDER_F64;
+    assert_eq!(op(7.0, 2.5), 2.0);
+}
+
+// ============================================================================
+// 20. Float Abs tests (f32, f64)
+// ============================================================================
+
+#[test]
+fn test_float_abs_f32() {
+    assert_eq!(abs_f32(5.5), 5.5);
+    assert_eq!(abs_f32(-5.5), 5.5);
+    assert_eq!(abs_f32(0.0), 0.0);
+    assert_eq!(abs_f32(-0.0), 0.0);
+    assert_eq!(abs_f32(f32::INFINITY), f32::INFINITY);
+    assert_eq!(abs_f32(f32::NEG_INFINITY), f32::INFINITY);
+    assert!(abs_f32(f32::NAN).is_nan());
+
+    let op: FloatAbs<f32> = ABS_F32;
+    assert_eq!(op(-10.0), 10.0);
+}
+
+#[test]
+fn test_float_abs_f64() {
+    assert_eq!(abs_f64(5.5), 5.5);
+    assert_eq!(abs_f64(-5.5), 5.5);
+    assert_eq!(abs_f64(0.0), 0.0);
+    assert_eq!(abs_f64(-0.0), 0.0);
+    assert_eq!(abs_f64(f64::INFINITY), f64::INFINITY);
+    assert_eq!(abs_f64(f64::NEG_INFINITY), f64::INFINITY);
+    assert!(abs_f64(f64::NAN).is_nan());
+
+    let op: FloatAbs<f64> = ABS_F64;
+    assert_eq!(op(-10.0), 10.0);
+}
+
+// ============================================================================
+// 21. Float Min tests (f32, f64)
+// ============================================================================
+
+#[test]
+fn test_float_min_f32() {
+    assert_eq!(min_f32(2.0, 5.0), 2.0);
+    assert_eq!(min_f32(5.0, 2.0), 2.0);
+    assert_eq!(min_f32(-5.0, 2.0), -5.0);
+    assert_eq!(min_f32(2.0, -5.0), -5.0);
+    assert_eq!(min_f32(f32::NEG_INFINITY, f32::INFINITY), f32::NEG_INFINITY);
+    // IEEE 754-2008 min returns the non-NaN operand
+    assert_eq!(min_f32(2.0, f32::NAN), 2.0);
+    assert_eq!(min_f32(f32::NAN, 2.0), 2.0);
+
+    let op: FloatMin<f32> = MIN_F32;
+    assert_eq!(op(10.0, 20.0), 10.0);
+}
+
+#[test]
+fn test_float_min_f64() {
+    assert_eq!(min_f64(2.0, 5.0), 2.0);
+    assert_eq!(min_f64(5.0, 2.0), 2.0);
+    assert_eq!(min_f64(-5.0, 2.0), -5.0);
+    assert_eq!(min_f64(2.0, -5.0), -5.0);
+    assert_eq!(min_f64(f64::NEG_INFINITY, f64::INFINITY), f64::NEG_INFINITY);
+    assert_eq!(min_f64(2.0, f64::NAN), 2.0);
+    assert_eq!(min_f64(f64::NAN, 2.0), 2.0);
+
+    let op: FloatMin<f64> = MIN_F64;
+    assert_eq!(op(10.0, 20.0), 10.0);
+}
+
+// ============================================================================
+// 22. Float Max tests (f32, f64)
+// ============================================================================
+
+#[test]
+fn test_float_max_f32() {
+    assert_eq!(max_f32(2.0, 5.0), 5.0);
+    assert_eq!(max_f32(5.0, 2.0), 5.0);
+    assert_eq!(max_f32(-5.0, 2.0), 2.0);
+    assert_eq!(max_f32(2.0, -5.0), 2.0);
+    assert_eq!(max_f32(f32::NEG_INFINITY, f32::INFINITY), f32::INFINITY);
+    // IEEE 754-2008 max returns the non-NaN operand
+    assert_eq!(max_f32(2.0, f32::NAN), 2.0);
+    assert_eq!(max_f32(f32::NAN, 2.0), 2.0);
+
+    let op: FloatMax<f32> = MAX_F32;
+    assert_eq!(op(10.0, 20.0), 20.0);
+}
+
+#[test]
+fn test_float_max_f64() {
+    assert_eq!(max_f64(2.0, 5.0), 5.0);
+    assert_eq!(max_f64(5.0, 2.0), 5.0);
+    assert_eq!(max_f64(-5.0, 2.0), 2.0);
+    assert_eq!(max_f64(2.0, -5.0), 2.0);
+    assert_eq!(max_f64(f64::NEG_INFINITY, f64::INFINITY), f64::INFINITY);
+    assert_eq!(max_f64(2.0, f64::NAN), 2.0);
+    assert_eq!(max_f64(f64::NAN, 2.0), 2.0);
+
+    let op: FloatMax<f64> = MAX_F64;
+    assert_eq!(op(10.0, 20.0), 20.0);
+}
+
+// ============================================================================
+// 23. Float Clamp tests (f32, f64)
+// ============================================================================
+
+#[test]
+fn test_float_clamp_f32() {
+    // Within, below, above
+    assert_eq!(clamp_f32(5.0, 0.0, 10.0), Ok(5.0));
+    assert_eq!(clamp_f32(-5.0, 0.0, 10.0), Ok(0.0));
+    assert_eq!(clamp_f32(20.0, 0.0, 10.0), Ok(10.0));
+
+    // Equals minimum, equals maximum
+    assert_eq!(clamp_f32(0.0, 0.0, 10.0), Ok(0.0));
+    assert_eq!(clamp_f32(10.0, 0.0, 10.0), Ok(10.0));
+
+    // Minimum == maximum
+    assert_eq!(clamp_f32(100.0, 7.0, 7.0), Ok(7.0));
+    assert_eq!(clamp_f32(-100.0, 7.0, 7.0), Ok(7.0));
+
+    // Invalid bounds
+    assert_eq!(
+        clamp_f32(5.0, 10.0, 0.0),
+        Err(NumericFailure::InvalidBounds)
+    );
+    assert_eq!(
+        clamp_f32(5.0, f32::NAN, 10.0),
+        Err(NumericFailure::InvalidBounds)
+    );
+    assert_eq!(
+        clamp_f32(5.0, 0.0, f32::NAN),
+        Err(NumericFailure::InvalidBounds)
+    );
+    assert_eq!(
+        clamp_f32(5.0, f32::NAN, f32::NAN),
+        Err(NumericFailure::InvalidBounds)
+    );
+
+    // Value is NaN with valid bounds evaluates comparisons to false -> Ok(NaN)
+    let nan_val = clamp_f32(f32::NAN, 0.0, 10.0).unwrap();
+    assert!(nan_val.is_nan());
+
+    let op: FloatClamp<f32> = CLAMP_F32;
+    assert_eq!(op(5.0, 0.0, 10.0), Ok(5.0));
+}
+
+#[test]
+fn test_float_clamp_f64() {
+    // Within, below, above
+    assert_eq!(clamp_f64(5.0, 0.0, 10.0), Ok(5.0));
+    assert_eq!(clamp_f64(-5.0, 0.0, 10.0), Ok(0.0));
+    assert_eq!(clamp_f64(20.0, 0.0, 10.0), Ok(10.0));
+
+    // Equals minimum, equals maximum
+    assert_eq!(clamp_f64(0.0, 0.0, 10.0), Ok(0.0));
+    assert_eq!(clamp_f64(10.0, 0.0, 10.0), Ok(10.0));
+
+    // Minimum == maximum
+    assert_eq!(clamp_f64(100.0, 7.0, 7.0), Ok(7.0));
+    assert_eq!(clamp_f64(-100.0, 7.0, 7.0), Ok(7.0));
+
+    // Invalid bounds
+    assert_eq!(
+        clamp_f64(5.0, 10.0, 0.0),
+        Err(NumericFailure::InvalidBounds)
+    );
+    assert_eq!(
+        clamp_f64(5.0, f64::NAN, 10.0),
+        Err(NumericFailure::InvalidBounds)
+    );
+    assert_eq!(
+        clamp_f64(5.0, 0.0, f64::NAN),
+        Err(NumericFailure::InvalidBounds)
+    );
+    assert_eq!(
+        clamp_f64(5.0, f64::NAN, f64::NAN),
+        Err(NumericFailure::InvalidBounds)
+    );
+
+    // Value is NaN with valid bounds evaluates comparisons to false -> Ok(NaN)
+    let nan_val = clamp_f64(f64::NAN, 0.0, 10.0).unwrap();
+    assert!(nan_val.is_nan());
+
+    let op: FloatClamp<f64> = CLAMP_F64;
+    assert_eq!(op(5.0, 0.0, 10.0), Ok(5.0));
+}
+
+// ============================================================================
+// 24. Float Floor tests (f32, f64)
+// ============================================================================
+
+#[test]
+fn test_float_floor_f32() {
+    assert_eq!(floor_f32(3.7), 3.0);
+    assert_eq!(floor_f32(-3.7), -4.0);
+    assert_eq!(floor_f32(3.0), 3.0);
+    assert_eq!(floor_f32(0.0), 0.0);
+    assert_eq!(floor_f32(-0.0), -0.0);
+
+    let op: FloatFloor<f32> = FLOOR_F32;
+    assert_eq!(op(2.9), 2.0);
+}
+
+#[test]
+fn test_float_floor_f64() {
+    assert_eq!(floor_f64(3.7), 3.0);
+    assert_eq!(floor_f64(-3.7), -4.0);
+    assert_eq!(floor_f64(3.0), 3.0);
+    assert_eq!(floor_f64(0.0), 0.0);
+    assert_eq!(floor_f64(-0.0), -0.0);
+
+    let op: FloatFloor<f64> = FLOOR_F64;
+    assert_eq!(op(2.9), 2.0);
+}
+
+// ============================================================================
+// 25. Float Ceil tests (f32, f64)
+// ============================================================================
+
+#[test]
+fn test_float_ceil_f32() {
+    assert_eq!(ceil_f32(3.2), 4.0);
+    assert_eq!(ceil_f32(-3.2), -3.0);
+    assert_eq!(ceil_f32(3.0), 3.0);
+    assert_eq!(ceil_f32(0.0), 0.0);
+
+    let op: FloatCeil<f32> = CEIL_F32;
+    assert_eq!(op(2.1), 3.0);
+}
+
+#[test]
+fn test_float_ceil_f64() {
+    assert_eq!(ceil_f64(3.2), 4.0);
+    assert_eq!(ceil_f64(-3.2), -3.0);
+    assert_eq!(ceil_f64(3.0), 3.0);
+    assert_eq!(ceil_f64(0.0), 0.0);
+
+    let op: FloatCeil<f64> = CEIL_F64;
+    assert_eq!(op(2.1), 3.0);
+}
+
+// ============================================================================
+// 26. Float Round tests (f32, f64)
+// ============================================================================
+
+#[test]
+fn test_float_round_f32() {
+    assert_eq!(round_f32(3.2), 3.0);
+    assert_eq!(round_f32(3.5), 4.0);
+    assert_eq!(round_f32(3.7), 4.0);
+    assert_eq!(round_f32(-3.5), -4.0);
+    assert_eq!(round_f32(-3.2), -3.0);
+
+    let op: FloatRound<f32> = ROUND_F32;
+    assert_eq!(op(2.5), 3.0);
+}
+
+#[test]
+fn test_float_round_f64() {
+    assert_eq!(round_f64(3.2), 3.0);
+    assert_eq!(round_f64(3.5), 4.0);
+    assert_eq!(round_f64(3.7), 4.0);
+    assert_eq!(round_f64(-3.5), -4.0);
+    assert_eq!(round_f64(-3.2), -3.0);
+
+    let op: FloatRound<f64> = ROUND_F64;
+    assert_eq!(op(2.5), 3.0);
+}
+
+// ============================================================================
+// 27. Float Trunc tests (f32, f64)
+// ============================================================================
+
+#[test]
+fn test_float_trunc_f32() {
+    assert_eq!(trunc_f32(3.7), 3.0);
+    assert_eq!(trunc_f32(-3.7), -3.0);
+    assert_eq!(trunc_f32(0.5), 0.0);
+    assert_eq!(trunc_f32(-0.5), -0.0);
+
+    let op: FloatTrunc<f32> = TRUNC_F32;
+    assert_eq!(op(2.9), 2.0);
+}
+
+#[test]
+fn test_float_trunc_f64() {
+    assert_eq!(trunc_f64(3.7), 3.0);
+    assert_eq!(trunc_f64(-3.7), -3.0);
+    assert_eq!(trunc_f64(0.5), 0.0);
+    assert_eq!(trunc_f64(-0.5), -0.0);
+
+    let op: FloatTrunc<f64> = TRUNC_F64;
+    assert_eq!(op(2.9), 2.0);
+}
+
+// ============================================================================
+// 28. Float Fract tests (f32, f64)
+// ============================================================================
+
+#[test]
+fn test_float_fract_f32() {
+    assert!((fract_f32(3.5) - 0.5).abs() < 1e-6);
+    assert!((fract_f32(-3.5) - -0.5).abs() < 1e-6);
+    assert_eq!(fract_f32(3.0), 0.0);
+
+    let op: FloatFract<f32> = FRACT_F32;
+    assert!((op(1.25) - 0.25).abs() < 1e-6);
+}
+
+#[test]
+fn test_float_fract_f64() {
+    assert!((fract_f64(3.5) - 0.5).abs() < 1e-10);
+    assert!((fract_f64(-3.5) - -0.5).abs() < 1e-10);
+    assert_eq!(fract_f64(3.0), 0.0);
+
+    let op: FloatFract<f64> = FRACT_F64;
+    assert!((op(1.25) - 0.25).abs() < 1e-10);
+}
+
+// ============================================================================
+// 29. Float IsNan tests (f32, f64)
+// ============================================================================
+
+#[test]
+fn test_float_is_nan_f32() {
+    assert!(is_nan_f32(f32::NAN));
+    assert!(!is_nan_f32(0.0));
+    assert!(!is_nan_f32(f32::INFINITY));
+    assert!(!is_nan_f32(1.23));
+
+    let op: FloatIsNan<f32> = IS_NAN_F32;
+    assert!(op(f32::NAN));
+    assert!(!op(1.0));
+}
+
+#[test]
+fn test_float_is_nan_f64() {
+    assert!(is_nan_f64(f64::NAN));
+    assert!(!is_nan_f64(0.0));
+    assert!(!is_nan_f64(f64::INFINITY));
+    assert!(!is_nan_f64(1.23));
+
+    let op: FloatIsNan<f64> = IS_NAN_F64;
+    assert!(op(f64::NAN));
+    assert!(!op(1.0));
+}
+
+// ============================================================================
+// 30. Float IsInfinite tests (f32, f64)
+// ============================================================================
+
+#[test]
+fn test_float_is_infinite_f32() {
+    assert!(is_infinite_f32(f32::INFINITY));
+    assert!(is_infinite_f32(f32::NEG_INFINITY));
+    assert!(!is_infinite_f32(0.0));
+    assert!(!is_infinite_f32(f32::NAN));
+    assert!(!is_infinite_f32(1.23));
+
+    let op: FloatIsInfinite<f32> = IS_INFINITE_F32;
+    assert!(op(f32::INFINITY));
+    assert!(!op(1.0));
+}
+
+#[test]
+fn test_float_is_infinite_f64() {
+    assert!(is_infinite_f64(f64::INFINITY));
+    assert!(is_infinite_f64(f64::NEG_INFINITY));
+    assert!(!is_infinite_f64(0.0));
+    assert!(!is_infinite_f64(f64::NAN));
+    assert!(!is_infinite_f64(1.23));
+
+    let op: FloatIsInfinite<f64> = IS_INFINITE_F64;
+    assert!(op(f64::INFINITY));
+    assert!(!op(1.0));
+}
+
+// ============================================================================
+// 31. Float IsFinite tests (f32, f64)
+// ============================================================================
+
+#[test]
+fn test_float_is_finite_f32() {
+    assert!(is_finite_f32(0.0));
+    assert!(is_finite_f32(-100.5));
+    assert!(!is_finite_f32(f32::INFINITY));
+    assert!(!is_finite_f32(f32::NEG_INFINITY));
+    assert!(!is_finite_f32(f32::NAN));
+
+    let op: FloatIsFinite<f32> = IS_FINITE_F32;
+    assert!(op(1.0));
+    assert!(!op(f32::INFINITY));
+}
+
+#[test]
+fn test_float_is_finite_f64() {
+    assert!(is_finite_f64(0.0));
+    assert!(is_finite_f64(-100.5));
+    assert!(!is_finite_f64(f64::INFINITY));
+    assert!(!is_finite_f64(f64::NEG_INFINITY));
+    assert!(!is_finite_f64(f64::NAN));
+
+    let op: FloatIsFinite<f64> = IS_FINITE_F64;
+    assert!(op(1.0));
+    assert!(!op(f64::INFINITY));
+}
+
+// ============================================================================
+// 32. Float all 18 operations function pointer contracts
+// ============================================================================
+
+#[test]
+fn test_all_18_float_function_pointer_contracts() {
+    let _op_neg_f32: FloatNegate<f32> = NEGATE_F32;
+    let _op_neg_f64: FloatNegate<f64> = NEGATE_F64;
+
+    let _op_add_f32: FloatAdd<f32> = ADD_F32;
+    let _op_add_f64: FloatAdd<f64> = ADD_F64;
+
+    let _op_sub_f32: FloatSubtract<f32> = SUBTRACT_F32;
+    let _op_sub_f64: FloatSubtract<f64> = SUBTRACT_F64;
+
+    let _op_mul_f32: FloatMultiply<f32> = MULTIPLY_F32;
+    let _op_mul_f64: FloatMultiply<f64> = MULTIPLY_F64;
+
+    let _op_div_f32: FloatDivide<f32> = DIVIDE_F32;
+    let _op_div_f64: FloatDivide<f64> = DIVIDE_F64;
+
+    let _op_rem_f32: FloatRemainder<f32> = REMAINDER_F32;
+    let _op_rem_f64: FloatRemainder<f64> = REMAINDER_F64;
+
+    let _op_abs_f32: FloatAbs<f32> = ABS_F32;
+    let _op_abs_f64: FloatAbs<f64> = ABS_F64;
+
+    let _op_min_f32: FloatMin<f32> = MIN_F32;
+    let _op_min_f64: FloatMin<f64> = MIN_F64;
+
+    let _op_max_f32: FloatMax<f32> = MAX_F32;
+    let _op_max_f64: FloatMax<f64> = MAX_F64;
+
+    let _op_clamp_f32: FloatClamp<f32> = CLAMP_F32;
+    let _op_clamp_f64: FloatClamp<f64> = CLAMP_F64;
+
+    let _op_floor_f32: FloatFloor<f32> = FLOOR_F32;
+    let _op_floor_f64: FloatFloor<f64> = FLOOR_F64;
+
+    let _op_ceil_f32: FloatCeil<f32> = CEIL_F32;
+    let _op_ceil_f64: FloatCeil<f64> = CEIL_F64;
+
+    let _op_round_f32: FloatRound<f32> = ROUND_F32;
+    let _op_round_f64: FloatRound<f64> = ROUND_F64;
+
+    let _op_trunc_f32: FloatTrunc<f32> = TRUNC_F32;
+    let _op_trunc_f64: FloatTrunc<f64> = TRUNC_F64;
+
+    let _op_fract_f32: FloatFract<f32> = FRACT_F32;
+    let _op_fract_f64: FloatFract<f64> = FRACT_F64;
+
+    let _op_is_nan_f32: FloatIsNan<f32> = IS_NAN_F32;
+    let _op_is_nan_f64: FloatIsNan<f64> = IS_NAN_F64;
+
+    let _op_is_infinite_f32: FloatIsInfinite<f32> = IS_INFINITE_F32;
+    let _op_is_infinite_f64: FloatIsInfinite<f64> = IS_INFINITE_F64;
+
+    let _op_is_finite_f32: FloatIsFinite<f32> = IS_FINITE_F32;
+    let _op_is_finite_f64: FloatIsFinite<f64> = IS_FINITE_F64;
 }

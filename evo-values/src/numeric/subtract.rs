@@ -1,5 +1,5 @@
 use crate::definitions::failures::NumericFailure;
-use crate::definitions::numeric::subtract::Subtract;
+use crate::definitions::numeric::subtract::{FloatSubtract, Subtract};
 
 macro_rules! impl_subtract {
     ($fn_name:ident, $const_name:ident, $t:ty) => {
@@ -23,6 +23,19 @@ impl_subtract!(subtract_u32, SUBTRACT_U32, u32);
 impl_subtract!(subtract_u64, SUBTRACT_U64, u64);
 impl_subtract!(subtract_u128, SUBTRACT_U128, u128);
 
+macro_rules! impl_float_subtract {
+    ($fn_name:ident, $const_name:ident, $t:ty) => {
+        pub fn $fn_name(lhs: $t, rhs: $t) -> $t {
+            lhs - rhs
+        }
+
+        pub const $const_name: FloatSubtract<$t> = $fn_name;
+    };
+}
+
+impl_float_subtract!(subtract_f32, SUBTRACT_F32, f32);
+impl_float_subtract!(subtract_f64, SUBTRACT_F64, f64);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -42,11 +55,20 @@ mod tests {
     }
 
     #[test]
+    fn subtract_float_cases() {
+        assert_eq!(subtract_f32(5.5, 2.0), 3.5);
+        assert_eq!(subtract_f64(5.5, 2.0), 3.5);
+    }
+
+    #[test]
     fn subtract_constants() {
         let op_signed: Subtract<i32> = SUBTRACT_I32;
         assert_eq!(op_signed(30, 10), Ok(20));
 
         let op_unsigned: Subtract<u64> = SUBTRACT_U64;
         assert_eq!(op_unsigned(30, 10), Ok(20));
+
+        let op_float: FloatSubtract<f64> = SUBTRACT_F64;
+        assert_eq!(op_float(30.0, 10.0), 20.0);
     }
 }

@@ -1,5 +1,5 @@
 use crate::definitions::failures::NumericFailure;
-use crate::definitions::numeric::multiply::Multiply;
+use crate::definitions::numeric::multiply::{FloatMultiply, Multiply};
 
 macro_rules! impl_multiply {
     ($fn_name:ident, $const_name:ident, $t:ty) => {
@@ -22,6 +22,19 @@ impl_multiply!(multiply_u16, MULTIPLY_U16, u16);
 impl_multiply!(multiply_u32, MULTIPLY_U32, u32);
 impl_multiply!(multiply_u64, MULTIPLY_U64, u64);
 impl_multiply!(multiply_u128, MULTIPLY_U128, u128);
+
+macro_rules! impl_float_multiply {
+    ($fn_name:ident, $const_name:ident, $t:ty) => {
+        pub fn $fn_name(lhs: $t, rhs: $t) -> $t {
+            lhs * rhs
+        }
+
+        pub const $const_name: FloatMultiply<$t> = $fn_name;
+    };
+}
+
+impl_float_multiply!(multiply_f32, MULTIPLY_F32, f32);
+impl_float_multiply!(multiply_f64, MULTIPLY_F64, f64);
 
 #[cfg(test)]
 mod tests {
@@ -46,11 +59,20 @@ mod tests {
     }
 
     #[test]
+    fn multiply_float_cases() {
+        assert_eq!(multiply_f32(2.5, 4.0), 10.0);
+        assert_eq!(multiply_f64(2.5, 4.0), 10.0);
+    }
+
+    #[test]
     fn multiply_constants() {
         let op_signed: Multiply<i32> = MULTIPLY_I32;
         assert_eq!(op_signed(5, 6), Ok(30));
 
         let op_unsigned: Multiply<u64> = MULTIPLY_U64;
         assert_eq!(op_unsigned(5, 6), Ok(30));
+
+        let op_float: FloatMultiply<f32> = MULTIPLY_F32;
+        assert_eq!(op_float(5.0, 6.0), 30.0);
     }
 }

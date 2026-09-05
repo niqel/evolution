@@ -1,5 +1,5 @@
 use crate::definitions::failures::NumericFailure;
-use crate::definitions::numeric::add::Add;
+use crate::definitions::numeric::add::{Add, FloatAdd};
 
 macro_rules! impl_add {
     ($fn_name:ident, $const_name:ident, $t:ty) => {
@@ -23,6 +23,19 @@ impl_add!(add_u32, ADD_U32, u32);
 impl_add!(add_u64, ADD_U64, u64);
 impl_add!(add_u128, ADD_U128, u128);
 
+macro_rules! impl_float_add {
+    ($fn_name:ident, $const_name:ident, $t:ty) => {
+        pub fn $fn_name(lhs: $t, rhs: $t) -> $t {
+            lhs + rhs
+        }
+
+        pub const $const_name: FloatAdd<$t> = $fn_name;
+    };
+}
+
+impl_float_add!(add_f32, ADD_F32, f32);
+impl_float_add!(add_f64, ADD_F64, f64);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -43,11 +56,22 @@ mod tests {
     }
 
     #[test]
+    fn add_float_cases() {
+        assert_eq!(add_f32(1.5, 2.5), 4.0);
+        assert_eq!(add_f32(f32::MAX, f32::MAX), f32::INFINITY);
+        assert_eq!(add_f64(1.5, 2.5), 4.0);
+        assert_eq!(add_f64(f64::MAX, f64::MAX), f64::INFINITY);
+    }
+
+    #[test]
     fn add_constants() {
         let op_signed: Add<i32> = ADD_I32;
         assert_eq!(op_signed(10, 20), Ok(30));
 
         let op_unsigned: Add<u64> = ADD_U64;
         assert_eq!(op_unsigned(10, 20), Ok(30));
+
+        let op_float: FloatAdd<f32> = ADD_F32;
+        assert_eq!(op_float(10.0, 20.0), 30.0);
     }
 }

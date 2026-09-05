@@ -1,4 +1,4 @@
-use crate::definitions::numeric::max::IntegerMax;
+use crate::definitions::numeric::max::{FloatMax, IntegerMax};
 
 macro_rules! impl_max {
     ($fn_name:ident, $const_name:ident, $t:ty) => {
@@ -22,6 +22,19 @@ impl_max!(max_u32, MAX_U32, u32);
 impl_max!(max_u64, MAX_U64, u64);
 impl_max!(max_u128, MAX_U128, u128);
 
+macro_rules! impl_float_max {
+    ($fn_name:ident, $const_name:ident, $t:ty) => {
+        pub fn $fn_name(a: $t, b: $t) -> $t {
+            a.max(b)
+        }
+
+        pub const $const_name: FloatMax<$t> = $fn_name;
+    };
+}
+
+impl_float_max!(max_f32, MAX_F32, f32);
+impl_float_max!(max_f64, MAX_F64, f64);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -43,8 +56,19 @@ mod tests {
     }
 
     #[test]
+    fn max_float() {
+        assert_eq!(max_f32(2.0, 5.0), 5.0);
+        assert_eq!(max_f32(5.0, 2.0), 5.0);
+        assert_eq!(max_f64(2.0, 5.0), 5.0);
+        assert_eq!(max_f64(5.0, 2.0), 5.0);
+    }
+
+    #[test]
     fn max_constants() {
         let op: IntegerMax<u64> = MAX_U64;
         assert_eq!(op(10, 20), 20);
+
+        let op_float: FloatMax<f64> = MAX_F64;
+        assert_eq!(op_float(10.0, 20.0), 20.0);
     }
 }

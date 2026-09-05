@@ -1,4 +1,4 @@
-use crate::definitions::numeric::min::IntegerMin;
+use crate::definitions::numeric::min::{FloatMin, IntegerMin};
 
 macro_rules! impl_min {
     ($fn_name:ident, $const_name:ident, $t:ty) => {
@@ -22,6 +22,19 @@ impl_min!(min_u32, MIN_U32, u32);
 impl_min!(min_u64, MIN_U64, u64);
 impl_min!(min_u128, MIN_U128, u128);
 
+macro_rules! impl_float_min {
+    ($fn_name:ident, $const_name:ident, $t:ty) => {
+        pub fn $fn_name(a: $t, b: $t) -> $t {
+            a.min(b)
+        }
+
+        pub const $const_name: FloatMin<$t> = $fn_name;
+    };
+}
+
+impl_float_min!(min_f32, MIN_F32, f32);
+impl_float_min!(min_f64, MIN_F64, f64);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -43,8 +56,19 @@ mod tests {
     }
 
     #[test]
+    fn min_float() {
+        assert_eq!(min_f32(2.0, 5.0), 2.0);
+        assert_eq!(min_f32(5.0, 2.0), 2.0);
+        assert_eq!(min_f64(2.0, 5.0), 2.0);
+        assert_eq!(min_f64(5.0, 2.0), 2.0);
+    }
+
+    #[test]
     fn min_constants() {
         let op: IntegerMin<i32> = MIN_I32;
         assert_eq!(op(10, 20), 10);
+
+        let op_float: FloatMin<f32> = MIN_F32;
+        assert_eq!(op_float(10.0, 20.0), 10.0);
     }
 }
