@@ -2,6 +2,7 @@
 
 extern crate alloc;
 
+pub mod boolean;
 pub mod definitions;
 pub mod materialize_owned;
 pub mod text;

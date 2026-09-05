@@ -1,3 +1,4 @@
+pub mod boolean;
 pub mod control;
 pub mod failures;
 pub mod materialize_owned;
