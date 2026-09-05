@@ -67,3 +67,25 @@ pub fn to_uint64_from_f64(source: f64) -> Result<u64, ConversionFailure> {
     }
 }
 pub const TO_UINT64_FROM_F64: ToUint64<f64> = to_uint64_from_f64;
+
+use crate::conversion::kernel::dynamic_integer_to_u64;
+use crate::definitions::conversion::to_uint64::{ToUint64FromDynamic, ToUint64FromOwnedDynamic};
+use crate::definitions::value::{DynamicValue, OwnedDynamicValue};
+
+pub fn to_uint64_from_dynamic(source: &DynamicValue<'_>) -> Result<u64, ConversionFailure> {
+    match source {
+        DynamicValue::Integer(val) => dynamic_integer_to_u64(val.negative(), val.magnitude()),
+        DynamicValue::Float32(val) => to_uint64_from_f32(*val),
+        DynamicValue::Float64(val) => to_uint64_from_f64(*val),
+    }
+}
+pub const TO_UINT64_FROM_DYNAMIC: ToUint64FromDynamic = to_uint64_from_dynamic;
+
+pub fn to_uint64_from_owned_dynamic(source: &OwnedDynamicValue) -> Result<u64, ConversionFailure> {
+    match source {
+        OwnedDynamicValue::Integer(val) => dynamic_integer_to_u64(val.negative(), val.magnitude()),
+        OwnedDynamicValue::Float32(val) => to_uint64_from_f32(*val),
+        OwnedDynamicValue::Float64(val) => to_uint64_from_f64(*val),
+    }
+}
+pub const TO_UINT64_FROM_OWNED_DYNAMIC: ToUint64FromOwnedDynamic = to_uint64_from_owned_dynamic;

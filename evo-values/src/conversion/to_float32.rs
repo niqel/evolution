@@ -85,3 +85,25 @@ pub fn to_float32_from_f64(source: f64) -> Result<f32, ConversionFailure> {
     f64_to_f32(source)
 }
 pub const TO_FLOAT32_FROM_F64: ToFloat32<f64> = to_float32_from_f64;
+
+use crate::conversion::kernel::dynamic_integer_to_f32;
+use crate::definitions::conversion::to_float32::{ToFloat32FromDynamic, ToFloat32FromOwnedDynamic};
+use crate::definitions::value::{DynamicValue, OwnedDynamicValue};
+
+pub fn to_float32_from_dynamic(source: &DynamicValue<'_>) -> Result<f32, ConversionFailure> {
+    match source {
+        DynamicValue::Integer(val) => dynamic_integer_to_f32(val.negative(), val.magnitude()),
+        DynamicValue::Float32(val) => to_float32_from_f32(*val),
+        DynamicValue::Float64(val) => to_float32_from_f64(*val),
+    }
+}
+pub const TO_FLOAT32_FROM_DYNAMIC: ToFloat32FromDynamic = to_float32_from_dynamic;
+
+pub fn to_float32_from_owned_dynamic(source: &OwnedDynamicValue) -> Result<f32, ConversionFailure> {
+    match source {
+        OwnedDynamicValue::Integer(val) => dynamic_integer_to_f32(val.negative(), val.magnitude()),
+        OwnedDynamicValue::Float32(val) => to_float32_from_f32(*val),
+        OwnedDynamicValue::Float64(val) => to_float32_from_f64(*val),
+    }
+}
+pub const TO_FLOAT32_FROM_OWNED_DYNAMIC: ToFloat32FromOwnedDynamic = to_float32_from_owned_dynamic;

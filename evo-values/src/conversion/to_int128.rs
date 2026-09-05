@@ -67,3 +67,25 @@ pub fn to_int128_from_f64(source: f64) -> Result<i128, ConversionFailure> {
     }
 }
 pub const TO_INT128_FROM_F64: ToInt128<f64> = to_int128_from_f64;
+
+use crate::conversion::kernel::dynamic_integer_to_i128;
+use crate::definitions::conversion::to_int128::{ToInt128FromDynamic, ToInt128FromOwnedDynamic};
+use crate::definitions::value::{DynamicValue, OwnedDynamicValue};
+
+pub fn to_int128_from_dynamic(source: &DynamicValue<'_>) -> Result<i128, ConversionFailure> {
+    match source {
+        DynamicValue::Integer(val) => dynamic_integer_to_i128(val.negative(), val.magnitude()),
+        DynamicValue::Float32(val) => to_int128_from_f32(*val),
+        DynamicValue::Float64(val) => to_int128_from_f64(*val),
+    }
+}
+pub const TO_INT128_FROM_DYNAMIC: ToInt128FromDynamic = to_int128_from_dynamic;
+
+pub fn to_int128_from_owned_dynamic(source: &OwnedDynamicValue) -> Result<i128, ConversionFailure> {
+    match source {
+        OwnedDynamicValue::Integer(val) => dynamic_integer_to_i128(val.negative(), val.magnitude()),
+        OwnedDynamicValue::Float32(val) => to_int128_from_f32(*val),
+        OwnedDynamicValue::Float64(val) => to_int128_from_f64(*val),
+    }
+}
+pub const TO_INT128_FROM_OWNED_DYNAMIC: ToInt128FromOwnedDynamic = to_int128_from_owned_dynamic;

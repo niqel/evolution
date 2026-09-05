@@ -1,5 +1,8 @@
 pub(crate) mod kernel;
 
+pub mod to_dynamic_float32;
+pub mod to_dynamic_float64;
+pub mod to_dynamic_integer;
 pub mod to_float32;
 pub mod to_float64;
 pub mod to_int128;
@@ -13,6 +16,9 @@ pub mod to_uint32;
 pub mod to_uint64;
 pub mod to_uint8;
 
+pub use to_dynamic_float32::*;
+pub use to_dynamic_float64::*;
+pub use to_dynamic_integer::*;
 pub use to_float32::*;
 pub use to_float64::*;
 pub use to_int8::*;

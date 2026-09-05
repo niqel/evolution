@@ -67,3 +67,25 @@ pub fn to_int16_from_f64(source: f64) -> Result<i16, ConversionFailure> {
     }
 }
 pub const TO_INT16_FROM_F64: ToInt16<f64> = to_int16_from_f64;
+
+use crate::conversion::kernel::dynamic_integer_to_i16;
+use crate::definitions::conversion::to_int16::{ToInt16FromDynamic, ToInt16FromOwnedDynamic};
+use crate::definitions::value::{DynamicValue, OwnedDynamicValue};
+
+pub fn to_int16_from_dynamic(source: &DynamicValue<'_>) -> Result<i16, ConversionFailure> {
+    match source {
+        DynamicValue::Integer(val) => dynamic_integer_to_i16(val.negative(), val.magnitude()),
+        DynamicValue::Float32(val) => to_int16_from_f32(*val),
+        DynamicValue::Float64(val) => to_int16_from_f64(*val),
+    }
+}
+pub const TO_INT16_FROM_DYNAMIC: ToInt16FromDynamic = to_int16_from_dynamic;
+
+pub fn to_int16_from_owned_dynamic(source: &OwnedDynamicValue) -> Result<i16, ConversionFailure> {
+    match source {
+        OwnedDynamicValue::Integer(val) => dynamic_integer_to_i16(val.negative(), val.magnitude()),
+        OwnedDynamicValue::Float32(val) => to_int16_from_f32(*val),
+        OwnedDynamicValue::Float64(val) => to_int16_from_f64(*val),
+    }
+}
+pub const TO_INT16_FROM_OWNED_DYNAMIC: ToInt16FromOwnedDynamic = to_int16_from_owned_dynamic;

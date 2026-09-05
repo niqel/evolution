@@ -35,7 +35,7 @@ pub(crate) fn decompose_f32_to_integer(val: f32) -> Option<(bool, u128)> {
     let bits = val.to_bits();
     let sign = (bits >> 31) != 0;
     let raw_exp = ((bits >> 23) & 0xff) as i32;
-    let raw_mant = (bits & 0x7f_ffff) as u32;
+    let raw_mant = bits & 0x7f_ffff;
 
     if raw_exp == 0xff {
         // NaN or Infinity
@@ -83,7 +83,7 @@ pub(crate) fn decompose_f64_to_integer(val: f64) -> Option<(bool, u128)> {
     let bits = val.to_bits();
     let sign = (bits >> 63) != 0;
     let raw_exp = ((bits >> 52) & 0x7ff) as i32;
-    let raw_mant = (bits & 0x000f_ffff_ffff_ffff) as u64;
+    let raw_mant = bits & 0x000f_ffff_ffff_ffff;
 
     if raw_exp == 0x7ff {
         // NaN or Infinity
@@ -231,4 +231,136 @@ pub(crate) fn f64_to_f32(source: f64) -> Result<f32, ConversionFailure> {
             Err(ConversionFailure::NotExactlyRepresentable)
         }
     }
+}
+
+// ============================================================================
+// 5. Dynamic Integer -> Fixed Conversion Helpers
+// ============================================================================
+
+#[inline]
+pub(crate) fn magnitude_to_u128(magnitude: &[u8]) -> Option<u128> {
+    let first_non_zero = match magnitude.iter().position(|&b| b != 0) {
+        Some(pos) => pos,
+        None => return Some(0),
+    };
+    let mag = &magnitude[first_non_zero..];
+    if mag.len() > 16 {
+        return None;
+    }
+    let mut buf = [0u8; 16];
+    buf[16 - mag.len()..].copy_from_slice(mag);
+    Some(u128::from_be_bytes(buf))
+}
+
+macro_rules! impl_dyn_int_to_target {
+    ($fn_name:ident, $fit_fn:ident, $target:ident) => {
+        #[inline]
+        pub(crate) fn $fn_name(
+            negative: bool,
+            magnitude: &[u8],
+        ) -> Result<$target, ConversionFailure> {
+            match magnitude_to_u128(magnitude) {
+                Some(mag) => $fit_fn(negative, mag),
+                None => Err(ConversionFailure::NotExactlyRepresentable),
+            }
+        }
+    };
+}
+
+impl_dyn_int_to_target!(dynamic_integer_to_i8, fit_i8, i8);
+impl_dyn_int_to_target!(dynamic_integer_to_i16, fit_i16, i16);
+impl_dyn_int_to_target!(dynamic_integer_to_i32, fit_i32, i32);
+impl_dyn_int_to_target!(dynamic_integer_to_i64, fit_i64, i64);
+impl_dyn_int_to_target!(dynamic_integer_to_i128, fit_i128, i128);
+
+impl_dyn_int_to_target!(dynamic_integer_to_u8, fit_u8, u8);
+impl_dyn_int_to_target!(dynamic_integer_to_u16, fit_u16, u16);
+impl_dyn_int_to_target!(dynamic_integer_to_u32, fit_u32, u32);
+impl_dyn_int_to_target!(dynamic_integer_to_u64, fit_u64, u64);
+impl_dyn_int_to_target!(dynamic_integer_to_u128, fit_u128, u128);
+
+pub(crate) fn dynamic_integer_to_f32(
+    negative: bool,
+    magnitude: &[u8],
+) -> Result<f32, ConversionFailure> {
+    let first_non_zero = match magnitude.iter().position(|&b| b != 0) {
+        Some(pos) => pos,
+        None => return Ok(if negative { -0.0f32 } else { 0.0f32 }),
+    };
+    let mag = &magnitude[first_non_zero..];
+    let lz = mag[0].leading_zeros() as usize;
+    let l = (mag.len() - 1) * 8 + (8 - lz);
+
+    if l > 128 {
+        return Err(ConversionFailure::NotExactlyRepresentable);
+    }
+    if l > 24 {
+        let mut z = 0usize;
+        for &b in mag.iter().rev() {
+            if b == 0 {
+                z += 8;
+            } else {
+                z += b.trailing_zeros() as usize;
+                break;
+            }
+        }
+        if z < l - 24 {
+            return Err(ConversionFailure::NotExactlyRepresentable);
+        }
+    }
+
+    let mut top_buf = [0u8; 8];
+    let take = mag.len().min(8);
+    top_buf[..take].copy_from_slice(&mag[..take]);
+    let top_u64 = u64::from_be_bytes(top_buf);
+
+    let shift = 40 - lz;
+    let mantissa = ((top_u64 >> shift) as u32) & 0x7f_ffff;
+    let biased_exp = (l as u32 + 126) << 23;
+    let sign_bit = if negative { 1u32 << 31 } else { 0 };
+    let bits = sign_bit | biased_exp | mantissa;
+    Ok(f32::from_bits(bits))
+}
+
+pub(crate) fn dynamic_integer_to_f64(
+    negative: bool,
+    magnitude: &[u8],
+) -> Result<f64, ConversionFailure> {
+    let first_non_zero = match magnitude.iter().position(|&b| b != 0) {
+        Some(pos) => pos,
+        None => return Ok(if negative { -0.0f64 } else { 0.0f64 }),
+    };
+    let mag = &magnitude[first_non_zero..];
+    let lz = mag[0].leading_zeros() as usize;
+    let l = (mag.len() - 1) * 8 + (8 - lz);
+
+    if l > 1024 {
+        return Err(ConversionFailure::NotExactlyRepresentable);
+    }
+    if l > 53 {
+        let mut z = 0usize;
+        for &b in mag.iter().rev() {
+            if b == 0 {
+                z += 8;
+            } else {
+                z += b.trailing_zeros() as usize;
+                break;
+            }
+        }
+        if z < l - 53 {
+            return Err(ConversionFailure::NotExactlyRepresentable);
+        }
+    }
+
+    let mut top_buf = [0u8; 8];
+    let take = mag.len().min(8);
+    top_buf[..take].copy_from_slice(&mag[..take]);
+    let top_u64 = u64::from_be_bytes(top_buf);
+
+    let shift = 11 - lz;
+    let mantissa = (top_u64 >> shift) & 0x000f_ffff_ffff_ffff;
+    let biased_exp = (l as u64 + 1022) << 52;
+    let sign_bit = if negative { 1u64 << 63 } else { 0 };
+    let bits = sign_bit | biased_exp | mantissa;
+    Ok(f64::from_bits(bits))
 }
