@@ -1,1 +1,3 @@
-pub type Len = fn(text: &str) -> usize;
+use crate::definitions::scalars::TextLength;
+
+pub type Len = fn(&str) -> TextLength;

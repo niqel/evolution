@@ -1,4 +1,19 @@
 pub mod concat;
+pub mod contains;
+pub mod ends_with;
+pub mod find;
+pub mod is_empty;
 pub mod len;
 pub mod replace;
+pub mod starts_with;
 pub mod substring;
+pub mod trim;
+
+pub use contains::Contains;
+pub use ends_with::EndsWith;
+pub use find::Find;
+pub use is_empty::IsEmpty;
+pub use len::Len;
+pub use starts_with::StartsWith;
+pub use substring::Substring;
+pub use trim::Trim;
