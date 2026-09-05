@@ -18,11 +18,6 @@ pub fn boolean_to_string(source: bool) -> &'static str {
 }
 pub const BOOLEAN_TO_STRING: BooleanToString = boolean_to_string;
 
-pub fn to_string_from_bool(source: bool) -> &'static str {
-    boolean_to_string(source)
-}
-pub const TO_STRING_FROM_BOOL: BooleanToString = to_string_from_bool;
-
 // ============================================================================
 // 2. String Identity
 // ============================================================================
@@ -31,11 +26,6 @@ pub fn string_to_string<'text>(source: &'text str) -> &'text str {
     source
 }
 pub const STRING_TO_STRING: StringToString = string_to_string;
-
-pub fn to_string_from_str<'text>(source: &'text str) -> &'text str {
-    string_to_string(source)
-}
-pub const TO_STRING_FROM_STR: StringToString = to_string_from_str;
 
 // ============================================================================
 // 3. Fixed Signed Integers

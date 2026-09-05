@@ -1925,8 +1925,6 @@ use evo_values::definitions::conversion::{
 fn test_to_string_boolean() {
     assert_eq!(boolean_to_string(true), "true");
     assert_eq!(boolean_to_string(false), "false");
-    assert_eq!(to_string_from_bool(true), "true");
-    assert_eq!(to_string_from_bool(false), "false");
 
     let op: BooleanToString = BOOLEAN_TO_STRING;
     assert_eq!(op(true), "true");
