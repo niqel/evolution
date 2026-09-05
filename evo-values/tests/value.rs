@@ -743,6 +743,10 @@ fn public_exports_access() {
     let owned_dyn_int = evo_values::OwnedDynamicInteger::from_parts(false, Box::new([]));
     assert!(!owned_dyn_int.negative());
     assert_eq!(owned_dyn_int.magnitude(), &[]);
+
+    let op: evo_values::MaterializeOwned = evo_values::MATERIALIZE_OWNED;
+    let _ = evo_values::materialize_owned(&evo_values::Value::Boolean(true));
+    let _ = op(&evo_values::Value::Boolean(false));
 }
 
 // ============================================================================
