@@ -1,12 +1,14 @@
 extern crate alloc;
 
+use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::string::String as AllocString;
 use alloc::vec;
 use evo_values::{
-    BitwiseFailure, ComparisonFailure, ConversionFailure, DynamicValue, EnumPayload,
-    NumericFailure, OwnedDynamicValue, OwnedEnumPayload, OwnedValue, PowerExponent,
-    ProductionControl, ShiftAmount, TextLength, TextOperationFailure, TextPosition, Value,
+    BitwiseFailure, ComparisonFailure, ConversionFailure, DynamicIntegerValue, DynamicValue,
+    EnumPayload, NumericFailure, OwnedDynamicInteger, OwnedDynamicValue, OwnedEnumPayload,
+    OwnedValue, PowerExponent, ProductionControl, ShiftAmount, TextLength, TextOperationFailure,
+    TextPosition, Value,
 };
 
 // ============================================================================
@@ -733,4 +735,264 @@ fn public_exports_access() {
     let _: evo_values::BitwiseFailure = evo_values::BitwiseFailure::InvalidShift;
     let _: evo_values::ComparisonFailure = evo_values::ComparisonFailure::DifferentFamily;
     let _: evo_values::ConversionFailure = evo_values::ConversionFailure::NotExactlyRepresentable;
+
+    let dyn_int = evo_values::DynamicIntegerValue::from_parts(false, Cow::Borrowed(&[]));
+    assert!(!dyn_int.negative());
+    assert_eq!(dyn_int.magnitude(), &[]);
+
+    let owned_dyn_int = evo_values::OwnedDynamicInteger::from_parts(false, Box::new([]));
+    assert!(!owned_dyn_int.negative());
+    assert_eq!(owned_dyn_int.magnitude(), &[]);
+}
+
+// ============================================================================
+// 13. Canonical Dynamic Integer (Borrowed & Owned)
+// ============================================================================
+
+#[test]
+fn borrowed_dynamic_integer_case_1_zero_normal() {
+    let val = DynamicIntegerValue::from_parts(false, Cow::Borrowed(&[]));
+    assert!(!val.negative());
+    assert_eq!(val.magnitude(), &[]);
+}
+
+#[test]
+fn borrowed_dynamic_integer_case_2_negative_zero() {
+    let val = DynamicIntegerValue::from_parts(true, Cow::Borrowed(&[]));
+    assert!(!val.negative());
+    assert_eq!(val.magnitude(), &[]);
+}
+
+#[test]
+fn borrowed_dynamic_integer_case_3_zero_single_zero_byte() {
+    let val_pos = DynamicIntegerValue::from_parts(false, Cow::Borrowed(&[0x00]));
+    assert!(!val_pos.negative());
+    assert_eq!(val_pos.magnitude(), &[]);
+
+    let val_neg = DynamicIntegerValue::from_parts(true, Cow::Borrowed(&[0x00]));
+    assert!(!val_neg.negative());
+    assert_eq!(val_neg.magnitude(), &[]);
+}
+
+#[test]
+fn borrowed_dynamic_integer_case_4_zero_multiple_zero_bytes() {
+    let val_pos = DynamicIntegerValue::from_parts(false, Cow::Borrowed(&[0x00, 0x00, 0x00]));
+    assert!(!val_pos.negative());
+    assert_eq!(val_pos.magnitude(), &[]);
+
+    let val_neg = DynamicIntegerValue::from_parts(true, Cow::Borrowed(&[0x00, 0x00, 0x00]));
+    assert!(!val_neg.negative());
+    assert_eq!(val_neg.magnitude(), &[]);
+}
+
+#[test]
+fn borrowed_dynamic_integer_case_5_positive_one() {
+    let val = DynamicIntegerValue::from_parts(false, Cow::Borrowed(&[0x01]));
+    assert!(!val.negative());
+    assert_eq!(val.magnitude(), &[0x01]);
+}
+
+#[test]
+fn borrowed_dynamic_integer_case_6_negative_one() {
+    let val = DynamicIntegerValue::from_parts(true, Cow::Borrowed(&[0x01]));
+    assert!(val.negative());
+    assert_eq!(val.magnitude(), &[0x01]);
+}
+
+#[test]
+fn borrowed_dynamic_integer_case_7_magnitude_without_redundant_zeros() {
+    let val_pos = DynamicIntegerValue::from_parts(false, Cow::Borrowed(&[0x01, 0x02]));
+    assert!(!val_pos.negative());
+    assert_eq!(val_pos.magnitude(), &[0x01, 0x02]);
+
+    let val_neg = DynamicIntegerValue::from_parts(true, Cow::Borrowed(&[0x01, 0x02]));
+    assert!(val_neg.negative());
+    assert_eq!(val_neg.magnitude(), &[0x01, 0x02]);
+}
+
+#[test]
+fn borrowed_dynamic_integer_case_8_single_leading_zero() {
+    let val_pos = DynamicIntegerValue::from_parts(false, Cow::Borrowed(&[0x00, 0x01]));
+    assert!(!val_pos.negative());
+    assert_eq!(val_pos.magnitude(), &[0x01]);
+
+    let val_neg = DynamicIntegerValue::from_parts(true, Cow::Borrowed(&[0x00, 0x01]));
+    assert!(val_neg.negative());
+    assert_eq!(val_neg.magnitude(), &[0x01]);
+}
+
+#[test]
+fn borrowed_dynamic_integer_case_9_multiple_leading_zeros() {
+    let val_pos = DynamicIntegerValue::from_parts(false, Cow::Borrowed(&[0x00, 0x00, 0x01]));
+    assert!(!val_pos.negative());
+    assert_eq!(val_pos.magnitude(), &[0x01]);
+
+    let val_neg = DynamicIntegerValue::from_parts(true, Cow::Borrowed(&[0x00, 0x00, 0x01]));
+    assert!(val_neg.negative());
+    assert_eq!(val_neg.magnitude(), &[0x01]);
+}
+
+#[test]
+fn borrowed_dynamic_integer_case_10_significant_internal_zero() {
+    let val_pos = DynamicIntegerValue::from_parts(false, Cow::Borrowed(&[0x01, 0x00, 0x02]));
+    assert!(!val_pos.negative());
+    assert_eq!(val_pos.magnitude(), &[0x01, 0x00, 0x02]);
+
+    let val_neg = DynamicIntegerValue::from_parts(true, Cow::Borrowed(&[0x01, 0x00, 0x02]));
+    assert!(val_neg.negative());
+    assert_eq!(val_neg.magnitude(), &[0x01, 0x00, 0x02]);
+}
+
+#[test]
+fn borrowed_dynamic_integer_case_11_significant_trailing_zero() {
+    let val_pos = DynamicIntegerValue::from_parts(false, Cow::Borrowed(&[0x01, 0x00]));
+    assert!(!val_pos.negative());
+    assert_eq!(val_pos.magnitude(), &[0x01, 0x00]);
+
+    let val_neg = DynamicIntegerValue::from_parts(true, Cow::Borrowed(&[0x01, 0x00]));
+    assert!(val_neg.negative());
+    assert_eq!(val_neg.magnitude(), &[0x01, 0x00]);
+}
+
+#[test]
+fn borrowed_dynamic_integer_from_cow_owned() {
+    let val = DynamicIntegerValue::from_parts(false, Cow::Owned(vec![0x00, 0x00, 0x05, 0x06]));
+    assert!(!val.negative());
+    assert_eq!(val.magnitude(), &[0x05, 0x06]);
+
+    let zero = DynamicIntegerValue::from_parts(true, Cow::Owned(vec![0x00, 0x00]));
+    assert!(!zero.negative());
+    assert_eq!(zero.magnitude(), &[]);
+}
+
+#[test]
+fn owned_dynamic_integer_case_1_zero_normal() {
+    let val = OwnedDynamicInteger::from_parts(false, Box::new([]));
+    assert!(!val.negative());
+    assert_eq!(val.magnitude(), &[]);
+}
+
+#[test]
+fn owned_dynamic_integer_case_2_negative_zero() {
+    let val = OwnedDynamicInteger::from_parts(true, Box::new([]));
+    assert!(!val.negative());
+    assert_eq!(val.magnitude(), &[]);
+}
+
+#[test]
+fn owned_dynamic_integer_case_3_zero_single_zero_byte() {
+    let val_pos = OwnedDynamicInteger::from_parts(false, Box::new([0x00]));
+    assert!(!val_pos.negative());
+    assert_eq!(val_pos.magnitude(), &[]);
+
+    let val_neg = OwnedDynamicInteger::from_parts(true, Box::new([0x00]));
+    assert!(!val_neg.negative());
+    assert_eq!(val_neg.magnitude(), &[]);
+}
+
+#[test]
+fn owned_dynamic_integer_case_4_zero_multiple_zero_bytes() {
+    let val_pos = OwnedDynamicInteger::from_parts(false, Box::new([0x00, 0x00, 0x00]));
+    assert!(!val_pos.negative());
+    assert_eq!(val_pos.magnitude(), &[]);
+
+    let val_neg = OwnedDynamicInteger::from_parts(true, Box::new([0x00, 0x00, 0x00]));
+    assert!(!val_neg.negative());
+    assert_eq!(val_neg.magnitude(), &[]);
+}
+
+#[test]
+fn owned_dynamic_integer_case_5_positive_one() {
+    let val = OwnedDynamicInteger::from_parts(false, Box::new([0x01]));
+    assert!(!val.negative());
+    assert_eq!(val.magnitude(), &[0x01]);
+}
+
+#[test]
+fn owned_dynamic_integer_case_6_negative_one() {
+    let val = OwnedDynamicInteger::from_parts(true, Box::new([0x01]));
+    assert!(val.negative());
+    assert_eq!(val.magnitude(), &[0x01]);
+}
+
+#[test]
+fn owned_dynamic_integer_case_7_magnitude_without_redundant_zeros() {
+    let val_pos = OwnedDynamicInteger::from_parts(false, Box::new([0x01, 0x02]));
+    assert!(!val_pos.negative());
+    assert_eq!(val_pos.magnitude(), &[0x01, 0x02]);
+
+    let val_neg = OwnedDynamicInteger::from_parts(true, Box::new([0x01, 0x02]));
+    assert!(val_neg.negative());
+    assert_eq!(val_neg.magnitude(), &[0x01, 0x02]);
+}
+
+#[test]
+fn owned_dynamic_integer_case_8_single_leading_zero() {
+    let val_pos = OwnedDynamicInteger::from_parts(false, Box::new([0x00, 0x01]));
+    assert!(!val_pos.negative());
+    assert_eq!(val_pos.magnitude(), &[0x01]);
+
+    let val_neg = OwnedDynamicInteger::from_parts(true, Box::new([0x00, 0x01]));
+    assert!(val_neg.negative());
+    assert_eq!(val_neg.magnitude(), &[0x01]);
+}
+
+#[test]
+fn owned_dynamic_integer_case_9_multiple_leading_zeros() {
+    let val_pos = OwnedDynamicInteger::from_parts(false, Box::new([0x00, 0x00, 0x01]));
+    assert!(!val_pos.negative());
+    assert_eq!(val_pos.magnitude(), &[0x01]);
+
+    let val_neg = OwnedDynamicInteger::from_parts(true, Box::new([0x00, 0x00, 0x01]));
+    assert!(val_neg.negative());
+    assert_eq!(val_neg.magnitude(), &[0x01]);
+}
+
+#[test]
+fn owned_dynamic_integer_case_10_significant_internal_zero() {
+    let val_pos = OwnedDynamicInteger::from_parts(false, Box::new([0x01, 0x00, 0x02]));
+    assert!(!val_pos.negative());
+    assert_eq!(val_pos.magnitude(), &[0x01, 0x00, 0x02]);
+
+    let val_neg = OwnedDynamicInteger::from_parts(true, Box::new([0x01, 0x00, 0x02]));
+    assert!(val_neg.negative());
+    assert_eq!(val_neg.magnitude(), &[0x01, 0x00, 0x02]);
+}
+
+#[test]
+fn owned_dynamic_integer_case_11_significant_trailing_zero() {
+    let val_pos = OwnedDynamicInteger::from_parts(false, Box::new([0x01, 0x00]));
+    assert!(!val_pos.negative());
+    assert_eq!(val_pos.magnitude(), &[0x01, 0x00]);
+
+    let val_neg = OwnedDynamicInteger::from_parts(true, Box::new([0x01, 0x00]));
+    assert!(val_neg.negative());
+    assert_eq!(val_neg.magnitude(), &[0x01, 0x00]);
+}
+
+#[test]
+fn dynamic_value_with_canonical_integer() {
+    let dyn_borrowed = DynamicValue::Integer(DynamicIntegerValue::from_parts(
+        false,
+        Cow::Borrowed(&[0x00, 0x0A]),
+    ));
+    match dyn_borrowed {
+        DynamicValue::Integer(val) => {
+            assert!(!val.negative());
+            assert_eq!(val.magnitude(), &[0x0A]);
+        }
+        _ => panic!("expected DynamicValue::Integer"),
+    }
+
+    let dyn_owned = OwnedDynamicValue::Integer(OwnedDynamicInteger::from_parts(
+        true,
+        Box::new([0x00, 0x00, 0x0B]),
+    ));
+    match dyn_owned {
+        OwnedDynamicValue::Integer(val) => {
+            assert!(val.negative());
+            assert_eq!(val.magnitude(), &[0x0B]);
+        }
+        _ => panic!("expected OwnedDynamicValue::Integer"),
+    }
 }

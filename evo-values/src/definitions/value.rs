@@ -40,10 +40,49 @@ pub enum DynamicValue<'value> {
 }
 
 #[derive(Clone)]
-#[allow(dead_code)]
 pub struct DynamicIntegerValue<'value> {
     negative: bool,
     magnitude: Cow<'value, [u8]>,
+}
+
+impl<'value> DynamicIntegerValue<'value> {
+    pub fn from_parts(negative: bool, magnitude: Cow<'value, [u8]>) -> Self {
+        let leading_zeros = magnitude
+            .iter()
+            .position(|&b| b != 0)
+            .unwrap_or(magnitude.len());
+        if leading_zeros == magnitude.len() {
+            Self {
+                negative: false,
+                magnitude: Cow::Borrowed(&[]),
+            }
+        } else if leading_zeros == 0 {
+            Self {
+                negative,
+                magnitude,
+            }
+        } else {
+            let trimmed = match magnitude {
+                Cow::Borrowed(slice) => Cow::Borrowed(&slice[leading_zeros..]),
+                Cow::Owned(mut vec) => {
+                    vec.drain(..leading_zeros);
+                    Cow::Owned(vec)
+                }
+            };
+            Self {
+                negative,
+                magnitude: trimmed,
+            }
+        }
+    }
+
+    pub fn negative(&self) -> bool {
+        self.negative
+    }
+
+    pub fn magnitude(&self) -> &[u8] {
+        &self.magnitude
+    }
 }
 
 #[derive(Clone)]
@@ -92,10 +131,42 @@ pub enum OwnedDynamicValue {
 }
 
 #[derive(Clone)]
-#[allow(dead_code)]
 pub struct OwnedDynamicInteger {
     negative: bool,
     magnitude: Box<[u8]>,
+}
+
+impl OwnedDynamicInteger {
+    pub fn from_parts(negative: bool, magnitude: Box<[u8]>) -> Self {
+        let leading_zeros = magnitude
+            .iter()
+            .position(|&b| b != 0)
+            .unwrap_or(magnitude.len());
+        if leading_zeros == magnitude.len() {
+            Self {
+                negative: false,
+                magnitude: Box::new([]),
+            }
+        } else if leading_zeros == 0 {
+            Self {
+                negative,
+                magnitude,
+            }
+        } else {
+            Self {
+                negative,
+                magnitude: Box::from(&magnitude[leading_zeros..]),
+            }
+        }
+    }
+
+    pub fn negative(&self) -> bool {
+        self.negative
+    }
+
+    pub fn magnitude(&self) -> &[u8] {
+        &self.magnitude
+    }
 }
 
 #[derive(Clone)]
@@ -103,4 +174,33 @@ pub enum OwnedEnumPayload {
     Simple,
     Associated(Box<OwnedValue>),
     Structured { fields: Box<[OwnedValue]> },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::borrow::Cow;
+
+    #[test]
+    fn borrowed_preserves_borrow_after_stripping_leading_zeros() {
+        let source: [u8; 4] = [0x00, 0x00, 0x01, 0xFF];
+        let val = DynamicIntegerValue::from_parts(false, Cow::Borrowed(&source));
+        assert!(!val.negative());
+        assert_eq!(val.magnitude(), &[0x01, 0xFF]);
+        match val.magnitude {
+            Cow::Borrowed(slice) => {
+                assert_eq!(slice.as_ptr(), source[2..].as_ptr());
+            }
+            Cow::Owned(_) => panic!("expected Cow::Borrowed"),
+        }
+    }
+
+    #[test]
+    fn borrowed_zero_preserves_borrow() {
+        let source: [u8; 2] = [0x00, 0x00];
+        let val = DynamicIntegerValue::from_parts(true, Cow::Borrowed(&source));
+        assert!(!val.negative());
+        assert_eq!(val.magnitude(), &[]);
+        assert!(matches!(val.magnitude, Cow::Borrowed(_)));
+    }
 }
