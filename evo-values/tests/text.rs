@@ -1,14 +1,18 @@
 extern crate alloc;
 
 use alloc::borrow::Cow;
+use alloc::string::String;
+use alloc::vec::Vec;
 use evo_values::definitions::text::{
-    Concat, Contains, EndsWith, Find, IsEmpty, Join, Len, Replace, StartsWith, Substring, Trim,
+    Concat, Contains, EndsWith, Find, IsEmpty, Join, Len, ReceiveTextSegment, Replace, Split,
+    StartsWith, Substring, Trim,
 };
 use evo_values::text::{
     CONCAT, CONTAINS, ENDS_WITH, FIND, IS_EMPTY, JOIN, LEN, REPLACE, STARTS_WITH, SUBSTRING, TRIM,
-    concat, contains, ends_with, find, is_empty, join, len, replace, starts_with, substring, trim,
+    concat, contains, ends_with, find, is_empty, join, len, replace, split, starts_with, substring,
+    trim,
 };
-use evo_values::{TextLength, TextOperationFailure, TextPosition};
+use evo_values::{ProductionControl, TextLength, TextOperationFailure, TextPosition};
 
 // ============================================================================
 // 1. Len
@@ -642,4 +646,263 @@ fn test_replace_function_pointer() {
     let res = op("one two one", "one", "1").unwrap();
     assert_eq!(res, "1 two 1");
     assert!(matches!(res, Cow::Owned(_)));
+}
+
+// ============================================================================
+// 12. Split
+// ============================================================================
+
+#[derive(Default, Debug, PartialEq, Eq)]
+struct TestCollectorState {
+    segments: Vec<String>,
+    call_count: usize,
+}
+
+fn test_collect_all(state: &mut TestCollectorState, segment: &str) -> ProductionControl {
+    state.call_count += 1;
+    state.segments.push(String::from(segment));
+    ProductionControl::Continue
+}
+
+#[test]
+fn test_split_normal() {
+    let mut state = TestCollectorState::default();
+    let res = split("a,b,c", ",", &mut state, test_collect_all);
+    assert_eq!(res, Ok(()));
+    assert_eq!(state.segments, ["a", "b", "c"]);
+    assert_eq!(state.call_count, 3);
+}
+
+#[test]
+fn test_split_separator_not_found() {
+    let mut state = TestCollectorState::default();
+    let res = split("abc", ",", &mut state, test_collect_all);
+    assert_eq!(res, Ok(()));
+    assert_eq!(state.segments, ["abc"]);
+    assert_eq!(state.call_count, 1);
+}
+
+#[test]
+fn test_split_empty_text() {
+    let mut state = TestCollectorState::default();
+    let res = split("", ",", &mut state, test_collect_all);
+    assert_eq!(res, Ok(()));
+    assert_eq!(state.segments, [""]);
+    assert_eq!(state.call_count, 1);
+}
+
+#[test]
+fn test_split_initial_empty_segment() {
+    let mut state = TestCollectorState::default();
+    let res = split(",a", ",", &mut state, test_collect_all);
+    assert_eq!(res, Ok(()));
+    assert_eq!(state.segments, ["", "a"]);
+    assert_eq!(state.call_count, 2);
+}
+
+#[test]
+fn test_split_trailing_empty_segment() {
+    let mut state1 = TestCollectorState::default();
+    let res1 = split("a,", ",", &mut state1, test_collect_all);
+    assert_eq!(res1, Ok(()));
+    assert_eq!(state1.segments, ["a", ""]);
+    assert_eq!(state1.call_count, 2);
+
+    let mut state2 = TestCollectorState::default();
+    let res2 = split(",a,", ",", &mut state2, test_collect_all);
+    assert_eq!(res2, Ok(()));
+    assert_eq!(state2.segments, ["", "a", ""]);
+    assert_eq!(state2.call_count, 3);
+}
+
+#[test]
+fn test_split_consecutive_separators() {
+    let mut state1 = TestCollectorState::default();
+    let res1 = split("a,,b", ",", &mut state1, test_collect_all);
+    assert_eq!(res1, Ok(()));
+    assert_eq!(state1.segments, ["a", "", "b"]);
+    assert_eq!(state1.call_count, 3);
+
+    let mut state2 = TestCollectorState::default();
+    let res2 = split("a----b", "--", &mut state2, test_collect_all);
+    assert_eq!(res2, Ok(()));
+    assert_eq!(state2.segments, ["a", "", "b"]);
+    assert_eq!(state2.call_count, 3);
+}
+
+#[test]
+fn test_split_multiple_empty_segments() {
+    let mut state = TestCollectorState::default();
+    let res = split(",,,", ",", &mut state, test_collect_all);
+    assert_eq!(res, Ok(()));
+    assert_eq!(state.segments, ["", "", "", ""]);
+    assert_eq!(state.call_count, 4);
+}
+
+#[test]
+fn test_split_multi_scalar_separator() {
+    let mut state = TestCollectorState::default();
+    let res = split("a--b--c", "--", &mut state, test_collect_all);
+    assert_eq!(res, Ok(()));
+    assert_eq!(state.segments, ["a", "b", "c"]);
+    assert_eq!(state.call_count, 3);
+}
+
+#[test]
+fn test_split_unicode_separator() {
+    let mut state = TestCollectorState::default();
+    let res = split("a🦀b🦀c", "🦀", &mut state, test_collect_all);
+    assert_eq!(res, Ok(()));
+    assert_eq!(state.segments, ["a", "b", "c"]);
+    assert_eq!(state.call_count, 3);
+}
+
+#[test]
+fn test_split_unicode_content() {
+    let mut state = TestCollectorState::default();
+    let res = split("árbol,niño,café", ",", &mut state, test_collect_all);
+    assert_eq!(res, Ok(()));
+    assert_eq!(state.segments, ["árbol", "niño", "café"]);
+    assert_eq!(state.call_count, 3);
+}
+
+#[test]
+fn test_split_empty_separator_mandatory() {
+    let mut state = TestCollectorState::default();
+    let res = split("abc", "", &mut state, test_collect_all);
+    assert_eq!(res, Err(TextOperationFailure::EmptySeparator));
+    assert_eq!(state.call_count, 0);
+    assert!(state.segments.is_empty());
+}
+
+#[test]
+fn test_split_continue_until_exhaustion() {
+    let mut state = TestCollectorState::default();
+    let res = split("1;2;3;4;5", ";", &mut state, test_collect_all);
+    assert_eq!(res, Ok(()));
+    assert_eq!(state.segments, ["1", "2", "3", "4", "5"]);
+    assert_eq!(state.call_count, 5);
+}
+
+#[test]
+fn test_split_stop_after_first() {
+    struct StopFirstState {
+        segments: Vec<String>,
+        calls: usize,
+    }
+
+    fn receiver(state: &mut StopFirstState, segment: &str) -> ProductionControl {
+        state.calls += 1;
+        state.segments.push(String::from(segment));
+        ProductionControl::Stop
+    }
+
+    let mut state = StopFirstState {
+        segments: Vec::new(),
+        calls: 0,
+    };
+    let res = split("a,b,c", ",", &mut state, receiver);
+    assert_eq!(res, Ok(()));
+    assert_eq!(state.segments, ["a"]);
+    assert_eq!(state.calls, 1);
+}
+
+#[test]
+fn test_split_stop_after_multiple_mandatory() {
+    struct StopAtBState {
+        segments: Vec<String>,
+        calls: usize,
+    }
+
+    fn receiver(state: &mut StopAtBState, segment: &str) -> ProductionControl {
+        state.calls += 1;
+        state.segments.push(String::from(segment));
+        if segment == "b" {
+            ProductionControl::Stop
+        } else {
+            ProductionControl::Continue
+        }
+    }
+
+    let mut state = StopAtBState {
+        segments: Vec::new(),
+        calls: 0,
+    };
+    let res = split("a,b,c,d", ",", &mut state, receiver);
+    assert_eq!(res, Ok(()));
+    assert_eq!(state.segments, ["a", "b"]);
+    assert_eq!(state.calls, 2);
+}
+
+#[test]
+fn test_split_function_pointer_split() {
+    let operation: Split<TestCollectorState> = split::<TestCollectorState>;
+    let mut state = TestCollectorState::default();
+    let res = operation("hello world", " ", &mut state, test_collect_all);
+    assert_eq!(res, Ok(()));
+    assert_eq!(state.segments, ["hello", "world"]);
+    assert_eq!(state.call_count, 2);
+}
+
+#[test]
+fn test_split_function_pointer_receive_text_segment() {
+    let receiver: ReceiveTextSegment<TestCollectorState> = test_collect_all;
+    let mut state = TestCollectorState::default();
+    let res = split("x:y:z", ":", &mut state, receiver);
+    assert_eq!(res, Ok(()));
+    assert_eq!(state.segments, ["x", "y", "z"]);
+    assert_eq!(state.call_count, 3);
+}
+
+#[test]
+fn test_split_borrow_invariants() {
+    let source = "alpha,beta,gamma";
+
+    struct BorrowState<'a> {
+        source: &'a str,
+        all_borrowed: bool,
+    }
+
+    fn check_borrow<'a>(state: &mut BorrowState<'a>, segment: &str) -> ProductionControl {
+        let seg_start = segment.as_ptr() as usize;
+        let seg_end = seg_start + segment.len();
+        let src_start = state.source.as_ptr() as usize;
+        let src_end = src_start + state.source.len();
+
+        if seg_start < src_start || seg_end > src_end {
+            state.all_borrowed = false;
+        }
+        ProductionControl::Continue
+    }
+
+    let mut state = BorrowState {
+        source,
+        all_borrowed: true,
+    };
+    let res = split(source, ",", &mut state, check_borrow);
+    assert_eq!(res, Ok(()));
+    assert!(state.all_borrowed);
+}
+
+#[test]
+fn test_split_custom_consumer_state() {
+    #[derive(Default)]
+    struct CustomConsumerState {
+        total_segment_len: usize,
+        seen_empty: bool,
+    }
+
+    fn analyze(state: &mut CustomConsumerState, segment: &str) -> ProductionControl {
+        state.total_segment_len += segment.len();
+        if segment.is_empty() {
+            state.seen_empty = true;
+        }
+        ProductionControl::Continue
+    }
+
+    let mut state = CustomConsumerState::default();
+    let res = split("apple,,banana", ",", &mut state, analyze);
+    assert_eq!(res, Ok(()));
+    assert_eq!(state.total_segment_len, 5 + 0 + 6);
+    assert!(state.seen_empty);
 }
