@@ -1,5 +1,6 @@
 pub mod bitwise;
 pub mod boolean;
+pub mod comparison;
 pub mod control;
 pub mod failures;
 pub mod materialize_owned;
@@ -9,6 +10,7 @@ pub mod text;
 pub mod value;
 
 pub use bitwise::*;
+pub use comparison::*;
 pub use control::ProductionControl;
 
 pub use failures::{
