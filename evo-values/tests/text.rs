@@ -1,9 +1,12 @@
+extern crate alloc;
+
+use alloc::borrow::Cow;
 use evo_values::definitions::text::{
-    Contains, EndsWith, Find, IsEmpty, Len, StartsWith, Substring, Trim,
+    Concat, Contains, EndsWith, Find, IsEmpty, Join, Len, Replace, StartsWith, Substring, Trim,
 };
 use evo_values::text::{
-    CONTAINS, ENDS_WITH, FIND, IS_EMPTY, LEN, STARTS_WITH, SUBSTRING, TRIM, contains, ends_with,
-    find, is_empty, len, starts_with, substring, trim,
+    CONCAT, CONTAINS, ENDS_WITH, FIND, IS_EMPTY, JOIN, LEN, REPLACE, STARTS_WITH, SUBSTRING, TRIM,
+    concat, contains, ends_with, find, is_empty, join, len, replace, starts_with, substring, trim,
 };
 use evo_values::{TextLength, TextOperationFailure, TextPosition};
 
@@ -418,4 +421,225 @@ fn test_trim_returns_borrowed_slice() {
 fn test_trim_function_pointer() {
     let op: Trim = TRIM;
     assert_eq!(op("  Evo  "), "Evo");
+}
+
+// ============================================================================
+// 9. Concat
+// ============================================================================
+
+#[test]
+fn test_concat_zero_elements() {
+    let res = concat(&[]);
+    assert_eq!(res, "");
+    assert!(matches!(res, Cow::Borrowed(_)));
+}
+
+#[test]
+fn test_concat_single_element_preserves_borrow() {
+    let input = "Evo";
+    let res = concat(&[input]);
+    assert_eq!(res, "Evo");
+    match res {
+        Cow::Borrowed(slice) => {
+            assert_eq!(slice.as_ptr(), input.as_ptr());
+        }
+        Cow::Owned(_) => panic!("expected Cow::Borrowed without allocation"),
+    }
+}
+
+#[test]
+fn test_concat_multiple_elements() {
+    let res = concat(&["Evo", "-", "Values"]);
+    assert_eq!(res, "Evo-Values");
+    assert!(matches!(res, Cow::Owned(_)));
+}
+
+#[test]
+fn test_concat_empty_elements_preserved() {
+    let res = concat(&["a", "", "b"]);
+    assert_eq!(res, "ab");
+    assert!(matches!(res, Cow::Owned(_)));
+}
+
+#[test]
+fn test_concat_unicode() {
+    let res = concat(&["Mé", "xi", "co"]);
+    assert_eq!(res, "México");
+    assert!(matches!(res, Cow::Owned(_)));
+}
+
+#[test]
+fn test_concat_function_pointer() {
+    let op: Concat = CONCAT;
+    let res = op(&["Hello", " ", "World"]);
+    assert_eq!(res, "Hello World");
+    assert!(matches!(res, Cow::Owned(_)));
+}
+
+// ============================================================================
+// 10. Join
+// ============================================================================
+
+#[test]
+fn test_join_zero_elements() {
+    let res = join(&[], ",");
+    assert_eq!(res, "");
+    assert!(matches!(res, Cow::Borrowed(_)));
+}
+
+#[test]
+fn test_join_single_element_preserves_borrow() {
+    let input = "Evo";
+    let res = join(&[input], ",");
+    assert_eq!(res, "Evo");
+    match res {
+        Cow::Borrowed(slice) => {
+            assert_eq!(slice.as_ptr(), input.as_ptr());
+        }
+        Cow::Owned(_) => panic!("expected Cow::Borrowed without allocation"),
+    }
+}
+
+#[test]
+fn test_join_two_elements() {
+    let res = join(&["a", "b"], ",");
+    assert_eq!(res, "a,b");
+    assert!(matches!(res, Cow::Owned(_)));
+}
+
+#[test]
+fn test_join_multiple_elements() {
+    let res = join(&["a", "b", "c"], ",");
+    assert_eq!(res, "a,b,c");
+    assert!(matches!(res, Cow::Owned(_)));
+}
+
+#[test]
+fn test_join_empty_elements() {
+    let res1 = join(&["a", "", "b"], ",");
+    assert_eq!(res1, "a,,b");
+    assert!(matches!(res1, Cow::Owned(_)));
+
+    let res2 = join(&["", "a", ""], ",");
+    assert_eq!(res2, ",a,");
+    assert!(matches!(res2, Cow::Owned(_)));
+}
+
+#[test]
+fn test_join_empty_separator() {
+    let res = join(&["a", "b"], "");
+    assert_eq!(res, "ab");
+    assert!(matches!(res, Cow::Owned(_)));
+}
+
+#[test]
+fn test_join_multi_scalar_separator() {
+    let res1 = join(&["a", "b"], "---");
+    assert_eq!(res1, "a---b");
+
+    let res2 = join(&["a", "b"], "🦀");
+    assert_eq!(res2, "a🦀b");
+}
+
+#[test]
+fn test_join_unicode() {
+    let res = join(&["México", "lindo"], " 🇲🇽 ");
+    assert_eq!(res, "México 🇲🇽 lindo");
+    assert!(matches!(res, Cow::Owned(_)));
+}
+
+#[test]
+fn test_join_function_pointer() {
+    let op: Join = JOIN;
+    let res = op(&["x", "y", "z"], "-");
+    assert_eq!(res, "x-y-z");
+    assert!(matches!(res, Cow::Owned(_)));
+}
+
+// ============================================================================
+// 11. Replace
+// ============================================================================
+
+#[test]
+fn test_replace_one_match() {
+    let res = replace("hello world", "world", "rust").unwrap();
+    assert_eq!(res, "hello rust");
+    assert!(matches!(res, Cow::Owned(_)));
+}
+
+#[test]
+fn test_replace_multiple_matches() {
+    let res = replace("one two one", "one", "1").unwrap();
+    assert_eq!(res, "1 two 1");
+    assert!(matches!(res, Cow::Owned(_)));
+}
+
+#[test]
+fn test_replace_no_match_preserves_borrow() {
+    let input = "hello world";
+    let res = replace(input, "abc", "123").unwrap();
+    assert_eq!(res, "hello world");
+    match res {
+        Cow::Borrowed(slice) => {
+            assert_eq!(slice.as_ptr(), input.as_ptr());
+        }
+        Cow::Owned(_) => panic!("expected Cow::Borrowed without allocation"),
+    }
+}
+
+#[test]
+fn test_replace_pattern_equals_replacement_preserves_borrow() {
+    let input = "hello world";
+    let res = replace(input, "world", "world").unwrap();
+    assert_eq!(res, "hello world");
+    match res {
+        Cow::Borrowed(slice) => {
+            assert_eq!(slice.as_ptr(), input.as_ptr());
+        }
+        Cow::Owned(_) => panic!("expected Cow::Borrowed without allocation"),
+    }
+}
+
+#[test]
+fn test_replace_to_empty() {
+    let res = replace("Gustavo", "avo", "").unwrap();
+    assert_eq!(res, "Gust");
+    assert!(matches!(res, Cow::Owned(_)));
+}
+
+#[test]
+fn test_replace_empty_pattern_error() {
+    assert_eq!(
+        replace("hello", "", "world"),
+        Err(TextOperationFailure::EmptyPattern)
+    );
+}
+
+#[test]
+fn test_replace_case_sensitive() {
+    let res = replace("Case CASE case", "case", "word").unwrap();
+    assert_eq!(res, "Case CASE word");
+    assert!(matches!(res, Cow::Owned(_)));
+}
+
+#[test]
+fn test_replace_unicode() {
+    let res = replace("México lindo y querido", "México", "MÉXICO").unwrap();
+    assert_eq!(res, "MÉXICO lindo y querido");
+    assert!(matches!(res, Cow::Owned(_)));
+}
+
+#[test]
+fn test_replace_non_overlapping() {
+    let res = replace("aaaa", "aa", "x").unwrap();
+    assert_eq!(res, "xx");
+    assert!(matches!(res, Cow::Owned(_)));
+}
+
+#[test]
+fn test_replace_function_pointer() {
+    let op: Replace = REPLACE;
+    let res = op("one two one", "one", "1").unwrap();
+    assert_eq!(res, "1 two 1");
+    assert!(matches!(res, Cow::Owned(_)));
 }

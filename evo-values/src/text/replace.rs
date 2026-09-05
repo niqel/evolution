@@ -1,25 +1,39 @@
+use crate::definitions::failures::TextOperationFailure;
 use crate::definitions::text::replace as replace_definition;
+use alloc::borrow::Cow;
 use alloc::string::String;
 
-pub fn replace(text: &str, from: &str, to: &str) -> Result<String, replace_definition::Error> {
-    if from.is_empty() {
-        return Err(replace_definition::Error::EmptyPattern);
+pub fn replace<'text>(
+    text: &'text str,
+    pattern: &str,
+    replacement: &str,
+) -> Result<Cow<'text, str>, TextOperationFailure> {
+    if pattern.is_empty() {
+        return Err(TextOperationFailure::EmptyPattern);
+    }
+
+    if pattern == replacement {
+        return Ok(Cow::Borrowed(text));
+    }
+
+    if !text.contains(pattern) {
+        return Ok(Cow::Borrowed(text));
     }
 
     let mut result = String::new();
     let mut last_end = 0;
-    let from_len = from.len();
+    let pattern_len = pattern.len();
 
-    for (start, _) in text.match_indices(from) {
+    for (start, _) in text.match_indices(pattern) {
         if start >= last_end {
             result.push_str(&text[last_end..start]);
-            result.push_str(to);
-            last_end = start + from_len;
+            result.push_str(replacement);
+            last_end = start + pattern_len;
         }
     }
 
     result.push_str(&text[last_end..]);
-    Ok(result)
+    Ok(Cow::Owned(result))
 }
 
 pub const REPLACE: replace_definition::Replace = replace;
@@ -30,60 +44,85 @@ mod tests {
 
     #[test]
     fn replace_one() {
-        assert_eq!(
-            replace("hello world", "world", "rust"),
-            Ok(String::from("hello rust"))
-        );
+        let res = replace("hello world", "world", "rust").unwrap();
+        assert_eq!(res, "hello rust");
+        assert!(matches!(res, Cow::Owned(_)));
     }
 
     #[test]
     fn replace_multiple() {
-        assert_eq!(
-            replace("one two one", "one", "1"),
-            Ok(String::from("1 two 1"))
-        );
+        let res = replace("one two one", "one", "1").unwrap();
+        assert_eq!(res, "1 two 1");
+        assert!(matches!(res, Cow::Owned(_)));
     }
 
     #[test]
     fn replace_no_match() {
-        assert_eq!(
-            replace("hello world", "abc", "123"),
-            Ok(String::from("hello world"))
-        );
+        let input = "hello world";
+        let res = replace(input, "abc", "123").unwrap();
+        assert_eq!(res, "hello world");
+        match res {
+            Cow::Borrowed(slice) => {
+                assert_eq!(slice.as_ptr(), input.as_ptr());
+            }
+            Cow::Owned(_) => panic!("expected Cow::Borrowed"),
+        }
+    }
+
+    #[test]
+    fn replace_pattern_equals_replacement() {
+        let input = "hello world";
+        let res = replace(input, "world", "world").unwrap();
+        assert_eq!(res, "hello world");
+        match res {
+            Cow::Borrowed(slice) => {
+                assert_eq!(slice.as_ptr(), input.as_ptr());
+            }
+            Cow::Owned(_) => panic!("expected Cow::Borrowed"),
+        }
     }
 
     #[test]
     fn replace_unicode() {
-        assert_eq!(
-            replace("México lindo y querido", "México", "MÉXICO"),
-            Ok(String::from("MÉXICO lindo y querido"))
-        );
+        let res = replace("México lindo y querido", "México", "MÉXICO").unwrap();
+        assert_eq!(res, "MÉXICO lindo y querido");
+        assert!(matches!(res, Cow::Owned(_)));
     }
 
     #[test]
     fn replace_case_sensitive() {
-        assert_eq!(
-            replace("Case CASE case", "case", "word"),
-            Ok(String::from("Case CASE word"))
-        );
+        let res = replace("Case CASE case", "case", "word").unwrap();
+        assert_eq!(res, "Case CASE word");
+        assert!(matches!(res, Cow::Owned(_)));
     }
 
     #[test]
     fn replace_to_empty() {
-        assert_eq!(replace("Gustavo", "avo", ""), Ok(String::from("Gust")));
+        let res = replace("Gustavo", "avo", "").unwrap();
+        assert_eq!(res, "Gust");
+        assert!(matches!(res, Cow::Owned(_)));
     }
 
     #[test]
     fn replace_empty_pattern_error() {
         assert_eq!(
             replace("hello", "", "world"),
-            Err(replace_definition::Error::EmptyPattern)
+            Err(TextOperationFailure::EmptyPattern)
         );
+    }
+
+    #[test]
+    fn replace_non_overlapping() {
+        let res = replace("aaaa", "aa", "x").unwrap();
+        assert_eq!(res, "xx");
+        assert!(matches!(res, Cow::Owned(_)));
     }
 
     #[test]
     fn replace_function_pointer() {
         let op: replace_definition::Replace = REPLACE;
-        assert_eq!(op("one two one", "one", "1"), Ok(String::from("1 two 1")));
+        let res = op("one two one", "one", "1").unwrap();
+        assert_eq!(res, "1 two 1");
+        assert!(matches!(res, Cow::Owned(_)));
     }
 }

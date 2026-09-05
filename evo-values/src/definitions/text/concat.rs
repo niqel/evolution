@@ -1,3 +1,3 @@
-use alloc::string::String;
+use alloc::borrow::Cow;
 
-pub type Concat = fn(parts: &[&str]) -> String;
+pub type Concat = for<'text> fn(&[&'text str]) -> Cow<'text, str>;

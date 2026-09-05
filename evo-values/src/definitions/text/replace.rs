@@ -1,8 +1,5 @@
-use alloc::string::String;
+use crate::definitions::failures::TextOperationFailure;
+use alloc::borrow::Cow;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Error {
-    EmptyPattern,
-}
-
-pub type Replace = fn(text: &str, from: &str, to: &str) -> Result<String, Error>;
+pub type Replace =
+    for<'text> fn(&'text str, &str, &str) -> Result<Cow<'text, str>, TextOperationFailure>;
