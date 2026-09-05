@@ -1,3 +1,4 @@
+pub mod bitwise;
 pub mod boolean;
 pub mod control;
 pub mod failures;
@@ -7,7 +8,9 @@ pub mod scalars;
 pub mod text;
 pub mod value;
 
+pub use bitwise::*;
 pub use control::ProductionControl;
+
 pub use failures::{
     BitwiseFailure, ComparisonFailure, ConversionFailure, NumericFailure, TextOperationFailure,
 };
