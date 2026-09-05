@@ -2,11 +2,11 @@ use crate::definitions::control::ProductionControl;
 use crate::definitions::failures::TextOperationFailure;
 pub use crate::definitions::text::split::{ReceiveTextSegment, Split};
 
-pub fn split<State>(
-    text: &str,
+pub fn split<'text, State>(
+    text: &'text str,
     separator: &str,
     state: &mut State,
-    receiver: ReceiveTextSegment<State>,
+    receiver: ReceiveTextSegment<'text, State>,
 ) -> Result<(), TextOperationFailure> {
     if separator.is_empty() {
         return Err(TextOperationFailure::EmptySeparator);
@@ -37,6 +37,18 @@ mod tests {
     fn collect_all(state: &mut CollectorState, segment: &str) -> ProductionControl {
         state.call_count += 1;
         state.segments.push(String::from(segment));
+        ProductionControl::Continue
+    }
+
+    struct BorrowState<'text> {
+        segments: Vec<&'text str>,
+    }
+
+    fn collect_borrowed<'text>(
+        state: &mut BorrowState<'text>,
+        segment: &'text str,
+    ) -> ProductionControl {
+        state.segments.push(segment);
         ProductionControl::Continue
     }
 
@@ -105,11 +117,30 @@ mod tests {
     }
 
     #[test]
+    fn split_stores_borrowed_segments() {
+        let source = "alpha,beta,gamma";
+        let mut state = BorrowState {
+            segments: Vec::new(),
+        };
+        let res = split(source, ",", &mut state, collect_borrowed);
+        assert_eq!(res, Ok(()));
+        assert_eq!(state.segments, ["alpha", "beta", "gamma"]);
+    }
+
+    #[test]
     fn split_function_pointer_contract() {
         let operation: Split<CollectorState> = split::<CollectorState>;
         let mut state = CollectorState::default();
         let res = operation("hello world", " ", &mut state, collect_all);
         assert_eq!(res, Ok(()));
         assert_eq!(state.segments, ["hello", "world"]);
+
+        let borrow_op: Split<BorrowState> = split::<BorrowState>;
+        let mut borrow_state = BorrowState {
+            segments: Vec::new(),
+        };
+        let res = borrow_op("one,two", ",", &mut borrow_state, collect_borrowed);
+        assert_eq!(res, Ok(()));
+        assert_eq!(borrow_state.segments, ["one", "two"]);
     }
 }

@@ -835,6 +835,30 @@ fn test_split_stop_after_multiple_mandatory() {
 }
 
 #[test]
+fn test_split_stores_borrowed_segments_mandatory() {
+    struct BorrowState<'text> {
+        segments: Vec<&'text str>,
+    }
+
+    fn collect_borrowed<'text>(
+        state: &mut BorrowState<'text>,
+        segment: &'text str,
+    ) -> ProductionControl {
+        state.segments.push(segment);
+        ProductionControl::Continue
+    }
+
+    let source = String::from("alpha,beta,gamma");
+    let mut state = BorrowState {
+        segments: Vec::new(),
+    };
+
+    let res = split(source.as_str(), ",", &mut state, collect_borrowed);
+    assert_eq!(res, Ok(()));
+    assert_eq!(state.segments, ["alpha", "beta", "gamma"]);
+}
+
+#[test]
 fn test_split_function_pointer_split() {
     let operation: Split<TestCollectorState> = split::<TestCollectorState>;
     let mut state = TestCollectorState::default();
@@ -842,6 +866,27 @@ fn test_split_function_pointer_split() {
     assert_eq!(res, Ok(()));
     assert_eq!(state.segments, ["hello", "world"]);
     assert_eq!(state.call_count, 2);
+
+    struct BorrowState<'text> {
+        segments: Vec<&'text str>,
+    }
+
+    fn collect_borrowed<'text>(
+        state: &mut BorrowState<'text>,
+        segment: &'text str,
+    ) -> ProductionControl {
+        state.segments.push(segment);
+        ProductionControl::Continue
+    }
+
+    let borrow_op: Split<'_, BorrowState<'_>> = split::<BorrowState<'_>>;
+    let source = String::from("one,two,three");
+    let mut borrow_state = BorrowState {
+        segments: Vec::new(),
+    };
+    let res = borrow_op(source.as_str(), ",", &mut borrow_state, collect_borrowed);
+    assert_eq!(res, Ok(()));
+    assert_eq!(borrow_state.segments, ["one", "two", "three"]);
 }
 
 #[test]
@@ -852,6 +897,27 @@ fn test_split_function_pointer_receive_text_segment() {
     assert_eq!(res, Ok(()));
     assert_eq!(state.segments, ["x", "y", "z"]);
     assert_eq!(state.call_count, 3);
+
+    struct BorrowState<'text> {
+        segments: Vec<&'text str>,
+    }
+
+    fn collect_borrowed<'text>(
+        state: &mut BorrowState<'text>,
+        segment: &'text str,
+    ) -> ProductionControl {
+        state.segments.push(segment);
+        ProductionControl::Continue
+    }
+
+    let borrow_receiver: ReceiveTextSegment<'_, BorrowState<'_>> = collect_borrowed;
+    let source = String::from("m:n");
+    let mut borrow_state = BorrowState {
+        segments: Vec::new(),
+    };
+    let res = split(source.as_str(), ":", &mut borrow_state, borrow_receiver);
+    assert_eq!(res, Ok(()));
+    assert_eq!(borrow_state.segments, ["m", "n"]);
 }
 
 #[test]
