@@ -757,6 +757,40 @@ fn public_exports_access() {
     let op: evo_values::MaterializeOwned = evo_values::MATERIALIZE_OWNED;
     let _ = evo_values::materialize_owned(&evo_values::Value::Boolean(true));
     let _ = op(&evo_values::Value::Boolean(false));
+
+    let _fn_negate: Option<evo_values::definitions::DynamicNegate> = None;
+    let _fn_add: Option<evo_values::definitions::DynamicAdd> = None;
+    let _fn_sub: Option<evo_values::definitions::DynamicSubtract> = None;
+    let _fn_mul: Option<evo_values::definitions::DynamicMultiply> = None;
+    let _fn_div: Option<evo_values::definitions::DynamicDivide> = None;
+    let _fn_rem: Option<evo_values::definitions::DynamicRemainder> = None;
+
+    let _fn_negate_sub: Option<evo_values::definitions::dynamic_numeric::DynamicNegate> = None;
+    let _fn_add_sub: Option<evo_values::definitions::dynamic_numeric::DynamicAdd> = None;
+    let _fn_sub_sub: Option<evo_values::definitions::dynamic_numeric::DynamicSubtract> = None;
+    let _fn_mul_sub: Option<evo_values::definitions::dynamic_numeric::DynamicMultiply> = None;
+    let _fn_div_sub: Option<evo_values::definitions::dynamic_numeric::DynamicDivide> = None;
+    let _fn_rem_sub: Option<evo_values::definitions::dynamic_numeric::DynamicRemainder> = None;
+}
+
+#[test]
+fn dynamic_numeric_signatures_type_compatibility() {
+    fn mock_negate<'v>(_val: &evo_values::DynamicValue<'v>) -> evo_values::OwnedDynamicValue {
+        evo_values::OwnedDynamicValue::Float32(0.0)
+    }
+    fn mock_binary<'l, 'r>(
+        _left: &evo_values::DynamicValue<'l>,
+        _right: &evo_values::DynamicValue<'r>,
+    ) -> Result<evo_values::OwnedDynamicValue, evo_values::DynamicNumericFailure> {
+        Ok(evo_values::OwnedDynamicValue::Float32(0.0))
+    }
+
+    let _negate: evo_values::definitions::DynamicNegate = mock_negate;
+    let _add: evo_values::definitions::DynamicAdd = mock_binary;
+    let _sub: evo_values::definitions::DynamicSubtract = mock_binary;
+    let _mul: evo_values::definitions::DynamicMultiply = mock_binary;
+    let _div: evo_values::definitions::DynamicDivide = mock_binary;
+    let _rem: evo_values::definitions::DynamicRemainder = mock_binary;
 }
 
 // ============================================================================

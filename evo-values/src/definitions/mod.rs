@@ -3,6 +3,7 @@ pub mod boolean;
 pub mod comparison;
 pub mod control;
 pub mod conversion;
+pub mod dynamic_numeric;
 pub mod failures;
 pub mod materialize_owned;
 pub mod numeric;
@@ -14,6 +15,7 @@ pub use bitwise::*;
 pub use comparison::*;
 pub use control::ProductionControl;
 pub use conversion::*;
+pub use dynamic_numeric::*;
 
 pub use failures::{
     BitwiseFailure, ComparisonFailure, ConversionFailure, DynamicNumericFailure, NumericFailure,
