@@ -8,3 +8,4 @@ path = "src/lib.rs"
 
 [dependencies]
 libm = "0.2.16"
+num-bigint = { version = "0.5.1", default-features = false }

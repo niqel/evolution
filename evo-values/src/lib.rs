@@ -7,6 +7,7 @@ pub mod boolean;
 pub mod comparison;
 pub mod conversion;
 pub mod definitions;
+pub mod dynamic_numeric;
 pub mod materialize_owned;
 pub mod numeric;
 pub mod text;
