@@ -158,7 +158,7 @@ El inventario técnico cerrado de `evo-values` tras v0.1 queda exactamente en:
 
 ```text
 Use Cases:      70  (+6 de Dynamic Numeric Arithmetic: UC-EV-065..070)
-Requesters:      1  (MaterializeOwned)
+Requesters:      1  (ReceiveTextSegment)
 Contracts:       0
 Resolvers:       0
 Collaborators:   0
