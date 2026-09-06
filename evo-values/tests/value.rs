@@ -1010,3 +1010,121 @@ fn dynamic_value_with_canonical_integer() {
         _ => panic!("expected OwnedDynamicValue::Integer"),
     }
 }
+
+// ============================================================================
+// 14. Owned -> Borrowed Dynamic Views (as_borrowed)
+// ============================================================================
+
+#[test]
+fn owned_dynamic_integer_as_borrowed_positive() {
+    let owned = OwnedDynamicInteger::from_parts(false, Box::new([0x12, 0x34, 0x56]));
+    assert!(!owned.negative());
+    assert_eq!(owned.magnitude(), &[0x12, 0x34, 0x56]);
+
+    let borrowed = owned.as_borrowed();
+    assert_eq!(borrowed.negative(), owned.negative());
+    assert_eq!(borrowed.magnitude(), owned.magnitude());
+    assert!(!borrowed.negative());
+    assert_eq!(borrowed.magnitude(), &[0x12, 0x34, 0x56]);
+}
+
+#[test]
+fn owned_dynamic_integer_as_borrowed_negative() {
+    let owned = OwnedDynamicInteger::from_parts(true, Box::new([0xAB, 0xCD]));
+    assert!(owned.negative());
+    assert_eq!(owned.magnitude(), &[0xAB, 0xCD]);
+
+    let borrowed = owned.as_borrowed();
+    assert_eq!(borrowed.negative(), owned.negative());
+    assert_eq!(borrowed.magnitude(), owned.magnitude());
+    assert!(borrowed.negative());
+    assert_eq!(borrowed.magnitude(), &[0xAB, 0xCD]);
+}
+
+#[test]
+fn owned_dynamic_integer_as_borrowed_zero() {
+    let owned_empty = OwnedDynamicInteger::from_parts(false, Box::new([]));
+    assert!(!owned_empty.negative());
+    assert_eq!(owned_empty.magnitude(), &[]);
+
+    let borrowed_empty = owned_empty.as_borrowed();
+    assert!(!borrowed_empty.negative());
+    assert_eq!(borrowed_empty.magnitude(), &[]);
+
+    let owned_zeros = OwnedDynamicInteger::from_parts(true, Box::new([0x00, 0x00]));
+    assert!(!owned_zeros.negative());
+    assert_eq!(owned_zeros.magnitude(), &[]);
+
+    let borrowed_zeros = owned_zeros.as_borrowed();
+    assert!(!borrowed_zeros.negative());
+    assert_eq!(borrowed_zeros.magnitude(), &[]);
+}
+
+#[test]
+fn owned_dynamic_integer_as_borrowed_no_allocation_pointer_identity() {
+    let owned = OwnedDynamicInteger::from_parts(false, Box::new([0xDE, 0xAD, 0xBE, 0xEF]));
+    let borrowed = owned.as_borrowed();
+    assert_eq!(borrowed.magnitude().as_ptr(), owned.magnitude().as_ptr());
+    assert_eq!(borrowed.magnitude().len(), owned.magnitude().len());
+}
+
+#[test]
+fn owned_dynamic_value_as_borrowed_integer() {
+    let owned = OwnedDynamicValue::Integer(OwnedDynamicInteger::from_parts(
+        true,
+        Box::new([0x42, 0x43]),
+    ));
+    let borrowed = owned.as_borrowed();
+    match (&owned, borrowed) {
+        (OwnedDynamicValue::Integer(o_int), DynamicValue::Integer(b_int)) => {
+            assert_eq!(b_int.negative(), o_int.negative());
+            assert_eq!(b_int.magnitude(), o_int.magnitude());
+            assert_eq!(b_int.magnitude().as_ptr(), o_int.magnitude().as_ptr());
+        }
+        _ => panic!("expected Integer variant in both owned and borrowed"),
+    }
+}
+
+#[test]
+fn owned_dynamic_value_as_borrowed_float32() {
+    let test_cases = [
+        123.456_f32,
+        -42.5_f32,
+        0.0_f32,
+        -0.0_f32,
+        f32::MIN_POSITIVE,
+        f32::MAX,
+    ];
+    for &val in &test_cases {
+        let owned = OwnedDynamicValue::Float32(val);
+        let borrowed = owned.as_borrowed();
+        match borrowed {
+            DynamicValue::Float32(b_val) => {
+                assert_eq!(b_val.to_bits(), val.to_bits());
+            }
+            _ => panic!("expected Float32 variant"),
+        }
+    }
+}
+
+#[test]
+fn owned_dynamic_value_as_borrowed_float64() {
+    let test_cases = [
+        123.4567890123_f64,
+        -42.5_f64,
+        0.0_f64,
+        -0.0_f64,
+        f64::MIN_POSITIVE,
+        f64::MAX,
+    ];
+    for &val in &test_cases {
+        let owned = OwnedDynamicValue::Float64(val);
+        let borrowed = owned.as_borrowed();
+        match borrowed {
+            DynamicValue::Float64(b_val) => {
+                assert_eq!(b_val.to_bits(), val.to_bits());
+            }
+            _ => panic!("expected Float64 variant"),
+        }
+    }
+}

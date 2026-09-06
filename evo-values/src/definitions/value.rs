@@ -160,12 +160,29 @@ impl OwnedDynamicInteger {
         }
     }
 
+    pub fn as_borrowed(&self) -> DynamicIntegerValue<'_> {
+        DynamicIntegerValue {
+            negative: self.negative,
+            magnitude: Cow::Borrowed(&self.magnitude[..]),
+        }
+    }
+
     pub fn negative(&self) -> bool {
         self.negative
     }
 
     pub fn magnitude(&self) -> &[u8] {
         &self.magnitude
+    }
+}
+
+impl OwnedDynamicValue {
+    pub fn as_borrowed(&self) -> DynamicValue<'_> {
+        match self {
+            Self::Integer(value) => DynamicValue::Integer(value.as_borrowed()),
+            Self::Float32(value) => DynamicValue::Float32(*value),
+            Self::Float64(value) => DynamicValue::Float64(*value),
+        }
     }
 }
 
@@ -202,5 +219,15 @@ mod tests {
         assert!(!val.negative());
         assert_eq!(val.magnitude(), &[]);
         assert!(matches!(val.magnitude, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn owned_dynamic_integer_as_borrowed_preserves_underlying_bytes_and_cow_borrowed() {
+        let owned = OwnedDynamicInteger::from_parts(true, Box::new([0x01, 0x02, 0x03]));
+        let borrowed = owned.as_borrowed();
+        assert!(borrowed.negative());
+        assert_eq!(borrowed.magnitude(), &[0x01, 0x02, 0x03]);
+        assert_eq!(borrowed.magnitude().as_ptr(), owned.magnitude().as_ptr());
+        assert!(matches!(borrowed.magnitude, Cow::Borrowed(_)));
     }
 }
