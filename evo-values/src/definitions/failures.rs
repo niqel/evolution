@@ -27,3 +27,9 @@ pub enum ComparisonFailure {
 pub enum ConversionFailure {
     NotExactlyRepresentable,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DynamicNumericFailure {
+    DifferentFamily,
+    DivisionByZero,
+}

@@ -5,10 +5,10 @@ use alloc::boxed::Box;
 use alloc::string::String as AllocString;
 use alloc::vec;
 use evo_values::{
-    BitwiseFailure, ComparisonFailure, ConversionFailure, DynamicIntegerValue, DynamicValue,
-    EnumPayload, NumericFailure, OwnedDynamicInteger, OwnedDynamicValue, OwnedEnumPayload,
-    OwnedValue, PowerExponent, ProductionControl, ShiftAmount, TextLength, TextOperationFailure,
-    TextPosition, Value,
+    BitwiseFailure, ComparisonFailure, ConversionFailure, DynamicIntegerValue,
+    DynamicNumericFailure, DynamicValue, EnumPayload, NumericFailure, OwnedDynamicInteger,
+    OwnedDynamicValue, OwnedEnumPayload, OwnedValue, PowerExponent, ProductionControl, ShiftAmount,
+    TextLength, TextOperationFailure, TextPosition, Value,
 };
 
 // ============================================================================
@@ -703,6 +703,13 @@ fn failure_enums_contain_closed_variants() {
     // ConversionFailure: NotExactlyRepresentable
     let cv_ner = ConversionFailure::NotExactlyRepresentable;
     assert_eq!(cv_ner, ConversionFailure::NotExactlyRepresentable);
+
+    // DynamicNumericFailure: DifferentFamily, DivisionByZero
+    let dn_df = DynamicNumericFailure::DifferentFamily;
+    let dn_dbz = DynamicNumericFailure::DivisionByZero;
+    assert_eq!(dn_df, DynamicNumericFailure::DifferentFamily);
+    assert_eq!(dn_dbz, DynamicNumericFailure::DivisionByZero);
+    assert_ne!(dn_df, dn_dbz);
 }
 
 // ============================================================================
@@ -735,6 +742,9 @@ fn public_exports_access() {
     let _: evo_values::BitwiseFailure = evo_values::BitwiseFailure::InvalidShift;
     let _: evo_values::ComparisonFailure = evo_values::ComparisonFailure::DifferentFamily;
     let _: evo_values::ConversionFailure = evo_values::ConversionFailure::NotExactlyRepresentable;
+    let _: evo_values::DynamicNumericFailure = evo_values::DynamicNumericFailure::DifferentFamily;
+    let _: evo_values::definitions::DynamicNumericFailure =
+        evo_values::definitions::DynamicNumericFailure::DivisionByZero;
 
     let dyn_int = evo_values::DynamicIntegerValue::from_parts(false, Cow::Borrowed(&[]));
     assert!(!dyn_int.negative());

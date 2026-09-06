@@ -13,7 +13,8 @@ pub mod text;
 
 pub use definitions::control::ProductionControl;
 pub use definitions::failures::{
-    BitwiseFailure, ComparisonFailure, ConversionFailure, NumericFailure, TextOperationFailure,
+    BitwiseFailure, ComparisonFailure, ConversionFailure, DynamicNumericFailure, NumericFailure,
+    TextOperationFailure,
 };
 pub use definitions::materialize_owned::MaterializeOwned;
 pub use definitions::scalars::{PowerExponent, ShiftAmount, TextLength, TextPosition};

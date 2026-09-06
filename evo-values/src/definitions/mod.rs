@@ -16,7 +16,8 @@ pub use control::ProductionControl;
 pub use conversion::*;
 
 pub use failures::{
-    BitwiseFailure, ComparisonFailure, ConversionFailure, NumericFailure, TextOperationFailure,
+    BitwiseFailure, ComparisonFailure, ConversionFailure, DynamicNumericFailure, NumericFailure,
+    TextOperationFailure,
 };
 pub use materialize_owned::MaterializeOwned;
 pub use scalars::{PowerExponent, ShiftAmount, TextLength, TextPosition};
