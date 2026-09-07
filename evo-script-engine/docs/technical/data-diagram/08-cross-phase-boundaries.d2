@@ -40,6 +40,7 @@ vm: {
   ApplicationBindings: { label: "<<struct>> ApplicationBindings" }
   ExternalCapability: { label: "<<alias>> ExternalCapability" }
   CallFrame: { label: "<<struct>> CallFrame" }
+  DynamicIntegerBacking: { label: "<<struct>> DynamicIntegerBacking" }
 }
 
 outcome: {
@@ -56,6 +57,7 @@ evo_values: {
   label: "evo-values · external shared owner"
   Value: { label: "<<borrowed view>> Value<'a>" }
   OwnedValue: { label: "<<enum>> OwnedValue · external shared" }
+  OwnedDynamicInteger: { label: "<<struct>> OwnedDynamicInteger · external shared" }
 }
 
 # SourceSpan ownership and cross-phase reuse
@@ -89,6 +91,9 @@ vm.ExternalCapability -> evo_values.Value: "references · 0..N ordered"
 vm.ExternalCapability -> evo_values.OwnedValue: "references · 1"
 vm.ExternalCapability -> outcome.ExternalCapabilityFailure: "references · 1"
 
+# Runtime backing reused from evo-values
+vm.DynamicIntegerBacking -> evo_values.OwnedDynamicInteger: "contains · 1"
+
 # Public outcomes reference success payload types across boundaries
 outcome.CompileOutcome -> compiled.CompiledProgram: "references · 1"
 outcome.ExecutionOutcome -> evo_values.OwnedValue: "references · 1"
@@ -97,6 +102,6 @@ notes: {
   label: "Cross-Phase Boundary Rules"
   one: "Only persistent/reused data relations are shown; no lowering/execution arrows"
   two: "Owner phase remains authoritative even when an identity is reused elsewhere"
-  three: "Value<'a> and OwnedValue are owned by evo-values, not evo-script-engine"
+  three: "Value<'a>, OwnedValue and OwnedDynamicInteger are owned by evo-values, not evo-script-engine"
   four: "CompilationCatalog has no persistence relation into CompiledProgram or VmExecution"
 }

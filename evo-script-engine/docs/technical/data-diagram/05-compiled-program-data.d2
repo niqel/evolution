@@ -12,7 +12,7 @@ lexical_reused: {
 }
 
 compiled: {
-  label: "Compiled Program / Bytecode Data · owner · 21 identities"
+  label: "Compiled Program / Bytecode Data · owner · 18 identities"
 
   ids: {
     label: "Persistent IDs / Coordinates · 8"
@@ -35,13 +35,6 @@ compiled: {
     DynamicConstant: { label: "<<enum>> DynamicConstant\n3 variants" }
     NumericKind: { label: "<<enum>> NumericKind\n12 variants" }
     Instruction: { label: "<<enum>> Instruction\n48 variants" }
-  }
-
-  equality: {
-    label: "Structural Equality · 3"
-    EqualityRule: { label: "<<enum>> EqualityRule\n4 variants" }
-    CompositeEqualityPlan: { label: "<<enum>> CompositeEqualityPlan\n2 variants" }
-    EnumEqualityPayloadPlan: { label: "<<enum>> EnumEqualityPayloadPlan\n3 variants" }
   }
 
   mapping_boundary: {
@@ -85,14 +78,6 @@ compiled.root_storage.Instruction -> compiled.root_storage.NumericKind: "variant
 compiled.root_storage.Instruction -> compiled.ids.InstructionIndex: "variant payload · 0..1"
 compiled.root_storage.Instruction -> compiled.ids.FieldIndex: "variant payload · 0..N ordered"
 compiled.root_storage.Instruction -> compiled.ids.VariantDiscriminant: "variant payload · 0..1"
-compiled.root_storage.Instruction -> compiled.equality.CompositeEqualityPlan: "variant payload · 0..1"
-
-# Structural equality plan
-compiled.equality.EqualityRule -> compiled.root_storage.NumericKind: "variant payload · 0..1"
-compiled.equality.EqualityRule -> compiled.equality.CompositeEqualityPlan: "variant payload · 0..1"
-compiled.equality.CompositeEqualityPlan -> compiled.equality.EqualityRule: "variant payload · 0..N ordered"
-compiled.equality.CompositeEqualityPlan -> compiled.equality.EnumEqualityPayloadPlan: "variant payload · 0..N ordered"
-compiled.equality.EnumEqualityPayloadPlan -> compiled.equality.EqualityRule: "variant payload · 0..N ordered"
 
 # Source mapping
 compiled.mapping_boundary.SourceMap -> lexical_reused.SourceSpan: "contains · 1..N ordered"
@@ -104,10 +89,10 @@ compiled.mapping_boundary.CompiledEnumValueShape -> compiled.ids.CompiledValueSh
 
 notes: {
   label: "Compiled Program Boundaries"
-  count: "Exactly 21 own identities; FunctionId, SignatureSymbol and SourceSpan are reused"
+  count: "Exactly 18 own identities; FunctionId, SignatureSymbol and SourceSpan are reused"
   instruction: "Instruction remains one enum node with exactly 48 variants"
   slots: "ParameterSlot and LocalSlot are logical function-relative coordinates; no generic FrameSlot or OperandSlot is introduced"
-  equality: "CompositeEqualityPlan is stored directly inside equality instructions; no EqualityPlanId/table exists"
+  equality: "EqualComposite / NotEqualComposite are payloadless Instruction variants; no equality-plan identity persists in Compiled Program"
   shapes: "Boundary shapes are executable contract metadata for entry arguments and external results, not general runtime reflection"
   no_semantic: "No TypeId, BindingId, AST, names for local resolution or SemanticProgram borrow persists into CompiledProgram"
 }

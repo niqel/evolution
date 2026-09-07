@@ -22,6 +22,7 @@ evo_values: {
   label: "evo-values · external shared owner"
   Value: { label: "<<borrowed view>> Value<'a>" }
   OwnedValue: { label: "<<enum>> OwnedValue" }
+  OwnedDynamicInteger: { label: "<<struct>> OwnedDynamicInteger" }
 }
 
 vm: {
@@ -109,6 +110,9 @@ vm.backing_data.EnumBacking -> compiled_reused.VariantDiscriminant: "contains ·
 vm.backing_data.EnumBacking -> vm.backing_data.RuntimeEnumPayload: "contains · 1"
 vm.backing_data.RuntimeEnumPayload -> vm.values.RuntimeValue: "variant payload · 0..N ordered"
 
+# Runtime backing reused from evo-values
+vm.backing_data.DynamicIntegerBacking -> evo_values.OwnedDynamicInteger: "contains · 1"
+
 # Shared storage and frames
 vm.control.SharedValueStorage -> vm.values.RuntimeValue: "owns · 0..N ordered"
 vm.control.CallFrame -> semantic_reused.FunctionId: "contains · 1"
@@ -120,6 +124,7 @@ notes: {
   root: "VmExecution has exactly 5 persistent fields: 2 immutable borrows + 3 mutable owned roots"
   storage: "SharedValueStorage owns descriptor cells; CallFrame only describes boundaries and owns no per-frame Value collections"
   strings: "ExecutionBackingStore also owns a typed String store of Box<str>; Box<str> is storage, not a separate technical identity"
+  dynamic_integer: "DynamicIntegerBacking remains an engine-owned VM identity; OwnedDynamicInteger is reused from evo-values and is not recounted"
   refs: "String/Dynamic Integer may reference CompiledProgram constants or execution-owned backing; Struct/Enum use execution-owned typed IDs"
   graph: "Composite backing is finite, immutable and acyclic; RuntimeValue copies descriptors, not backing"
   frame: "CallFrame.function + InstructionPointer identify current bytecode position; frame_base is a primitive boundary, not a new identity"
