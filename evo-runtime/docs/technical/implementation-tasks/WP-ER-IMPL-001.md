@@ -2,19 +2,26 @@
 
 ```text
 STATUS:
-PLANNED
+IMPLEMENTATION CLOSED
+FINAL QUALITY GATE PENDING
 
 PROGRESS:
-0 / 6 APPROVED
+4 / 6 APPROVED
 
 APPROVED THROUGH:
-NONE
+TASK-ER-IMPL-004
+
+CURRENT:
+TASK-ER-IMPL-005 — PENDING REVIEW
 
 NEXT:
-TASK-ER-IMPL-002
+TASK-ER-IMPL-006
 
 BASE COMMIT:
 f16df11595f0167c1b0fdb72c4aeb56056ae487b
+
+IMPLEMENTATION CLOSURE HEAD:
+3ca34c606251c07236d37280ae70d794ae98741a
 ```
 
 Este Work Package define la secuencia obligatoria para implementar de forma mínima, canónica e incremental el crate `evo-runtime` bajo **Evo Runtime Model A**, materializando las decisiones cerradas `ARQ-ER-001`, `ARQ-ER-002`, `LT-ER-DM-001`, `LT-ER-SIG-001`, `LT-ER-SIG-002`, `LT-ER-PART-001` y `LT-ER-PART-002`.
@@ -71,7 +78,7 @@ Total           3 participants
 ## 3. Inventario Canónico de Tareas
 
 ### TASK-ER-IMPL-001 — Registrar Work Package
-- **Estado**: PENDING REVIEW
+- **Estado**: APPROVED
 - **Base obligatoria**: `f16df11595f0167c1b0fdb72c4aeb56056ae487b`
 - **Alcance**:
   - Crear la autoridad documental del Work Package (`WP-ER-IMPL-001.md` y `README.md`).
@@ -79,7 +86,7 @@ Total           3 participants
   - Exclusivamente documental. Cero Rust, cero Cargo.
 
 ### TASK-ER-IMPL-002 — Materializar crate y estructura modular
-- **Estado**: NOT STARTED
+- **Estado**: APPROVED
 - **Objetivo**: Crear físicamente el crate `evo-runtime`.
 - **Scope previsto**:
   - `evo-runtime/Cargo.toml`
@@ -108,7 +115,7 @@ Total           3 participants
   - `cargo check -p evo-runtime`
 
 ### TASK-ER-IMPL-003 — Materializar firmas arquitectónicas
-- **Estado**: NOT STARTED
+- **Estado**: APPROVED
 - **Objetivo**: Materializar las definiciones de Use Case y Requester.
 - **Scope previsto**:
   - `evo-runtime/src/definitions/requesters/run_request.rs`:
@@ -129,7 +136,9 @@ Total           3 participants
   - `cargo test -p evo-runtime`
 
 ### TASK-ER-IMPL-004 — Implementar Starter y comportamiento Model A
-- **Estado**: NOT STARTED
+- **Estado**: APPROVED
+- **Implementation Head**: `3ca34c606251c07236d37280ae70d794ae98741a`
+- **Tests**: 7 passed; 0 failed
 - **Objetivo**: Implementar el Agent canónico `Starter` y la suite de tests unitarios de comportamiento de Model A.
 - **Scope previsto**:
   - `evo-runtime/src/agents/starter.rs`:
@@ -145,7 +154,7 @@ Total           3 participants
 
     pub const START: start::Start = start;
     ```
-  - Reexportar `starter` y `START` en `lib.rs` / `agents/mod.rs`.
+  - Declarar `starter` en `agents/mod.rs`.
 - **Tests obligatorios**:
   1. `START` satisface exactamente `start::Start`.
   2. `start` invoca `Run` exactamente una vez.
@@ -158,7 +167,7 @@ Total           3 participants
   - `cargo test -p evo-runtime`
 
 ### TASK-ER-IMPL-005 — Cerrar documentación de implementación
-- **Estado**: NOT STARTED
+- **Estado**: PENDING REVIEW
 - **Objetivo**: Cerrar documentalmente la implementación tras verificar la suite unitaria.
 - **Scope previsto**:
   - `evo-runtime/docs/technical/TECHNICAL_DESIGN.md`

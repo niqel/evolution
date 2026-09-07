@@ -140,19 +140,25 @@ Sequence Views: 1
 
 ```text
 Implementation:
-NOT STARTED
+CLOSED
+
+Implementation Head:
+3ca34c606251c07236d37280ae70d794ae98741a
 
 Work Package:
 WP-ER-IMPL-001
 
-Tasks:
-6
+Progress:
+4 / 6 APPROVED
 
 Current Task:
-TASK-ER-IMPL-001 — PENDING REVIEW
+TASK-ER-IMPL-005 — PENDING REVIEW
 
 Next after approval:
-TASK-ER-IMPL-002
+TASK-ER-IMPL-006 — Final Quality Gate
+
+Final Quality Gate:
+PENDING
 ```
 
-El diseño técnico está formalmente cerrado (`TECHNICAL DESIGN CLOSED`). La secuencia de implementación física en Rust se gestiona a través del Work Package [WP-ER-IMPL-001](implementation-tasks/WP-ER-IMPL-001.md).
+El diseño técnico y la implementación productiva en Rust están formalmente cerrados (`Implementation: CLOSED`). Nótese que `Implementation CLOSED != Work Package CLOSED`: el código productivo y sus pruebas unitarias están completos, pero el Work Package permanece abierto hasta que se verifique y apruebe el Final Quality Gate en `TASK-ER-IMPL-006`. La secuencia y estado de tareas se gestiona a través del Work Package [WP-ER-IMPL-001](implementation-tasks/WP-ER-IMPL-001.md).
