@@ -1,6 +1,5 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use num_bigint::Sign;
 
 use crate::data::compiled::program::CompiledProgram;
 use crate::data::compiled::storage::{Constant, DynamicConstant};
@@ -79,15 +78,7 @@ pub fn own_runtime_value(
                         .dynamic_integers
                         .get(id.0)
                         .expect("DynamicIntegerBackingId must reference execution backing store");
-                    let (sign, magnitude) = backing.value.to_bytes_be();
-                    let (negative, magnitude) = match sign {
-                        Sign::Minus => (true, magnitude.into_boxed_slice()),
-                        Sign::Plus => (false, magnitude.into_boxed_slice()),
-                        Sign::NoSign => (false, vec![].into_boxed_slice()),
-                    };
-                    OwnedValue::Dynamic(OwnedDynamicValue::Integer(
-                        OwnedDynamicInteger::from_parts(negative, magnitude),
-                    ))
+                    OwnedValue::Dynamic(OwnedDynamicValue::Integer(backing.value.clone()))
                 }
             },
         },
@@ -145,7 +136,6 @@ mod tests {
     use super::*;
     use alloc::string::ToString;
     use alloc::vec;
-    use num_bigint::BigInt;
 
     use crate::data::compiled::identities::{ConstantId, VariantDiscriminant};
     use crate::data::compiled::source_map::SourceMap;
@@ -342,21 +332,21 @@ mod tests {
         let mut store = empty_store();
         // 0: zero
         store.dynamic_integers.push(DynamicIntegerBacking {
-            value: BigInt::from(0),
+            value: OwnedDynamicInteger::from_parts(false, vec![].into_boxed_slice()),
         });
         // 1: positive 42
         store.dynamic_integers.push(DynamicIntegerBacking {
-            value: BigInt::from(42),
+            value: OwnedDynamicInteger::from_parts(false, vec![42].into_boxed_slice()),
         });
         // 2: negative 42
         store.dynamic_integers.push(DynamicIntegerBacking {
-            value: BigInt::from(-42),
+            value: OwnedDynamicInteger::from_parts(true, vec![42].into_boxed_slice()),
         });
-        // 3: > u128 (2^128 = 340282366920938463463374607431768211456)
-        let large_bigint = BigInt::parse_bytes(b"340282366920938463463374607431768211456", 10)
-            .expect("valid decimal");
+        // 3: > u128 (2^128)
+        let mut large_mag = vec![0u8; 17];
+        large_mag[0] = 1;
         store.dynamic_integers.push(DynamicIntegerBacking {
-            value: large_bigint,
+            value: OwnedDynamicInteger::from_parts(false, large_mag.into_boxed_slice()),
         });
 
         let val_zero = RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
@@ -432,7 +422,7 @@ mod tests {
             .strings
             .push("struct field text".to_string().into_boxed_str());
         store.dynamic_integers.push(DynamicIntegerBacking {
-            value: BigInt::from(7),
+            value: OwnedDynamicInteger::from_parts(false, vec![7].into_boxed_slice()),
         });
         store.structs.push(StructBacking {
             fields: vec![
@@ -636,7 +626,7 @@ mod tests {
         let mut store = empty_store();
         store.strings.push("deep leaf".to_string().into_boxed_str());
         store.dynamic_integers.push(DynamicIntegerBacking {
-            value: BigInt::from(-99),
+            value: OwnedDynamicInteger::from_parts(true, vec![99].into_boxed_slice()),
         });
         store.structs.push(StructBacking {
             fields: vec![RuntimeValue::String(StringBackingRef::Execution(

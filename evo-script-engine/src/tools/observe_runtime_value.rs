@@ -1,7 +1,6 @@
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use num_bigint::Sign;
 
 use crate::data::compiled::program::CompiledProgram;
 use crate::data::compiled::storage::{Constant, DynamicConstant};
@@ -89,14 +88,8 @@ pub fn observe_runtime_value<'value>(
                         .dynamic_integers
                         .get(id.0)
                         .expect("DynamicIntegerBackingId must reference execution backing store");
-                    let (sign, magnitude) = backing.value.to_bytes_be();
-                    let (negative, magnitude) = match sign {
-                        Sign::Minus => (true, magnitude),
-                        Sign::Plus => (false, magnitude),
-                        Sign::NoSign => (false, Vec::new()),
-                    };
                     Value::Dynamic(InterchangeDynamicValue::Integer(
-                        DynamicIntegerValue::from_parts(negative, Cow::Owned(magnitude)),
+                        backing.value.as_borrowed(),
                     ))
                 }
             },
@@ -159,7 +152,7 @@ mod tests {
     use super::*;
     use alloc::string::ToString;
     use alloc::vec;
-    use num_bigint::BigInt;
+    use evo_values::OwnedDynamicInteger;
 
     use crate::data::compiled::identities::{ConstantId, VariantDiscriminant};
     use crate::data::compiled::source_map::SourceMap;
@@ -370,26 +363,26 @@ mod tests {
     }
 
     #[test]
-    fn execution_dynamic_integer_uses_cow_owned() {
+    fn execution_dynamic_integer_zero_copy() {
         let program = empty_program();
         let mut store = empty_store();
         // 0: zero
         store.dynamic_integers.push(DynamicIntegerBacking {
-            value: BigInt::from(0),
+            value: OwnedDynamicInteger::from_parts(false, vec![].into_boxed_slice()),
         });
         // 1: positive 42
         store.dynamic_integers.push(DynamicIntegerBacking {
-            value: BigInt::from(42),
+            value: OwnedDynamicInteger::from_parts(false, vec![42].into_boxed_slice()),
         });
         // 2: negative 42
         store.dynamic_integers.push(DynamicIntegerBacking {
-            value: BigInt::from(-42),
+            value: OwnedDynamicInteger::from_parts(true, vec![42].into_boxed_slice()),
         });
-        // 3: > u128 (2^128 = 340282366920938463463374607431768211456)
-        let large_bigint = BigInt::parse_bytes(b"340282366920938463463374607431768211456", 10)
-            .expect("valid decimal");
+        // 3: > u128 (2^128)
+        let mut mag = vec![0u8; 17];
+        mag[0] = 1;
         store.dynamic_integers.push(DynamicIntegerBacking {
-            value: large_bigint,
+            value: OwnedDynamicInteger::from_parts(false, mag.clone().into_boxed_slice()),
         });
 
         // 0: zero
@@ -405,7 +398,7 @@ mod tests {
             _ => panic!("expected dynamic integer"),
         }
 
-        // 1: positive 42
+        // 1: positive 42 (zero-copy pointer verification)
         let val_pos = RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
             DynamicIntegerBackingRef::Execution(DynamicIntegerBackingId(1)),
         ));
@@ -414,11 +407,15 @@ mod tests {
             Value::Dynamic(InterchangeDynamicValue::Integer(dyn_int)) => {
                 assert!(!dyn_int.negative());
                 assert_eq!(dyn_int.magnitude(), &[42]);
+                assert_eq!(
+                    dyn_int.magnitude().as_ptr(),
+                    store.dynamic_integers[1].value.magnitude().as_ptr()
+                );
             }
             _ => panic!("expected dynamic integer"),
         }
 
-        // 2: negative 42
+        // 2: negative 42 (zero-copy pointer verification)
         let val_neg = RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
             DynamicIntegerBackingRef::Execution(DynamicIntegerBackingId(2)),
         ));
@@ -427,11 +424,15 @@ mod tests {
             Value::Dynamic(InterchangeDynamicValue::Integer(dyn_int)) => {
                 assert!(dyn_int.negative());
                 assert_eq!(dyn_int.magnitude(), &[42]);
+                assert_eq!(
+                    dyn_int.magnitude().as_ptr(),
+                    store.dynamic_integers[2].value.magnitude().as_ptr()
+                );
             }
             _ => panic!("expected dynamic integer"),
         }
 
-        // 3: > u128
+        // 3: > u128 (zero-copy pointer verification)
         let val_large = RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
             DynamicIntegerBackingRef::Execution(DynamicIntegerBackingId(3)),
         ));
@@ -439,9 +440,11 @@ mod tests {
         match obs_large {
             Value::Dynamic(InterchangeDynamicValue::Integer(dyn_int)) => {
                 assert!(!dyn_int.negative());
-                let mut expected_mag = vec![0u8; 17];
-                expected_mag[0] = 1;
-                assert_eq!(dyn_int.magnitude(), expected_mag.as_slice());
+                assert_eq!(dyn_int.magnitude(), mag.as_slice());
+                assert_eq!(
+                    dyn_int.magnitude().as_ptr(),
+                    store.dynamic_integers[3].value.magnitude().as_ptr()
+                );
             }
             _ => panic!("expected dynamic integer"),
         }
@@ -709,7 +712,7 @@ mod tests {
             .strings
             .push("deep leaf string".to_string().into_boxed_str());
         store.dynamic_integers.push(DynamicIntegerBacking {
-            value: BigInt::from(-99),
+            value: OwnedDynamicInteger::from_parts(true, vec![99].into_boxed_slice()),
         });
         store.structs.push(StructBacking {
             fields: vec![RuntimeValue::String(StringBackingRef::Execution(

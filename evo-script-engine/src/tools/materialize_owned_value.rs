@@ -1,7 +1,3 @@
-use alloc::boxed::Box;
-use alloc::vec::Vec;
-use num_bigint::{BigInt, Sign};
-
 use crate::data::compiled::identities::VariantDiscriminant;
 use crate::data::vm::backing::{
     DynamicIntegerBacking, EnumBacking, ExecutionBackingStore, RuntimeEnumPayload, StructBacking,
@@ -10,6 +6,8 @@ use crate::data::vm::values::{
     DynamicIntegerBackingId, DynamicIntegerBackingRef, DynamicValue as RuntimeDynamicValue,
     EnumBackingId, RuntimeValue, StringBackingId, StringBackingRef, StructBackingId,
 };
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use evo_values::{OwnedDynamicValue, OwnedEnumPayload, OwnedValue};
 
 pub type MaterializeOwnedValue = fn(OwnedValue, &mut ExecutionBackingStore) -> RuntimeValue;
@@ -43,17 +41,11 @@ pub fn materialize_owned_value(
         }
 
         OwnedValue::Dynamic(dyn_val) => match dyn_val {
-            OwnedDynamicValue::Integer(dyn_int) => {
-                let sign = if dyn_int.negative() {
-                    Sign::Minus
-                } else {
-                    Sign::Plus
-                };
-                let big_int = BigInt::from_bytes_be(sign, dyn_int.magnitude());
+            OwnedDynamicValue::Integer(owned_integer) => {
                 let id = DynamicIntegerBackingId(backing_store.dynamic_integers.len());
-                backing_store
-                    .dynamic_integers
-                    .push(DynamicIntegerBacking { value: big_int });
+                backing_store.dynamic_integers.push(DynamicIntegerBacking {
+                    value: owned_integer,
+                });
                 RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
                     DynamicIntegerBackingRef::Execution(id),
                 ))
@@ -274,7 +266,8 @@ mod tests {
             _ => panic!("expected dynamic integer"),
         }
         assert_eq!(store.dynamic_integers.len(), 1);
-        assert_eq!(store.dynamic_integers[0].value, BigInt::from(42));
+        assert!(!store.dynamic_integers[0].value.negative());
+        assert_eq!(store.dynamic_integers[0].value.magnitude(), &[42]);
     }
 
     #[test]
@@ -295,7 +288,8 @@ mod tests {
             _ => panic!("expected dynamic integer"),
         }
         assert_eq!(store.dynamic_integers.len(), 1);
-        assert_eq!(store.dynamic_integers[0].value, BigInt::from(-42));
+        assert!(store.dynamic_integers[0].value.negative());
+        assert_eq!(store.dynamic_integers[0].value.magnitude(), &[42]);
     }
 
     #[test]
@@ -315,7 +309,8 @@ mod tests {
             }
             _ => panic!("expected dynamic integer"),
         }
-        assert_eq!(store.dynamic_integers[0].value, BigInt::from(0));
+        assert!(!store.dynamic_integers[0].value.negative());
+        assert_eq!(store.dynamic_integers[0].value.magnitude(), &[]);
 
         // 2. negative = true, magnitude = []
         let val2 = OwnedValue::Dynamic(OwnedDynamicValue::Integer(
@@ -330,7 +325,8 @@ mod tests {
             }
             _ => panic!("expected dynamic integer"),
         }
-        assert_eq!(store.dynamic_integers[1].value, BigInt::from(0));
+        assert!(!store.dynamic_integers[1].value.negative());
+        assert_eq!(store.dynamic_integers[1].value.magnitude(), &[]);
     }
 
     #[test]
@@ -341,7 +337,7 @@ mod tests {
         mag[0] = 1;
         let val = OwnedValue::Dynamic(OwnedDynamicValue::Integer(OwnedDynamicInteger::from_parts(
             false,
-            mag.into_boxed_slice(),
+            mag.clone().into_boxed_slice(),
         )));
 
         let runtime_val = materialize_owned_value(val, &mut store);
@@ -353,16 +349,15 @@ mod tests {
             }
             _ => panic!("expected dynamic integer"),
         }
-        let expected_bigint = BigInt::parse_bytes(b"340282366920938463463374607431768211456", 10)
-            .expect("valid decimal");
-        assert_eq!(store.dynamic_integers[0].value, expected_bigint);
+        assert!(!store.dynamic_integers[0].value.negative());
+        assert_eq!(store.dynamic_integers[0].value.magnitude(), &mag[..]);
     }
 
     #[test]
     fn existing_dynamic_backing() {
         let mut store = empty_store();
         store.dynamic_integers.push(DynamicIntegerBacking {
-            value: BigInt::from(100),
+            value: OwnedDynamicInteger::from_parts(false, vec![100].into_boxed_slice()),
         });
 
         let val = OwnedValue::Dynamic(OwnedDynamicValue::Integer(OwnedDynamicInteger::from_parts(
@@ -380,8 +375,10 @@ mod tests {
             _ => panic!("expected dynamic integer"),
         }
         assert_eq!(store.dynamic_integers.len(), 2);
-        assert_eq!(store.dynamic_integers[0].value, BigInt::from(100));
-        assert_eq!(store.dynamic_integers[1].value, BigInt::from(200));
+        assert!(!store.dynamic_integers[0].value.negative());
+        assert_eq!(store.dynamic_integers[0].value.magnitude(), &[100]);
+        assert!(!store.dynamic_integers[1].value.negative());
+        assert_eq!(store.dynamic_integers[1].value.magnitude(), &[200]);
     }
 
     #[test]
@@ -409,7 +406,8 @@ mod tests {
         assert_eq!(&*store.strings[0], "field str");
 
         assert_eq!(store.dynamic_integers.len(), 1);
-        assert_eq!(store.dynamic_integers[0].value, BigInt::from(50));
+        assert!(!store.dynamic_integers[0].value.negative());
+        assert_eq!(store.dynamic_integers[0].value.magnitude(), &[50]);
 
         assert_eq!(store.structs.len(), 1);
         assert_eq!(store.structs[0].fields.len(), 3);
@@ -682,7 +680,8 @@ mod tests {
 
         // 2. Dynamic integer at 0
         assert_eq!(store.dynamic_integers.len(), 1);
-        assert_eq!(store.dynamic_integers[0].value, BigInt::from(77));
+        assert!(!store.dynamic_integers[0].value.negative());
+        assert_eq!(store.dynamic_integers[0].value.magnitude(), &[77]);
 
         // 3. Struct at 0
         assert_eq!(store.structs.len(), 1);

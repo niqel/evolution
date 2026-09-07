@@ -1,11 +1,8 @@
 use alloc::boxed::Box;
 use alloc::string::ToString;
 use alloc::vec::Vec;
-use num_bigint::{BigInt, Sign};
 
-use crate::data::compiled::identities::{
-    ConstantId, FieldIndex, InstructionIndex, NumericKind, VariantDiscriminant,
-};
+use crate::data::compiled::identities::{ConstantId, FieldIndex, NumericKind, VariantDiscriminant};
 use crate::data::compiled::instructions::Instruction;
 use crate::data::compiled::program::CompiledProgram;
 use crate::data::compiled::storage::{Constant, DynamicConstant};
@@ -20,11 +17,13 @@ use crate::data::vm::values::{
     EnumBackingId, RuntimeValue, StringBackingId, StringBackingRef, StructBackingId,
 };
 use crate::tools::locate_source_span::LOCATE_SOURCE_SPAN;
+use crate::tools::materialize_owned_value::MATERIALIZE_OWNED_VALUE;
 use crate::tools::observe_runtime_value::OBSERVE_RUNTIME_VALUE;
 use crate::tools::own_runtime_value::OWN_RUNTIME_VALUE;
 use evo_values::boolean::NOT;
 use evo_values::comparison::{EQUAL, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, NOT_EQUAL};
 use evo_values::conversion;
+use evo_values::dynamic_numeric;
 use evo_values::numeric::{
     ADD_F32, ADD_F64, ADD_I8, ADD_I16, ADD_I32, ADD_I64, ADD_I128, ADD_U8, ADD_U16, ADD_U32,
     ADD_U64, ADD_U128, DIVIDE_F32, DIVIDE_F64, DIVIDE_I8, DIVIDE_I16, DIVIDE_I32, DIVIDE_I64,
@@ -37,16 +36,14 @@ use evo_values::numeric::{
     SUBTRACT_I32, SUBTRACT_I64, SUBTRACT_I128, SUBTRACT_U8, SUBTRACT_U16, SUBTRACT_U32,
     SUBTRACT_U64, SUBTRACT_U128,
 };
-use evo_values::{ComparisonFailure, ConversionFailure, NumericFailure, OwnedValue, Value};
+use evo_values::{
+    ComparisonFailure, ConversionFailure, DynamicNumericFailure, NumericFailure, OwnedValue, Value,
+};
 
 pub type ExecuteInstruction =
     for<'compiled, 'bindings> fn(
         &mut VmExecution<'compiled, 'bindings>,
     ) -> Result<Option<OwnedValue>, ExecutionFailure>;
-
-const I128_MIN_F64: f64 = -170_141_183_460_469_231_731_687_303_715_884_105_728.0;
-const I128_MAX_LIMIT_F64: f64 = 170_141_183_460_469_231_731_687_303_715_884_105_728.0;
-const U128_MAX_LIMIT_F64: f64 = 340_282_366_920_938_463_463_374_607_431_768_211_456.0;
 
 fn make_evaluation_failure(
     execution: &VmExecution,
@@ -76,6 +73,13 @@ fn map_numeric_failure(failure: NumericFailure) -> EvaluationFailure {
 fn map_conversion_failure(failure: ConversionFailure) -> EvaluationFailure {
     match failure {
         ConversionFailure::NotExactlyRepresentable => EvaluationFailure::Conversion,
+    }
+}
+
+fn map_dynamic_numeric_failure(failure: DynamicNumericFailure) -> EvaluationFailure {
+    match failure {
+        DynamicNumericFailure::DifferentFamily => EvaluationFailure::DynamicNumericType,
+        DynamicNumericFailure::DivisionByZero => EvaluationFailure::DivisionByZero,
     }
 }
 
@@ -244,225 +248,6 @@ fn resolve_string<'a>(
         },
         StringBackingRef::Execution(id) => &backing.strings[id.0],
     }
-}
-
-fn resolve_dynamic_integer(
-    dyn_int_ref: DynamicIntegerBackingRef,
-    compiled: &CompiledProgram,
-    backing: &ExecutionBackingStore,
-) -> BigInt {
-    match dyn_int_ref {
-        DynamicIntegerBackingRef::Compiled(constant_id) => {
-            match &compiled.constants[constant_id.0] {
-                Constant::Dynamic(DynamicConstant::Integer {
-                    negative,
-                    magnitude,
-                }) => {
-                    let sign = if *negative { Sign::Minus } else { Sign::Plus };
-                    BigInt::from_bytes_be(sign, magnitude)
-                }
-                _ => panic!(
-                    "Constant referenced by DynamicIntegerBackingRef::Compiled must be DynamicConstant::Integer"
-                ),
-            }
-        }
-        DynamicIntegerBackingRef::Execution(id) => backing.dynamic_integers[id.0].value.clone(),
-    }
-}
-
-fn convert_i128_to_target(val: i128, target: &NumericKind) -> Result<RuntimeValue, ()> {
-    match target {
-        NumericKind::Int8 => i8::try_from(val).map(RuntimeValue::Int8).map_err(|_| ()),
-        NumericKind::Int16 => i16::try_from(val).map(RuntimeValue::Int16).map_err(|_| ()),
-        NumericKind::Int32 => i32::try_from(val).map(RuntimeValue::Int32).map_err(|_| ()),
-        NumericKind::Int64 => i64::try_from(val).map(RuntimeValue::Int64).map_err(|_| ()),
-        NumericKind::Int128 => Ok(RuntimeValue::Int128(val)),
-
-        NumericKind::Uint8 => u8::try_from(val).map(RuntimeValue::Uint8).map_err(|_| ()),
-        NumericKind::Uint16 => u16::try_from(val).map(RuntimeValue::Uint16).map_err(|_| ()),
-        NumericKind::Uint32 => u32::try_from(val).map(RuntimeValue::Uint32).map_err(|_| ()),
-        NumericKind::Uint64 => u64::try_from(val).map(RuntimeValue::Uint64).map_err(|_| ()),
-        NumericKind::Uint128 => u128::try_from(val)
-            .map(RuntimeValue::Uint128)
-            .map_err(|_| ()),
-
-        NumericKind::Float32 => {
-            let f = val as f32;
-            if f.is_finite()
-                && (f as f64) >= I128_MIN_F64
-                && (f as f64) < I128_MAX_LIMIT_F64
-                && (f as i128) == val
-            {
-                Ok(RuntimeValue::Float32(f))
-            } else {
-                Err(())
-            }
-        }
-        NumericKind::Float64 => {
-            let f = val as f64;
-            if f.is_finite() && f >= I128_MIN_F64 && f < I128_MAX_LIMIT_F64 && (f as i128) == val {
-                Ok(RuntimeValue::Float64(f))
-            } else {
-                Err(())
-            }
-        }
-    }
-}
-
-fn convert_u128_to_target(val: u128, target: &NumericKind) -> Result<RuntimeValue, ()> {
-    match target {
-        NumericKind::Int8 => i8::try_from(val).map(RuntimeValue::Int8).map_err(|_| ()),
-        NumericKind::Int16 => i16::try_from(val).map(RuntimeValue::Int16).map_err(|_| ()),
-        NumericKind::Int32 => i32::try_from(val).map(RuntimeValue::Int32).map_err(|_| ()),
-        NumericKind::Int64 => i64::try_from(val).map(RuntimeValue::Int64).map_err(|_| ()),
-        NumericKind::Int128 => i128::try_from(val)
-            .map(RuntimeValue::Int128)
-            .map_err(|_| ()),
-
-        NumericKind::Uint8 => u8::try_from(val).map(RuntimeValue::Uint8).map_err(|_| ()),
-        NumericKind::Uint16 => u16::try_from(val).map(RuntimeValue::Uint16).map_err(|_| ()),
-        NumericKind::Uint32 => u32::try_from(val).map(RuntimeValue::Uint32).map_err(|_| ()),
-        NumericKind::Uint64 => u64::try_from(val).map(RuntimeValue::Uint64).map_err(|_| ()),
-        NumericKind::Uint128 => Ok(RuntimeValue::Uint128(val)),
-
-        NumericKind::Float32 => {
-            let f = val as f32;
-            if f.is_finite() && f >= 0.0 && (f as f64) < U128_MAX_LIMIT_F64 && (f as u128) == val {
-                Ok(RuntimeValue::Float32(f))
-            } else {
-                Err(())
-            }
-        }
-        NumericKind::Float64 => {
-            let f = val as f64;
-            if f.is_finite() && f >= 0.0 && f < U128_MAX_LIMIT_F64 && (f as u128) == val {
-                Ok(RuntimeValue::Float64(f))
-            } else {
-                Err(())
-            }
-        }
-    }
-}
-
-fn convert_f64_to_target(f: f64, target: &NumericKind) -> Result<RuntimeValue, ()> {
-    if !f.is_finite() {
-        return Err(());
-    }
-    match target {
-        NumericKind::Float32 => {
-            let f32_val = f as f32;
-            if (f32_val as f64) == f {
-                Ok(RuntimeValue::Float32(f32_val))
-            } else {
-                Err(())
-            }
-        }
-        NumericKind::Float64 => Ok(RuntimeValue::Float64(f)),
-
-        NumericKind::Int8
-        | NumericKind::Int16
-        | NumericKind::Int32
-        | NumericKind::Int64
-        | NumericKind::Int128 => {
-            if f.fract() != 0.0 || f < I128_MIN_F64 || f >= I128_MAX_LIMIT_F64 {
-                return Err(());
-            }
-            let int_val = f as i128;
-            convert_i128_to_target(int_val, target)
-        }
-
-        NumericKind::Uint8
-        | NumericKind::Uint16
-        | NumericKind::Uint32
-        | NumericKind::Uint64
-        | NumericKind::Uint128 => {
-            if f.fract() != 0.0 || f < 0.0 || f >= U128_MAX_LIMIT_F64 {
-                return Err(());
-            }
-            let uint_val = f as u128;
-            convert_u128_to_target(uint_val, target)
-        }
-    }
-}
-
-fn convert_bigint_to_f32(bigint: &BigInt) -> Result<RuntimeValue, ()> {
-    if *bigint == BigInt::from(0) {
-        return Ok(RuntimeValue::Float32(0.0));
-    }
-    let is_negative = bigint.sign() == Sign::Minus;
-    let magnitude = if is_negative {
-        -bigint.clone()
-    } else {
-        bigint.clone()
-    };
-    let total_bits = magnitude.bits();
-
-    // Max finite f32 exponent is 127: total_bits - 1 <= 127 => total_bits <= 128
-    if total_bits > 128 {
-        return Err(());
-    }
-
-    let p = 24u64;
-    let (mantissa_u32, shift) = if total_bits <= p {
-        let val = u32::try_from(&magnitude).map_err(|_| ())?;
-        (val, 0i32)
-    } else {
-        let shift = (total_bits - p) as usize;
-        let mask = (BigInt::from(1) << shift) - BigInt::from(1);
-        if (&magnitude & &mask) != BigInt::from(0) {
-            return Err(());
-        }
-        let shifted = &magnitude >> shift;
-        let val = u32::try_from(&shifted).map_err(|_| ())?;
-        (val, shift as i32)
-    };
-
-    let f = (mantissa_u32 as f32) * 2.0f32.powi(shift);
-    if !f.is_finite() {
-        return Err(());
-    }
-    let res = if is_negative { -f } else { f };
-    Ok(RuntimeValue::Float32(res))
-}
-
-fn convert_bigint_to_f64(bigint: &BigInt) -> Result<RuntimeValue, ()> {
-    if *bigint == BigInt::from(0) {
-        return Ok(RuntimeValue::Float64(0.0));
-    }
-    let is_negative = bigint.sign() == Sign::Minus;
-    let magnitude = if is_negative {
-        -bigint.clone()
-    } else {
-        bigint.clone()
-    };
-    let total_bits = magnitude.bits();
-
-    // Max finite f64 exponent is 1023: total_bits - 1 <= 1023 => total_bits <= 1024
-    if total_bits > 1024 {
-        return Err(());
-    }
-
-    let p = 53u64;
-    let (mantissa_u64, shift) = if total_bits <= p {
-        let val = u64::try_from(&magnitude).map_err(|_| ())?;
-        (val, 0i32)
-    } else {
-        let shift = (total_bits - p) as usize;
-        let mask = (BigInt::from(1) << shift) - BigInt::from(1);
-        if (&magnitude & &mask) != BigInt::from(0) {
-            return Err(());
-        }
-        let shifted = &magnitude >> shift;
-        let val = u64::try_from(&shifted).map_err(|_| ())?;
-        (val, shift as i32)
-    };
-
-    let f = (mantissa_u64 as f64) * 2.0f64.powi(shift);
-    if !f.is_finite() {
-        return Err(());
-    }
-    let res = if is_negative { -f } else { f };
-    Ok(RuntimeValue::Float64(res))
 }
 
 fn assert_runtime_value_matches_kind(val: &RuntimeValue, kind: &NumericKind) {
@@ -753,41 +538,6 @@ fn convert_fixed_numeric(
         ),
     };
     res.map_err(map_conversion_failure)
-}
-
-fn convert_dynamic_numeric(
-    dyn_val: RuntimeDynamicValue,
-    target: &NumericKind,
-    compiled: &CompiledProgram,
-    backing: &ExecutionBackingStore,
-) -> Result<RuntimeValue, ()> {
-    match dyn_val {
-        RuntimeDynamicValue::Float32(v) => convert_f64_to_target(v as f64, target),
-        RuntimeDynamicValue::Float64(v) => convert_f64_to_target(v as f64, target),
-        RuntimeDynamicValue::Integer(ref_id) => {
-            let bigint = resolve_dynamic_integer(ref_id, compiled, backing);
-            match target {
-                NumericKind::Int8
-                | NumericKind::Int16
-                | NumericKind::Int32
-                | NumericKind::Int64
-                | NumericKind::Int128 => {
-                    let val = i128::try_from(&bigint).map_err(|_| ())?;
-                    convert_i128_to_target(val, target)
-                }
-                NumericKind::Uint8
-                | NumericKind::Uint16
-                | NumericKind::Uint32
-                | NumericKind::Uint64
-                | NumericKind::Uint128 => {
-                    let val = u128::try_from(&bigint).map_err(|_| ())?;
-                    convert_u128_to_target(val, target)
-                }
-                NumericKind::Float32 => convert_bigint_to_f32(&bigint),
-                NumericKind::Float64 => convert_bigint_to_f64(&bigint),
-            }
-        }
-    }
 }
 
 fn validate_and_reorder_fields(
@@ -1473,188 +1223,75 @@ pub fn execute_instruction<'compiled, 'bindings>(
         // Dynamic numeric — 7
         Instruction::LiftDynamic(kind) => {
             let operand = pop_operand(execution);
-            let runtime_dynamic = match (kind, operand) {
+            let owned_dynamic = match (kind, operand) {
                 (NumericKind::Int8, RuntimeValue::Int8(v)) => {
-                    let id =
-                        DynamicIntegerBackingId(execution.backing_store.dynamic_integers.len());
-                    execution
-                        .backing_store
-                        .dynamic_integers
-                        .push(DynamicIntegerBacking {
-                            value: BigInt::from(v),
-                        });
-                    RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
-                        DynamicIntegerBackingRef::Execution(id),
-                    ))
+                    conversion::TO_DYNAMIC_INTEGER_FROM_I8(v)
                 }
                 (NumericKind::Int16, RuntimeValue::Int16(v)) => {
-                    let id =
-                        DynamicIntegerBackingId(execution.backing_store.dynamic_integers.len());
-                    execution
-                        .backing_store
-                        .dynamic_integers
-                        .push(DynamicIntegerBacking {
-                            value: BigInt::from(v),
-                        });
-                    RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
-                        DynamicIntegerBackingRef::Execution(id),
-                    ))
+                    conversion::TO_DYNAMIC_INTEGER_FROM_I16(v)
                 }
                 (NumericKind::Int32, RuntimeValue::Int32(v)) => {
-                    let id =
-                        DynamicIntegerBackingId(execution.backing_store.dynamic_integers.len());
-                    execution
-                        .backing_store
-                        .dynamic_integers
-                        .push(DynamicIntegerBacking {
-                            value: BigInt::from(v),
-                        });
-                    RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
-                        DynamicIntegerBackingRef::Execution(id),
-                    ))
+                    conversion::TO_DYNAMIC_INTEGER_FROM_I32(v)
                 }
                 (NumericKind::Int64, RuntimeValue::Int64(v)) => {
-                    let id =
-                        DynamicIntegerBackingId(execution.backing_store.dynamic_integers.len());
-                    execution
-                        .backing_store
-                        .dynamic_integers
-                        .push(DynamicIntegerBacking {
-                            value: BigInt::from(v),
-                        });
-                    RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
-                        DynamicIntegerBackingRef::Execution(id),
-                    ))
+                    conversion::TO_DYNAMIC_INTEGER_FROM_I64(v)
                 }
                 (NumericKind::Int128, RuntimeValue::Int128(v)) => {
-                    let id =
-                        DynamicIntegerBackingId(execution.backing_store.dynamic_integers.len());
-                    execution
-                        .backing_store
-                        .dynamic_integers
-                        .push(DynamicIntegerBacking {
-                            value: BigInt::from(v),
-                        });
-                    RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
-                        DynamicIntegerBackingRef::Execution(id),
-                    ))
+                    conversion::TO_DYNAMIC_INTEGER_FROM_I128(v)
                 }
-
                 (NumericKind::Uint8, RuntimeValue::Uint8(v)) => {
-                    let id =
-                        DynamicIntegerBackingId(execution.backing_store.dynamic_integers.len());
-                    execution
-                        .backing_store
-                        .dynamic_integers
-                        .push(DynamicIntegerBacking {
-                            value: BigInt::from(v),
-                        });
-                    RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
-                        DynamicIntegerBackingRef::Execution(id),
-                    ))
+                    conversion::TO_DYNAMIC_INTEGER_FROM_U8(v)
                 }
                 (NumericKind::Uint16, RuntimeValue::Uint16(v)) => {
-                    let id =
-                        DynamicIntegerBackingId(execution.backing_store.dynamic_integers.len());
-                    execution
-                        .backing_store
-                        .dynamic_integers
-                        .push(DynamicIntegerBacking {
-                            value: BigInt::from(v),
-                        });
-                    RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
-                        DynamicIntegerBackingRef::Execution(id),
-                    ))
+                    conversion::TO_DYNAMIC_INTEGER_FROM_U16(v)
                 }
                 (NumericKind::Uint32, RuntimeValue::Uint32(v)) => {
-                    let id =
-                        DynamicIntegerBackingId(execution.backing_store.dynamic_integers.len());
-                    execution
-                        .backing_store
-                        .dynamic_integers
-                        .push(DynamicIntegerBacking {
-                            value: BigInt::from(v),
-                        });
-                    RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
-                        DynamicIntegerBackingRef::Execution(id),
-                    ))
+                    conversion::TO_DYNAMIC_INTEGER_FROM_U32(v)
                 }
                 (NumericKind::Uint64, RuntimeValue::Uint64(v)) => {
-                    let id =
-                        DynamicIntegerBackingId(execution.backing_store.dynamic_integers.len());
-                    execution
-                        .backing_store
-                        .dynamic_integers
-                        .push(DynamicIntegerBacking {
-                            value: BigInt::from(v),
-                        });
-                    RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
-                        DynamicIntegerBackingRef::Execution(id),
-                    ))
+                    conversion::TO_DYNAMIC_INTEGER_FROM_U64(v)
                 }
                 (NumericKind::Uint128, RuntimeValue::Uint128(v)) => {
-                    let id =
-                        DynamicIntegerBackingId(execution.backing_store.dynamic_integers.len());
-                    execution
-                        .backing_store
-                        .dynamic_integers
-                        .push(DynamicIntegerBacking {
-                            value: BigInt::from(v),
-                        });
-                    RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
-                        DynamicIntegerBackingRef::Execution(id),
-                    ))
+                    conversion::TO_DYNAMIC_INTEGER_FROM_U128(v)
                 }
-
                 (NumericKind::Float32, RuntimeValue::Float32(v)) => {
-                    RuntimeValue::Dynamic(RuntimeDynamicValue::Float32(v))
+                    conversion::TO_DYNAMIC_FLOAT32_FROM_F32(v)
                 }
                 (NumericKind::Float64, RuntimeValue::Float64(v)) => {
-                    RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(v))
+                    conversion::TO_DYNAMIC_FLOAT64_FROM_F64(v)
                 }
-
                 _ => panic!("LiftDynamic: operand family mismatch with NumericKind"),
             };
 
-            push_operand(execution, runtime_dynamic);
+            let rt = MATERIALIZE_OWNED_VALUE(
+                OwnedValue::Dynamic(owned_dynamic),
+                &mut execution.backing_store,
+            );
+            push_operand(execution, rt);
             advance_ip(execution);
             Ok(None)
         }
 
         Instruction::DynamicNegate => {
             let operand = pop_operand(execution);
-            let dyn_val = match operand {
-                RuntimeValue::Dynamic(d) => d,
-                _ => panic!("DynamicNegate expected Dynamic runtime value"),
+            let owned_dyn = {
+                let obs = OBSERVE_RUNTIME_VALUE(
+                    operand,
+                    execution.compiled_program,
+                    &execution.backing_store,
+                );
+                let dyn_val = match obs {
+                    Value::Dynamic(d) => d,
+                    _ => panic!("DynamicNegate expected Dynamic runtime value"),
+                };
+                dynamic_numeric::DYNAMIC_NEGATE(&dyn_val)
             };
 
-            let res = match dyn_val {
-                RuntimeDynamicValue::Integer(ref_id) => {
-                    let bigint = resolve_dynamic_integer(
-                        ref_id,
-                        execution.compiled_program,
-                        &execution.backing_store,
-                    );
-                    let negated = -bigint;
-                    let id =
-                        DynamicIntegerBackingId(execution.backing_store.dynamic_integers.len());
-                    execution
-                        .backing_store
-                        .dynamic_integers
-                        .push(DynamicIntegerBacking { value: negated });
-                    RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
-                        DynamicIntegerBackingRef::Execution(id),
-                    ))
-                }
-                RuntimeDynamicValue::Float32(v) => {
-                    RuntimeValue::Dynamic(RuntimeDynamicValue::Float32(-v))
-                }
-                RuntimeDynamicValue::Float64(v) => {
-                    RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(-v))
-                }
-            };
-
-            push_operand(execution, res);
+            let rt = MATERIALIZE_OWNED_VALUE(
+                OwnedValue::Dynamic(owned_dyn),
+                &mut execution.backing_store,
+            );
+            push_operand(execution, rt);
             advance_ip(execution);
             Ok(None)
         }
@@ -1662,74 +1299,37 @@ pub fn execute_instruction<'compiled, 'bindings>(
         Instruction::DynamicAdd => {
             let right = pop_operand(execution);
             let left = pop_operand(execution);
-            let (l_dyn, r_dyn) = match (left, right) {
-                (RuntimeValue::Dynamic(l), RuntimeValue::Dynamic(r)) => (l, r),
-                _ => panic!("DynamicAdd expected Dynamic runtime values"),
+            let result = {
+                let l_obs = OBSERVE_RUNTIME_VALUE(
+                    left,
+                    execution.compiled_program,
+                    &execution.backing_store,
+                );
+                let r_obs = OBSERVE_RUNTIME_VALUE(
+                    right,
+                    execution.compiled_program,
+                    &execution.backing_store,
+                );
+                let (l_dyn, r_dyn) = match (l_obs, r_obs) {
+                    (Value::Dynamic(l), Value::Dynamic(r)) => (l, r),
+                    _ => panic!("DynamicAdd expected Dynamic runtime values"),
+                };
+                dynamic_numeric::DYNAMIC_ADD(&l_dyn, &r_dyn)
             };
 
-            match (l_dyn, r_dyn) {
-                (RuntimeDynamicValue::Integer(l_ref), RuntimeDynamicValue::Integer(r_ref)) => {
-                    let l_bi = resolve_dynamic_integer(
-                        l_ref,
-                        execution.compiled_program,
-                        &execution.backing_store,
+            match result {
+                Ok(owned_dyn) => {
+                    let rt = MATERIALIZE_OWNED_VALUE(
+                        OwnedValue::Dynamic(owned_dyn),
+                        &mut execution.backing_store,
                     );
-                    let r_bi = resolve_dynamic_integer(
-                        r_ref,
-                        execution.compiled_program,
-                        &execution.backing_store,
-                    );
-                    let res_bi = l_bi + r_bi;
-                    let id =
-                        DynamicIntegerBackingId(execution.backing_store.dynamic_integers.len());
-                    execution
-                        .backing_store
-                        .dynamic_integers
-                        .push(DynamicIntegerBacking { value: res_bi });
-                    push_operand(
-                        execution,
-                        RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
-                            DynamicIntegerBackingRef::Execution(id),
-                        )),
-                    );
+                    push_operand(execution, rt);
                     advance_ip(execution);
                     Ok(None)
                 }
-                (RuntimeDynamicValue::Float32(l), RuntimeDynamicValue::Float32(r)) => {
-                    let sum = l + r;
-                    if sum.is_finite() {
-                        push_operand(
-                            execution,
-                            RuntimeValue::Dynamic(RuntimeDynamicValue::Float32(sum)),
-                        );
-                        advance_ip(execution);
-                        Ok(None)
-                    } else {
-                        Err(make_evaluation_failure(
-                            execution,
-                            EvaluationFailure::Overflow,
-                        ))
-                    }
-                }
-                (RuntimeDynamicValue::Float64(l), RuntimeDynamicValue::Float64(r)) => {
-                    let sum = l + r;
-                    if sum.is_finite() {
-                        push_operand(
-                            execution,
-                            RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(sum)),
-                        );
-                        advance_ip(execution);
-                        Ok(None)
-                    } else {
-                        Err(make_evaluation_failure(
-                            execution,
-                            EvaluationFailure::Overflow,
-                        ))
-                    }
-                }
-                _ => Err(make_evaluation_failure(
+                Err(fail) => Err(make_evaluation_failure(
                     execution,
-                    EvaluationFailure::DynamicNumericType,
+                    map_dynamic_numeric_failure(fail),
                 )),
             }
         }
@@ -1737,74 +1337,37 @@ pub fn execute_instruction<'compiled, 'bindings>(
         Instruction::DynamicSubtract => {
             let right = pop_operand(execution);
             let left = pop_operand(execution);
-            let (l_dyn, r_dyn) = match (left, right) {
-                (RuntimeValue::Dynamic(l), RuntimeValue::Dynamic(r)) => (l, r),
-                _ => panic!("DynamicSubtract expected Dynamic runtime values"),
+            let result = {
+                let l_obs = OBSERVE_RUNTIME_VALUE(
+                    left,
+                    execution.compiled_program,
+                    &execution.backing_store,
+                );
+                let r_obs = OBSERVE_RUNTIME_VALUE(
+                    right,
+                    execution.compiled_program,
+                    &execution.backing_store,
+                );
+                let (l_dyn, r_dyn) = match (l_obs, r_obs) {
+                    (Value::Dynamic(l), Value::Dynamic(r)) => (l, r),
+                    _ => panic!("DynamicSubtract expected Dynamic runtime values"),
+                };
+                dynamic_numeric::DYNAMIC_SUBTRACT(&l_dyn, &r_dyn)
             };
 
-            match (l_dyn, r_dyn) {
-                (RuntimeDynamicValue::Integer(l_ref), RuntimeDynamicValue::Integer(r_ref)) => {
-                    let l_bi = resolve_dynamic_integer(
-                        l_ref,
-                        execution.compiled_program,
-                        &execution.backing_store,
+            match result {
+                Ok(owned_dyn) => {
+                    let rt = MATERIALIZE_OWNED_VALUE(
+                        OwnedValue::Dynamic(owned_dyn),
+                        &mut execution.backing_store,
                     );
-                    let r_bi = resolve_dynamic_integer(
-                        r_ref,
-                        execution.compiled_program,
-                        &execution.backing_store,
-                    );
-                    let res_bi = l_bi - r_bi;
-                    let id =
-                        DynamicIntegerBackingId(execution.backing_store.dynamic_integers.len());
-                    execution
-                        .backing_store
-                        .dynamic_integers
-                        .push(DynamicIntegerBacking { value: res_bi });
-                    push_operand(
-                        execution,
-                        RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
-                            DynamicIntegerBackingRef::Execution(id),
-                        )),
-                    );
+                    push_operand(execution, rt);
                     advance_ip(execution);
                     Ok(None)
                 }
-                (RuntimeDynamicValue::Float32(l), RuntimeDynamicValue::Float32(r)) => {
-                    let diff = l - r;
-                    if diff.is_finite() {
-                        push_operand(
-                            execution,
-                            RuntimeValue::Dynamic(RuntimeDynamicValue::Float32(diff)),
-                        );
-                        advance_ip(execution);
-                        Ok(None)
-                    } else {
-                        Err(make_evaluation_failure(
-                            execution,
-                            EvaluationFailure::Overflow,
-                        ))
-                    }
-                }
-                (RuntimeDynamicValue::Float64(l), RuntimeDynamicValue::Float64(r)) => {
-                    let diff = l - r;
-                    if diff.is_finite() {
-                        push_operand(
-                            execution,
-                            RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(diff)),
-                        );
-                        advance_ip(execution);
-                        Ok(None)
-                    } else {
-                        Err(make_evaluation_failure(
-                            execution,
-                            EvaluationFailure::Overflow,
-                        ))
-                    }
-                }
-                _ => Err(make_evaluation_failure(
+                Err(fail) => Err(make_evaluation_failure(
                     execution,
-                    EvaluationFailure::DynamicNumericType,
+                    map_dynamic_numeric_failure(fail),
                 )),
             }
         }
@@ -1812,74 +1375,37 @@ pub fn execute_instruction<'compiled, 'bindings>(
         Instruction::DynamicMultiply => {
             let right = pop_operand(execution);
             let left = pop_operand(execution);
-            let (l_dyn, r_dyn) = match (left, right) {
-                (RuntimeValue::Dynamic(l), RuntimeValue::Dynamic(r)) => (l, r),
-                _ => panic!("DynamicMultiply expected Dynamic runtime values"),
+            let result = {
+                let l_obs = OBSERVE_RUNTIME_VALUE(
+                    left,
+                    execution.compiled_program,
+                    &execution.backing_store,
+                );
+                let r_obs = OBSERVE_RUNTIME_VALUE(
+                    right,
+                    execution.compiled_program,
+                    &execution.backing_store,
+                );
+                let (l_dyn, r_dyn) = match (l_obs, r_obs) {
+                    (Value::Dynamic(l), Value::Dynamic(r)) => (l, r),
+                    _ => panic!("DynamicMultiply expected Dynamic runtime values"),
+                };
+                dynamic_numeric::DYNAMIC_MULTIPLY(&l_dyn, &r_dyn)
             };
 
-            match (l_dyn, r_dyn) {
-                (RuntimeDynamicValue::Integer(l_ref), RuntimeDynamicValue::Integer(r_ref)) => {
-                    let l_bi = resolve_dynamic_integer(
-                        l_ref,
-                        execution.compiled_program,
-                        &execution.backing_store,
+            match result {
+                Ok(owned_dyn) => {
+                    let rt = MATERIALIZE_OWNED_VALUE(
+                        OwnedValue::Dynamic(owned_dyn),
+                        &mut execution.backing_store,
                     );
-                    let r_bi = resolve_dynamic_integer(
-                        r_ref,
-                        execution.compiled_program,
-                        &execution.backing_store,
-                    );
-                    let res_bi = l_bi * r_bi;
-                    let id =
-                        DynamicIntegerBackingId(execution.backing_store.dynamic_integers.len());
-                    execution
-                        .backing_store
-                        .dynamic_integers
-                        .push(DynamicIntegerBacking { value: res_bi });
-                    push_operand(
-                        execution,
-                        RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
-                            DynamicIntegerBackingRef::Execution(id),
-                        )),
-                    );
+                    push_operand(execution, rt);
                     advance_ip(execution);
                     Ok(None)
                 }
-                (RuntimeDynamicValue::Float32(l), RuntimeDynamicValue::Float32(r)) => {
-                    let prod = l * r;
-                    if prod.is_finite() {
-                        push_operand(
-                            execution,
-                            RuntimeValue::Dynamic(RuntimeDynamicValue::Float32(prod)),
-                        );
-                        advance_ip(execution);
-                        Ok(None)
-                    } else {
-                        Err(make_evaluation_failure(
-                            execution,
-                            EvaluationFailure::Overflow,
-                        ))
-                    }
-                }
-                (RuntimeDynamicValue::Float64(l), RuntimeDynamicValue::Float64(r)) => {
-                    let prod = l * r;
-                    if prod.is_finite() {
-                        push_operand(
-                            execution,
-                            RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(prod)),
-                        );
-                        advance_ip(execution);
-                        Ok(None)
-                    } else {
-                        Err(make_evaluation_failure(
-                            execution,
-                            EvaluationFailure::Overflow,
-                        ))
-                    }
-                }
-                _ => Err(make_evaluation_failure(
+                Err(fail) => Err(make_evaluation_failure(
                     execution,
-                    EvaluationFailure::DynamicNumericType,
+                    map_dynamic_numeric_failure(fail),
                 )),
             }
         }
@@ -1887,95 +1413,37 @@ pub fn execute_instruction<'compiled, 'bindings>(
         Instruction::DynamicDivide => {
             let right = pop_operand(execution);
             let left = pop_operand(execution);
-            let (l_dyn, r_dyn) = match (left, right) {
-                (RuntimeValue::Dynamic(l), RuntimeValue::Dynamic(r)) => (l, r),
-                _ => panic!("DynamicDivide expected Dynamic runtime values"),
+            let result = {
+                let l_obs = OBSERVE_RUNTIME_VALUE(
+                    left,
+                    execution.compiled_program,
+                    &execution.backing_store,
+                );
+                let r_obs = OBSERVE_RUNTIME_VALUE(
+                    right,
+                    execution.compiled_program,
+                    &execution.backing_store,
+                );
+                let (l_dyn, r_dyn) = match (l_obs, r_obs) {
+                    (Value::Dynamic(l), Value::Dynamic(r)) => (l, r),
+                    _ => panic!("DynamicDivide expected Dynamic runtime values"),
+                };
+                dynamic_numeric::DYNAMIC_DIVIDE(&l_dyn, &r_dyn)
             };
 
-            match (l_dyn, r_dyn) {
-                (RuntimeDynamicValue::Integer(l_ref), RuntimeDynamicValue::Integer(r_ref)) => {
-                    let l_bi = resolve_dynamic_integer(
-                        l_ref,
-                        execution.compiled_program,
-                        &execution.backing_store,
+            match result {
+                Ok(owned_dyn) => {
+                    let rt = MATERIALIZE_OWNED_VALUE(
+                        OwnedValue::Dynamic(owned_dyn),
+                        &mut execution.backing_store,
                     );
-                    let r_bi = resolve_dynamic_integer(
-                        r_ref,
-                        execution.compiled_program,
-                        &execution.backing_store,
-                    );
-                    if r_bi == BigInt::from(0) {
-                        Err(make_evaluation_failure(
-                            execution,
-                            EvaluationFailure::DivisionByZero,
-                        ))
-                    } else {
-                        let res_bi = l_bi / r_bi;
-                        let id =
-                            DynamicIntegerBackingId(execution.backing_store.dynamic_integers.len());
-                        execution
-                            .backing_store
-                            .dynamic_integers
-                            .push(DynamicIntegerBacking { value: res_bi });
-                        push_operand(
-                            execution,
-                            RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
-                                DynamicIntegerBackingRef::Execution(id),
-                            )),
-                        );
-                        advance_ip(execution);
-                        Ok(None)
-                    }
+                    push_operand(execution, rt);
+                    advance_ip(execution);
+                    Ok(None)
                 }
-                (RuntimeDynamicValue::Float32(l), RuntimeDynamicValue::Float32(r)) => {
-                    if r == 0.0 || r == -0.0 {
-                        Err(make_evaluation_failure(
-                            execution,
-                            EvaluationFailure::DivisionByZero,
-                        ))
-                    } else {
-                        let quotient = l / r;
-                        if quotient.is_finite() {
-                            push_operand(
-                                execution,
-                                RuntimeValue::Dynamic(RuntimeDynamicValue::Float32(quotient)),
-                            );
-                            advance_ip(execution);
-                            Ok(None)
-                        } else {
-                            Err(make_evaluation_failure(
-                                execution,
-                                EvaluationFailure::Overflow,
-                            ))
-                        }
-                    }
-                }
-                (RuntimeDynamicValue::Float64(l), RuntimeDynamicValue::Float64(r)) => {
-                    if r == 0.0 || r == -0.0 {
-                        Err(make_evaluation_failure(
-                            execution,
-                            EvaluationFailure::DivisionByZero,
-                        ))
-                    } else {
-                        let quotient = l / r;
-                        if quotient.is_finite() {
-                            push_operand(
-                                execution,
-                                RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(quotient)),
-                            );
-                            advance_ip(execution);
-                            Ok(None)
-                        } else {
-                            Err(make_evaluation_failure(
-                                execution,
-                                EvaluationFailure::Overflow,
-                            ))
-                        }
-                    }
-                }
-                _ => Err(make_evaluation_failure(
+                Err(fail) => Err(make_evaluation_failure(
                     execution,
-                    EvaluationFailure::DynamicNumericType,
+                    map_dynamic_numeric_failure(fail),
                 )),
             }
         }
@@ -1983,53 +1451,51 @@ pub fn execute_instruction<'compiled, 'bindings>(
         Instruction::DynamicRemainder => {
             let right = pop_operand(execution);
             let left = pop_operand(execution);
-            let (l_dyn, r_dyn) = match (left, right) {
-                (RuntimeValue::Dynamic(l), RuntimeValue::Dynamic(r)) => (l, r),
+            match (&left, &right) {
+                (
+                    RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(_)),
+                    RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(_)),
+                ) => {}
+                (RuntimeValue::Dynamic(_), RuntimeValue::Dynamic(_)) => {
+                    return Err(make_evaluation_failure(
+                        execution,
+                        EvaluationFailure::DynamicNumericType,
+                    ));
+                }
                 _ => panic!("DynamicRemainder expected Dynamic runtime values"),
+            }
+
+            let result = {
+                let l_obs = OBSERVE_RUNTIME_VALUE(
+                    left,
+                    execution.compiled_program,
+                    &execution.backing_store,
+                );
+                let r_obs = OBSERVE_RUNTIME_VALUE(
+                    right,
+                    execution.compiled_program,
+                    &execution.backing_store,
+                );
+                let (l_dyn, r_dyn) = match (l_obs, r_obs) {
+                    (Value::Dynamic(l), Value::Dynamic(r)) => (l, r),
+                    _ => unreachable!(),
+                };
+                dynamic_numeric::DYNAMIC_REMAINDER(&l_dyn, &r_dyn)
             };
 
-            match (l_dyn, r_dyn) {
-                (RuntimeDynamicValue::Integer(l_ref), RuntimeDynamicValue::Integer(r_ref)) => {
-                    let l_bi = resolve_dynamic_integer(
-                        l_ref,
-                        execution.compiled_program,
-                        &execution.backing_store,
+            match result {
+                Ok(owned_dyn) => {
+                    let rt = MATERIALIZE_OWNED_VALUE(
+                        OwnedValue::Dynamic(owned_dyn),
+                        &mut execution.backing_store,
                     );
-                    let r_bi = resolve_dynamic_integer(
-                        r_ref,
-                        execution.compiled_program,
-                        &execution.backing_store,
-                    );
-                    if r_bi == BigInt::from(0) {
-                        Err(make_evaluation_failure(
-                            execution,
-                            EvaluationFailure::DivisionByZero,
-                        ))
-                    } else {
-                        let res_bi = l_bi % r_bi;
-                        let id =
-                            DynamicIntegerBackingId(execution.backing_store.dynamic_integers.len());
-                        execution
-                            .backing_store
-                            .dynamic_integers
-                            .push(DynamicIntegerBacking { value: res_bi });
-                        push_operand(
-                            execution,
-                            RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
-                                DynamicIntegerBackingRef::Execution(id),
-                            )),
-                        );
-                        advance_ip(execution);
-                        Ok(None)
-                    }
+                    push_operand(execution, rt);
+                    advance_ip(execution);
+                    Ok(None)
                 }
-                (RuntimeDynamicValue::Float32(_), RuntimeDynamicValue::Float32(_))
-                | (RuntimeDynamicValue::Float64(_), RuntimeDynamicValue::Float64(_)) => Err(
-                    make_evaluation_failure(execution, EvaluationFailure::DynamicNumericType),
-                ),
-                _ => Err(make_evaluation_failure(
+                Err(fail) => Err(make_evaluation_failure(
                     execution,
-                    EvaluationFailure::DynamicNumericType,
+                    map_dynamic_numeric_failure(fail),
                 )),
             }
         }
@@ -2109,25 +1575,65 @@ pub fn execute_instruction<'compiled, 'bindings>(
 
         Instruction::ConvertDynamic(target) => {
             let operand = pop_operand(execution);
-            let dyn_val = match operand {
-                RuntimeValue::Dynamic(d) => d,
-                _ => panic!("ConvertDynamic expected Dynamic operand"),
+            let result = {
+                let obs = OBSERVE_RUNTIME_VALUE(
+                    operand,
+                    execution.compiled_program,
+                    &execution.backing_store,
+                );
+                let dyn_val = match obs {
+                    Value::Dynamic(d) => d,
+                    _ => panic!("ConvertDynamic expected Dynamic operand"),
+                };
+                match target {
+                    NumericKind::Int8 => {
+                        conversion::TO_INT8_FROM_DYNAMIC(&dyn_val).map(RuntimeValue::Int8)
+                    }
+                    NumericKind::Int16 => {
+                        conversion::TO_INT16_FROM_DYNAMIC(&dyn_val).map(RuntimeValue::Int16)
+                    }
+                    NumericKind::Int32 => {
+                        conversion::TO_INT32_FROM_DYNAMIC(&dyn_val).map(RuntimeValue::Int32)
+                    }
+                    NumericKind::Int64 => {
+                        conversion::TO_INT64_FROM_DYNAMIC(&dyn_val).map(RuntimeValue::Int64)
+                    }
+                    NumericKind::Int128 => {
+                        conversion::TO_INT128_FROM_DYNAMIC(&dyn_val).map(RuntimeValue::Int128)
+                    }
+                    NumericKind::Uint8 => {
+                        conversion::TO_UINT8_FROM_DYNAMIC(&dyn_val).map(RuntimeValue::Uint8)
+                    }
+                    NumericKind::Uint16 => {
+                        conversion::TO_UINT16_FROM_DYNAMIC(&dyn_val).map(RuntimeValue::Uint16)
+                    }
+                    NumericKind::Uint32 => {
+                        conversion::TO_UINT32_FROM_DYNAMIC(&dyn_val).map(RuntimeValue::Uint32)
+                    }
+                    NumericKind::Uint64 => {
+                        conversion::TO_UINT64_FROM_DYNAMIC(&dyn_val).map(RuntimeValue::Uint64)
+                    }
+                    NumericKind::Uint128 => {
+                        conversion::TO_UINT128_FROM_DYNAMIC(&dyn_val).map(RuntimeValue::Uint128)
+                    }
+                    NumericKind::Float32 => {
+                        conversion::TO_FLOAT32_FROM_DYNAMIC(&dyn_val).map(RuntimeValue::Float32)
+                    }
+                    NumericKind::Float64 => {
+                        conversion::TO_FLOAT64_FROM_DYNAMIC(&dyn_val).map(RuntimeValue::Float64)
+                    }
+                }
             };
 
-            match convert_dynamic_numeric(
-                dyn_val,
-                target,
-                execution.compiled_program,
-                &execution.backing_store,
-            ) {
+            match result {
                 Ok(res) => {
                     push_operand(execution, res);
                     advance_ip(execution);
                     Ok(None)
                 }
-                Err(()) => Err(make_evaluation_failure(
+                Err(fail) => Err(make_evaluation_failure(
                     execution,
-                    EvaluationFailure::Conversion,
+                    map_conversion_failure(fail),
                 )),
             }
         }
@@ -2176,22 +1682,17 @@ pub fn execute_instruction<'compiled, 'bindings>(
 
         Instruction::DynamicToString => {
             let operand = pop_operand(execution);
-            let dyn_val = match operand {
-                RuntimeValue::Dynamic(d) => d,
-                _ => panic!("DynamicToString expected Dynamic operand"),
-            };
-
-            let str_val = match dyn_val {
-                RuntimeDynamicValue::Integer(ref_id) => {
-                    let bigint = resolve_dynamic_integer(
-                        ref_id,
-                        execution.compiled_program,
-                        &execution.backing_store,
-                    );
-                    bigint.to_string()
-                }
-                RuntimeDynamicValue::Float32(v) => v.to_string(),
-                RuntimeDynamicValue::Float64(v) => v.to_string(),
+            let str_val = {
+                let obs = OBSERVE_RUNTIME_VALUE(
+                    operand,
+                    execution.compiled_program,
+                    &execution.backing_store,
+                );
+                let dyn_val = match obs {
+                    Value::Dynamic(d) => d,
+                    _ => panic!("DynamicToString expected Dynamic operand"),
+                };
+                conversion::TO_STRING_FROM_DYNAMIC(&dyn_val)
             };
 
             let id = StringBackingId(execution.backing_store.strings.len());
@@ -2477,8 +1978,7 @@ mod tests {
 
     use crate::data::compiled::boundary::CompiledValueShape;
     use crate::data::compiled::identities::{
-        CompiledValueShapeId, ConstantId, ExternalSymbolId, InstructionIndex, LocalSlot,
-        ParameterSlot,
+        ConstantId, ExternalSymbolId, InstructionIndex, LocalSlot, ParameterSlot,
     };
     use crate::data::compiled::instructions::Instruction;
     use crate::data::compiled::program::CompiledFunction;
@@ -2800,50 +2300,64 @@ mod tests {
 
     #[test]
     fn regression_big_dynamic_integer_exact_to_float() {
+        use alloc::borrow::Cow;
+        use evo_values::{DynamicIntegerValue, DynamicValue};
+
         // 2^200 -> Float64 succeeds
-        let big_2_200 = BigInt::from(1) << 200;
-        let res_f64 = convert_bigint_to_f64(&big_2_200);
+        let mut mag_2_200 = vec![0u8; 26];
+        mag_2_200[0] = 1;
+        let val_2_200 = DynamicValue::Integer(DynamicIntegerValue::from_parts(
+            false,
+            Cow::Borrowed(&mag_2_200),
+        ));
+        let res_f64 = conversion::TO_FLOAT64_FROM_DYNAMIC(&val_2_200);
         assert!(res_f64.is_ok());
-        match res_f64.unwrap() {
-            RuntimeValue::Float64(f) => {
-                assert!(f.is_finite());
-                assert_eq!(f, 2.0f64.powi(200));
-            }
-            _ => panic!("expected Float64"),
-        }
+        let f = res_f64.unwrap();
+        assert!(f.is_finite());
+        assert_eq!(f, 2.0f64.powi(200));
 
         // -2^200 -> Float64 succeeds
-        let neg_big_2_200 = -big_2_200.clone();
-        let res_neg_f64 = convert_bigint_to_f64(&neg_big_2_200);
+        let val_neg_2_200 = DynamicValue::Integer(DynamicIntegerValue::from_parts(
+            true,
+            Cow::Borrowed(&mag_2_200),
+        ));
+        let res_neg_f64 = conversion::TO_FLOAT64_FROM_DYNAMIC(&val_neg_2_200);
         assert!(res_neg_f64.is_ok());
-        match res_neg_f64.unwrap() {
-            RuntimeValue::Float64(f) => {
-                assert!(f.is_finite());
-                assert_eq!(f, -2.0f64.powi(200));
-            }
-            _ => panic!("expected Float64"),
-        }
+        let neg_f = res_neg_f64.unwrap();
+        assert!(neg_f.is_finite());
+        assert_eq!(neg_f, -2.0f64.powi(200));
 
         // (2^200) + 1 -> Float64 conversion error
-        let big_2_200_plus_1 = big_2_200 + BigInt::from(1);
-        let res_plus_1 = convert_bigint_to_f64(&big_2_200_plus_1);
+        let mut mag_2_200_plus_1 = mag_2_200.clone();
+        mag_2_200_plus_1[25] = 1;
+        let val_plus_1 = DynamicValue::Integer(DynamicIntegerValue::from_parts(
+            false,
+            Cow::Borrowed(&mag_2_200_plus_1),
+        ));
+        let res_plus_1 = conversion::TO_FLOAT64_FROM_DYNAMIC(&val_plus_1);
         assert!(res_plus_1.is_err());
 
         // 2^127 -> Float32 succeeds
-        let big_2_127 = BigInt::from(1) << 127;
-        let res_f32 = convert_bigint_to_f32(&big_2_127);
+        let mut mag_2_127 = vec![0u8; 16];
+        mag_2_127[0] = 0x80;
+        let val_2_127 = DynamicValue::Integer(DynamicIntegerValue::from_parts(
+            false,
+            Cow::Borrowed(&mag_2_127),
+        ));
+        let res_f32 = conversion::TO_FLOAT32_FROM_DYNAMIC(&val_2_127);
         assert!(res_f32.is_ok());
-        match res_f32.unwrap() {
-            RuntimeValue::Float32(f) => {
-                assert!(f.is_finite());
-                assert_eq!(f, 2.0f32.powi(127));
-            }
-            _ => panic!("expected Float32"),
-        }
+        let f32_val = res_f32.unwrap();
+        assert!(f32_val.is_finite());
+        assert_eq!(f32_val, 2.0f32.powi(127));
 
         // 2^128 -> Float32 conversion error (exceeds finite f32)
-        let big_2_128 = BigInt::from(1) << 128;
-        let res_f32_overflow = convert_bigint_to_f32(&big_2_128);
+        let mut mag_2_128 = vec![0u8; 17];
+        mag_2_128[0] = 1;
+        let val_2_128 = DynamicValue::Integer(DynamicIntegerValue::from_parts(
+            false,
+            Cow::Borrowed(&mag_2_128),
+        ));
+        let res_f32_overflow = conversion::TO_FLOAT32_FROM_DYNAMIC(&val_2_128);
         assert!(res_f32_overflow.is_err());
     }
 
@@ -2911,7 +2425,7 @@ mod tests {
     }
 
     #[test]
-    fn regression_dynamic_float_overflow() {
+    fn regression_dynamic_float_overflow_produces_infinity() {
         let program = CompiledProgram {
             functions: vec![CompiledFunction {
                 parameter_count: 0,
@@ -2921,6 +2435,7 @@ mod tests {
                     Instruction::LoadConstant(ConstantId(0)),
                     Instruction::LoadConstant(ConstantId(1)),
                     Instruction::DynamicAdd,
+                    Instruction::Return,
                 ],
             }],
             entry_point: FunctionId(0),
@@ -2936,6 +2451,7 @@ mod tests {
                     SourceSpan { start: 0, end: 1 },
                     SourceSpan { start: 1, end: 2 },
                     SourceSpan { start: 2, end: 3 },
+                    SourceSpan { start: 3, end: 4 },
                 ]],
             },
         };
@@ -2962,13 +2478,15 @@ mod tests {
 
         let _ = execute_instruction(&mut execution);
         let _ = execute_instruction(&mut execution);
-        let err = match execute_instruction(&mut execution) {
-            Ok(_) => panic!("dynamic float overflow should fail"),
-            Err(e) => e,
-        };
-        match err.kind {
-            ExecutionFailureKind::Evaluation(EvaluationFailure::Overflow) => {}
-            _ => panic!("expected Overflow failure"),
+        let outcome = execute_instruction(&mut execution);
+        assert!(outcome.is_ok());
+        assert_eq!(execution.call_frames[0].instruction_pointer.0, 3);
+        match execution.value_storage.cells.last() {
+            Some(Some(RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(f)))) => {
+                assert!(f.is_infinite());
+                assert!(f.is_sign_positive());
+            }
+            _ => panic!("expected dynamic float +Infinity"),
         }
     }
 
@@ -5797,5 +5315,381 @@ mod tests {
             ],
             vec![Constant::Boolean(true)],
         );
+    }
+
+    #[test]
+    fn test_dynamic_lift_and_string() {
+        let test_cases = vec![
+            (Constant::Int32(42), NumericKind::Int32, "42"),
+            (Constant::Int128(-1000), NumericKind::Int128, "-1000"),
+            (Constant::Uint64(999), NumericKind::Uint64, "999"),
+            (Constant::Float32(1.5), NumericKind::Float32, "1.5"),
+            (Constant::Float64(-2.5), NumericKind::Float64, "-2.5"),
+        ];
+
+        for (constant, kind, expected_str) in test_cases {
+            let res = test_execute_instructions(
+                vec![
+                    Instruction::LoadConstant(ConstantId(0)),
+                    Instruction::LiftDynamic(kind),
+                    Instruction::DynamicToString,
+                    Instruction::LoadConstant(ConstantId(1)),
+                    Instruction::EqualString,
+                ],
+                vec![constant, Constant::String(expected_str.to_string())],
+            );
+            match res {
+                Ok(RuntimeValue::Boolean(b)) => {
+                    assert!(b, "expected string match for {}", expected_str);
+                }
+                _ => panic!(
+                    "expected EqualString to return Boolean for {}",
+                    expected_str
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn test_dynamic_arithmetic_integers() {
+        // Add: 10 + 20 = 30
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::DynamicAdd,
+                Instruction::DynamicToString,
+                Instruction::LoadConstant(ConstantId(2)),
+                Instruction::EqualString,
+            ],
+            vec![
+                Constant::Int32(10),
+                Constant::Int32(20),
+                Constant::String("30".to_string()),
+            ],
+        );
+        match res {
+            Ok(RuntimeValue::Boolean(b)) => assert!(b),
+            _ => panic!("expected Boolean(true)"),
+        }
+
+        // Subtract: 50 - 15 = 35
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::DynamicSubtract,
+                Instruction::DynamicToString,
+                Instruction::LoadConstant(ConstantId(2)),
+                Instruction::EqualString,
+            ],
+            vec![
+                Constant::Int32(50),
+                Constant::Int32(15),
+                Constant::String("35".to_string()),
+            ],
+        );
+        match res {
+            Ok(RuntimeValue::Boolean(b)) => assert!(b),
+            _ => panic!("expected Boolean(true)"),
+        }
+
+        // Multiply: 7 * 6 = 42
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::DynamicMultiply,
+                Instruction::DynamicToString,
+                Instruction::LoadConstant(ConstantId(2)),
+                Instruction::EqualString,
+            ],
+            vec![
+                Constant::Int32(7),
+                Constant::Int32(6),
+                Constant::String("42".to_string()),
+            ],
+        );
+        match res {
+            Ok(RuntimeValue::Boolean(b)) => assert!(b),
+            _ => panic!("expected Boolean(true)"),
+        }
+
+        // Divide: 100 / 4 = 25
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::DynamicDivide,
+                Instruction::DynamicToString,
+                Instruction::LoadConstant(ConstantId(2)),
+                Instruction::EqualString,
+            ],
+            vec![
+                Constant::Int32(100),
+                Constant::Int32(4),
+                Constant::String("25".to_string()),
+            ],
+        );
+        match res {
+            Ok(RuntimeValue::Boolean(b)) => assert!(b),
+            _ => panic!("expected Boolean(true)"),
+        }
+
+        // Negate: -(42) = -42
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::DynamicNegate,
+                Instruction::DynamicToString,
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::EqualString,
+            ],
+            vec![Constant::Int32(42), Constant::String("-42".to_string())],
+        );
+        match res {
+            Ok(RuntimeValue::Boolean(b)) => assert!(b),
+            _ => panic!("expected Boolean(true)"),
+        }
+
+        // Remainder: 17 % 5 = 2
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::DynamicRemainder,
+                Instruction::DynamicToString,
+                Instruction::LoadConstant(ConstantId(2)),
+                Instruction::EqualString,
+            ],
+            vec![
+                Constant::Int32(17),
+                Constant::Int32(5),
+                Constant::String("2".to_string()),
+            ],
+        );
+        match res {
+            Ok(RuntimeValue::Boolean(b)) => assert!(b),
+            _ => panic!("expected Boolean(true)"),
+        }
+    }
+
+    #[test]
+    fn test_dynamic_arithmetic_floats() {
+        // Float Add: 1.25 + 2.5 = 3.75
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Float64),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::LiftDynamic(NumericKind::Float64),
+                Instruction::DynamicAdd,
+                Instruction::DynamicToString,
+                Instruction::LoadConstant(ConstantId(2)),
+                Instruction::EqualString,
+            ],
+            vec![
+                Constant::Float64(1.25),
+                Constant::Float64(2.5),
+                Constant::String("3.75".to_string()),
+            ],
+        );
+        match res {
+            Ok(RuntimeValue::Boolean(b)) => assert!(b),
+            _ => panic!("expected Boolean(true)"),
+        }
+
+        // Float Divide by 0.0 succeeds (IEEE infinity)
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Float64),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::LiftDynamic(NumericKind::Float64),
+                Instruction::DynamicDivide,
+            ],
+            vec![Constant::Float64(1.0), Constant::Float64(0.0)],
+        );
+        match res {
+            Ok(RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(f))) => {
+                assert!(f.is_infinite());
+                assert!(f.is_sign_positive());
+            }
+            _ => panic!("expected dynamic float +Infinity"),
+        }
+    }
+
+    #[test]
+    fn test_dynamic_failures() {
+        // Integer division by zero
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::DynamicDivide,
+            ],
+            vec![Constant::Int32(10), Constant::Int32(0)],
+        );
+        match res {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::DivisionByZero) => {}
+                _ => panic!("expected DivisionByZero failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
+
+        // Integer remainder by zero
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::DynamicRemainder,
+            ],
+            vec![Constant::Int32(10), Constant::Int32(0)],
+        );
+        match res {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::DivisionByZero) => {}
+                _ => panic!("expected DivisionByZero failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
+
+        // Dynamic remainder on floats MUST fail with DynamicNumericType (language guard)
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Float64),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::LiftDynamic(NumericKind::Float64),
+                Instruction::DynamicRemainder,
+            ],
+            vec![Constant::Float64(10.0), Constant::Float64(3.0)],
+        );
+        match res {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::DynamicNumericType) => {}
+                _ => panic!("expected DynamicNumericType failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
+
+        // Dynamic remainder mixed integer and float -> DynamicNumericType
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::LiftDynamic(NumericKind::Float64),
+                Instruction::DynamicRemainder,
+            ],
+            vec![Constant::Int32(10), Constant::Float64(3.0)],
+        );
+        match res {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::DynamicNumericType) => {}
+                _ => panic!("expected DynamicNumericType failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
+
+        // DynamicAdd mixed families -> DynamicNumericType
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::LiftDynamic(NumericKind::Float64),
+                Instruction::DynamicAdd,
+            ],
+            vec![Constant::Int32(10), Constant::Float64(3.0)],
+        );
+        match res {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::DynamicNumericType) => {}
+                _ => panic!("expected DynamicNumericType failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
+    }
+
+    #[test]
+    fn test_convert_dynamic() {
+        // Dynamic integer 42 -> ConvertDynamic(Int8) -> Int8(42)
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::ConvertDynamic(NumericKind::Int8),
+            ],
+            vec![Constant::Int32(42)],
+        );
+        match res {
+            Ok(RuntimeValue::Int8(v)) => assert_eq!(v, 42),
+            _ => panic!("expected Int8(42)"),
+        }
+
+        // Dynamic integer 1000 -> ConvertDynamic(Int8) -> Err(Conversion)
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::ConvertDynamic(NumericKind::Int8),
+            ],
+            vec![Constant::Int32(1000)],
+        );
+        match res {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::Conversion) => {}
+                _ => panic!("expected Conversion failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
+
+        // Dynamic float 2.0 -> ConvertDynamic(Int32) -> Int32(2)
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Float64),
+                Instruction::ConvertDynamic(NumericKind::Int32),
+            ],
+            vec![Constant::Float64(2.0)],
+        );
+        match res {
+            Ok(RuntimeValue::Int32(v)) => assert_eq!(v, 2),
+            _ => panic!("expected Int32(2)"),
+        }
+
+        // Dynamic float 2.5 -> ConvertDynamic(Int32) -> Err(Conversion)
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Float64),
+                Instruction::ConvertDynamic(NumericKind::Int32),
+            ],
+            vec![Constant::Float64(2.5)],
+        );
+        match res {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::Conversion) => {}
+                _ => panic!("expected Conversion failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
     }
 }

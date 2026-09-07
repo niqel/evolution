@@ -1,7 +1,7 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
-use num_bigint::BigInt;
+use evo_values::OwnedDynamicInteger;
 
 use crate::data::compiled::identities::VariantDiscriminant;
 use crate::data::vm::values::RuntimeValue;
@@ -14,7 +14,7 @@ pub(crate) struct ExecutionBackingStore {
 }
 
 pub(crate) struct DynamicIntegerBacking {
-    pub(crate) value: BigInt,
+    pub(crate) value: OwnedDynamicInteger,
 }
 
 pub(crate) struct StructBacking {
@@ -40,19 +40,22 @@ mod tests {
 
     #[test]
     fn dynamic_integer_backing_greater_than_u128_and_negative() {
-        // Decimal string greater than u128::MAX (340282366920938463463374607431768211455)
-        let large_positive_str = "340282366920938463463374607431768211456";
-        let pos_bigint =
-            BigInt::parse_bytes(large_positive_str.as_bytes(), 10).expect("valid decimal BigInt");
-        let pos_backing = DynamicIntegerBacking { value: pos_bigint };
-        assert_eq!(pos_backing.value.to_str_radix(10), large_positive_str);
+        // Arbitrarily large positive magnitude (greater than u128: 17 bytes)
+        let mut large_pos_bytes = [0u8; 17];
+        large_pos_bytes[0] = 1;
+        let pos_backing = DynamicIntegerBacking {
+            value: OwnedDynamicInteger::from_parts(false, Box::from(large_pos_bytes.as_slice())),
+        };
+        assert!(!pos_backing.value.negative());
+        assert_eq!(pos_backing.value.magnitude(), &large_pos_bytes);
 
-        // Arbitrarily large negative decimal
-        let large_negative_str = "-10000000000000000000000000000000000000000";
-        let neg_bigint = BigInt::parse_bytes(large_negative_str.as_bytes(), 10)
-            .expect("valid negative decimal BigInt");
-        let neg_backing = DynamicIntegerBacking { value: neg_bigint };
-        assert_eq!(neg_backing.value.to_str_radix(10), large_negative_str);
+        // Arbitrarily large negative magnitude (e.g. 20 bytes)
+        let large_neg_bytes = [0xffu8; 20];
+        let neg_backing = DynamicIntegerBacking {
+            value: OwnedDynamicInteger::from_parts(true, Box::from(large_neg_bytes.as_slice())),
+        };
+        assert!(neg_backing.value.negative());
+        assert_eq!(neg_backing.value.magnitude(), &large_neg_bytes);
     }
 
     #[test]
@@ -60,7 +63,7 @@ mod tests {
         let store = ExecutionBackingStore {
             strings: alloc::vec!["hello world".to_string().into_boxed_str()],
             dynamic_integers: alloc::vec![DynamicIntegerBacking {
-                value: BigInt::from(100),
+                value: OwnedDynamicInteger::from_parts(false, Box::from([100u8].as_slice())),
             }],
             structs: alloc::vec![StructBacking {
                 fields: alloc::vec![RuntimeValue::Int32(1)].into_boxed_slice(),
@@ -74,7 +77,8 @@ mod tests {
         assert_eq!(store.strings.len(), 1);
         assert_eq!(&*store.strings[0], "hello world");
         assert_eq!(store.dynamic_integers.len(), 1);
-        assert_eq!(store.dynamic_integers[0].value, BigInt::from(100));
+        assert!(!store.dynamic_integers[0].value.negative());
+        assert_eq!(store.dynamic_integers[0].value.magnitude(), &[100u8]);
         assert_eq!(store.structs.len(), 1);
         assert_eq!(store.enums.len(), 1);
     }
