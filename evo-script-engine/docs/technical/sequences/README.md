@@ -223,8 +223,11 @@ Representa la delegación de aritmética dinámica sobre `RuntimeValue::Dynamic`
 instruction_executor
   ├── Observación zero-copy de operandos vía observe_runtime_value:
   │     ↳ OBSERVE_RUNTIME_VALUE(...) → Value::Dynamic(DynamicValue<'a>)
-  │     ↳ instruction_executor extrae/borra DynamicValue usando as_borrowed()
-  │     ↳ DynamicIntegerBacking.value = OwnedDynamicInteger (sin copia de magnitud ni conversión BigInt)
+  │     ↳ instruction_executor extrae/borrows el DynamicValue contenido
+  │       y lo pasa por referencia a las UCs DYNAMIC_*
+  │     ↳ para Dynamic Integer de execution backing,
+  │       OBSERVE_RUNTIME_VALUE usa OwnedDynamicInteger::as_borrowed()
+  │       para construir la view sin copiar magnitude ni convertir a BigInt
   ├── 6 Universal Dynamic Numeric Operations:
   │     ├── Binary: DYNAMIC_ADD, DYNAMIC_SUBTRACT, DYNAMIC_MULTIPLY, DYNAMIC_DIVIDE
   │     ├── Unary: DYNAMIC_NEGATE
