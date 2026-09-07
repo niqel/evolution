@@ -4,9 +4,8 @@ Status: FUNCTIONAL
 
 ## Objetivo
 
-Evo Runtime inicia una Evo Application ejecutando la acción Run que dicha
-aplicación proporciona, manteniéndose activo mientras Run se ejecuta y
-retornando su Result final hacia el Host.
+Evo Runtime inicia una Evo Application ejecutando Run y permanece activo
+hasta que Run concluye.
 
 ## Trigger
 
@@ -26,18 +25,12 @@ acción Run.
 3. Evo Runtime invoca la acción Run de la aplicación.
 4. La aplicación ejecuta su trabajo interno directamente con sus librerías,
    engines y providers, mientras Start permanece a la espera.
-5. La acción Run finaliza y produce un Result (éxito o Failure).
-6. Evo Runtime recibe el Result de Run.
-7. Evo Runtime retorna el Result al Host, concluyendo la llamada a Start.
+5. La acción Run retorna naturalmente.
+6. Start retorna naturalmente al Host, concluyendo la llamada.
 
-## Outcome Exitoso
+## Finalización
 
-La aplicación finaliza su ejecución y entrega un Result exitoso al Host.
-
-## Outcomes de Fallo
-
-La aplicación finaliza con un fallo y entrega un Result que expresa un Failure
-al Host.
+La conclusión natural de Run determina la conclusión natural de Start.
 
 ## Invariantes
 
@@ -45,14 +38,17 @@ al Host.
   proporcionada por la Evo Application.
 - Start recibe la función Run, no el resultado de haber ejecutado Run
   previamente (`Start(run)`).
-- La terminación de `run()` determina naturalmente la finalización de `start()`;
-  no se requiere un Use Case separado de `Finalize` ni métodos como `stop()`.
-- Múltiples llamadas a Start son mutuamente independientes: el Failure de una
-  no afecta a las demás y terminar una no finaliza a las otras.
+- La duración de `Start` está delimitada por la duración de `Run`.
+- La terminación natural de `run()` determina naturalmente la finalización de
+  `start()`; no se requiere un Use Case separado de `Finalize` ni métodos como
+  `stop()`.
+- Múltiples llamadas a Start son mutuamente independientes: la terminación de una
+  no altera ni finaliza a las demás.
 - Evo Runtime no participa en las operaciones internas, resolución de
   dependencias, selección de engines ni transporte de valores dentro de la
   aplicación.
-- `Result != Failure` (el modelo de resultados pertenece a `evo-values`).
+- `Runtime lifecycle control != application outcome semantics`: Evo Runtime
+  Model A no posee ni transporta outcomes.
 
 ## User Stories Relacionadas
 
@@ -65,8 +61,6 @@ al Host.
 - Evo Application
 - Start
 - Run
-- Result
-- Failure
 
 ## Fuera de Alcance
 
@@ -75,5 +69,6 @@ al Host.
 - Carga o selección de engines y providers.
 - Modelo de Context o entidad de Execution.
 - Transporte de Values entre componentes internos.
+- Semántica o transporte de outcomes de la aplicación.
 - Lógica de negocio o parsing de la aplicación.
 - Definición de structs o enums en Rust.

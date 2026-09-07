@@ -1,14 +1,17 @@
 # Especificación de Evo Runtime v0
 
-Status: MODEL A CLOSED
+Status: MODEL A CLOSED — RECONCILED
 
 ## 1. Propósito
 
-Evo Runtime Model A define la frontera mínima de plataforma para iniciar una
-Evo Application. En Model A, el Runtime tiene una responsabilidad única y mínima:
-iniciar la ejecución invocando la acción `Run` proporcionada por una Evo
-Application, mantener la invocación activa mientras la aplicación se ejecuta, y
-entregar el `Result` final al caller.
+Evo Runtime Model A define la frontera mínima para iniciar una Evo Application.
+
+Su responsabilidad única es:
+
+1. recibir Run;
+2. invocar Run;
+3. permanecer activo durante la ejecución de Run;
+4. concluir cuando Run concluye.
 
 ---
 
@@ -17,30 +20,31 @@ entregar el `Result` final al caller.
 La frontera arquitectónica de Evo Runtime Model A está definida por:
 - Exactamente **un Use Case** proporcionado por el Runtime (`Start`).
 - Exactamente **un Requester** consumido desde la aplicación (`Run`).
-- Exactamente **un tipo de outcome** (`Result`) definido por `evo-values`.
+- Exactamente **0 Outcome Models**.
 
 ```text
-Caller / Host
-     │
-     │ llama Start(Run)
-     ▼
-┌───────────────────────────────┐
-│ Evo Runtime                   │
-│                               │
-│  Use Case: Start              │
-│       │                       │
-│       │ llama run()           │
-│       ▼                       │
-│  Requester: Run               │
-└───────┬───────────────────────┘
-        │
-        ▼
-Evo Application (activa)
-        │
-        │ retorna Result
-        ▼
-   Result (evo-values)
+Host
+ │
+ │ Start(Run)
+ ▼
+Evo Runtime
+ │
+ │ Run()
+ ▼
+Evo Application
+ │
+ │ ejecución
+ ▼
+Run retorna naturalmente
+ │
+ ▼
+Start retorna naturalmente
+ │
+ ▼
+Host
 ```
+
+Evo Runtime no transporta ningún dato en el retorno.
 
 ---
 
@@ -48,14 +52,14 @@ Evo Application (activa)
 
 - **Categoría**: Use Case (Proporcionado por `evo-runtime`)
 - **Definición**: `definitions/use_cases/start.rs`
-- **Tipo Function Pointer**: `pub type Start = fn(run_request::Request) -> Result;`
+- **Tipo Técnico**: Technical signature: PENDING TECHNICAL REVALIDATION
 - **Semántica**:
-  1. Recibe el function pointer del requester `Run` desde el caller.
-  2. Invoca `run()`.
-  3. Permanece activo en el call stack durante la duración de `run()`.
-  4. Retorna el `Result` producido por `run()` directamente al caller.
+  1. Recibe la acción `Run` proporcionada por la Evo Application desde el Host.
+  2. Invoca `Run`.
+  3. Permanece activo en el call stack durante la duración de `Run`.
+  4. Retorna naturalmente cuando `Run` retorna naturalmente.
   5. No requiere operaciones explícitas de `stop()`, `close()` o `finalize()`; la
-     terminación de `run()` concluye naturalmente `start()`.
+     terminación de `Run` concluye naturalmente `Start`.
 
 ---
 
@@ -63,24 +67,27 @@ Evo Application (activa)
 
 - **Categoría**: Requester (Consumido por `evo-runtime` desde la Evo Application)
 - **Definición**: `definitions/requesters/run_request.rs`
-- **Tipo Function Pointer**: `pub type Request = fn() -> Result;`
+- **Tipo Técnico**: Technical signature: PENDING TECHNICAL REVALIDATION
 - **Semántica**:
   1. Representa la acción de punto de entrada que la aplicación proporciona al
      Runtime.
-  2. Encapsula el ciclo de vida completo de ejecución de la aplicación.
-  3. Retorna `Result` al completarse.
+  2. Encapsula el ciclo de vida de ejecución de la aplicación desde la perspectiva
+     de Runtime.
+  3. Su retorno natural determina la conclusión de `Start`.
 
 ---
 
-## 5. Result
+## 5. Reconciliación de Model A
 
-- `Result` es el tipo de outcome canónico que representa la conclusión de una
-  ejecución (éxito o fallo).
-- Definido y propiedad de `evo-values`.
-- Desde la perspectiva de Evo Runtime, `Result` es un tipo de outcome concreto;
-  no se exponen genéricos a través de la frontera del Runtime.
-- `Result != Failure`: un outcome fallido se expresa a través de la rama de
-  fallo de `Result`.
+Una versión anterior modelaba `Result` y `Failure` como outcomes transportados por
+Evo Runtime y propiedad de `evo-values`.
+
+`ARQ-ER-001` y `ARQ-ER-002` superseden esa decisión:
+
+- Evo Runtime Model A controla únicamente la duración de `Start(Run)`.
+- El modelo actual no posee `Result` ni `Failure`.
+- El modelo actual no transporta outcomes.
+- `evo-runtime Model A` no requiere una dependencia arquitectónica a `evo-values`.
 
 ---
 
@@ -89,12 +96,13 @@ Evo Application (activa)
 Evo Runtime soporta múltiples invocaciones concurrentes o secuenciales de Start:
 
 ```text
-Start(run_app_1)  ──►  App 1  ──►  Result 1
-Start(run_app_2)  ──►  App 2  ──►  Result 2
+Start(run_app_1)  ──►  App 1  ──►  concluye naturalmente  ──►  Start concluye
+Start(run_app_2)  ──►  App 2  ──►  concluye naturalmente  ──►  Start concluye
 ```
 
 - Cada invocación de `Start` es aislada e independiente.
-- El fallo de una aplicación no afecta a otra aplicación.
+- La terminación de una invocación de `Run` no termina, modifica ni altera otra
+  invocación de `Start`.
 - Evo Runtime no comparte estado a través de las invocaciones.
 
 ---
@@ -102,7 +110,7 @@ Start(run_app_2)  ──►  App 2  ──►  Result 2
 ## 7. No Responsabilidades del Runtime
 
 Evo Runtime Model A excluye deliberadamente todos los mecanismos internos de
-coordinación:
+coordinación y transporte de resultados:
 - **Sin struct Context**: El Runtime no mantiene contexto de ejecución ni
   estado de sesión.
 - **Sin entidad Execution**: El ciclo de vida de ejecución está representado
@@ -115,12 +123,16 @@ coordinación:
   directamente dentro de la aplicación.
 - **Sin resolución de operaciones**: El Runtime no resuelve dependencias ni
   símbolos.
+- **Sin transporte de outcomes**: El Runtime no recibe ni entrega resultados de
+  negocio (`Result`/`Failure`).
+- **Sin dependencia a evo-values**: El Runtime no depende arquitectónicamente
+  de `evo-values` en Model A.
 
 ---
 
 ## 8. Engines y Aplicaciones
 
-Una vez que `Start` invoca `run()`, la Evo Application ejecuta su lógica de
+Una vez que `Start` invoca a `Run`, la Evo Application ejecuta su lógica de
 dominio directamente con sus propias dependencias, bibliotecas y engines:
 
 ```text
@@ -152,19 +164,22 @@ Esta capacidad futura:
 
 | Concepto | Rol Arquitectónico | Archivo de Definición Técnica | Tipo Técnico |
 | --- | --- | --- | --- |
-| **Start** | Use Case | `definitions/use_cases/start.rs` | `pub type Start = fn(run_request::Request) -> Result;` |
-| **Run** | Requester | `definitions/requesters/run_request.rs` | `pub type Request = fn() -> Result;` |
-| **Starter** | Agent (futuro) | `agents/starter/start.rs` | `pub fn start(run: run_request::Request) -> Result` |
-| **Result** | Tipo de Outcome | `evo-values` | Tipo de outcome desde `evo-values` |
+| **Start** | Use Case | `definitions/use_cases/start.rs` | Technical signature: PENDING TECHNICAL REVALIDATION |
+| **Run** | Requester | `definitions/requesters/run_request.rs` | Technical signature: PENDING TECHNICAL REVALIDATION |
 
 ---
 
 ## 11. Invariantes Cerrados
 
-1. `Start != Run`
-2. `Result != Failure`
-3. `Start(run)` recibe el function pointer `run`, no el resultado evaluado.
-4. Evo Runtime proporciona exactamente 1 Use Case (`Start`) y consume
-   exactamente 1 Requester (`Run`).
-5. Evo Runtime no tiene Context, no tiene entidad Execution y no tiene
-   Providers en Model A.
+1. `Start != Run`.
+2. `Start` recibe la acción `Run`, no el resultado de ejecutarla previamente.
+3. `Start` invoca `Run` exactamente como acción proporcionada por la aplicación.
+4. La duración de `Start` está delimitada por la duración de `Run`.
+5. Cuando `Run` retorna, `Start` retorna naturalmente.
+6. Evo Runtime proporciona exactamente 1 Use Case: `Start`.
+7. Evo Runtime consume exactamente 1 Requester: `Run`.
+8. Evo Runtime Model A no posee `Result` ni `Failure`.
+9. Evo Runtime Model A no transporta outcomes.
+10. Evo Runtime Model A no depende arquitectónicamente de `evo-values`.
+11. Evo Runtime no posee `Context`, `Execution`, `Providers` ni engine resolution en Model A.
+12. Las invocaciones `Start` son independientes y no comparten estado.

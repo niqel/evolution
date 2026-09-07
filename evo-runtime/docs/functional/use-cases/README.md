@@ -6,8 +6,8 @@ Este directorio contiene el Use Case funcional canónico para Evo Runtime
 Model A.
 
 En Model A, Evo Runtime proporciona exactamente una acción funcional: iniciar
-una Evo Application invocando su acción Run proporcionada y retornando el
-Result final.
+una Evo Application invocando su acción Run proporcionada y concluir Start
+cuando Run concluya.
 
 ## Catálogo
 

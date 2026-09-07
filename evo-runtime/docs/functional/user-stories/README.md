@@ -6,8 +6,8 @@ Este directorio contiene la User Story funcional canónica para Evo Runtime
 Model A.
 
 En Model A, Evo Runtime tiene una responsabilidad única y mínima: iniciar una
-Evo Application invocando su acción Run proporcionada y retornando el Result
-final.
+Evo Application invocando su acción Run proporcionada y mantener Start activo
+hasta que Run concluya.
 
 ## Catálogo
 

@@ -10,7 +10,7 @@ La arquitectura actual es deliberadamente orientada a funciones: los Use Cases d
 
 Evolution distingue formalmente dos dimensiones diferentes:
 
-1. **Topología de ejecución**: quién inicia, aloja y entrega el outcome de una aplicación.
+1. **Topología de ejecución**: quién inicia, aloja y delimita la duración de ejecución de una aplicación.
 2. **Dependencias de código / crates**: qué proyecto conoce a cuál durante la compilación.
 
 Estas dimensiones no deben confundirse. Una relación de ejecución no implica necesariamente una dependencia directa de código, y una dependencia de crate no implica IPC, red ni un servicio externo.
@@ -21,7 +21,7 @@ Estas dimensiones no deben confundirse. Una relación de ejecución no implica n
 
 `evo-runtime` es el **Execution Host** mínimo de las aplicaciones Evolution.
 
-Bajo **Evo Runtime Model A**, el Runtime tiene una responsabilidad única y acotada: iniciar la aplicación mediante la acción `Run` suministrada por el Host, mantener la invocación activa y retornar el `Result` final.
+Bajo **Evo Runtime Model A**, el Runtime tiene una responsabilidad única y acotada: iniciar la aplicación mediante la acción `Run` suministrada por el Host, mantener la invocación activa mientras `Run` ejecuta y retornar naturalmente cuando `Run` retorna naturalmente.
 
 ```text
                     Host / Caller
@@ -43,11 +43,11 @@ Bajo **Evo Runtime Model A**, el Runtime tiene una responsabilidad única y acot
         ├── evo-shell
         └── Providers
                          │
-                         │ retorna Result
+                         │ Run retorna naturalmente
                          ▼
                     evo-runtime
                          │
-                         │ retorna Result
+                         │ Start retorna naturalmente
                          ▼
                     Host / Caller
 ```
@@ -62,15 +62,15 @@ Evolution permite múltiples invocaciones independientes de `Start`:
 
 ```text
 Host / Caller
-  ├── Start(Run_A) ──► Application A (activa) ──► Result A
-  ├── Start(Run_B) ──► Application B (activa) ──► Result B
-  └── Start(Run_C) ──► Application C (activa) ──► Result C
+  ├── Start(Run_A) ──► Application A (activa) ──► concluye naturalmente
+  ├── Start(Run_B) ──► Application B (activa) ──► concluye naturalmente
+  └── Start(Run_C) ──► Application C (activa) ──► concluye naturalmente
 ```
 
 Principios:
 
 - cada invocación de `Start` es aislada e independiente;
-- el fallo de una aplicación no afecta a otra aplicación;
+- la terminación de una invocación de `Run` no termina, modifica ni altera otra invocación de `Start`;
 - `evo-runtime` no comparte estado entre invocaciones;
 - no existe ningún `Context` global ni entidad de seguimiento `Execution` en `evo-runtime`;
 - el mecanismo físico de ejecución (hilos, tareas asíncronas o procesos) permanece abierto y no se fija en este nivel.
@@ -81,14 +81,14 @@ Principios:
 
 Bajo **Evo Runtime Model A**, `evo-runtime` tiene una frontera estrictamente mínima:
 
-- proporciona exactamente un Use Case: `Start` (`pub type Start = fn(run_request::Request) -> Result;`);
-- consume exactamente un Requester: `Run` (`pub type Request = fn() -> Result;`);
-- recibe el function pointer `Run` desde el Host/Caller;
-- invoca `run()`;
-- permanece activo en el call stack durante la ejecución de la aplicación;
-- retorna el `Result` producido por `run()` directamente al Host/Caller.
+- proporciona exactamente un Use Case: `Start` (`definitions/use_cases/start.rs`, firma técnica: `PENDING TECHNICAL REVALIDATION`);
+- consume exactamente un Requester: `Run` (`definitions/requesters/run_request.rs`, firma técnica: `PENDING TECHNICAL REVALIDATION`);
+- recibe la acción `Run` desde el Host/Caller;
+- invoca `Run`;
+- permanece activo en el call stack durante la ejecución de `Run`;
+- concluye naturalmente cuando `Run` concluye.
 
-La terminación de `run()` concluye naturalmente la llamada a `Start`, sin requerir operaciones explícitas de detención o finalización.
+La terminación de `Run` concluye naturalmente la llamada a `Start`, sin requerir operaciones explícitas de detención o finalización, sin poseer `Result` ni `Failure` y sin transportar outcomes.
 
 ### Principio No-God-Runtime (Invariantes de Model A)
 
@@ -96,6 +96,9 @@ La terminación de `run()` concluye naturalmente la llamada a `Start`, sin reque
 
 - mantiene un struct `Context`, `Session` ni estado de sesión;
 - posee una entidad `Execution` (el ciclo de vida está representado únicamente por el call stack activo de `Start(run)`);
+- posee `Result` ni `Failure` en Model A;
+- transporta outcomes ni valores de retorno desde la aplicación hacia el Host;
+- depende arquitectónicamente de `evo-values`;
 - descubre, selecciona ni carga engines (como Evo-Script Engine o EvoQ);
 - administra Providers, Contracts ni capabilities;
 - compone operaciones internas de la aplicación ni resuelve dependencias;
@@ -581,7 +584,7 @@ Host / Caller ──────────► evo-runtime (Use Case: Start)
                                ▼
 Evo Application ────────► evo-runtime (definitions/requesters: Run)
       │
-      ├───► evo-values (Result)
+      ├───► evo-values (opcional / según aplicación)
       ├───► evo-script-engine (opcional / según aplicación)
       ├───► evo-query (opcional / según aplicación)
       └───► evo-shell (operaciones semánticas de entorno)
@@ -589,6 +592,7 @@ Evo Application ────────► evo-runtime (definitions/requesters:
 
 Prohibiciones:
 
+- `evo-runtime → evo-values` (no posee dependencia arquitectónica en Model A);
 - `evo-runtime → frontends / aplicaciones concretas`;
 - `evo-runtime → evo-script-engine / engines de dominio`;
 - `evo-shell → evo-script`;
@@ -657,7 +661,7 @@ Host / Caller
     │ Start(Run)
     ▼
 evo-runtime
-    inicia la ejecución invocando Run() y entrega Result
+    inicia la ejecución invocando Run() y concluye naturalmente cuando Run concluye
         │
         ▼
 Evo Application

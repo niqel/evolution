@@ -7,8 +7,8 @@ Status: FUNCTIONAL CLOSED
 Este documento registra la cobertura funcional completada de Evo Runtime Model A.
 
 En Model A, Evo Runtime tiene una responsabilidad única y mínima: iniciar una
-Evo Application invocando su acción Run proporcionada y retornando el Result
-final.
+Evo Application invocando su acción Run proporcionada y concluir Start cuando
+Run concluye.
 
 ## Alcance Funcional y Trazabilidad
 
@@ -34,13 +34,13 @@ Evo Runtime
   ▼
 Evo Application (Run activo)
   │
-  │ concluye con Result
+  │ Run termina
   ▼
 Evo Runtime
   │
-  │ retorna Result
+  │ Start termina
   ▼
-Host
+Host (recupera control)
 ```
 
 ## Independencia de Múltiples Invocaciones de Start
@@ -49,20 +49,21 @@ Evo Runtime soporta múltiples invocaciones independientes de Start:
 
 ```text
 Host / Caller
-  ├── Start(Run_A) ──► Application A (activa) ──► Result A
-  ├── Start(Run_B) ──► Application B (activa) ──► Result B
-  └── Start(Run_C) ──► Application C (activa) ──► Result C
+  ├── Start(Run_A) ──► Application A (activa) ──► Run_A termina ──► Start termina
+  ├── Start(Run_B) ──► Application B (activa) ──► Run_B termina ──► Start termina
+  └── Start(Run_C) ──► Application C (activa) ──► Run_C termina ──► Start termina
 ```
 
 - Cada invocación de Start opera de manera independiente.
-- El fallo de la Application A no produce el fallo de la Application B o C.
+- La terminación de una invocación de Run no termina, altera ni produce la
+  terminación de otra invocación de Start.
 - No existe ningún Context compartido ni entidad de seguimiento de Execution en
   Evo Runtime.
 
 ## No Responsabilidades de Evo Runtime Model A
 
-Todas las operaciones internas, ejecuciones de engines e integraciones de
-providers ocurren fuera de Evo Runtime:
+Todas las operaciones internas, ejecuciones de engines, transporte de datos y
+manejo de outcomes ocurren fuera de Evo Runtime:
 
 - Evo Runtime **no** resuelve operaciones ni dependencias.
 - Evo Runtime **no** selecciona ni carga engines (como EvoS o EvoQ).
@@ -71,6 +72,8 @@ providers ocurren fuera de Evo Runtime:
 - Evo Runtime **no** mantiene un Context interno ni una entidad Execution.
 - Evo Runtime **no** transporta Values a través de las fronteras internas de la
   aplicación.
+- Evo Runtime **no** posee ni transporta outcomes (`Result`/`Failure`).
+- Evo Runtime **no** depende arquitectónicamente de `evo-values`.
 
 Una vez que Start invoca a Run, la aplicación interactúa directamente con sus
 propias bibliotecas, engines y providers.

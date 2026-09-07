@@ -2,9 +2,11 @@
 
 ## Historia
 
-Como un caller/host,
+Como Host,
 quiero iniciar una Evo Application proporcionando su acción Run,
-para que Evo Runtime la mantenga activa hasta que termine y me entregue su Result.
+para que Evo Runtime inicie su ejecución
+y mantenga activa la llamada Start
+hasta que Run termine.
 
 ## Contexto
 
@@ -13,8 +15,8 @@ Application a partir de la acción Run que dicha aplicación proporciona.
 
 Evo Runtime no administra la lógica interna de la aplicación, no resuelve
 operaciones, no determina ni selecciona engines, no administra providers ni
-capacidades, no transporta Values entre operaciones y no mantiene un Context ni
-una entidad Execution propia.
+capacidades, no transporta Values entre operaciones, no transporta outcomes y no
+mantiene un Context ni una entidad Execution propia.
 
 El flujo de control es directo:
 
@@ -22,8 +24,8 @@ El flujo de control es directo:
    acción Run.
 2. Evo Runtime invoca la acción Run.
 3. La llamada Start permanece activa mientras la acción Run continúe ejecutándose.
-4. Cuando la acción Run concluye y entrega un Result, Evo Runtime retorna dicho
-   Result al Host.
+4. Cuando la acción Run concluye naturalmente, la llamada Start retorna
+   naturalmente al Host.
 
 Múltiples llamadas a Start pueden ejecutarse de forma independiente sin compartir
 estado ni interferir funcionalmente entre sí.
@@ -33,16 +35,16 @@ estado ni interferir funcionalmente entre sí.
 - Evo Runtime acepta una acción Run proporcionada por la Evo Application.
 - Evo Runtime invoca la acción Run recibida.
 - La ejecución de Start permanece activa mientras la acción Run esté activa.
-- Cuando la acción Run retorna un Result, Start retorna dicho Result al Host.
+- Cuando la acción Run termina, Start termina naturalmente.
 - Cada invocación de Start es completamente independiente de otras invocaciones.
 - Múltiples invocaciones de Start pueden coexistir funcionalmente.
-- El Failure de una invocación de Start no implica ni produce el Failure de otra.
+- La terminación de una invocación de Start no termina ni altera otra invocación.
 - Evo Runtime no participa ni conoce las operaciones internas, engines o
   providers que la aplicación utilice tras ser iniciada.
 - No se requiere una entidad Context.
 - No se requiere una entidad Execution.
 - No se requiere un Use Case separado de Finalize (la conclusión de Run finaliza
-  la llamada Start).
+  naturalmente la llamada Start).
 
 ## Fuera de Alcance
 
@@ -50,7 +52,7 @@ Esta historia no define:
 
 - Mecanismos de concurrencia física (hilos del SO, tareas asíncronas, procesos).
 - Estructura o lógica interna de la aplicación ejecutada.
-- Definición interna de los tipos Result o Failure (pertenecientes a `evo-values`).
+- Semántica de outcomes propios de la Evo Application.
 - Carga dinámica de extensiones o engines.
 - Formatos de paquetes, ejecutables o manifests.
 - APIs técnicas o firmas concretas en Rust.
