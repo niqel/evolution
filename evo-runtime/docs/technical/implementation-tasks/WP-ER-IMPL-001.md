@@ -48,8 +48,23 @@ Este Work Package define la secuencia obligatoria para implementar de forma mín
 - **LT-ER-DM-001** (CLOSED): Technical Data Model = 0 identidades (0 Structs, 0 Enums, 0 Artifacts, 0 Borrowed Views, 0 Errors, 0 Outcomes).
 - **LT-ER-SIG-001** (CLOSED): Requester `Run`: `pub type Request = fn();`.
 - **LT-ER-SIG-002** (CLOSED): Use Case `Start`: `pub type Start = fn(run_request::Request);`.
-- **LT-ER-PART-001** (CLOSED): Total participantes = 3 (1 Use Case, 1 Agent, 1 Requester).
-- **LT-ER-PART-002** (CLOSED): Agent `Starter` en `agents/starter.rs`.
+- **LT-ER-PART-001** (CLOSED): Agent Starter. Módulo canónico: `agents/starter.rs`.
+- **LT-ER-PART-002** (CLOSED): Contracts 0, Resolvers 0, Collaborators 0, Tools 0, Providers 0.
+
+### Inventario de Participantes Resultante
+
+```text
+Use Cases       1
+Agents          1
+Requesters      1
+Contracts       0
+Resolvers       0
+Collaborators   0
+Tools           0
+Providers       0
+
+Total           3 participants
+```
 
 ---
 
