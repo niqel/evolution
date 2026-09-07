@@ -25,7 +25,20 @@ use crate::data::vm::values::{
 };
 use crate::tools::locate_source_span::LOCATE_SOURCE_SPAN;
 use crate::tools::own_runtime_value::OWN_RUNTIME_VALUE;
-use evo_values::OwnedValue;
+use evo_values::boolean::NOT;
+use evo_values::numeric::{
+    ADD_F32, ADD_F64, ADD_I8, ADD_I16, ADD_I32, ADD_I64, ADD_I128, ADD_U8, ADD_U16, ADD_U32,
+    ADD_U64, ADD_U128, DIVIDE_F32, DIVIDE_F64, DIVIDE_I8, DIVIDE_I16, DIVIDE_I32, DIVIDE_I64,
+    DIVIDE_I128, DIVIDE_U8, DIVIDE_U16, DIVIDE_U32, DIVIDE_U64, DIVIDE_U128, MULTIPLY_F32,
+    MULTIPLY_F64, MULTIPLY_I8, MULTIPLY_I16, MULTIPLY_I32, MULTIPLY_I64, MULTIPLY_I128,
+    MULTIPLY_U8, MULTIPLY_U16, MULTIPLY_U32, MULTIPLY_U64, MULTIPLY_U128, NEGATE_F32, NEGATE_F64,
+    NEGATE_I8, NEGATE_I16, NEGATE_I32, NEGATE_I64, NEGATE_I128, REMAINDER_I8, REMAINDER_I16,
+    REMAINDER_I32, REMAINDER_I64, REMAINDER_I128, REMAINDER_U8, REMAINDER_U16, REMAINDER_U32,
+    REMAINDER_U64, REMAINDER_U128, SUBTRACT_F32, SUBTRACT_F64, SUBTRACT_I8, SUBTRACT_I16,
+    SUBTRACT_I32, SUBTRACT_I64, SUBTRACT_I128, SUBTRACT_U8, SUBTRACT_U16, SUBTRACT_U32,
+    SUBTRACT_U64, SUBTRACT_U128,
+};
+use evo_values::{NumericFailure, OwnedValue};
 
 pub type ExecuteInstruction =
     for<'compiled, 'bindings> fn(
@@ -48,6 +61,16 @@ fn make_evaluation_failure(
     ExecutionFailure {
         kind: ExecutionFailureKind::Evaluation(failure),
         source_span: Some(span),
+    }
+}
+
+fn map_numeric_failure(failure: NumericFailure) -> EvaluationFailure {
+    match failure {
+        NumericFailure::Overflow => EvaluationFailure::Overflow,
+        NumericFailure::DivisionByZero => EvaluationFailure::DivisionByZero,
+        NumericFailure::InvalidBounds => {
+            panic!("internal invariant violation: unexpected InvalidBounds from arithmetic UC")
+        }
     }
 }
 
@@ -848,244 +871,264 @@ pub fn execute_instruction<'compiled, 'bindings>(
         // Fixed numeric — 12
         Instruction::Negate(kind) => {
             let operand = pop_operand(execution);
-            let res = match (kind, operand) {
-                (NumericKind::Int8, RuntimeValue::Int8(v)) => {
-                    v.checked_neg().map(RuntimeValue::Int8)
+            let res: Result<RuntimeValue, EvaluationFailure> = match (kind, operand) {
+                (NumericKind::Int8, RuntimeValue::Int8(v)) => NEGATE_I8(v)
+                    .map(RuntimeValue::Int8)
+                    .map_err(map_numeric_failure),
+                (NumericKind::Int16, RuntimeValue::Int16(v)) => NEGATE_I16(v)
+                    .map(RuntimeValue::Int16)
+                    .map_err(map_numeric_failure),
+                (NumericKind::Int32, RuntimeValue::Int32(v)) => NEGATE_I32(v)
+                    .map(RuntimeValue::Int32)
+                    .map_err(map_numeric_failure),
+                (NumericKind::Int64, RuntimeValue::Int64(v)) => NEGATE_I64(v)
+                    .map(RuntimeValue::Int64)
+                    .map_err(map_numeric_failure),
+                (NumericKind::Int128, RuntimeValue::Int128(v)) => NEGATE_I128(v)
+                    .map(RuntimeValue::Int128)
+                    .map_err(map_numeric_failure),
+                (NumericKind::Float32, RuntimeValue::Float32(v)) => {
+                    Ok(RuntimeValue::Float32(NEGATE_F32(v)))
                 }
-                (NumericKind::Int16, RuntimeValue::Int16(v)) => {
-                    v.checked_neg().map(RuntimeValue::Int16)
+                (NumericKind::Float64, RuntimeValue::Float64(v)) => {
+                    Ok(RuntimeValue::Float64(NEGATE_F64(v)))
                 }
-                (NumericKind::Int32, RuntimeValue::Int32(v)) => {
-                    v.checked_neg().map(RuntimeValue::Int32)
-                }
-                (NumericKind::Int64, RuntimeValue::Int64(v)) => {
-                    v.checked_neg().map(RuntimeValue::Int64)
-                }
-                (NumericKind::Int128, RuntimeValue::Int128(v)) => {
-                    v.checked_neg().map(RuntimeValue::Int128)
-                }
-                (NumericKind::Float32, RuntimeValue::Float32(v)) => Some(RuntimeValue::Float32(-v)),
-                (NumericKind::Float64, RuntimeValue::Float64(v)) => Some(RuntimeValue::Float64(-v)),
                 _ => panic!("Negate: operand family mismatch or unsupported unsigned negation"),
             };
 
             match res {
-                Some(val) => {
+                Ok(val) => {
                     push_operand(execution, val);
                     advance_ip(execution);
                     Ok(None)
                 }
-                None => Err(make_evaluation_failure(
-                    execution,
-                    EvaluationFailure::Overflow,
-                )),
+                Err(failure) => Err(make_evaluation_failure(execution, failure)),
             }
         }
 
         Instruction::Add(kind) => {
             let right = pop_operand(execution);
             let left = pop_operand(execution);
-            let res = match (kind, left, right) {
-                (NumericKind::Int8, RuntimeValue::Int8(l), RuntimeValue::Int8(r)) => {
-                    l.checked_add(r).map(RuntimeValue::Int8)
-                }
+            let res: Result<RuntimeValue, EvaluationFailure> = match (kind, left, right) {
+                (NumericKind::Int8, RuntimeValue::Int8(l), RuntimeValue::Int8(r)) => ADD_I8(l, r)
+                    .map(RuntimeValue::Int8)
+                    .map_err(map_numeric_failure),
                 (NumericKind::Int16, RuntimeValue::Int16(l), RuntimeValue::Int16(r)) => {
-                    l.checked_add(r).map(RuntimeValue::Int16)
+                    ADD_I16(l, r)
+                        .map(RuntimeValue::Int16)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Int32, RuntimeValue::Int32(l), RuntimeValue::Int32(r)) => {
-                    l.checked_add(r).map(RuntimeValue::Int32)
+                    ADD_I32(l, r)
+                        .map(RuntimeValue::Int32)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Int64, RuntimeValue::Int64(l), RuntimeValue::Int64(r)) => {
-                    l.checked_add(r).map(RuntimeValue::Int64)
+                    ADD_I64(l, r)
+                        .map(RuntimeValue::Int64)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Int128, RuntimeValue::Int128(l), RuntimeValue::Int128(r)) => {
-                    l.checked_add(r).map(RuntimeValue::Int128)
+                    ADD_I128(l, r)
+                        .map(RuntimeValue::Int128)
+                        .map_err(map_numeric_failure)
                 }
 
                 (NumericKind::Uint8, RuntimeValue::Uint8(l), RuntimeValue::Uint8(r)) => {
-                    l.checked_add(r).map(RuntimeValue::Uint8)
+                    ADD_U8(l, r)
+                        .map(RuntimeValue::Uint8)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint16, RuntimeValue::Uint16(l), RuntimeValue::Uint16(r)) => {
-                    l.checked_add(r).map(RuntimeValue::Uint16)
+                    ADD_U16(l, r)
+                        .map(RuntimeValue::Uint16)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint32, RuntimeValue::Uint32(l), RuntimeValue::Uint32(r)) => {
-                    l.checked_add(r).map(RuntimeValue::Uint32)
+                    ADD_U32(l, r)
+                        .map(RuntimeValue::Uint32)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint64, RuntimeValue::Uint64(l), RuntimeValue::Uint64(r)) => {
-                    l.checked_add(r).map(RuntimeValue::Uint64)
+                    ADD_U64(l, r)
+                        .map(RuntimeValue::Uint64)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint128, RuntimeValue::Uint128(l), RuntimeValue::Uint128(r)) => {
-                    l.checked_add(r).map(RuntimeValue::Uint128)
+                    ADD_U128(l, r)
+                        .map(RuntimeValue::Uint128)
+                        .map_err(map_numeric_failure)
                 }
 
                 (NumericKind::Float32, RuntimeValue::Float32(l), RuntimeValue::Float32(r)) => {
-                    let sum = l + r;
-                    if sum.is_finite() {
-                        Some(RuntimeValue::Float32(sum))
-                    } else {
-                        None
-                    }
+                    Ok(RuntimeValue::Float32(ADD_F32(l, r)))
                 }
                 (NumericKind::Float64, RuntimeValue::Float64(l), RuntimeValue::Float64(r)) => {
-                    let sum = l + r;
-                    if sum.is_finite() {
-                        Some(RuntimeValue::Float64(sum))
-                    } else {
-                        None
-                    }
+                    Ok(RuntimeValue::Float64(ADD_F64(l, r)))
                 }
 
                 _ => panic!("Add: operand family mismatch with NumericKind"),
             };
 
             match res {
-                Some(val) => {
+                Ok(val) => {
                     push_operand(execution, val);
                     advance_ip(execution);
                     Ok(None)
                 }
-                None => Err(make_evaluation_failure(
-                    execution,
-                    EvaluationFailure::Overflow,
-                )),
+                Err(failure) => Err(make_evaluation_failure(execution, failure)),
             }
         }
 
         Instruction::Subtract(kind) => {
             let right = pop_operand(execution);
             let left = pop_operand(execution);
-            let res = match (kind, left, right) {
+            let res: Result<RuntimeValue, EvaluationFailure> = match (kind, left, right) {
                 (NumericKind::Int8, RuntimeValue::Int8(l), RuntimeValue::Int8(r)) => {
-                    l.checked_sub(r).map(RuntimeValue::Int8)
+                    SUBTRACT_I8(l, r)
+                        .map(RuntimeValue::Int8)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Int16, RuntimeValue::Int16(l), RuntimeValue::Int16(r)) => {
-                    l.checked_sub(r).map(RuntimeValue::Int16)
+                    SUBTRACT_I16(l, r)
+                        .map(RuntimeValue::Int16)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Int32, RuntimeValue::Int32(l), RuntimeValue::Int32(r)) => {
-                    l.checked_sub(r).map(RuntimeValue::Int32)
+                    SUBTRACT_I32(l, r)
+                        .map(RuntimeValue::Int32)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Int64, RuntimeValue::Int64(l), RuntimeValue::Int64(r)) => {
-                    l.checked_sub(r).map(RuntimeValue::Int64)
+                    SUBTRACT_I64(l, r)
+                        .map(RuntimeValue::Int64)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Int128, RuntimeValue::Int128(l), RuntimeValue::Int128(r)) => {
-                    l.checked_sub(r).map(RuntimeValue::Int128)
+                    SUBTRACT_I128(l, r)
+                        .map(RuntimeValue::Int128)
+                        .map_err(map_numeric_failure)
                 }
 
                 (NumericKind::Uint8, RuntimeValue::Uint8(l), RuntimeValue::Uint8(r)) => {
-                    l.checked_sub(r).map(RuntimeValue::Uint8)
+                    SUBTRACT_U8(l, r)
+                        .map(RuntimeValue::Uint8)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint16, RuntimeValue::Uint16(l), RuntimeValue::Uint16(r)) => {
-                    l.checked_sub(r).map(RuntimeValue::Uint16)
+                    SUBTRACT_U16(l, r)
+                        .map(RuntimeValue::Uint16)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint32, RuntimeValue::Uint32(l), RuntimeValue::Uint32(r)) => {
-                    l.checked_sub(r).map(RuntimeValue::Uint32)
+                    SUBTRACT_U32(l, r)
+                        .map(RuntimeValue::Uint32)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint64, RuntimeValue::Uint64(l), RuntimeValue::Uint64(r)) => {
-                    l.checked_sub(r).map(RuntimeValue::Uint64)
+                    SUBTRACT_U64(l, r)
+                        .map(RuntimeValue::Uint64)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint128, RuntimeValue::Uint128(l), RuntimeValue::Uint128(r)) => {
-                    l.checked_sub(r).map(RuntimeValue::Uint128)
+                    SUBTRACT_U128(l, r)
+                        .map(RuntimeValue::Uint128)
+                        .map_err(map_numeric_failure)
                 }
 
                 (NumericKind::Float32, RuntimeValue::Float32(l), RuntimeValue::Float32(r)) => {
-                    let diff = l - r;
-                    if diff.is_finite() {
-                        Some(RuntimeValue::Float32(diff))
-                    } else {
-                        None
-                    }
+                    Ok(RuntimeValue::Float32(SUBTRACT_F32(l, r)))
                 }
                 (NumericKind::Float64, RuntimeValue::Float64(l), RuntimeValue::Float64(r)) => {
-                    let diff = l - r;
-                    if diff.is_finite() {
-                        Some(RuntimeValue::Float64(diff))
-                    } else {
-                        None
-                    }
+                    Ok(RuntimeValue::Float64(SUBTRACT_F64(l, r)))
                 }
 
                 _ => panic!("Subtract: operand family mismatch with NumericKind"),
             };
 
             match res {
-                Some(val) => {
+                Ok(val) => {
                     push_operand(execution, val);
                     advance_ip(execution);
                     Ok(None)
                 }
-                None => Err(make_evaluation_failure(
-                    execution,
-                    EvaluationFailure::Overflow,
-                )),
+                Err(failure) => Err(make_evaluation_failure(execution, failure)),
             }
         }
 
         Instruction::Multiply(kind) => {
             let right = pop_operand(execution);
             let left = pop_operand(execution);
-            let res = match (kind, left, right) {
+            let res: Result<RuntimeValue, EvaluationFailure> = match (kind, left, right) {
                 (NumericKind::Int8, RuntimeValue::Int8(l), RuntimeValue::Int8(r)) => {
-                    l.checked_mul(r).map(RuntimeValue::Int8)
+                    MULTIPLY_I8(l, r)
+                        .map(RuntimeValue::Int8)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Int16, RuntimeValue::Int16(l), RuntimeValue::Int16(r)) => {
-                    l.checked_mul(r).map(RuntimeValue::Int16)
+                    MULTIPLY_I16(l, r)
+                        .map(RuntimeValue::Int16)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Int32, RuntimeValue::Int32(l), RuntimeValue::Int32(r)) => {
-                    l.checked_mul(r).map(RuntimeValue::Int32)
+                    MULTIPLY_I32(l, r)
+                        .map(RuntimeValue::Int32)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Int64, RuntimeValue::Int64(l), RuntimeValue::Int64(r)) => {
-                    l.checked_mul(r).map(RuntimeValue::Int64)
+                    MULTIPLY_I64(l, r)
+                        .map(RuntimeValue::Int64)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Int128, RuntimeValue::Int128(l), RuntimeValue::Int128(r)) => {
-                    l.checked_mul(r).map(RuntimeValue::Int128)
+                    MULTIPLY_I128(l, r)
+                        .map(RuntimeValue::Int128)
+                        .map_err(map_numeric_failure)
                 }
 
                 (NumericKind::Uint8, RuntimeValue::Uint8(l), RuntimeValue::Uint8(r)) => {
-                    l.checked_mul(r).map(RuntimeValue::Uint8)
+                    MULTIPLY_U8(l, r)
+                        .map(RuntimeValue::Uint8)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint16, RuntimeValue::Uint16(l), RuntimeValue::Uint16(r)) => {
-                    l.checked_mul(r).map(RuntimeValue::Uint16)
+                    MULTIPLY_U16(l, r)
+                        .map(RuntimeValue::Uint16)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint32, RuntimeValue::Uint32(l), RuntimeValue::Uint32(r)) => {
-                    l.checked_mul(r).map(RuntimeValue::Uint32)
+                    MULTIPLY_U32(l, r)
+                        .map(RuntimeValue::Uint32)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint64, RuntimeValue::Uint64(l), RuntimeValue::Uint64(r)) => {
-                    l.checked_mul(r).map(RuntimeValue::Uint64)
+                    MULTIPLY_U64(l, r)
+                        .map(RuntimeValue::Uint64)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint128, RuntimeValue::Uint128(l), RuntimeValue::Uint128(r)) => {
-                    l.checked_mul(r).map(RuntimeValue::Uint128)
+                    MULTIPLY_U128(l, r)
+                        .map(RuntimeValue::Uint128)
+                        .map_err(map_numeric_failure)
                 }
 
                 (NumericKind::Float32, RuntimeValue::Float32(l), RuntimeValue::Float32(r)) => {
-                    let prod = l * r;
-                    if prod.is_finite() {
-                        Some(RuntimeValue::Float32(prod))
-                    } else {
-                        None
-                    }
+                    Ok(RuntimeValue::Float32(MULTIPLY_F32(l, r)))
                 }
                 (NumericKind::Float64, RuntimeValue::Float64(l), RuntimeValue::Float64(r)) => {
-                    let prod = l * r;
-                    if prod.is_finite() {
-                        Some(RuntimeValue::Float64(prod))
-                    } else {
-                        None
-                    }
+                    Ok(RuntimeValue::Float64(MULTIPLY_F64(l, r)))
                 }
 
                 _ => panic!("Multiply: operand family mismatch with NumericKind"),
             };
 
             match res {
-                Some(val) => {
+                Ok(val) => {
                     push_operand(execution, val);
                     advance_ip(execution);
                     Ok(None)
                 }
-                None => Err(make_evaluation_failure(
-                    execution,
-                    EvaluationFailure::Overflow,
-                )),
+                Err(failure) => Err(make_evaluation_failure(execution, failure)),
             }
         }
 
@@ -1095,120 +1138,62 @@ pub fn execute_instruction<'compiled, 'bindings>(
 
             let res: Result<RuntimeValue, EvaluationFailure> = match (kind, left, right) {
                 (NumericKind::Int8, RuntimeValue::Int8(l), RuntimeValue::Int8(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_div(r)
-                            .map(RuntimeValue::Int8)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    DIVIDE_I8(l, r)
+                        .map(RuntimeValue::Int8)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Int16, RuntimeValue::Int16(l), RuntimeValue::Int16(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_div(r)
-                            .map(RuntimeValue::Int16)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    DIVIDE_I16(l, r)
+                        .map(RuntimeValue::Int16)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Int32, RuntimeValue::Int32(l), RuntimeValue::Int32(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_div(r)
-                            .map(RuntimeValue::Int32)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    DIVIDE_I32(l, r)
+                        .map(RuntimeValue::Int32)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Int64, RuntimeValue::Int64(l), RuntimeValue::Int64(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_div(r)
-                            .map(RuntimeValue::Int64)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    DIVIDE_I64(l, r)
+                        .map(RuntimeValue::Int64)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Int128, RuntimeValue::Int128(l), RuntimeValue::Int128(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_div(r)
-                            .map(RuntimeValue::Int128)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    DIVIDE_I128(l, r)
+                        .map(RuntimeValue::Int128)
+                        .map_err(map_numeric_failure)
                 }
 
                 (NumericKind::Uint8, RuntimeValue::Uint8(l), RuntimeValue::Uint8(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_div(r)
-                            .map(RuntimeValue::Uint8)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    DIVIDE_U8(l, r)
+                        .map(RuntimeValue::Uint8)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint16, RuntimeValue::Uint16(l), RuntimeValue::Uint16(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_div(r)
-                            .map(RuntimeValue::Uint16)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    DIVIDE_U16(l, r)
+                        .map(RuntimeValue::Uint16)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint32, RuntimeValue::Uint32(l), RuntimeValue::Uint32(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_div(r)
-                            .map(RuntimeValue::Uint32)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    DIVIDE_U32(l, r)
+                        .map(RuntimeValue::Uint32)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint64, RuntimeValue::Uint64(l), RuntimeValue::Uint64(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_div(r)
-                            .map(RuntimeValue::Uint64)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    DIVIDE_U64(l, r)
+                        .map(RuntimeValue::Uint64)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint128, RuntimeValue::Uint128(l), RuntimeValue::Uint128(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_div(r)
-                            .map(RuntimeValue::Uint128)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    DIVIDE_U128(l, r)
+                        .map(RuntimeValue::Uint128)
+                        .map_err(map_numeric_failure)
                 }
 
                 (NumericKind::Float32, RuntimeValue::Float32(l), RuntimeValue::Float32(r)) => {
-                    if r == 0.0 || r == -0.0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        let quotient = l / r;
-                        if quotient.is_finite() {
-                            Ok(RuntimeValue::Float32(quotient))
-                        } else {
-                            Err(EvaluationFailure::Overflow)
-                        }
-                    }
+                    Ok(RuntimeValue::Float32(DIVIDE_F32(l, r)))
                 }
                 (NumericKind::Float64, RuntimeValue::Float64(l), RuntimeValue::Float64(r)) => {
-                    if r == 0.0 || r == -0.0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        let quotient = l / r;
-                        if quotient.is_finite() {
-                            Ok(RuntimeValue::Float64(quotient))
-                        } else {
-                            Err(EvaluationFailure::Overflow)
-                        }
-                    }
+                    Ok(RuntimeValue::Float64(DIVIDE_F64(l, r)))
                 }
 
                 _ => panic!("Divide: operand family mismatch with NumericKind"),
@@ -1230,95 +1215,55 @@ pub fn execute_instruction<'compiled, 'bindings>(
 
             let res: Result<RuntimeValue, EvaluationFailure> = match (kind, left, right) {
                 (NumericKind::Int8, RuntimeValue::Int8(l), RuntimeValue::Int8(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_rem(r)
-                            .map(RuntimeValue::Int8)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    REMAINDER_I8(l, r)
+                        .map(RuntimeValue::Int8)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Int16, RuntimeValue::Int16(l), RuntimeValue::Int16(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_rem(r)
-                            .map(RuntimeValue::Int16)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    REMAINDER_I16(l, r)
+                        .map(RuntimeValue::Int16)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Int32, RuntimeValue::Int32(l), RuntimeValue::Int32(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_rem(r)
-                            .map(RuntimeValue::Int32)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    REMAINDER_I32(l, r)
+                        .map(RuntimeValue::Int32)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Int64, RuntimeValue::Int64(l), RuntimeValue::Int64(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_rem(r)
-                            .map(RuntimeValue::Int64)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    REMAINDER_I64(l, r)
+                        .map(RuntimeValue::Int64)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Int128, RuntimeValue::Int128(l), RuntimeValue::Int128(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_rem(r)
-                            .map(RuntimeValue::Int128)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    REMAINDER_I128(l, r)
+                        .map(RuntimeValue::Int128)
+                        .map_err(map_numeric_failure)
                 }
 
                 (NumericKind::Uint8, RuntimeValue::Uint8(l), RuntimeValue::Uint8(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_rem(r)
-                            .map(RuntimeValue::Uint8)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    REMAINDER_U8(l, r)
+                        .map(RuntimeValue::Uint8)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint16, RuntimeValue::Uint16(l), RuntimeValue::Uint16(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_rem(r)
-                            .map(RuntimeValue::Uint16)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    REMAINDER_U16(l, r)
+                        .map(RuntimeValue::Uint16)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint32, RuntimeValue::Uint32(l), RuntimeValue::Uint32(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_rem(r)
-                            .map(RuntimeValue::Uint32)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    REMAINDER_U32(l, r)
+                        .map(RuntimeValue::Uint32)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint64, RuntimeValue::Uint64(l), RuntimeValue::Uint64(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_rem(r)
-                            .map(RuntimeValue::Uint64)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    REMAINDER_U64(l, r)
+                        .map(RuntimeValue::Uint64)
+                        .map_err(map_numeric_failure)
                 }
                 (NumericKind::Uint128, RuntimeValue::Uint128(l), RuntimeValue::Uint128(r)) => {
-                    if r == 0 {
-                        Err(EvaluationFailure::DivisionByZero)
-                    } else {
-                        l.checked_rem(r)
-                            .map(RuntimeValue::Uint128)
-                            .ok_or(EvaluationFailure::Overflow)
-                    }
+                    REMAINDER_U128(l, r)
+                        .map(RuntimeValue::Uint128)
+                        .map_err(map_numeric_failure)
                 }
 
                 _ => panic!("Remainder: operand family mismatch or unsupported float Remainder"),
@@ -2207,7 +2152,7 @@ pub fn execute_instruction<'compiled, 'bindings>(
                 RuntimeValue::Boolean(val) => val,
                 _ => panic!("NotBoolean expected Boolean operand"),
             };
-            push_operand(execution, RuntimeValue::Boolean(!b));
+            push_operand(execution, RuntimeValue::Boolean(NOT(b)));
             advance_ip(execution);
             Ok(None)
         }
@@ -2817,7 +2762,7 @@ mod tests {
     }
 
     #[test]
-    fn regression_fixed_float_overflow() {
+    fn regression_fixed_float_overflow_produces_infinity() {
         let program = CompiledProgram {
             functions: vec![CompiledFunction {
                 parameter_count: 0,
@@ -2827,6 +2772,7 @@ mod tests {
                     Instruction::LoadConstant(ConstantId(0)),
                     Instruction::LoadConstant(ConstantId(1)),
                     Instruction::Multiply(NumericKind::Float32),
+                    Instruction::Return,
                 ],
             }],
             entry_point: FunctionId(0),
@@ -2839,6 +2785,7 @@ mod tests {
                     SourceSpan { start: 0, end: 1 },
                     SourceSpan { start: 1, end: 2 },
                     SourceSpan { start: 2, end: 3 },
+                    SourceSpan { start: 3, end: 4 },
                 ]],
             },
         };
@@ -2865,16 +2812,16 @@ mod tests {
 
         let _ = execute_instruction(&mut execution);
         let _ = execute_instruction(&mut execution);
-        let err = match execute_instruction(&mut execution) {
-            Ok(_) => panic!("overflow should fail"),
-            Err(e) => e,
-        };
-        assert_eq!(execution.call_frames[0].instruction_pointer.0, 2);
-        match err.kind {
-            ExecutionFailureKind::Evaluation(EvaluationFailure::Overflow) => {}
-            _ => panic!("expected Overflow failure"),
+        let outcome = execute_instruction(&mut execution);
+        assert!(outcome.is_ok());
+        assert_eq!(execution.call_frames[0].instruction_pointer.0, 3);
+        match execution.value_storage.cells.last() {
+            Some(Some(RuntimeValue::Float32(f))) => {
+                assert!(f.is_infinite());
+                assert!(f.is_sign_positive());
+            }
+            _ => panic!("expected +Infinity"),
         }
-        assert_eq!(err.source_span, Some(SourceSpan { start: 2, end: 3 }));
     }
 
     #[test]
@@ -3384,7 +3331,7 @@ mod tests {
     }
 
     #[test]
-    fn fixed_float_division_by_zero() {
+    fn fixed_float_division_by_zero_produces_infinity() {
         let program = CompiledProgram {
             functions: vec![CompiledFunction {
                 parameter_count: 0,
@@ -3394,6 +3341,7 @@ mod tests {
                     Instruction::LoadConstant(ConstantId(0)),
                     Instruction::LoadConstant(ConstantId(1)),
                     Instruction::Divide(NumericKind::Float32),
+                    Instruction::Return,
                 ],
             }],
             entry_point: FunctionId(0),
@@ -3406,6 +3354,7 @@ mod tests {
                     SourceSpan { start: 0, end: 1 },
                     SourceSpan { start: 1, end: 2 },
                     SourceSpan { start: 2, end: 3 },
+                    SourceSpan { start: 3, end: 4 },
                 ]],
             },
         };
@@ -3432,16 +3381,16 @@ mod tests {
 
         let _ = execute_instruction(&mut execution);
         let _ = execute_instruction(&mut execution);
-
-        let err = match execute_instruction(&mut execution) {
-            Ok(_) => panic!("float division by zero should fail"),
-            Err(e) => e,
-        };
-        match err.kind {
-            ExecutionFailureKind::Evaluation(EvaluationFailure::DivisionByZero) => {}
-            _ => panic!("expected DivisionByZero failure"),
+        let outcome = execute_instruction(&mut execution);
+        assert!(outcome.is_ok());
+        assert_eq!(execution.call_frames[0].instruction_pointer.0, 3);
+        match execution.value_storage.cells.last() {
+            Some(Some(RuntimeValue::Float32(f))) => {
+                assert!(f.is_infinite());
+                assert!(f.is_sign_positive());
+            }
+            _ => panic!("expected +Infinity"),
         }
-        assert_eq!(execution.call_frames[0].instruction_pointer.0, 2);
     }
 
     #[test]
@@ -3512,5 +3461,645 @@ mod tests {
             _ => panic!("expected DivisionByZero failure"),
         }
         assert_eq!(execution.call_frames[0].instruction_pointer.0, 2);
+    }
+
+    fn test_execute_instructions(
+        mut instructions: Vec<Instruction>,
+        constants: Vec<Constant>,
+    ) -> Result<RuntimeValue, ExecutionFailure> {
+        instructions.push(Instruction::Return);
+        let max_operand_depth = 4;
+        let mut source_map_spans = Vec::new();
+        for i in 0..instructions.len() {
+            source_map_spans.push(SourceSpan {
+                start: i,
+                end: i + 1,
+            });
+        }
+        let program = CompiledProgram {
+            functions: vec![CompiledFunction {
+                parameter_count: 0,
+                local_count: 0,
+                max_operand_depth,
+                instructions,
+            }],
+            entry_point: FunctionId(0),
+            entry_parameter_shapes: Vec::new(),
+            constants,
+            external_symbols: Vec::new(),
+            value_shapes: Vec::new(),
+            source_map: SourceMap {
+                functions: vec![source_map_spans],
+            },
+        };
+        let bindings = ApplicationBindings {
+            capabilities: HashMap::new(),
+        };
+
+        let mut execution = VmExecution {
+            compiled_program: &program,
+            application_bindings: &bindings,
+            value_storage: SharedValueStorage { cells: Vec::new() },
+            backing_store: ExecutionBackingStore {
+                strings: Vec::new(),
+                dynamic_integers: Vec::new(),
+                structs: Vec::new(),
+                enums: Vec::new(),
+            },
+            call_frames: vec![CallFrame {
+                function: FunctionId(0),
+                instruction_pointer: InstructionPointer(0),
+                frame_base: 0,
+            }],
+        };
+
+        let count = execution.compiled_program.functions[0].instructions.len() - 1;
+        for _ in 0..count {
+            match execute_instruction(&mut execution) {
+                Ok(_) => {}
+                Err(e) => return Err(e),
+            }
+        }
+        let result = execution
+            .value_storage
+            .cells
+            .pop()
+            .expect("stack should have cell")
+            .expect("cell should contain value");
+        Ok(result)
+    }
+
+    #[test]
+    fn fixed_integer_signed_negate_overflow() {
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::Negate(NumericKind::Int8),
+            ],
+            vec![Constant::Int8(i8::MIN)],
+        );
+        match res {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::Overflow) => {}
+                _ => panic!("expected Overflow failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
+    }
+
+    #[test]
+    fn fixed_integer_signed_add_overflow() {
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Add(NumericKind::Int16),
+            ],
+            vec![Constant::Int16(i16::MAX), Constant::Int16(1)],
+        );
+        match res {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::Overflow) => {}
+                _ => panic!("expected Overflow failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
+    }
+
+    #[test]
+    fn fixed_integer_unsigned_add_overflow() {
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Add(NumericKind::Uint8),
+            ],
+            vec![Constant::Uint8(u8::MAX), Constant::Uint8(1)],
+        );
+        match res {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::Overflow) => {}
+                _ => panic!("expected Overflow failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
+    }
+
+    #[test]
+    fn fixed_integer_signed_subtract_overflow() {
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Subtract(NumericKind::Int8),
+            ],
+            vec![Constant::Int8(i8::MIN), Constant::Int8(1)],
+        );
+        match res {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::Overflow) => {}
+                _ => panic!("expected Overflow failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
+    }
+
+    #[test]
+    fn fixed_integer_unsigned_subtract_underflow() {
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Subtract(NumericKind::Uint8),
+            ],
+            vec![Constant::Uint8(0), Constant::Uint8(1)],
+        );
+        match res {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::Overflow) => {}
+                _ => panic!("expected Overflow failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
+    }
+
+    #[test]
+    fn fixed_integer_signed_multiply_overflow() {
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Multiply(NumericKind::Int8),
+            ],
+            vec![Constant::Int8(i8::MAX), Constant::Int8(2)],
+        );
+        match res {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::Overflow) => {}
+                _ => panic!("expected Overflow failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
+    }
+
+    #[test]
+    fn fixed_integer_unsigned_multiply_overflow() {
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Multiply(NumericKind::Uint8),
+            ],
+            vec![Constant::Uint8(u8::MAX), Constant::Uint8(2)],
+        );
+        match res {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::Overflow) => {}
+                _ => panic!("expected Overflow failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
+    }
+
+    #[test]
+    fn fixed_integer_divide_by_zero() {
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Divide(NumericKind::Int32),
+            ],
+            vec![Constant::Int32(10), Constant::Int32(0)],
+        );
+        match res {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::DivisionByZero) => {}
+                _ => panic!("expected DivisionByZero failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
+    }
+
+    #[test]
+    fn fixed_integer_divide_min_by_neg_one_overflow() {
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Divide(NumericKind::Int8),
+            ],
+            vec![Constant::Int8(i8::MIN), Constant::Int8(-1)],
+        );
+        match res {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::Overflow) => {}
+                _ => panic!("expected Overflow failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
+    }
+
+    #[test]
+    fn fixed_integer_remainder_by_zero() {
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Remainder(NumericKind::Int32),
+            ],
+            vec![Constant::Int32(10), Constant::Int32(0)],
+        );
+        match res {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::DivisionByZero) => {}
+                _ => panic!("expected DivisionByZero failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
+    }
+
+    #[test]
+    fn fixed_integer_remainder_min_by_neg_one_overflow() {
+        let res = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Remainder(NumericKind::Int8),
+            ],
+            vec![Constant::Int8(i8::MIN), Constant::Int8(-1)],
+        );
+        match res {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::Overflow) => {}
+                _ => panic!("expected Overflow failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
+    }
+
+    #[test]
+    fn fixed_float_ieee_add_overflow_to_infinity() {
+        let res_f32 = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Add(NumericKind::Float32),
+            ],
+            vec![Constant::Float32(f32::MAX), Constant::Float32(f32::MAX)],
+        );
+        match res_f32 {
+            Ok(RuntimeValue::Float32(f)) => {
+                assert!(f.is_infinite());
+                assert!(f.is_sign_positive());
+            }
+            _ => panic!("expected +Infinity f32"),
+        }
+
+        let res_f64 = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Add(NumericKind::Float64),
+            ],
+            vec![Constant::Float64(f64::MAX), Constant::Float64(f64::MAX)],
+        );
+        match res_f64 {
+            Ok(RuntimeValue::Float64(f)) => {
+                assert!(f.is_infinite());
+                assert!(f.is_sign_positive());
+            }
+            _ => panic!("expected +Infinity f64"),
+        }
+    }
+
+    #[test]
+    fn fixed_float_ieee_multiply_overflow_to_infinity() {
+        let res_f32 = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Multiply(NumericKind::Float32),
+            ],
+            vec![Constant::Float32(f32::MAX), Constant::Float32(2.0)],
+        );
+        match res_f32 {
+            Ok(RuntimeValue::Float32(f)) => {
+                assert!(f.is_infinite());
+                assert!(f.is_sign_positive());
+            }
+            _ => panic!("expected +Infinity f32"),
+        }
+
+        let res_f64 = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Multiply(NumericKind::Float64),
+            ],
+            vec![Constant::Float64(f64::MAX), Constant::Float64(2.0)],
+        );
+        match res_f64 {
+            Ok(RuntimeValue::Float64(f)) => {
+                assert!(f.is_infinite());
+                assert!(f.is_sign_positive());
+            }
+            _ => panic!("expected +Infinity f64"),
+        }
+    }
+
+    #[test]
+    fn fixed_float_ieee_divide_by_positive_zero() {
+        let res_f32_pos = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Divide(NumericKind::Float32),
+            ],
+            vec![Constant::Float32(1.0), Constant::Float32(0.0)],
+        );
+        match res_f32_pos {
+            Ok(RuntimeValue::Float32(f)) => {
+                assert!(f.is_infinite());
+                assert!(f.is_sign_positive());
+            }
+            _ => panic!("expected +Infinity f32"),
+        }
+
+        let res_f32_neg = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Divide(NumericKind::Float32),
+            ],
+            vec![Constant::Float32(-1.0), Constant::Float32(0.0)],
+        );
+        match res_f32_neg {
+            Ok(RuntimeValue::Float32(f)) => {
+                assert!(f.is_infinite());
+                assert!(f.is_sign_negative());
+            }
+            _ => panic!("expected -Infinity f32"),
+        }
+
+        let res_f64_pos = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Divide(NumericKind::Float64),
+            ],
+            vec![Constant::Float64(1.0), Constant::Float64(0.0)],
+        );
+        match res_f64_pos {
+            Ok(RuntimeValue::Float64(f)) => {
+                assert!(f.is_infinite());
+                assert!(f.is_sign_positive());
+            }
+            _ => panic!("expected +Infinity f64"),
+        }
+
+        let res_f64_neg = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Divide(NumericKind::Float64),
+            ],
+            vec![Constant::Float64(-1.0), Constant::Float64(0.0)],
+        );
+        match res_f64_neg {
+            Ok(RuntimeValue::Float64(f)) => {
+                assert!(f.is_infinite());
+                assert!(f.is_sign_negative());
+            }
+            _ => panic!("expected -Infinity f64"),
+        }
+    }
+
+    #[test]
+    fn fixed_float_ieee_divide_by_negative_zero() {
+        let res_f32_pos = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Divide(NumericKind::Float32),
+            ],
+            vec![Constant::Float32(1.0), Constant::Float32(-0.0)],
+        );
+        match res_f32_pos {
+            Ok(RuntimeValue::Float32(f)) => {
+                assert!(f.is_infinite());
+                assert!(f.is_sign_negative());
+            }
+            _ => panic!("expected -Infinity f32"),
+        }
+
+        let res_f32_neg = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Divide(NumericKind::Float32),
+            ],
+            vec![Constant::Float32(-1.0), Constant::Float32(-0.0)],
+        );
+        match res_f32_neg {
+            Ok(RuntimeValue::Float32(f)) => {
+                assert!(f.is_infinite());
+                assert!(f.is_sign_positive());
+            }
+            _ => panic!("expected +Infinity f32"),
+        }
+
+        let res_f64_pos = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Divide(NumericKind::Float64),
+            ],
+            vec![Constant::Float64(1.0), Constant::Float64(-0.0)],
+        );
+        match res_f64_pos {
+            Ok(RuntimeValue::Float64(f)) => {
+                assert!(f.is_infinite());
+                assert!(f.is_sign_negative());
+            }
+            _ => panic!("expected -Infinity f64"),
+        }
+
+        let res_f64_neg = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Divide(NumericKind::Float64),
+            ],
+            vec![Constant::Float64(-1.0), Constant::Float64(-0.0)],
+        );
+        match res_f64_neg {
+            Ok(RuntimeValue::Float64(f)) => {
+                assert!(f.is_infinite());
+                assert!(f.is_sign_positive());
+            }
+            _ => panic!("expected +Infinity f64"),
+        }
+    }
+
+    #[test]
+    fn fixed_float_ieee_zero_divided_by_zero_produces_nan() {
+        let res_f32 = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Divide(NumericKind::Float32),
+            ],
+            vec![Constant::Float32(0.0), Constant::Float32(0.0)],
+        );
+        match res_f32 {
+            Ok(RuntimeValue::Float32(f)) => assert!(f.is_nan()),
+            _ => panic!("expected NaN f32"),
+        }
+
+        let res_f64 = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Divide(NumericKind::Float64),
+            ],
+            vec![Constant::Float64(0.0), Constant::Float64(0.0)],
+        );
+        match res_f64 {
+            Ok(RuntimeValue::Float64(f)) => assert!(f.is_nan()),
+            _ => panic!("expected NaN f64"),
+        }
+    }
+
+    #[test]
+    fn fixed_float_ieee_non_finite_inputs_and_results() {
+        let res_f32 = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Subtract(NumericKind::Float32),
+            ],
+            vec![
+                Constant::Float32(f32::INFINITY),
+                Constant::Float32(f32::INFINITY),
+            ],
+        );
+        match res_f32 {
+            Ok(RuntimeValue::Float32(f)) => assert!(f.is_nan()),
+            _ => panic!("expected NaN f32 for Infinity - Infinity"),
+        }
+
+        let res_f64 = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Subtract(NumericKind::Float64),
+            ],
+            vec![
+                Constant::Float64(f64::INFINITY),
+                Constant::Float64(f64::INFINITY),
+            ],
+        );
+        match res_f64 {
+            Ok(RuntimeValue::Float64(f)) => assert!(f.is_nan()),
+            _ => panic!("expected NaN f64 for Infinity - Infinity"),
+        }
+    }
+
+    #[test]
+    fn fixed_float_negate_preserves_signed_zero() {
+        let res_f32 = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::Negate(NumericKind::Float32),
+            ],
+            vec![Constant::Float32(0.0)],
+        );
+        match res_f32 {
+            Ok(RuntimeValue::Float32(f)) => {
+                assert_eq!(f, 0.0);
+                assert!(f.is_sign_negative());
+            }
+            _ => panic!("expected -0.0 f32"),
+        }
+
+        let res_f64 = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::Negate(NumericKind::Float64),
+            ],
+            vec![Constant::Float64(0.0)],
+        );
+        match res_f64 {
+            Ok(RuntimeValue::Float64(f)) => {
+                assert_eq!(f, 0.0);
+                assert!(f.is_sign_negative());
+            }
+            _ => panic!("expected -0.0 f64"),
+        }
+    }
+
+    #[test]
+    fn boolean_not_delegation() {
+        let res_true = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::NotBoolean,
+            ],
+            vec![Constant::Boolean(true)],
+        );
+        match res_true {
+            Ok(RuntimeValue::Boolean(b)) => assert_eq!(b, false),
+            _ => panic!("expected Boolean(false)"),
+        }
+
+        let res_false = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::NotBoolean,
+            ],
+            vec![Constant::Boolean(false)],
+        );
+        match res_false {
+            Ok(RuntimeValue::Boolean(b)) => assert_eq!(b, true),
+            _ => panic!("expected Boolean(true)"),
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "Remainder: operand family mismatch or unsupported float Remainder")]
+    fn fixed_float32_remainder_unsupported_panics() {
+        let _ = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Remainder(NumericKind::Float32),
+            ],
+            vec![Constant::Float32(5.0), Constant::Float32(2.0)],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Remainder: operand family mismatch or unsupported float Remainder")]
+    fn fixed_float64_remainder_unsupported_panics() {
+        let _ = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::Remainder(NumericKind::Float64),
+            ],
+            vec![Constant::Float64(5.0), Constant::Float64(2.0)],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Negate: operand family mismatch or unsupported unsigned negation")]
+    fn fixed_unsigned_negate_unsupported_panics() {
+        let _ = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::Negate(NumericKind::Uint32),
+            ],
+            vec![Constant::Uint32(5)],
+        );
     }
 }
