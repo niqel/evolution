@@ -46,7 +46,7 @@ Functional Design                         ✅ CLOSED / REVALIDATED
 Technical Design                          ✅ CLOSED / REVALIDATED
 Historical Technical Data Model           ✅ CLOSED / PRESERVED
 Reconciled Technical Data Model           ✅ CLOSED — 137 technical identities
-Historical Technical Data Diagrams        ✅ CLOSED / PRESERVED — 9 canonical D2 views
+Technical Data Diagrams                   ✅ CLOSED — 9 canonical D2 views
 Historical D2 Sequence Diagrams           ✅ CLOSED / PRESERVED — 4 views
 Cross-component Sequence Diagrams         ✅ CLOSED — 5 views
 Current Canonical Sequence Suite          ✅ CLOSED — 9 views
