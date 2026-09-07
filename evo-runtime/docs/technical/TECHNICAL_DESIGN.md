@@ -139,6 +139,20 @@ Sequence Views: 1
 ## 10. Estado de Implementación
 
 ```text
-Implementation: PENDING
+Implementation:
+NOT STARTED
+
+Work Package:
+WP-ER-IMPL-001
+
+Tasks:
+6
+
+Current Task:
+TASK-ER-IMPL-001 — PENDING REVIEW
+
+Next after approval:
+TASK-ER-IMPL-002
 ```
-El diseño técnico está formalmente cerrado (`TECHNICAL DESIGN CLOSED`). La implementación física en Rust (`Cargo.toml`, `src/`) no ha comenzado y se realizará en su Work Package correspondiente.
+
+El diseño técnico está formalmente cerrado (`TECHNICAL DESIGN CLOSED`). La secuencia de implementación física en Rust se gestiona a través del Work Package [WP-ER-IMPL-001](implementation-tasks/WP-ER-IMPL-001.md).
