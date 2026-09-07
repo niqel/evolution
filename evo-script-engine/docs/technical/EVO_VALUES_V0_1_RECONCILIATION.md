@@ -36,7 +36,7 @@ evo-script-engine
 
 ### Principios rectores:
 
-1. **`evo-values` como Dependencia Semántica Interna**: `evo-values` es la autoridad universal de representación y operaciones semánticas sobre valores (aritmética escalar y dinámica, comparaciones, igualdad estructural y conversiones numéricas). Es una dependencia semántica interna de `evo-script-engine` y **NO un Provider**.
+1. **`evo-values` como Dependencia Semántica Interna**: `evo-values` es la autoridad universal de representación y operaciones semánticas sobre valores (aritmética escalar y dinámica, comparaciones [EQUAL / NOT_EQUAL sobre Value] y conversiones numéricas). Es una dependencia semántica interna de `evo-script-engine` y **NO un Provider**.
 2. **Responsabilidad de Lenguaje de `evo-script-engine`**: `evo-script-engine` retiene la responsabilidad exclusiva sobre las reglas sintácticas del lenguaje `.efn`, la disponibilidad de operadores, el chequeo estático de tipos, el lowering a bytecode, el conjunto de instrucciones de la VM, el control de flujo, la estructura interna de `RuntimeValue` y su backing storage, así como la traducción contextual de fallas operacionales hacia `ExecutionFailure` / `EvaluationFailure`.
 3. **No Duplicación de Semántica Universal**: `evo-script-engine` no replica algoritmos de evaluación de valores cuando `evo-values` ya posee la operación universal. `InstructionExecutor` delega directamente en las operaciones provistas por `evo-values`.
 
@@ -92,7 +92,7 @@ Current canonical sequence views
 - **`RuntimeValue != Value`**: `Value<'a>` y `OwnedValue` son los tipos de intercambio del ecosistema. `RuntimeValue` es el descriptor de ejecución de la VM en `evo-script-engine`, optimizado para evaluación y backing inmutable.
 - **`DynamicIntegerBacking`**: El payload de almacenamiento para enteros de precisión arbitraria en runtime se reconcilia utilizando `OwnedDynamicInteger` de `evo-values`.
 - **Eliminación de `num-bigint` directo**: `num-bigint` se elimina como dependencia productiva directa de `evo-script-engine`, consumiendo la representación y aritmética de enteros dinámicos a través de la API pública de `evo-values`.
-- **Eliminación de planes de igualdad técnica**: Al delegar la igualdad estructural en `evo-values::structural_equality`, las identidades intermedias `EqualityRule`, `CompositeEqualityPlan` y `EnumEqualityPayloadPlan` quedan eliminadas del modelo técnico de Compiled Program.
+- **Eliminación de planes de igualdad técnica**: Al delegar la igualdad en `evo_values::comparison::EQUAL` y `evo_values::comparison::NOT_EQUAL` sobre `Value`, la comparación recursiva de Struct/Enum pertenece internamente al kernel de Comparison de `evo-values`. Por ello, las identidades intermedias `EqualityRule`, `CompositeEqualityPlan` y `EnumEqualityPayloadPlan` quedan eliminadas del modelo técnico de Compiled Program.
 - **Variantes de `Instruction`**: El conjunto de instrucciones de la VM permanece estrictamente en 48 variantes.
 - **Identidades Técnicas de Compiled Program**: Se reducen de 21 identidades históricas a 18 identidades reconciliadas (-3 por la remoción de los planes de igualdad).
 - **Total de Identidades Técnicas**: Se reduce de 140 identidades históricas a 137 identidades reconciliadas en el modelo técnico general.
@@ -150,11 +150,11 @@ Current canonical sequence views
   3. `EXECUTE_SOURCE` orchestration
   4. `RESOLVE_EXTERNAL_CALL` interaction
 - **5 Secuencias Cross-Component de Reconciliación** (serán materializadas dentro del Work Package):
-  1. Delegación de Fixed Arithmetic y Boolean NOT
-  2. Delegación de Scalar Comparisons
-  3. Delegación de Structural Equality
-  4. Delegación de Conversiones Numéricas y ToString
-  5. Delegación de Operaciones Dynamic Value
+  1. `04-direct-scalar-delegation.d2`
+  2. `05-scalar-comparison-delegation.d2`
+  3. `06-conversion-delegation.d2`
+  4. `07-dynamic-numeric-delegation.d2`
+  5. `08-structural-equality-delegation.d2`
 
 ---
 

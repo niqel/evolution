@@ -56,7 +56,15 @@ Este Work Package define la secuencia obligatoria para reconciliar documentalmen
 
 ### TASK-ESE-RECON-006 — Restablecer compatibilidad con la API pública de evo-values
 - **Estado**: NOT STARTED
-- **Alcance**: Actualizar imports y dependencias de tipos de `evo-values` en el código de `evo-script-engine`.
+- **Alcance**: Compatibility baseline SIN cambio semántico:
+  - sustituir direct private-field access;
+  - usar `from_parts` / accessors / `as_borrowed` según corresponda;
+  - corregir tests que dependan de construcción directa;
+  - eliminar assumptions de `PartialEq` semántico sobre `Value`/`OwnedValue`;
+  - NO agregar `PartialEq` a `Value` ni `OwnedValue`;
+  - NO cambiar todavía `DynamicIntegerBacking`;
+  - NO eliminar todavía `BigInt`;
+  - NO delegar todavía operaciones semánticas.
 
 ### TASK-ESE-RECON-007 — Delegar fixed arithmetic y Boolean NOT
 - **Estado**: NOT STARTED
@@ -68,7 +76,7 @@ Este Work Package define la secuencia obligatoria para reconciliar documentalmen
 
 ### TASK-ESE-RECON-009 — Eliminar equality plans y delegar structural equality
 - **Estado**: NOT STARTED
-- **Alcance**: Eliminar en código `EqualityRule`, `CompositeEqualityPlan` y `EnumEqualityPayloadPlan`, delegando la igualdad estructural en `evo-values`.
+- **Alcance**: Eliminar en código `EqualityRule`, `CompositeEqualityPlan` y `EnumEqualityPayloadPlan`, delegando la comparación y equivalencia en `evo_values::comparison::EQUAL` y `evo_values::comparison::NOT_EQUAL` sobre `Value`.
 
 ### TASK-ESE-RECON-010 — Delegar fixed conversions y Numeric ToString
 - **Estado**: NOT STARTED
@@ -76,7 +84,28 @@ Este Work Package define la secuencia obligatoria para reconciliar documentalmen
 
 ### TASK-ESE-RECON-011 — Reconciliar Dynamic Value end-to-end
 - **Estado**: NOT STARTED
-- **Alcance**: Conectar evaluación de enteros y flotantes dinámicos usando las 6 operaciones de Dynamic Numeric Arithmetic de `evo-values v0.1`.
+- **Alcance**: Reconciliación Dynamic end-to-end:
+  - `DynamicIntegerBacking`: `BigInt` → `OwnedDynamicInteger`
+  - Reconciliar Tools:
+    - `MaterializeValue`
+    - `MaterializeOwnedValue`
+    - `ObserveRuntimeValue`
+    - `OwnRuntimeValue`
+  - `LiftDynamic`
+  - Dynamic numeric operations (delegación en `evo-values v0.1`):
+    - `DynamicNegate`
+    - `DynamicAdd`
+    - `DynamicSubtract`
+    - `DynamicMultiply`
+    - `DynamicDivide`
+    - `DynamicRemainder`
+  - Dynamic conversions y string:
+    - `ConvertDynamic`
+    - `DynamicToString`
+  - `DynamicNumericFailure` mapping a `EvaluationFailure`
+  - Preservar la regla de lenguaje:
+    - Dynamic Float remainder → `EvaluationFailure::DynamicNumericType` (no llamada a `DYNAMIC_REMAINDER`)
+  - Al finalizar no debe quedar uso productivo de `BigInt` dentro de `src/` (la dependencia Cargo se elimina únicamente en TASK-ESE-RECON-012).
 
 ### TASK-ESE-RECON-012 — Eliminar dependencia directa num-bigint
 - **Estado**: NOT STARTED
@@ -84,7 +113,14 @@ Este Work Package define la secuencia obligatoria para reconciliar documentalmen
 
 ### TASK-ESE-RECON-013 — Regression suite integrada
 - **Estado**: NOT STARTED
-- **Alcance**: Ejecutar e integrar suite completa de pruebas de regresión en `evo-script-engine` y el workspace.
+- **Alcance**: Ejecutar suite completa de pruebas de regresión integrada.
+- **Gates obligatorios**:
+  ```text
+  cargo test -p evo-values
+  cargo test -p evo-script-engine
+  ```
+- **Validación informativa (no gate)**:
+  `cargo test --workspace` puede ejecutarse solamente como validación informativa y NO como gate del Work Package debido al defecto separado de `evo-query`.
 
 ### TASK-ESE-RECON-014 — Cerrar documentación de implementación
 - **Estado**: NOT STARTED
@@ -92,4 +128,36 @@ Este Work Package define la secuencia obligatoria para reconciliar documentalmen
 
 ### TASK-ESE-RECON-015 — Final Quality Gate
 - **Estado**: NOT STARTED
-- **Alcance**: Ejecución del gate de calidad final (`cargo fmt --check`, `cargo check`, `cargo test`, `cargo clippy`).
+- **Alcance**: Ejecución del Quality Gate final de la reconciliación.
+- **Gates obligatorios**:
+  ```text
+  cargo fmt --check
+  cargo check -p evo-script-engine
+  cargo test -p evo-values
+  cargo test -p evo-script-engine
+  ```
+- **Verificaciones obligatorias adicionales**:
+  ```text
+  evo-script-engine/Cargo.toml
+      no direct num-bigint
+
+  evo-script-engine/src/
+      no BigInt
+      no EqualityRule
+      no CompositeEqualityPlan
+      no EnumEqualityPayloadPlan
+
+  Instruction
+      exactly 48 variants
+
+  RuntimeValue
+      exactly 17 variants
+
+  DynamicValue
+      exactly 3 variants
+
+  EvaluationFailure
+      exactly 4 variants
+  ```
+- **Comprobación opcional / informativa**:
+  `cargo clippy` no figura como gate obligatorio de este Work Package (es opcional/informativo).
