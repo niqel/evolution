@@ -5510,7 +5510,7 @@ mod tests {
             _ => panic!("expected Boolean(true)"),
         }
 
-        // Float Divide by 0.0 succeeds (IEEE infinity)
+        // Float Divide by 0.0 succeeds (IEEE +Infinity)
         let res = test_execute_instructions(
             vec![
                 Instruction::LoadConstant(ConstantId(0)),
@@ -5527,6 +5527,80 @@ mod tests {
                 assert!(f.is_sign_positive());
             }
             _ => panic!("expected dynamic float +Infinity"),
+        }
+
+        // Float Divide by -0.0 succeeds (IEEE -Infinity)
+        let res_neg_zero = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Float64),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::LiftDynamic(NumericKind::Float64),
+                Instruction::DynamicDivide,
+            ],
+            vec![Constant::Float64(1.0), Constant::Float64(-0.0)],
+        );
+        match res_neg_zero {
+            Ok(RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(f))) => {
+                assert!(f.is_infinite());
+                assert!(f.is_sign_negative());
+            }
+            _ => panic!("expected dynamic float -Infinity"),
+        }
+
+        // Float Multiply overflow produces +Infinity
+        let res_mult = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Float64),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::LiftDynamic(NumericKind::Float64),
+                Instruction::DynamicMultiply,
+            ],
+            vec![Constant::Float64(f64::MAX), Constant::Float64(2.0)],
+        );
+        match res_mult {
+            Ok(RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(f))) => {
+                assert!(f.is_infinite());
+                assert!(f.is_sign_positive());
+            }
+            _ => panic!("expected dynamic float +Infinity for multiply overflow"),
+        }
+
+        // Float 0.0 / 0.0 produces NaN
+        let res_zero_div_zero = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Float64),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::LiftDynamic(NumericKind::Float64),
+                Instruction::DynamicDivide,
+            ],
+            vec![Constant::Float64(0.0), Constant::Float64(0.0)],
+        );
+        match res_zero_div_zero {
+            Ok(RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(f))) => {
+                assert!(f.is_nan());
+            }
+            _ => panic!("expected dynamic float NaN for 0.0 / 0.0"),
+        }
+
+        // Float NaN propagation
+        let res_nan_prop = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Float64),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::LiftDynamic(NumericKind::Float64),
+                Instruction::DynamicAdd,
+            ],
+            vec![Constant::Float64(f64::NAN), Constant::Float64(1.0)],
+        );
+        match res_nan_prop {
+            Ok(RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(f))) => {
+                assert!(f.is_nan());
+            }
+            _ => panic!("expected dynamic float NaN for NaN + 1.0"),
         }
     }
 
@@ -5570,7 +5644,7 @@ mod tests {
             Ok(_) => panic!("expected failure"),
         }
 
-        // Dynamic remainder on floats MUST fail with DynamicNumericType (language guard)
+        // Dynamic remainder on Float64 MUST fail with DynamicNumericType (language guard)
         let res = test_execute_instructions(
             vec![
                 Instruction::LoadConstant(ConstantId(0)),
@@ -5585,6 +5659,25 @@ mod tests {
             Err(e) => match e.kind {
                 ExecutionFailureKind::Evaluation(EvaluationFailure::DynamicNumericType) => {}
                 _ => panic!("expected DynamicNumericType failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
+
+        // Dynamic remainder on Float32 MUST fail with DynamicNumericType (language guard)
+        let res_f32_rem = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Float32),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::LiftDynamic(NumericKind::Float32),
+                Instruction::DynamicRemainder,
+            ],
+            vec![Constant::Float32(10.0), Constant::Float32(3.0)],
+        );
+        match res_f32_rem {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::DynamicNumericType) => {}
+                _ => panic!("expected DynamicNumericType failure for Float32 % Float32"),
             },
             Ok(_) => panic!("expected failure"),
         }
@@ -5604,6 +5697,25 @@ mod tests {
             Err(e) => match e.kind {
                 ExecutionFailureKind::Evaluation(EvaluationFailure::DynamicNumericType) => {}
                 _ => panic!("expected DynamicNumericType failure"),
+            },
+            Ok(_) => panic!("expected failure"),
+        }
+
+        // Dynamic remainder mixed float and integer -> DynamicNumericType
+        let res_mixed_rem2 = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LiftDynamic(NumericKind::Float64),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::LiftDynamic(NumericKind::Int32),
+                Instruction::DynamicRemainder,
+            ],
+            vec![Constant::Float64(10.0), Constant::Int32(3)],
+        );
+        match res_mixed_rem2 {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::DynamicNumericType) => {}
+                _ => panic!("expected DynamicNumericType failure for Float64 % Int32"),
             },
             Ok(_) => panic!("expected failure"),
         }
