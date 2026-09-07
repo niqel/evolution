@@ -26,6 +26,7 @@ use crate::data::vm::values::{
 use crate::tools::locate_source_span::LOCATE_SOURCE_SPAN;
 use crate::tools::own_runtime_value::OWN_RUNTIME_VALUE;
 use evo_values::boolean::NOT;
+use evo_values::comparison::{EQUAL, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, NOT_EQUAL};
 use evo_values::numeric::{
     ADD_F32, ADD_F64, ADD_I8, ADD_I16, ADD_I32, ADD_I64, ADD_I128, ADD_U8, ADD_U16, ADD_U32,
     ADD_U64, ADD_U128, DIVIDE_F32, DIVIDE_F64, DIVIDE_I8, DIVIDE_I16, DIVIDE_I32, DIVIDE_I64,
@@ -38,7 +39,7 @@ use evo_values::numeric::{
     SUBTRACT_I32, SUBTRACT_I64, SUBTRACT_I128, SUBTRACT_U8, SUBTRACT_U16, SUBTRACT_U32,
     SUBTRACT_U64, SUBTRACT_U128,
 };
-use evo_values::{NumericFailure, OwnedValue};
+use evo_values::{ComparisonFailure, NumericFailure, OwnedValue, Value};
 
 pub type ExecuteInstruction =
     for<'compiled, 'bindings> fn(
@@ -71,6 +72,71 @@ fn map_numeric_failure(failure: NumericFailure) -> EvaluationFailure {
         NumericFailure::InvalidBounds => {
             panic!("internal invariant violation: unexpected InvalidBounds from arithmetic UC")
         }
+    }
+}
+
+fn expect_comparison_result(result: Result<bool, ComparisonFailure>) -> bool {
+    match result {
+        Ok(v) => v,
+        Err(ComparisonFailure::DifferentFamily) => {
+            panic!(
+                "internal invariant violation: ComparisonFailure::DifferentFamily in scalar comparison"
+            )
+        }
+        Err(ComparisonFailure::NotComparable) => {
+            panic!(
+                "internal invariant violation: ComparisonFailure::NotComparable in scalar comparison"
+            )
+        }
+    }
+}
+
+fn adapt_numeric_operands(
+    left: RuntimeValue,
+    right: RuntimeValue,
+    kind: &NumericKind,
+) -> (Value<'static>, Value<'static>) {
+    match (kind, left, right) {
+        (NumericKind::Int8, RuntimeValue::Int8(l), RuntimeValue::Int8(r)) => {
+            (Value::Int8(l), Value::Int8(r))
+        }
+        (NumericKind::Int16, RuntimeValue::Int16(l), RuntimeValue::Int16(r)) => {
+            (Value::Int16(l), Value::Int16(r))
+        }
+        (NumericKind::Int32, RuntimeValue::Int32(l), RuntimeValue::Int32(r)) => {
+            (Value::Int32(l), Value::Int32(r))
+        }
+        (NumericKind::Int64, RuntimeValue::Int64(l), RuntimeValue::Int64(r)) => {
+            (Value::Int64(l), Value::Int64(r))
+        }
+        (NumericKind::Int128, RuntimeValue::Int128(l), RuntimeValue::Int128(r)) => {
+            (Value::Int128(l), Value::Int128(r))
+        }
+
+        (NumericKind::Uint8, RuntimeValue::Uint8(l), RuntimeValue::Uint8(r)) => {
+            (Value::Uint8(l), Value::Uint8(r))
+        }
+        (NumericKind::Uint16, RuntimeValue::Uint16(l), RuntimeValue::Uint16(r)) => {
+            (Value::Uint16(l), Value::Uint16(r))
+        }
+        (NumericKind::Uint32, RuntimeValue::Uint32(l), RuntimeValue::Uint32(r)) => {
+            (Value::Uint32(l), Value::Uint32(r))
+        }
+        (NumericKind::Uint64, RuntimeValue::Uint64(l), RuntimeValue::Uint64(r)) => {
+            (Value::Uint64(l), Value::Uint64(r))
+        }
+        (NumericKind::Uint128, RuntimeValue::Uint128(l), RuntimeValue::Uint128(r)) => {
+            (Value::Uint128(l), Value::Uint128(r))
+        }
+
+        (NumericKind::Float32, RuntimeValue::Float32(l), RuntimeValue::Float32(r)) => {
+            (Value::Float32(l), Value::Float32(r))
+        }
+        (NumericKind::Float64, RuntimeValue::Float64(l), RuntimeValue::Float64(r)) => {
+            (Value::Float64(l), Value::Float64(r))
+        }
+
+        _ => panic!("Numeric comparison: operand family mismatch with NumericKind"),
     }
 }
 
@@ -1282,7 +1348,8 @@ pub fn execute_instruction<'compiled, 'bindings>(
         Instruction::EqualNumeric(kind) => {
             let right = pop_operand(execution);
             let left = pop_operand(execution);
-            let is_equal = compare_numeric_equality(left, right, kind);
+            let (l_val, r_val) = adapt_numeric_operands(left, right, &kind);
+            let is_equal = expect_comparison_result(EQUAL(&l_val, &r_val));
             push_operand(execution, RuntimeValue::Boolean(is_equal));
             advance_ip(execution);
             Ok(None)
@@ -1291,8 +1358,9 @@ pub fn execute_instruction<'compiled, 'bindings>(
         Instruction::NotEqualNumeric(kind) => {
             let right = pop_operand(execution);
             let left = pop_operand(execution);
-            let is_equal = compare_numeric_equality(left, right, kind);
-            push_operand(execution, RuntimeValue::Boolean(!is_equal));
+            let (l_val, r_val) = adapt_numeric_operands(left, right, &kind);
+            let is_not_equal = expect_comparison_result(NOT_EQUAL(&l_val, &r_val));
+            push_operand(execution, RuntimeValue::Boolean(is_not_equal));
             advance_ip(execution);
             Ok(None)
         }
@@ -1300,24 +1368,8 @@ pub fn execute_instruction<'compiled, 'bindings>(
         Instruction::LessNumeric(kind) => {
             let right = pop_operand(execution);
             let left = pop_operand(execution);
-            let res = match (kind, left, right) {
-                (NumericKind::Int8, RuntimeValue::Int8(l), RuntimeValue::Int8(r)) => l < r,
-                (NumericKind::Int16, RuntimeValue::Int16(l), RuntimeValue::Int16(r)) => l < r,
-                (NumericKind::Int32, RuntimeValue::Int32(l), RuntimeValue::Int32(r)) => l < r,
-                (NumericKind::Int64, RuntimeValue::Int64(l), RuntimeValue::Int64(r)) => l < r,
-                (NumericKind::Int128, RuntimeValue::Int128(l), RuntimeValue::Int128(r)) => l < r,
-
-                (NumericKind::Uint8, RuntimeValue::Uint8(l), RuntimeValue::Uint8(r)) => l < r,
-                (NumericKind::Uint16, RuntimeValue::Uint16(l), RuntimeValue::Uint16(r)) => l < r,
-                (NumericKind::Uint32, RuntimeValue::Uint32(l), RuntimeValue::Uint32(r)) => l < r,
-                (NumericKind::Uint64, RuntimeValue::Uint64(l), RuntimeValue::Uint64(r)) => l < r,
-                (NumericKind::Uint128, RuntimeValue::Uint128(l), RuntimeValue::Uint128(r)) => l < r,
-
-                (NumericKind::Float32, RuntimeValue::Float32(l), RuntimeValue::Float32(r)) => l < r,
-                (NumericKind::Float64, RuntimeValue::Float64(l), RuntimeValue::Float64(r)) => l < r,
-
-                _ => panic!("LessNumeric: operand family mismatch with NumericKind"),
-            };
+            let (l_val, r_val) = adapt_numeric_operands(left, right, &kind);
+            let res = expect_comparison_result(LESS(&l_val, &r_val));
             push_operand(execution, RuntimeValue::Boolean(res));
             advance_ip(execution);
             Ok(None)
@@ -1326,30 +1378,8 @@ pub fn execute_instruction<'compiled, 'bindings>(
         Instruction::LessEqualNumeric(kind) => {
             let right = pop_operand(execution);
             let left = pop_operand(execution);
-            let res = match (kind, left, right) {
-                (NumericKind::Int8, RuntimeValue::Int8(l), RuntimeValue::Int8(r)) => l <= r,
-                (NumericKind::Int16, RuntimeValue::Int16(l), RuntimeValue::Int16(r)) => l <= r,
-                (NumericKind::Int32, RuntimeValue::Int32(l), RuntimeValue::Int32(r)) => l <= r,
-                (NumericKind::Int64, RuntimeValue::Int64(l), RuntimeValue::Int64(r)) => l <= r,
-                (NumericKind::Int128, RuntimeValue::Int128(l), RuntimeValue::Int128(r)) => l <= r,
-
-                (NumericKind::Uint8, RuntimeValue::Uint8(l), RuntimeValue::Uint8(r)) => l <= r,
-                (NumericKind::Uint16, RuntimeValue::Uint16(l), RuntimeValue::Uint16(r)) => l <= r,
-                (NumericKind::Uint32, RuntimeValue::Uint32(l), RuntimeValue::Uint32(r)) => l <= r,
-                (NumericKind::Uint64, RuntimeValue::Uint64(l), RuntimeValue::Uint64(r)) => l <= r,
-                (NumericKind::Uint128, RuntimeValue::Uint128(l), RuntimeValue::Uint128(r)) => {
-                    l <= r
-                }
-
-                (NumericKind::Float32, RuntimeValue::Float32(l), RuntimeValue::Float32(r)) => {
-                    l <= r
-                }
-                (NumericKind::Float64, RuntimeValue::Float64(l), RuntimeValue::Float64(r)) => {
-                    l <= r
-                }
-
-                _ => panic!("LessEqualNumeric: operand family mismatch with NumericKind"),
-            };
+            let (l_val, r_val) = adapt_numeric_operands(left, right, &kind);
+            let res = expect_comparison_result(LESS_EQUAL(&l_val, &r_val));
             push_operand(execution, RuntimeValue::Boolean(res));
             advance_ip(execution);
             Ok(None)
@@ -1358,24 +1388,8 @@ pub fn execute_instruction<'compiled, 'bindings>(
         Instruction::GreaterNumeric(kind) => {
             let right = pop_operand(execution);
             let left = pop_operand(execution);
-            let res = match (kind, left, right) {
-                (NumericKind::Int8, RuntimeValue::Int8(l), RuntimeValue::Int8(r)) => l > r,
-                (NumericKind::Int16, RuntimeValue::Int16(l), RuntimeValue::Int16(r)) => l > r,
-                (NumericKind::Int32, RuntimeValue::Int32(l), RuntimeValue::Int32(r)) => l > r,
-                (NumericKind::Int64, RuntimeValue::Int64(l), RuntimeValue::Int64(r)) => l > r,
-                (NumericKind::Int128, RuntimeValue::Int128(l), RuntimeValue::Int128(r)) => l > r,
-
-                (NumericKind::Uint8, RuntimeValue::Uint8(l), RuntimeValue::Uint8(r)) => l > r,
-                (NumericKind::Uint16, RuntimeValue::Uint16(l), RuntimeValue::Uint16(r)) => l > r,
-                (NumericKind::Uint32, RuntimeValue::Uint32(l), RuntimeValue::Uint32(r)) => l > r,
-                (NumericKind::Uint64, RuntimeValue::Uint64(l), RuntimeValue::Uint64(r)) => l > r,
-                (NumericKind::Uint128, RuntimeValue::Uint128(l), RuntimeValue::Uint128(r)) => l > r,
-
-                (NumericKind::Float32, RuntimeValue::Float32(l), RuntimeValue::Float32(r)) => l > r,
-                (NumericKind::Float64, RuntimeValue::Float64(l), RuntimeValue::Float64(r)) => l > r,
-
-                _ => panic!("GreaterNumeric: operand family mismatch with NumericKind"),
-            };
+            let (l_val, r_val) = adapt_numeric_operands(left, right, &kind);
+            let res = expect_comparison_result(GREATER(&l_val, &r_val));
             push_operand(execution, RuntimeValue::Boolean(res));
             advance_ip(execution);
             Ok(None)
@@ -1384,30 +1398,8 @@ pub fn execute_instruction<'compiled, 'bindings>(
         Instruction::GreaterEqualNumeric(kind) => {
             let right = pop_operand(execution);
             let left = pop_operand(execution);
-            let res = match (kind, left, right) {
-                (NumericKind::Int8, RuntimeValue::Int8(l), RuntimeValue::Int8(r)) => l >= r,
-                (NumericKind::Int16, RuntimeValue::Int16(l), RuntimeValue::Int16(r)) => l >= r,
-                (NumericKind::Int32, RuntimeValue::Int32(l), RuntimeValue::Int32(r)) => l >= r,
-                (NumericKind::Int64, RuntimeValue::Int64(l), RuntimeValue::Int64(r)) => l >= r,
-                (NumericKind::Int128, RuntimeValue::Int128(l), RuntimeValue::Int128(r)) => l >= r,
-
-                (NumericKind::Uint8, RuntimeValue::Uint8(l), RuntimeValue::Uint8(r)) => l >= r,
-                (NumericKind::Uint16, RuntimeValue::Uint16(l), RuntimeValue::Uint16(r)) => l >= r,
-                (NumericKind::Uint32, RuntimeValue::Uint32(l), RuntimeValue::Uint32(r)) => l >= r,
-                (NumericKind::Uint64, RuntimeValue::Uint64(l), RuntimeValue::Uint64(r)) => l >= r,
-                (NumericKind::Uint128, RuntimeValue::Uint128(l), RuntimeValue::Uint128(r)) => {
-                    l >= r
-                }
-
-                (NumericKind::Float32, RuntimeValue::Float32(l), RuntimeValue::Float32(r)) => {
-                    l >= r
-                }
-                (NumericKind::Float64, RuntimeValue::Float64(l), RuntimeValue::Float64(r)) => {
-                    l >= r
-                }
-
-                _ => panic!("GreaterEqualNumeric: operand family mismatch with NumericKind"),
-            };
+            let (l_val, r_val) = adapt_numeric_operands(left, right, &kind);
+            let res = expect_comparison_result(GREATER_EQUAL(&l_val, &r_val));
             push_operand(execution, RuntimeValue::Boolean(res));
             advance_ip(execution);
             Ok(None)
@@ -2164,7 +2156,10 @@ pub fn execute_instruction<'compiled, 'bindings>(
                 (RuntimeValue::Boolean(l_b), RuntimeValue::Boolean(r_b)) => (l_b, r_b),
                 _ => panic!("EqualBoolean expected Boolean operands"),
             };
-            push_operand(execution, RuntimeValue::Boolean(l == r));
+            let l_val = Value::Boolean(l);
+            let r_val = Value::Boolean(r);
+            let is_equal = expect_comparison_result(EQUAL(&l_val, &r_val));
+            push_operand(execution, RuntimeValue::Boolean(is_equal));
             advance_ip(execution);
             Ok(None)
         }
@@ -2176,7 +2171,10 @@ pub fn execute_instruction<'compiled, 'bindings>(
                 (RuntimeValue::Boolean(l_b), RuntimeValue::Boolean(r_b)) => (l_b, r_b),
                 _ => panic!("NotEqualBoolean expected Boolean operands"),
             };
-            push_operand(execution, RuntimeValue::Boolean(l != r));
+            let l_val = Value::Boolean(l);
+            let r_val = Value::Boolean(r);
+            let is_not_equal = expect_comparison_result(NOT_EQUAL(&l_val, &r_val));
+            push_operand(execution, RuntimeValue::Boolean(is_not_equal));
             advance_ip(execution);
             Ok(None)
         }
@@ -2190,7 +2188,10 @@ pub fn execute_instruction<'compiled, 'bindings>(
             };
             let l_str = resolve_string(l_ref, execution.compiled_program, &execution.backing_store);
             let r_str = resolve_string(r_ref, execution.compiled_program, &execution.backing_store);
-            push_operand(execution, RuntimeValue::Boolean(l_str == r_str));
+            let l_val = Value::String(l_str);
+            let r_val = Value::String(r_str);
+            let is_equal = expect_comparison_result(EQUAL(&l_val, &r_val));
+            push_operand(execution, RuntimeValue::Boolean(is_equal));
             advance_ip(execution);
             Ok(None)
         }
@@ -2204,7 +2205,10 @@ pub fn execute_instruction<'compiled, 'bindings>(
             };
             let l_str = resolve_string(l_ref, execution.compiled_program, &execution.backing_store);
             let r_str = resolve_string(r_ref, execution.compiled_program, &execution.backing_store);
-            push_operand(execution, RuntimeValue::Boolean(l_str != r_str));
+            let l_val = Value::String(l_str);
+            let r_val = Value::String(r_str);
+            let is_not_equal = expect_comparison_result(NOT_EQUAL(&l_val, &r_val));
+            push_operand(execution, RuntimeValue::Boolean(is_not_equal));
             advance_ip(execution);
             Ok(None)
         }
@@ -4100,6 +4104,647 @@ mod tests {
                 Instruction::Negate(NumericKind::Uint32),
             ],
             vec![Constant::Uint32(5)],
+        );
+    }
+
+    #[test]
+    fn scalar_comparison_numeric_equality_int32_and_float64() {
+        let assert_cmp = |inst: Instruction, c1: Constant, c2: Constant, expected: bool| {
+            let res = test_execute_instructions(
+                vec![
+                    Instruction::LoadConstant(ConstantId(0)),
+                    Instruction::LoadConstant(ConstantId(1)),
+                    inst,
+                ],
+                vec![c1, c2],
+            );
+            match res {
+                Ok(RuntimeValue::Boolean(b)) => assert_eq!(b, expected),
+                _ => panic!("expected Boolean({expected})"),
+            }
+        };
+
+        // Int32
+        assert_cmp(
+            Instruction::EqualNumeric(NumericKind::Int32),
+            Constant::Int32(42),
+            Constant::Int32(42),
+            true,
+        );
+        assert_cmp(
+            Instruction::EqualNumeric(NumericKind::Int32),
+            Constant::Int32(42),
+            Constant::Int32(43),
+            false,
+        );
+        assert_cmp(
+            Instruction::NotEqualNumeric(NumericKind::Int32),
+            Constant::Int32(42),
+            Constant::Int32(43),
+            true,
+        );
+        assert_cmp(
+            Instruction::NotEqualNumeric(NumericKind::Int32),
+            Constant::Int32(42),
+            Constant::Int32(42),
+            false,
+        );
+
+        // Float64
+        assert_cmp(
+            Instruction::EqualNumeric(NumericKind::Float64),
+            Constant::Float64(3.5),
+            Constant::Float64(3.5),
+            true,
+        );
+        assert_cmp(
+            Instruction::EqualNumeric(NumericKind::Float64),
+            Constant::Float64(3.5),
+            Constant::Float64(2.25),
+            false,
+        );
+        assert_cmp(
+            Instruction::NotEqualNumeric(NumericKind::Float64),
+            Constant::Float64(3.5),
+            Constant::Float64(2.25),
+            true,
+        );
+        assert_cmp(
+            Instruction::NotEqualNumeric(NumericKind::Float64),
+            Constant::Float64(3.5),
+            Constant::Float64(3.5),
+            false,
+        );
+    }
+
+    #[test]
+    fn scalar_comparison_numeric_ordering_all_families() {
+        let assert_cmp = |inst: Instruction, c1: Constant, c2: Constant, expected: bool| {
+            let res = test_execute_instructions(
+                vec![
+                    Instruction::LoadConstant(ConstantId(0)),
+                    Instruction::LoadConstant(ConstantId(1)),
+                    inst,
+                ],
+                vec![c1, c2],
+            );
+            match res {
+                Ok(RuntimeValue::Boolean(b)) => assert_eq!(b, expected),
+                _ => panic!("expected Boolean({expected})"),
+            }
+        };
+
+        // Signed Int (Int32)
+        assert_cmp(
+            Instruction::LessNumeric(NumericKind::Int32),
+            Constant::Int32(10),
+            Constant::Int32(20),
+            true,
+        );
+        assert_cmp(
+            Instruction::LessNumeric(NumericKind::Int32),
+            Constant::Int32(20),
+            Constant::Int32(10),
+            false,
+        );
+        assert_cmp(
+            Instruction::LessNumeric(NumericKind::Int32),
+            Constant::Int32(10),
+            Constant::Int32(10),
+            false,
+        );
+
+        assert_cmp(
+            Instruction::LessEqualNumeric(NumericKind::Int32),
+            Constant::Int32(10),
+            Constant::Int32(20),
+            true,
+        );
+        assert_cmp(
+            Instruction::LessEqualNumeric(NumericKind::Int32),
+            Constant::Int32(10),
+            Constant::Int32(10),
+            true,
+        );
+        assert_cmp(
+            Instruction::LessEqualNumeric(NumericKind::Int32),
+            Constant::Int32(20),
+            Constant::Int32(10),
+            false,
+        );
+
+        assert_cmp(
+            Instruction::GreaterNumeric(NumericKind::Int32),
+            Constant::Int32(20),
+            Constant::Int32(10),
+            true,
+        );
+        assert_cmp(
+            Instruction::GreaterNumeric(NumericKind::Int32),
+            Constant::Int32(10),
+            Constant::Int32(20),
+            false,
+        );
+        assert_cmp(
+            Instruction::GreaterNumeric(NumericKind::Int32),
+            Constant::Int32(10),
+            Constant::Int32(10),
+            false,
+        );
+
+        assert_cmp(
+            Instruction::GreaterEqualNumeric(NumericKind::Int32),
+            Constant::Int32(20),
+            Constant::Int32(10),
+            true,
+        );
+        assert_cmp(
+            Instruction::GreaterEqualNumeric(NumericKind::Int32),
+            Constant::Int32(10),
+            Constant::Int32(10),
+            true,
+        );
+        assert_cmp(
+            Instruction::GreaterEqualNumeric(NumericKind::Int32),
+            Constant::Int32(10),
+            Constant::Int32(20),
+            false,
+        );
+
+        // Unsigned Int (Uint32)
+        assert_cmp(
+            Instruction::LessNumeric(NumericKind::Uint32),
+            Constant::Uint32(10),
+            Constant::Uint32(20),
+            true,
+        );
+        assert_cmp(
+            Instruction::LessNumeric(NumericKind::Uint32),
+            Constant::Uint32(20),
+            Constant::Uint32(10),
+            false,
+        );
+
+        assert_cmp(
+            Instruction::LessEqualNumeric(NumericKind::Uint32),
+            Constant::Uint32(10),
+            Constant::Uint32(20),
+            true,
+        );
+        assert_cmp(
+            Instruction::LessEqualNumeric(NumericKind::Uint32),
+            Constant::Uint32(10),
+            Constant::Uint32(10),
+            true,
+        );
+        assert_cmp(
+            Instruction::LessEqualNumeric(NumericKind::Uint32),
+            Constant::Uint32(20),
+            Constant::Uint32(10),
+            false,
+        );
+
+        assert_cmp(
+            Instruction::GreaterNumeric(NumericKind::Uint32),
+            Constant::Uint32(20),
+            Constant::Uint32(10),
+            true,
+        );
+        assert_cmp(
+            Instruction::GreaterNumeric(NumericKind::Uint32),
+            Constant::Uint32(10),
+            Constant::Uint32(20),
+            false,
+        );
+
+        assert_cmp(
+            Instruction::GreaterEqualNumeric(NumericKind::Uint32),
+            Constant::Uint32(20),
+            Constant::Uint32(10),
+            true,
+        );
+        assert_cmp(
+            Instruction::GreaterEqualNumeric(NumericKind::Uint32),
+            Constant::Uint32(10),
+            Constant::Uint32(10),
+            true,
+        );
+        assert_cmp(
+            Instruction::GreaterEqualNumeric(NumericKind::Uint32),
+            Constant::Uint32(10),
+            Constant::Uint32(20),
+            false,
+        );
+
+        // Float (Float64)
+        assert_cmp(
+            Instruction::LessNumeric(NumericKind::Float64),
+            Constant::Float64(1.5),
+            Constant::Float64(2.5),
+            true,
+        );
+        assert_cmp(
+            Instruction::LessNumeric(NumericKind::Float64),
+            Constant::Float64(2.5),
+            Constant::Float64(1.5),
+            false,
+        );
+
+        assert_cmp(
+            Instruction::LessEqualNumeric(NumericKind::Float64),
+            Constant::Float64(1.5),
+            Constant::Float64(2.5),
+            true,
+        );
+        assert_cmp(
+            Instruction::LessEqualNumeric(NumericKind::Float64),
+            Constant::Float64(1.5),
+            Constant::Float64(1.5),
+            true,
+        );
+        assert_cmp(
+            Instruction::LessEqualNumeric(NumericKind::Float64),
+            Constant::Float64(2.5),
+            Constant::Float64(1.5),
+            false,
+        );
+
+        assert_cmp(
+            Instruction::GreaterNumeric(NumericKind::Float64),
+            Constant::Float64(2.5),
+            Constant::Float64(1.5),
+            true,
+        );
+        assert_cmp(
+            Instruction::GreaterNumeric(NumericKind::Float64),
+            Constant::Float64(1.5),
+            Constant::Float64(2.5),
+            false,
+        );
+
+        assert_cmp(
+            Instruction::GreaterEqualNumeric(NumericKind::Float64),
+            Constant::Float64(2.5),
+            Constant::Float64(1.5),
+            true,
+        );
+        assert_cmp(
+            Instruction::GreaterEqualNumeric(NumericKind::Float64),
+            Constant::Float64(2.5),
+            Constant::Float64(2.5),
+            true,
+        );
+        assert_cmp(
+            Instruction::GreaterEqualNumeric(NumericKind::Float64),
+            Constant::Float64(1.5),
+            Constant::Float64(2.5),
+            false,
+        );
+    }
+
+    #[test]
+    fn scalar_comparison_float_ieee_nan_and_zeros() {
+        let assert_cmp = |inst: Instruction, c1: Constant, c2: Constant, expected: bool| {
+            let res = test_execute_instructions(
+                vec![
+                    Instruction::LoadConstant(ConstantId(0)),
+                    Instruction::LoadConstant(ConstantId(1)),
+                    inst,
+                ],
+                vec![c1, c2],
+            );
+            match res {
+                Ok(RuntimeValue::Boolean(b)) => assert_eq!(b, expected),
+                _ => panic!("expected Boolean({expected})"),
+            }
+        };
+
+        // Float32 NaN
+        let nan32 = f32::NAN;
+        assert_cmp(
+            Instruction::EqualNumeric(NumericKind::Float32),
+            Constant::Float32(nan32),
+            Constant::Float32(1.0),
+            false,
+        );
+        assert_cmp(
+            Instruction::EqualNumeric(NumericKind::Float32),
+            Constant::Float32(nan32),
+            Constant::Float32(nan32),
+            false,
+        );
+        assert_cmp(
+            Instruction::NotEqualNumeric(NumericKind::Float32),
+            Constant::Float32(nan32),
+            Constant::Float32(1.0),
+            true,
+        );
+        assert_cmp(
+            Instruction::NotEqualNumeric(NumericKind::Float32),
+            Constant::Float32(nan32),
+            Constant::Float32(nan32),
+            true,
+        );
+        assert_cmp(
+            Instruction::LessNumeric(NumericKind::Float32),
+            Constant::Float32(nan32),
+            Constant::Float32(1.0),
+            false,
+        );
+        assert_cmp(
+            Instruction::LessNumeric(NumericKind::Float32),
+            Constant::Float32(1.0),
+            Constant::Float32(nan32),
+            false,
+        );
+        assert_cmp(
+            Instruction::LessEqualNumeric(NumericKind::Float32),
+            Constant::Float32(nan32),
+            Constant::Float32(1.0),
+            false,
+        );
+        assert_cmp(
+            Instruction::LessEqualNumeric(NumericKind::Float32),
+            Constant::Float32(1.0),
+            Constant::Float32(nan32),
+            false,
+        );
+        assert_cmp(
+            Instruction::GreaterNumeric(NumericKind::Float32),
+            Constant::Float32(nan32),
+            Constant::Float32(1.0),
+            false,
+        );
+        assert_cmp(
+            Instruction::GreaterNumeric(NumericKind::Float32),
+            Constant::Float32(1.0),
+            Constant::Float32(nan32),
+            false,
+        );
+        assert_cmp(
+            Instruction::GreaterEqualNumeric(NumericKind::Float32),
+            Constant::Float32(nan32),
+            Constant::Float32(1.0),
+            false,
+        );
+        assert_cmp(
+            Instruction::GreaterEqualNumeric(NumericKind::Float32),
+            Constant::Float32(1.0),
+            Constant::Float32(nan32),
+            false,
+        );
+
+        // Float64 NaN
+        let nan64 = f64::NAN;
+        assert_cmp(
+            Instruction::EqualNumeric(NumericKind::Float64),
+            Constant::Float64(nan64),
+            Constant::Float64(1.0),
+            false,
+        );
+        assert_cmp(
+            Instruction::EqualNumeric(NumericKind::Float64),
+            Constant::Float64(nan64),
+            Constant::Float64(nan64),
+            false,
+        );
+        assert_cmp(
+            Instruction::NotEqualNumeric(NumericKind::Float64),
+            Constant::Float64(nan64),
+            Constant::Float64(1.0),
+            true,
+        );
+        assert_cmp(
+            Instruction::NotEqualNumeric(NumericKind::Float64),
+            Constant::Float64(nan64),
+            Constant::Float64(nan64),
+            true,
+        );
+        assert_cmp(
+            Instruction::LessNumeric(NumericKind::Float64),
+            Constant::Float64(nan64),
+            Constant::Float64(1.0),
+            false,
+        );
+        assert_cmp(
+            Instruction::LessEqualNumeric(NumericKind::Float64),
+            Constant::Float64(nan64),
+            Constant::Float64(1.0),
+            false,
+        );
+        assert_cmp(
+            Instruction::GreaterNumeric(NumericKind::Float64),
+            Constant::Float64(nan64),
+            Constant::Float64(1.0),
+            false,
+        );
+        assert_cmp(
+            Instruction::GreaterEqualNumeric(NumericKind::Float64),
+            Constant::Float64(nan64),
+            Constant::Float64(1.0),
+            false,
+        );
+
+        // Signed Zeros (+0.0 == -0.0 and +0.0 != -0.0)
+        assert_cmp(
+            Instruction::EqualNumeric(NumericKind::Float32),
+            Constant::Float32(0.0),
+            Constant::Float32(-0.0),
+            true,
+        );
+        assert_cmp(
+            Instruction::NotEqualNumeric(NumericKind::Float32),
+            Constant::Float32(0.0),
+            Constant::Float32(-0.0),
+            false,
+        );
+        assert_cmp(
+            Instruction::LessEqualNumeric(NumericKind::Float32),
+            Constant::Float32(0.0),
+            Constant::Float32(-0.0),
+            true,
+        );
+        assert_cmp(
+            Instruction::GreaterEqualNumeric(NumericKind::Float32),
+            Constant::Float32(0.0),
+            Constant::Float32(-0.0),
+            true,
+        );
+
+        assert_cmp(
+            Instruction::EqualNumeric(NumericKind::Float64),
+            Constant::Float64(0.0),
+            Constant::Float64(-0.0),
+            true,
+        );
+        assert_cmp(
+            Instruction::NotEqualNumeric(NumericKind::Float64),
+            Constant::Float64(0.0),
+            Constant::Float64(-0.0),
+            false,
+        );
+        assert_cmp(
+            Instruction::LessEqualNumeric(NumericKind::Float64),
+            Constant::Float64(0.0),
+            Constant::Float64(-0.0),
+            true,
+        );
+        assert_cmp(
+            Instruction::GreaterEqualNumeric(NumericKind::Float64),
+            Constant::Float64(0.0),
+            Constant::Float64(-0.0),
+            true,
+        );
+    }
+
+    #[test]
+    fn scalar_comparison_boolean_equality() {
+        let assert_cmp = |inst: Instruction, c1: Constant, c2: Constant, expected: bool| {
+            let res = test_execute_instructions(
+                vec![
+                    Instruction::LoadConstant(ConstantId(0)),
+                    Instruction::LoadConstant(ConstantId(1)),
+                    inst,
+                ],
+                vec![c1, c2],
+            );
+            match res {
+                Ok(RuntimeValue::Boolean(b)) => assert_eq!(b, expected),
+                _ => panic!("expected Boolean({expected})"),
+            }
+        };
+
+        assert_cmp(
+            Instruction::EqualBoolean,
+            Constant::Boolean(true),
+            Constant::Boolean(true),
+            true,
+        );
+        assert_cmp(
+            Instruction::EqualBoolean,
+            Constant::Boolean(true),
+            Constant::Boolean(false),
+            false,
+        );
+        assert_cmp(
+            Instruction::EqualBoolean,
+            Constant::Boolean(false),
+            Constant::Boolean(false),
+            true,
+        );
+
+        assert_cmp(
+            Instruction::NotEqualBoolean,
+            Constant::Boolean(true),
+            Constant::Boolean(false),
+            true,
+        );
+        assert_cmp(
+            Instruction::NotEqualBoolean,
+            Constant::Boolean(true),
+            Constant::Boolean(true),
+            false,
+        );
+        assert_cmp(
+            Instruction::NotEqualBoolean,
+            Constant::Boolean(false),
+            Constant::Boolean(false),
+            false,
+        );
+    }
+
+    #[test]
+    fn scalar_comparison_string_equality() {
+        let assert_cmp = |inst: Instruction, s1: &str, s2: &str, expected: bool| {
+            let res = test_execute_instructions(
+                vec![
+                    Instruction::LoadConstant(ConstantId(0)),
+                    Instruction::LoadConstant(ConstantId(1)),
+                    inst,
+                ],
+                vec![
+                    Constant::String(s1.to_string()),
+                    Constant::String(s2.to_string()),
+                ],
+            );
+            match res {
+                Ok(RuntimeValue::Boolean(b)) => assert_eq!(b, expected),
+                _ => panic!("expected Boolean({expected})"),
+            }
+        };
+
+        // Compiled strings
+        assert_cmp(Instruction::EqualString, "evo", "evo", true);
+        assert_cmp(Instruction::EqualString, "evo", "rust", false);
+        assert_cmp(Instruction::NotEqualString, "evo", "rust", true);
+        assert_cmp(Instruction::NotEqualString, "evo", "evo", false);
+
+        // Execution strings (via NumericToString) compared against compiled string
+        let res_exec_eq = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::NumericToString(NumericKind::Int32),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::EqualString,
+            ],
+            vec![Constant::Int32(42), Constant::String("42".to_string())],
+        );
+        match res_exec_eq {
+            Ok(RuntimeValue::Boolean(b)) => assert!(b),
+            _ => panic!("expected Boolean(true) for execution string EqualString"),
+        }
+
+        let res_exec_ne = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::NumericToString(NumericKind::Int32),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::NotEqualString,
+            ],
+            vec![Constant::Int32(42), Constant::String("99".to_string())],
+        );
+        match res_exec_ne {
+            Ok(RuntimeValue::Boolean(b)) => assert!(b),
+            _ => panic!("expected Boolean(true) for execution string NotEqualString"),
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "Numeric comparison: operand family mismatch with NumericKind")]
+    fn scalar_comparison_numeric_kind_mismatch_panics() {
+        let _ = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::EqualNumeric(NumericKind::Int32),
+            ],
+            vec![Constant::Int32(42), Constant::Float32(42.0)],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "EqualBoolean expected Boolean operands")]
+    fn scalar_comparison_boolean_type_mismatch_panics() {
+        let _ = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::EqualBoolean,
+            ],
+            vec![Constant::Int32(1), Constant::Boolean(true)],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "EqualString expected String operands")]
+    fn scalar_comparison_string_type_mismatch_panics() {
+        let _ = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::EqualString,
+            ],
+            vec![Constant::Int32(1), Constant::String("test".to_string())],
         );
     }
 }
