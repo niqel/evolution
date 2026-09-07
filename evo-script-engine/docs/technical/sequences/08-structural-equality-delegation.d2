@@ -1,0 +1,27 @@
+structural_equality_delegation: {
+  shape: sequence_diagram
+
+  instruction_executor: "collaborators/instruction_executor"
+  observe_runtime_value: "tools/observe_runtime_value"
+  evo_comparison: "evo-values::comparison"
+
+  composite_observation: {
+    instruction_executor -> observe_runtime_value: "OBSERVE_RUNTIME_VALUE(left_composite, compiled_program, backing_store)"
+    observe_runtime_value -> instruction_executor: "Value<'tree> · temporary composite Value tree"
+    instruction_executor -> observe_runtime_value: "OBSERVE_RUNTIME_VALUE(right_composite, compiled_program, backing_store)"
+    observe_runtime_value -> instruction_executor: "Value<'tree> · temporary composite Value tree"
+  }
+
+  equal_composite: {
+    instruction_executor -> evo_comparison: "EQUAL(&left_value, &right_value)"
+    evo_comparison -> instruction_executor: "Result<bool, ComparisonFailure>"
+  }
+
+  not_equal_composite: {
+    instruction_executor -> evo_comparison: "NOT_EQUAL(&left_value, &right_value)"
+    evo_comparison -> instruction_executor: "Result<bool, ComparisonFailure>"
+  }
+
+  instruction_executor."Instruction::EqualComposite and Instruction::NotEqualComposite are payloadless. NotEqualComposite calls NOT_EQUAL directly (never !EQUAL). The engine does NOT traverse fields/variants."
+  evo_comparison."evo-values Comparison owns recursive Struct and Enum equality semantics. Semantic Analyzer already proved static EqualityComparable; any ComparisonFailure constitutes an INTERNAL INVARIANT VIOLATION."
+}

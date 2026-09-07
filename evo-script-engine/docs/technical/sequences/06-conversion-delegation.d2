@@ -1,0 +1,39 @@
+conversion_delegation: {
+  shape: sequence_diagram
+
+  instruction_executor: "collaborators/instruction_executor"
+  observe_runtime_value: "tools/observe_runtime_value"
+  evo_conversion: "evo-values::conversion"
+
+  fixed_to_fixed: {
+    instruction_executor -> evo_conversion: "TO_INT32_FROM_I64(source_i64)"
+    evo_conversion -> instruction_executor: "Result<i32, ConversionFailure>"
+  }
+
+  dynamic_to_fixed: {
+    instruction_executor -> observe_runtime_value: "OBSERVE_RUNTIME_VALUE(dynamic_val, compiled_program, backing_store)"
+    observe_runtime_value -> instruction_executor: "Value::Dynamic(DynamicValue<'a>)"
+    instruction_executor -> evo_conversion: "TO_INT32_FROM_DYNAMIC(&dynamic)"
+    evo_conversion -> instruction_executor: "Result<i32, ConversionFailure>"
+  }
+
+  fixed_to_dynamic: {
+    instruction_executor -> evo_conversion: "TO_DYNAMIC_INTEGER_FROM_I32(val_i32)"
+    evo_conversion -> instruction_executor: "OwnedDynamicValue::Integer(OwnedDynamicInteger)"
+  }
+
+  numeric_to_string: {
+    instruction_executor -> evo_conversion: "TO_STRING_FROM_I32(val_i32)"
+    evo_conversion -> instruction_executor: "String"
+  }
+
+  dynamic_to_string: {
+    instruction_executor -> observe_runtime_value: "OBSERVE_RUNTIME_VALUE(dynamic_val, compiled_program, backing_store)"
+    observe_runtime_value -> instruction_executor: "Value::Dynamic(DynamicValue<'a>)"
+    instruction_executor -> evo_conversion: "TO_STRING_FROM_DYNAMIC(&dynamic)"
+    evo_conversion -> instruction_executor: "String"
+  }
+
+  instruction_executor."LiftDynamic moves OwnedDynamicInteger into DynamicIntegerBacking; floats stay inline. Exactness failure ConversionFailure::NotExactlyRepresentable maps to EvaluationFailure::Conversion."
+  evo_conversion."evo-values owns exact representability algorithms, target conversion UCs and textual string formatting; the engine only owns opcode availability, backing storage and failure translation."
+}

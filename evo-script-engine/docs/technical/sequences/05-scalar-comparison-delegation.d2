@@ -1,0 +1,34 @@
+scalar_comparison_delegation: {
+  shape: sequence_diagram
+
+  instruction_executor: "collaborators/instruction_executor"
+  observe_runtime_value: "tools/observe_runtime_value"
+  evo_comparison: "evo-values::comparison"
+
+  numeric_equality: {
+    instruction_executor -> evo_comparison: "EQUAL(&left_val, &right_val) · Value::Int32"
+    evo_comparison -> instruction_executor: "Result<bool, ComparisonFailure>"
+  }
+
+  numeric_ordering: {
+    instruction_executor -> evo_comparison: "LESS(&left_val, &right_val) · Value::Int32"
+    evo_comparison -> instruction_executor: "Result<bool, ComparisonFailure>"
+  }
+
+  boolean_equality: {
+    instruction_executor -> evo_comparison: "EQUAL(&left_val, &right_val) · Value::Boolean"
+    evo_comparison -> instruction_executor: "Result<bool, ComparisonFailure>"
+  }
+
+  string_equality: {
+    instruction_executor -> observe_runtime_value: "OBSERVE_RUNTIME_VALUE(string_left, compiled_program, backing_store)"
+    observe_runtime_value -> instruction_executor: "Value::String(&str) · borrowed view"
+    instruction_executor -> observe_runtime_value: "OBSERVE_RUNTIME_VALUE(string_right, compiled_program, backing_store)"
+    observe_runtime_value -> instruction_executor: "Value::String(&str) · borrowed view"
+    instruction_executor -> evo_comparison: "EQUAL(&left_val, &right_val) · Value::String"
+    evo_comparison -> instruction_executor: "Result<bool, ComparisonFailure>"
+  }
+
+  instruction_executor."Ordering instructions (Less, LessEqual, Greater, GreaterEqual) delegate strictly to LESS, LESS_EQUAL, GREATER, GREATER_EQUAL; not EQUAL. Strings are borrowed zero-copy without allocating a new String."
+  evo_comparison."Static analysis already guarantees type compatibility and EqualityComparable; ComparisonFailure (DifferentFamily / NotComparable) constitutes an INTERNAL INVARIANT VIOLATION, not a new EvaluationFailure variant."
+}

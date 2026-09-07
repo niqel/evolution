@@ -1,0 +1,31 @@
+direct_scalar_delegation: {
+  shape: sequence_diagram
+
+  instruction_executor: "collaborators/instruction_executor"
+  evo_numeric: "evo-values::numeric"
+  evo_boolean: "evo-values::boolean"
+
+  integer_arithmetic: {
+    instruction_executor -> evo_numeric: "ADD_I32(left_i32, right_i32)"
+    evo_numeric -> instruction_executor: "Result<i32, NumericFailure>"
+  }
+
+  integer_division: {
+    instruction_executor -> evo_numeric: "DIVIDE_I32(left_i32, right_i32)"
+    evo_numeric -> instruction_executor: "Result<i32, NumericFailure>"
+  }
+
+  float_arithmetic: {
+    instruction_executor -> evo_numeric: "DIVIDE_F64(left_f64, right_f64)"
+    evo_numeric -> instruction_executor: "f64 · IEEE 754 / Rust semantics"
+  }
+
+  boolean_not: {
+    instruction_executor -> evo_boolean: "NOT(value_bool)"
+    evo_boolean -> instruction_executor: "bool"
+  }
+
+  instruction_executor."Fixed Integer: operands extracted from RuntimeValue; NumericFailure::Overflow maps to EvaluationFailure::Overflow, NumericFailure::DivisionByZero maps to EvaluationFailure::DivisionByZero."
+  evo_numeric."Fixed Float: division by ±0.0 produces IEEE 754 result (±Infinity / NaN); NO NumericFailure, NO automatic Overflow, NO automatic DivisionByZero."
+  evo_boolean."Boolean NOT: Instruction::NotBoolean delegates directly to evo-values::boolean::NOT; && and || are engine control flow short-circuits and never delegate eagerly."
+}
