@@ -1,6 +1,19 @@
 # Evo-Script Engine — Implementation Tasks
 
-Status: IMPLEMENTATION TASKS — CLOSED / READY FOR PROGRAMMING
+```text
+HISTORICAL IMPLEMENTATION BACKLOG
+
+STATUS:
+CLOSED / PRESERVED
+
+TASK COUNT:
+54
+
+NOT CURRENT PROGRAMMING AUTHORITY
+```
+
+> [!IMPORTANT]
+> **AUTORIDAD DE PROGRAMACIÓN ACTUAL**: Este documento contiene el backlog histórico de 54 tareas con el que se construyó la implementación original de `evo-script-engine`. Permanece cerrado y preservado para trazabilidad histórica. La autoridad de programación actual para la reconciliación con `evo-values v0.1` es [`WP-ESE-RECON-001.md`](WP-ESE-RECON-001.md).
 
 Este documento es el backlog técnico canónico para implementar `evo-script-engine` v0 mediante AGY/Codex.
 

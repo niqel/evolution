@@ -1,6 +1,15 @@
 # Evo-Script Engine — Technical Documentation
 
-Status: TECHNICAL DESIGN PACKAGE — CLOSED / PROGRAMMING READY
+```text
+Historical Technical Design Package
+CLOSED / PRESERVED
+
+evo-values v0.1 Technical Reconciliation
+CLOSED
+
+Current Reconciled Implementation
+PENDING
+```
 
 Este directorio contiene la documentación técnica canónica de `evo-script-engine` v0.
 
@@ -35,17 +44,18 @@ PROGRAMMING
 ```text
 Functional Design                         ✅ CLOSED / REVALIDATED
 Technical Design                          ✅ CLOSED / REVALIDATED
-Technical Data Model                      ✅ CLOSED
-Technical Data Diagram                    ✅ CLOSED — 9 D2 views
+Technical Data Model                      ✅ CLOSED (historical)
+Technical Data Diagram                    ✅ CLOSED — 9 D2 views (historical)
 Root Rust Signatures                      ✅ CLOSED — RSD-001..RSD-010
 Compile Participant Design                ✅ CLOSED — RSD-011..RSD-020
 Execution Participant Design              ✅ CLOSED — RSD-021..RSD-040
 Rust Signatures / Participant Design      ✅ CLOSED
 Module Signature Design                   ✅ CLOSED — MSD-001..MSD-010
 Module Signature Diagram                  ✅ CLOSED — 4 D2 views
-D2 Sequence Diagrams                      ✅ CLOSED — 4 D2 views
-Implementation Tasks                      ✅ CLOSED — 54 tasks
-Programming                               ← READY
+D2 Sequence Diagrams                      ✅ CLOSED — 4 D2 views (historical orchestration)
+Implementation Tasks (Historical)         ✅ CLOSED / PRESERVED — 54 tasks (NOT CURRENT PROGRAMMING AUTHORITY)
+Reconciliation Authority                  ✅ CLOSED — EVO_VALUES_V0_1_RECONCILIATION.md
+Reconciliation Work Package (Active)      ← ACTIVE — implementation-tasks/WP-ESE-RECON-001.md
 ```
 
 ## Technical artifact structure
@@ -54,19 +64,21 @@ Programming                               ← READY
 technical/
 ├── README.md
 ├── TECHNICAL_DESIGN.md
+├── EVO_VALUES_V0_1_RECONCILIATION.md
 ├── data-model/
-│   └── closed Technical Data Model
+│   └── closed Technical Data Model (historical)
 ├── data-diagram/
-│   └── 9 Technical Data Diagram D2 views
+│   └── 9 Technical Data Diagram D2 views (historical)
 ├── signatures/
 │   └── RSD-001..RSD-040 + participant design
 ├── module-signatures/
 │   ├── MODULE_SIGNATURE_DESIGN.md
 │   └── 4 Module Signature D2 views
 ├── sequences/
-│   └── 4 D2 Sequence views
+│   └── 4 D2 Sequence views (historical)
 └── implementation-tasks/
-    └── README.md — 54 task programming backlog
+    ├── README.md — 54 task historical programming backlog (CLOSED / PRESERVED)
+    └── WP-ESE-RECON-001.md — Active reconciliation work package
 ```
 
 ## Closed behavioral inventory
@@ -84,7 +96,10 @@ Conductual modules 21
 
 `ExternalCapability` permanece como la frontera runtime function-pointer cerrada; no existe un Contract wrapper duplicado.
 
-## Programming prerequisite detected
+## Programming prerequisite detected (HISTORICAL / SUPERSEDED)
+
+> [!NOTE]
+> **HISTORICAL / SUPERSEDED**: El texto siguiente describe el diagnóstico histórico previo a la evolución de `evo-values v0.1`. Dicha etapa fue completada. La autoridad vigente de reconciliación es [`EVO_VALUES_V0_1_RECONCILIATION.md`](EVO_VALUES_V0_1_RECONCILIATION.md) y el backlog de programación actual es [`implementation-tasks/WP-ESE-RECON-001.md`](implementation-tasks/WP-ESE-RECON-001.md).
 
 El código actual de `evo-values` todavía implementa el modelo histórico:
 
@@ -128,7 +143,9 @@ Si dos artifacts cerrados parecen contradictorios, el programador debe detener e
 ```text
 Architecture / Functional Analysis     ✅ CLOSED
 Technical Lead Design                  ✅ CLOSED
-Programming Backlog                    ✅ CLOSED
+Historical Programming Backlog         ✅ CLOSED / PRESERVED (NOT CURRENT PROGRAMMING AUTHORITY)
+Reconciliation Authority              ✅ CLOSED (EVO_VALUES_V0_1_RECONCILIATION.md)
+Active Reconciliation Work Package     ← ACTIVE (WP-ESE-RECON-001.md)
 
 NEXT ROLE
     Programmer

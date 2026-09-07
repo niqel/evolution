@@ -487,3 +487,40 @@ SET_SCOPE Opcode
 ```
 
 No se decidirán Participants ni Rust function-pointer signatures antes de que los datos necesarios estén definidos.
+
+---
+
+## 5. evo-values v0.1 Reconciliation Amendment
+
+Este amendment formaliza la reconciliación técnica entre `evo-script-engine` y `evo-values v0.1`, preservando íntegramente las decisiones históricas `TD-001..TD-012`.
+
+La autoridad técnica canónica de la reconciliación se encuentra en [`EVO_VALUES_V0_1_RECONCILIATION.md`](EVO_VALUES_V0_1_RECONCILIATION.md).
+
+### División de Responsabilidades Semánticas
+
+```text
+Universal value-operation semantics
+    → evo-values
+
+Evo-Script operation availability
+    → evo-script-engine
+
+Static type checking
+    → evo-script-engine
+
+RuntimeValue / VM backing
+    → evo-script-engine
+
+Failure translation
+    → evo-script-engine
+
+No duplicated universal semantics
+    → InstructionExecutor debe delegar cuando
+      evo-values posee la operación universal
+```
+
+### Reglas de Delegación e Invariantes
+
+- `evo-values` es la autoridad universal para las operaciones sobre valores (aritmética, comparaciones, igualdad estructural y conversiones numéricas). Es una dependencia semántica interna y **NO un Provider**.
+- `evo-script-engine` es responsable de la semántica propia del lenguaje: disponibilidad de operadores en `.efn`, type checking estático, lowering a bytecode, control de flujo, `RuntimeValue`, backing runtime inmutable y traducción contextual de failures.
+- No se duplica semántica universal: `InstructionExecutor` delega directamente en `evo-values` cuando la operación universal corresponde a dicho componente.
