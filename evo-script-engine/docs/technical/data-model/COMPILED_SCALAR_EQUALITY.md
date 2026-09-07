@@ -1,10 +1,36 @@
 # Evo-Script Engine — Compiled Scalar Equality
 
-Status: CLOSED — REVALIDATED
+Status: CLOSED (reconciled with evo-values v0.1)
+Authority: [`../EVO_VALUES_V0_1_RECONCILIATION.md`](../EVO_VALUES_V0_1_RECONCILIATION.md)
 
 Este documento cierra las instructions escalares no numéricas requeridas por Evo-Script v0 para boolean negation/equality y string equality.
 
-La autoridad deriva de `evo-script/EVO_SCRIPT_SPECIFICATION_v0.1.md`, `SEMANTIC_EXPRESSIONS.md`, `COMPILED_NUMERIC_INSTRUCTIONS.md` y `COMPILED_CONTROL_FLOW.md`.
+La autoridad deriva de `evo-script/EVO_SCRIPT_SPECIFICATION_v0.1.md`, `SEMANTIC_EXPRESSIONS.md`, `COMPILED_NUMERIC_INSTRUCTIONS.md`, `COMPILED_CONTROL_FLOW.md` y `../EVO_VALUES_V0_1_RECONCILIATION.md`.
+
+## Current Authority
+
+```text
+NotBoolean
+    → evo-values Boolean NOT
+
+EqualBoolean
+NotEqualBoolean
+EqualString
+NotEqualString
+    → evo-values Comparison
+      EQUAL / NOT_EQUAL
+```
+
+El engine conserva:
+```text
+operator availability
+static type validation
+opcode selection
+RuntimeValue adaptation
+failure invariant handling
+```
+
+`&&` y `||` permanecen control flow short-circuit del engine y NO se convierten en llamadas eager a Boolean AND/OR.
 
 ## 1. Equality families
 
@@ -133,17 +159,25 @@ Además, `COMPOSITE_EQUALITY_COMPARABILITY_v0.1.md` cierra que un composite que 
 
 ## 7. Structural equality boundary
 
-Struct/Enum equality ya está cerrada en `COMPILED_STRUCTURAL_EQUALITY.md` mediante:
+Struct/Enum equality está cerrada en [`COMPILED_STRUCTURAL_EQUALITY.md`](COMPILED_STRUCTURAL_EQUALITY.md) mediante:
+
+```text
+EqualComposite (payloadless)
+NotEqualComposite (payloadless)
+    → EQUAL / NOT_EQUAL over Value (evo-values Comparison)
+```
+
+Las identidades históricas de planes:
 
 ```text
 EqualityRule
 CompositeEqualityPlan
 EnumEqualityPayloadPlan
-EqualComposite
-NotEqualComposite
 ```
 
-Este documento no redefine ese mecanismo.
+han sido eliminadas del modelo técnico vigente (SUPERSEDED BY evo-values v0.1 RECONCILIATION).
+
+Dynamic equality continúa no expuesta por Evo-Script.
 
 ## 8. Closure
 

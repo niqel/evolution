@@ -1,66 +1,151 @@
 # Evo-Script Engine — Compiled Structural Equality
 
-Status: CLOSED
+Status:
+- HISTORICAL DESIGN: CLOSED / PRESERVED (SUPERSEDED)
+- CURRENT RECONCILED MODEL: CLOSED
+- Authority: [`../EVO_VALUES_V0_1_RECONCILIATION.md`](../EVO_VALUES_V0_1_RECONCILIATION.md)
 
-Este documento cierra el mecanismo de bytecode para Structural Equality de `struct` y `enum` en `evo-script-engine` v0.
+Este documento define el mecanismo de bytecode para Structural Equality de `struct` y `enum` en `evo-script-engine` v0 reconciliado con las decisiones de `evo-values v0.1`.
 
-La autoridad deriva de:
-
-- `evo-script/EVO_SCRIPT_SPECIFICATION_v0.1.md`;
-- `evo-script/COMPOSITE_EQUALITY_COMPARABILITY_v0.1.md`;
-- `SEMANTIC_PROGRAM_STRUCTURE.md`;
-- `SEMANTIC_EXPRESSIONS.md`;
-- `COMPILED_SCALAR_EQUALITY.md`;
-- `COMPILED_COMPOSITE_LAYOUT.md`;
-- `COMPILED_COMPOSITE_INSTRUCTIONS.md`.
-
-## 1. Principle
-
-Regla canónica:
-
-> Semantic Analyzer decide si un composite type es `EqualityComparable`; Bytecode Compiler transforma esa decisión y el grafo de tipos ya resuelto en un plan ejecutable de igualdad; la VM ejecuta dicho plan sin `TypeId`, reflection, type inference ni igualdad dinámica oculta.
-
-Structural Equality solo se compila para composite types que ya satisfacen la regla normativa `EqualityComparable`.
-
-## 2. No bytecode expansion through destructive field access
-
-No se expande por defecto:
+## 1. Current Reconciled Responsibility Split
 
 ```text
-struct == struct
-    → GetField(0) / compare
-    → GetField(1) / compare
-    → ...
+Semantic Analyzer
+    → decide EqualityComparable
+    → valida compatibilidad estática
+    → same TypeId donde corresponde
+
+Bytecode Compiler
+    → emite EqualComposite / NotEqualComposite
+    → NO construye equality plan
+
+InstructionExecutor
+    → observa ambos RuntimeValue mediante
+      OBSERVE_RUNTIME_VALUE
+
+    → obtiene Value trees
+
+    → EqualComposite:
+      evo_values::comparison::EQUAL
+
+    → NotEqualComposite:
+      evo_values::comparison::NOT_EQUAL
 ```
 
-porque `GetField` transforma/consume el composite temporal y una expansión de múltiples fields requeriría introducir machinery adicional como:
+### Regla fundamental de delegación:
+
+`NotEqualComposite` debe delegar directamente en:
 
 ```text
-Duplicate
-stack shuffling
-compiler-generated locals solely for equality
-owner/payload aliasing
+evo_values::comparison::NOT_EQUAL
 ```
 
-Structural Equality merece un mecanismo compilado propio en lugar de deformar las instructions de acceso ya cerradas.
+y **NO** implementarse como `!EQUAL(...)`.
 
-## 3. No generic runtime `EqualValue`
+## 2. Runtime Semantics via evo-values Comparison Kernel
 
-No se introduce:
+La comparación recursiva de:
 
 ```text
-EqualValue
-NotEqualValue
+Struct
+Enum Simple
+Enum Associated
+Enum Structured
+```
+
+pertenece al kernel de Comparison de `evo-values` (`evo_values::comparison::EQUAL` y `evo_values::comparison::NOT_EQUAL` sobre `Value`).
+
+El engine **NO** recorre fields ni variants para definir la semántica de equality: esa semántica universal está centralizada en `evo-values`.
+
+---
+
+## 3. Value Materialization for Equality
+
+```text
+RuntimeValue composite
+    ↓
+OBSERVE_RUNTIME_VALUE
+    ↓
+temporary Value tree
+    ↓
+EQUAL / NOT_EQUAL
+```
+
+- La creación temporal de containers `Value` para `Struct` y `Enum` puede requerir allocation (`Box` o containers temporales de `Value<'a>`). Esto está formalmente aceptado en esta versión para preservar una única autoridad semántica universal sin duplicar algoritmos de comparación.
+- Strings permanecen borrowed cuando sea posible.
+- Dynamic Integer debe poder permanecer borrowed mediante el backing reconciliado posteriormente (`OwnedDynamicInteger.as_borrowed()`).
+
+---
+
+## 4. Current Instructions
+
+```rust
+Instruction::EqualComposite
+Instruction::NotEqualComposite
+```
+
+Ambas variantes son **payloadless**.
+
+Stack effect común:
+
+```text
+2 composite Values → 1 bool
+```
+
+Los operandos se evalúan de izquierda a derecha antes de ejecutar la instrucción de comparación.
+
+---
+
+## 5. Comparison Failure Handling
+
+Dado que `Semantic Analyzer` ya validó la compatibilidad estática (`EqualityComparable` y coherencia de tipos):
+
+```text
+ComparisonFailure::DifferentFamily
+ComparisonFailure::NotComparable
+```
+
+son considerados:
+
+```text
+INTERNAL INVARIANT VIOLATION
+```
+
+No se introducen nuevas variantes de `EvaluationFailure`. Si ocurriese un failure de comparación tras un análisis semántico exitoso, se trata como una violación invariante interna del motor.
+
+---
+
+## 6. Explicit Exclusions
+
+La reconciliación técnica prohíbe introducir:
+
+```text
+EqualValue instruction
 RuntimeTypeEquality
+EqualityPlanId
+CompiledProgram.equality_plans
+ValueSemanticBridge
+reflection metadata
+CompiledValueShape runtime equality dispatch
 ```
 
-La VM no selecciona igualdad preguntando dinámicamente qué clase de `Value` recibió.
+`CompiledValueShape` conserva su responsabilidad exclusiva de boundary validation y **NO** se reutiliza para dispatch de structural equality en runtime.
 
-El conocimiento de tipos ya fue resuelto durante Semantic Analysis y lowered por Bytecode Compiler.
+Dynamic comparison continúa prohibida por Evo-Script: un composite que contenga `dynamic` directa o transitivamente no es `EqualityComparable` y es rechazado estáticamente por Semantic Analyzer.
 
-## 4. EqualityRule
+---
 
-Representación cerrada:
+## 7. Historical Design (CLOSED / PRESERVED — SUPERSEDED)
+
+> [!NOTE]
+> **HISTORICAL DESIGN — SUPERSEDED BY evo-values v0.1 RECONCILIATION**: El diseño histórico requería que el compiler generase planes explícitos de igualdad recorridos recursivamente por la VM:
+> - `EqualityRule`
+> - `CompositeEqualityPlan`
+> - `EnumEqualityPayloadPlan`
+> - generación de planes en `BytecodeCompiler`
+> - recorrido de planes en `InstructionExecutor`
+>
+> Ese mecanismo ya **NO** es la autoridad vigente. Se preserva a continuación únicamente con fines de trazabilidad histórica.
 
 ```rust
 enum EqualityRule {
@@ -69,319 +154,43 @@ enum EqualityRule {
     String,
     Composite(CompositeEqualityPlan),
 }
-```
 
-No existe:
-
-```text
-EqualityRule::Dynamic
-```
-
-porque un composite que contenga `dynamic` directa o transitivamente no puede llegar válidamente a Structural Equality.
-
-## 5. CompositeEqualityPlan
-
-Representación cerrada:
-
-```rust
 enum CompositeEqualityPlan {
     Struct {
         fields: Vec<EqualityRule>,
     },
-
     Enum {
         variants: Vec<EnumEqualityPayloadPlan>,
     },
 }
-```
 
-El orden de `fields` es el canonical `FieldIndex` ordering ya cerrado.
-
-La posición `variants[n]` corresponde al `VariantDiscriminant(n)` canónico.
-
-No se almacenan nuevamente `FieldIndex` ni `VariantDiscriminant` cuando la posición del Vec ya expresa la misma relación física de forma no ambigua.
-
-## 6. EnumEqualityPayloadPlan
-
-Representación cerrada:
-
-```rust
 enum EnumEqualityPayloadPlan {
     Simple,
-
-    Associated(
-        EqualityRule,
-    ),
-
+    Associated(EqualityRule),
     Structured {
         fields: Vec<EqualityRule>,
     },
 }
+
+// Históricas instrucciones con payload:
+Instruction::EqualComposite(CompositeEqualityPlan)
+Instruction::NotEqualComposite(CompositeEqualityPlan)
 ```
 
-La forma corresponde exactamente al payload físico de la variant compilada.
+Dichas 3 identidades (`EqualityRule`, `CompositeEqualityPlan`, `EnumEqualityPayloadPlan`) han sido eliminadas del modelo técnico de Compiled Program reconciliado.
 
-## 7. Struct equality plan generation
+---
 
-Para un Struct semanticamente comparable:
+## 8. Closure
 
 ```text
-SemanticType::Struct(fields)
-        ↓ Bytecode Compiler
-CompositeEqualityPlan::Struct
-        └── one EqualityRule per canonical field
-```
-
-Ejemplo conceptual:
-
-```text
-struct Address {
-    string city;
-    int zip;
-}
-
-struct Person {
-    int id;
-    string name;
-    Address address;
-}
-```
-
-produce conceptualmente:
-
-```text
-Struct
-├── Numeric(Int32)
-├── String
-└── Composite(
-      Struct
-      ├── String
-      └── Numeric(Int32)
-   )
-```
-
-No contiene names, `TypeId` ni runtime layout lookup.
-
-## 8. Enum equality plan generation
-
-Para un Enum semanticamente comparable:
-
-```text
-SemanticType::Enum(variants)
-        ↓ Bytecode Compiler
-CompositeEqualityPlan::Enum
-        └── one EnumEqualityPayloadPlan per canonical variant
-```
-
-Ejemplo conceptual:
-
-```text
-enum Result {
-    Empty
-    Found(Person)
-    Error {
-        int code;
-        string message;
-    }
-}
-```
-
-produce:
-
-```text
-Enum
-├── Simple
-├── Associated(Person structural plan)
-└── Structured
-    ├── Numeric(Int32)
-    └── String
-```
-
-## 9. Instructions
-
-Representación cerrada:
-
-```rust
-Instruction::EqualComposite(
-    CompositeEqualityPlan,
-)
-
-Instruction::NotEqualComposite(
-    CompositeEqualityPlan,
-)
-```
-
-Stack effect común:
-
-```text
-2 composite Values → 1 bool
-```
-
-Los operands se evalúan antes de ejecutar la comparison instruction, conservando la regla general izquierda-a-derecha de Evo-Script.
-
-## 10. Struct runtime semantics
-
-Para `EqualComposite(StructPlan)`:
-
-```text
-compare field 0 using rule 0
-compare field 1 using rule 1
-...
-```
-
-Primer field desigual:
-
-```text
-→ false
-```
-
-Todos iguales:
-
-```text
-→ true
-```
-
-Un struct vacío contiene cero fields y por igualdad estructural:
-
-```text
-Empty {} == Empty {}
-    → true
-```
-
-La terminación temprana en primer field desigual es válida porque ambos operandos completos ya fueron evaluados antes de comenzar la comparison.
-
-## 11. Enum runtime semantics
-
-Para `EqualComposite(EnumPlan)`:
-
-```text
-left.discriminant != right.discriminant
-    → false
-
-same discriminant
-    ↓
-select variants[discriminant]
-```
-
-Según payload plan:
-
-```text
-Simple
-    → true
-
-Associated(rule)
-    → compare associated payload using rule
-
-Structured(fields)
-    → compare corresponding payload fields recursively
-```
-
-La VM no interpreta el discriminante como número visible de Evo-Script; únicamente lo usa como mecanismo físico interno ya cerrado.
-
-## 12. `NotEqualComposite`
-
-`NotEqualComposite(plan)` produce la negación lógica exacta de la Structural Equality correspondiente.
-
-Se conserva como instruction explícita, siguiendo la misma política ya cerrada para:
-
-```text
-NotEqualNumeric
-NotEqualBoolean
-NotEqualString
-```
-
-No obliga a emitir `EqualComposite + NotBoolean`.
-
-## 13. Totality and failures
-
-Una Structural Equality compilada es total sobre dos Values válidos del composite type para el que fue generada:
-
-```text
-Composite × Composite → bool
-```
-
-No produce:
-
-```text
-ComparisonTypeError runtime
-DynamicNumericTypeError
-ConversionError
-```
-
-Si el type no era EqualityComparable, Semantic Analyzer debía fallar antes con `ComparisonTypeError` y Bytecode Compiler nunca recibe una comparison válida para bajar.
-
-## 14. No hidden dynamic equality
-
-El plan no puede contener `Dynamic`.
-
-La regla normativa transitiva garantiza:
-
-```text
-composite contains dynamic directly or transitively
-    → composite not EqualityComparable
-    → comparison rejected statically
-```
-
-Por tanto la VM nunca necesita inventar semántica de igualdad para Dynamic Numeric Value dentro de Structural Equality.
-
-## 15. Plan ownership
-
-`CompositeEqualityPlan` se almacena directamente como operand data de `EqualComposite` / `NotEqualComposite` en v0.
-
-No se introduce:
-
-```text
-EqualityPlanId
-CompiledProgram.equality_plans
-EqualityPlanTable
-```
-
-Motivo:
-
-1. no existe necesidad demostrada de una tabla persistente nueva;
-2. evita reabrir la forma arquitectónica de `CompiledProgram`;
-3. mantiene el plan cerca de la instruction que lo consume;
-4. una futura optimización puede internar/deduplicar plans si profiling demuestra beneficio suficiente.
-
-Duplicación de plans equivalentes entre distintas instructions es válida en v0.
-
-## 16. No runtime type metadata
-
-Structural Equality no requiere:
-
-```text
-TypeId
-RuntimeTypeId
-StructLayoutId
-EnumLayoutId
-field names
-variant names
-reflection metadata
-```
-
-El plan expresa únicamente mecanismos ejecutables de igualdad.
-
-## 17. Closure
-
-```text
-EqualityRule                               ✅ CLOSED
-CompositeEqualityPlan                     ✅ CLOSED
-EnumEqualityPayloadPlan                   ✅ CLOSED
-EqualComposite                            ✅ CLOSED
-NotEqualComposite                         ✅ CLOSED
-struct structural equality                ✅ CLOSED
-enum structural equality                  ✅ CLOSED
-empty struct equality                     ✅ CLOSED
-same/different enum variant semantics      ✅ CLOSED
-recursive equality over composite DAG      ✅ CLOSED
-no EqualityRule::Dynamic                   ✅ CLOSED
-static EqualityComparable boundary         ✅ CLOSED
-no generic EqualValue runtime dispatch      ✅ CLOSED
-no TypeId/runtime reflection requirement    ✅ CLOSED
-plan stored directly in instruction         ✅ CLOSED
-EqualityPlanId/table                        ❌ NOT NEEDED v0
-
-Struct / Enum Structural Equality           ✅ CLOSED
-SourceMap                                   ← NEXT
-Compiled Program exact inventory            PENDING
+EqualComposite payloadless                   ✅ CLOSED (reconciled)
+NotEqualComposite payloadless                ✅ CLOSED (reconciled)
+Direct delegation to EQUAL / NOT_EQUAL       ✅ CLOSED (reconciled)
+Kernel Comparison in evo-values              ✅ CLOSED (reconciled)
+Temporary Value tree via OBSERVE             ✅ CLOSED (reconciled)
+No EqualityRule / CompositeEqualityPlan      ✅ CLOSED (reconciled — removed from active model)
+No EqualValue generic instruction            ❌ EXCLUDED
+No reflection metadata in engine             ❌ EXCLUDED
+Dynamic equality prohibited                  ❌ EXCLUDED by language spec
 ```

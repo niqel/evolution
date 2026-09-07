@@ -1,8 +1,9 @@
 # Evo-Script Engine — Compiled Numeric Instructions
 
-Status: CLOSED
+Status: CLOSED (reconciled with evo-values v0.1)
+Authority: [`../EVO_VALUES_V0_1_RECONCILIATION.md`](../EVO_VALUES_V0_1_RECONCILIATION.md)
 
-Este documento cierra las identidades y reglas de bytecode para arithmetic numérico fijo, numeric comparisons y dynamic arithmetic de `evo-script-engine` v0.
+Este documento cierra las identidades y reglas de bytecode para arithmetic numérico fijo, numeric comparisons y dynamic arithmetic de `evo-script-engine` v0 reconciliado con `evo-values v0.1`.
 
 La autoridad deriva de:
 
@@ -10,7 +11,8 @@ La autoridad deriva de:
 - `COMPILED_STORAGE_DATA.md`;
 - `SEMANTIC_PROGRAM_DATA.md`;
 - `evo-script/EVO_SCRIPT_SPECIFICATION_v0.1.md`;
-- `evo-script/DYNAMIC_NUMERIC_ARITHMETIC_v0.1.md`.
+- `evo-script/DYNAMIC_NUMERIC_ARITHMETIC_v0.1.md`;
+- `../EVO_VALUES_V0_1_RECONCILIATION.md`.
 
 ## 1. NumericKind
 
@@ -103,44 +105,72 @@ El orden de evaluación de las subexpresiones permanece determinado por el orden
 
 ## 4. Checked Fixed Arithmetic
 
-Todas las operaciones sobre fixed numeric kinds implementan directamente la semántica Evo-Script.
+### División de Responsabilidades:
 
 ```text
+operator availability / lowering
+    → evo-script-engine
+
+universal arithmetic semantics
+    → evo-values
+```
+
+Para fixed integer kinds:
+
+```text
+checked arithmetic
 fixed overflow
-    → OverflowError
+    → Overflow
+integer divide/remainder by zero
+    → DivisionByZero
 
 no wrapping
 no saturation
 no unchecked arithmetic
 ```
 
+El engine traduce `NumericFailure` hacia `EvaluationFailure`.
+
 No se introducen opcodes alternativos `CheckedAdd`, `WrappingAdd`, `SaturatingAdd` o equivalentes porque Evo-Script v0 posee una sola semántica observable.
 
 ## 5. Divide
 
-`Divide(NumericKind)` conserva las reglas del kind:
+`Divide(NumericKind)` conserva las reglas según kind:
+
+### Fixed Integer:
+- signed integer: quotient truncated toward zero.
+- unsigned integer: unsigned quotient.
+- divisor integer zero (`0`): produce `EvaluationFailure::DivisionByZero`.
+- signed fixed integer: `MIN_VALUE / -1` produce `EvaluationFailure::Overflow`.
+
+### Fixed Float (Semántica IEEE 754 / Rust):
+El cálculo en Float32 y Float64 delega en `evo-values` y sigue la semántica estándar IEEE 754 de Rust:
 
 ```text
-signed integer  → quotient truncated toward zero
-unsigned integer → unsigned quotient
-floating         → floating quotient
+Float32 / Float64 arithmetic
+→ evo-values
+→ Rust / IEEE semantics
+
+Infinity
+-Infinity
+NaN
++0.0
+-0.0
+are legitimate floating results/values
 ```
 
-Para cualquier kind válido:
+Por tanto:
 
 ```text
-divisor numerically zero
-    → DivisionByZeroError
+Float / ±0.0
+→ IEEE result (±Infinity o NaN)
+→ NO automatic DivisionByZero
+
+non-finite result
+→ NO automatic Overflow
 ```
 
-Esto incluye `0.0` y `-0.0` para floating kinds; la VM no produce Infinity o NaN silenciosamente por división entre cero.
-
-Para signed fixed integer:
-
-```text
-MIN_VALUE / -1
-    → OverflowError
-```
+La regla histórica que transformaba la división float por cero en `DivisionByZeroError` queda formalmente corregida y superseded por la reconciliación con `evo-values`.
 
 ## 6. Remainder
 
@@ -154,16 +184,18 @@ Invariante de validez:
 NumericKind must be integer
 ```
 
-`Remainder(Float32)` y `Remainder(Float64)` son estados compilados inválidos y Bytecode Compiler no los produce.
+`Remainder(Float32)` y `Remainder(Float64)` son estados compilados inválidos y Bytecode Compiler no los produce (`INTERNAL INVARIANT VIOLATION`).
 
-Semántica:
+Evo-Script v0 no expone fixed Float remainder. La existencia de Float remainder en `evo-values` **NO** obliga al lenguaje a exponerla.
+
+Semántica para integer:
 
 ```text
 integer divisor zero
-    → DivisionByZeroError
+    → DivisionByZero
 
 signed MIN_VALUE % -1
-    → OverflowError
+    → Overflow
 ```
 
 Para signed integers, el quotient asociado se define por truncation toward zero y el remainder conserva el signo del dividend cuando es non-zero.
@@ -189,11 +221,20 @@ Stack effect:
 2 → 1 bool
 ```
 
-Bytecode Compiler ya comprobó exact type compatibility; la VM no realiza type inference ni coercion.
+### Delegación de Autoridad:
 
-`EqualNumeric` y `NotEqualNumeric` son explícitamente numéricas porque Evo-Script también define equality sobre bool, string, struct y enum mediante mecanismos que se cerrarán por separado.
+```text
+EqualNumeric
+NotEqualNumeric
+LessNumeric
+LessEqualNumeric
+GreaterNumeric
+GreaterEqualNumeric
 
-Ordering solo existe para concrete numeric kinds.
+→ evo-values Comparison
+```
+
+Bytecode Compiler ya comprobó exact type compatibility; el engine mantiene compatibilidad estática y `NumericKind`. La VM delega la evaluación universal en las operaciones de Comparison de `evo-values`. Ordering solo existe para concrete numeric kinds.
 
 ## 8. Logical Operators Are Not Numeric Instructions
 
@@ -279,7 +320,25 @@ Instruction::DynamicDivide
 Instruction::DynamicRemainder
 ```
 
-No contienen `NumericKind` porque el payload family de un Value semánticamente `dynamic` puede conocerse solamente durante runtime.
+### Separación de Responsabilidades:
+
+```text
+operation availability
+runtime family restrictions
+failure translation
+    → evo-script-engine
+
+universal Dynamic Numeric operation semantics
+    → evo-values
+```
+
+Las seis operaciones universales son provistas por `evo-values v0.1`:
+- `Negate` (`DYNAMIC_NEGATE`)
+- `Add` (`DYNAMIC_ADD`)
+- `Subtract` (`DYNAMIC_SUBTRACT`)
+- `Multiply` (`DYNAMIC_MULTIPLY`)
+- `Divide` (`DYNAMIC_DIVIDE`)
+- `Remainder` (`DYNAMIC_REMAINDER`)
 
 Stack effects:
 
@@ -313,6 +372,8 @@ Float32 with Float32
 Float64 with Float64
 ```
 
+No existe promoción o coerción implícita entre familias dinámicas.
+
 Cross-family arithmetic es inválida durante evaluación:
 
 ```text
@@ -321,13 +382,11 @@ Integer with Float64
 Float32 with Float64
 ```
 
-y produce:
+y el engine traduce `DynamicNumericFailure::DifferentFamily` hacia:
 
 ```text
-DynamicNumericTypeError
+EvaluationFailure::DynamicNumericType
 ```
-
-según el amendment normativo `DYNAMIC_NUMERIC_ARITHMETIC_v0.1.md`.
 
 ## 13. Dynamic Integer Semantics
 
@@ -345,20 +404,38 @@ Remainder
     → Evo integer remainder semantics
 
 Divide / Remainder by zero
-    → DivisionByZeroError
+    → DivisionByZero (EvaluationFailure::DivisionByZero)
 ```
 
-La representación física de arbitrary-precision runtime values pertenece a VM Execution Data y no se prescribe aquí.
+La representación física de arbitrary-precision runtime values se reconcilia con `OwnedDynamicInteger` de `evo-values` (VM Execution Data).
 
 ## 14. Dynamic Floating Semantics
 
-Dynamic Float32 conserva `f32` semantics y Dynamic Float64 conserva `f64` semantics.
+Dynamic Float32 conserva `f32` semantics y Dynamic Float64 conserva `f64` semantics (IEEE 754 / Rust):
 
-No existe silent promotion Float32 → Float64.
+```text
+Dynamic Float32
+Dynamic Float64
+→ Rust / IEEE semantics
 
-División por `0.0` o `-0.0` produce `DivisionByZeroError`.
+division by ±0.0
+→ IEEE result (±Infinity o NaN)
+→ NOT DivisionByZero
+```
 
-`DynamicRemainder` solo es válido cuando ambos payloads son Dynamic Integer. Payloads Float32/Float64 producen `DynamicNumericTypeError` porque `%` no pertenece a sus familias válidas en Evo-Script v0.
+### Restricción de lenguaje en DynamicRemainder:
+
+Aunque `evo-values` posee Dynamic Float remainder como operación universal:
+
+```text
+Evo-Script DynamicRemainder
+    Integer + Integer
+        → delegate to DYNAMIC_REMAINDER
+
+    Float32 / Float64 family
+        → EvaluationFailure::DynamicNumericType
+        → NO call to DYNAMIC_REMAINDER
+```
 
 ## 15. Dynamic Context Does Not Cross Concrete Contracts
 

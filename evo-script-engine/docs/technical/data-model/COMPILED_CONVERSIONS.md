@@ -1,8 +1,9 @@
 # Evo-Script Engine — Compiled Conversions
 
-Status: CLOSED
+Status: CLOSED (reconciled with evo-values v0.1)
+Authority: [`../EVO_VALUES_V0_1_RECONCILIATION.md`](../EVO_VALUES_V0_1_RECONCILIATION.md)
 
-Este documento cierra la representación de bytecode para las conversiones explícitas `to_tipo` definidas por Evo-Script v0.1.
+Este documento cierra la representación de bytecode para las conversiones explícitas `to_tipo` definidas por Evo-Script v0.1 reconciliadas con `evo-values v0.1`.
 
 La autoridad deriva de:
 
@@ -10,9 +11,24 @@ La autoridad deriva de:
 - `evo-script/DYNAMIC_NUMERIC_ARITHMETIC_v0.1.md`;
 - `SEMANTIC_EXPRESSIONS.md`;
 - `COMPILED_NUMERIC_INSTRUCTIONS.md`;
-- `COMPILED_STORAGE_DATA.md`.
+- `COMPILED_STORAGE_DATA.md`;
+- `../EVO_VALUES_V0_1_RECONCILIATION.md`.
 
-## 1. Principle
+## 1. Principle & Responsibility Split
+
+```text
+conversion availability
+target selection
+lowering
+opcode selection
+    → evo-script-engine
+
+exact conversion semantics
+    → evo-values
+
+failure translation
+    → evo-script-engine
+```
 
 Semantic Program representa conversiones mediante:
 
@@ -28,7 +44,7 @@ Bytecode Compiler transforma esa información a mecanismos físicos y elimina `T
 
 Regla canónica:
 
-> La VM ejecuta una conversión explícitamente descrita por bytecode; no realiza type inference, coercion implícita ni selección dinámica de un target semántico.
+> La VM ejecuta una conversión explícitamente descrita por bytecode; no realiza type inference, coercion implícita ni selección dinámica de un target semántico. La semántica matemática exacta de conversión delega en las operaciones universales de `evo-values`.
 
 ## 2. Conversion instruction family
 
@@ -89,8 +105,10 @@ source value exactly representable in target
     → produce target value
 
 otherwise
-    → ConversionError
+    → ConversionFailure::NotExactlyRepresentable → EvaluationFailure::Conversion
 ```
+
+La semántica de exact representability y la detección de fallas pertenecen a las operaciones de conversión de `evo-values`. El engine delega la conversión a `evo-values` y traduce `ConversionFailure::NotExactlyRepresentable` a `EvaluationFailure::Conversion` (históricamente documentado como `ConversionError`). El engine no duplica algoritmos de rango ni de exactitud matemática.
 
 Esto cubre:
 
@@ -116,7 +134,7 @@ potentially fallible conversion
 ConvertNumeric { source, target }
 ```
 
-La VM puede implementar la misma operación exacta; una conversión garantizada simplemente no alcanza la ruta `ConversionError` para ningún Value válido del source kind.
+La VM puede implementar la misma operación exacta delegando en `evo-values`; una conversión garantizada simplemente no alcanza la ruta `EvaluationFailure::Conversion` para ningún Value válido del source kind.
 
 Bytecode Compiler puede eliminar una conversión físicamente identidad cuando demuestre que source y target requieren exactamente la misma representación y la operación no puede fallar.
 
@@ -133,7 +151,7 @@ Esta eliminación es optimization/lowering válido, no cambio de semántica visi
 
 ## 6. Integer conversions
 
-Entre integer kinds, `ConvertNumeric` conserva el valor matemático exacto cuando pertenece al rango destino.
+Entre integer kinds, `ConvertNumeric` delega en `evo-values`, que conserva el valor matemático exacto cuando pertenece al rango destino.
 
 Ejemplos:
 
@@ -142,38 +160,38 @@ Int8 → Int16
     guaranteed
 
 Int128 → Int64
-    runtime range check
+    runtime range check via evo-values
 
 Int32 → Uint32
-    requires source >= 0 and within target range
+    requires source >= 0 and within target range via evo-values
 
 Uint128 → Int128
-    requires source <= Int128::MAX mathematical value
+    requires source <= Int128::MAX mathematical value via evo-values
 ```
 
 Failure:
 
 ```text
-ConversionError
+ConversionFailure::NotExactlyRepresentable → EvaluationFailure::Conversion
 ```
 
 No existe bit reinterpretation.
 
 ## 7. Floating conversions
 
-Las conversiones que involucran floating kinds exigen exact representability.
+Las conversiones que involucran floating kinds delegan en `evo-values` y exigen exact representability (`ConversionFailure::NotExactlyRepresentable`).
 
 ```text
 integer → float
-    exact or ConversionError
+    exact or EvaluationFailure::Conversion
 
 float → integer
     exact integer value + in range
-    otherwise ConversionError
+    otherwise EvaluationFailure::Conversion
 
 Float64 → Float32
     exact representation required
-    otherwise ConversionError
+    otherwise EvaluationFailure::Conversion
 ```
 
 La VM no redondea ni trunca silenciosamente para satisfacer una conversión Evo-Script.
@@ -192,7 +210,7 @@ Stack effect:
 
 El target físico está completamente fijado por `NumericKind`.
 
-La VM inspecciona únicamente la familia interna del Dynamic Numeric Value necesaria para realizar la conversión exacta:
+La instrucción delega directamente en los Use Cases por target de `evo-values` sobre la familia runtime activa del dynamic numeric:
 
 ```text
 Dynamic Integer
@@ -200,21 +218,23 @@ Dynamic Float32
 Dynamic Float64
 ```
 
-Si el valor concreto puede representarse exactamente en el target, produce el fixed Value correspondiente.
+Si el valor concreto de la familia activa puede representarse exactamente en el target especificado, produce el fixed Value correspondiente.
 
 En cualquier otro caso:
 
 ```text
-ConversionError
+ConversionFailure::NotExactlyRepresentable → EvaluationFailure::Conversion
 ```
 
-No existe:
+No existe `DifferentFamily` como semántica o error de conversión: la conversión entre familias numéricas dinámicas y tipos fijos es una operación de exact representability (o se puede convertir exactamente al target o falla con `EvaluationFailure::Conversion`).
+
+Tampoco existe:
 
 ```text
-DynamicNumericTypeError
+EvaluationFailure::DynamicNumericType
 ```
 
-para una conversión explícita, porque la semántica de la operación es precisamente intentar convertir el valor. `DynamicNumericTypeError` pertenece a arithmetic cross-family sin conversión solicitada.
+para una conversión explícita, porque la semántica de la operación es precisamente intentar convertir el valor. `EvaluationFailure::DynamicNumericType` pertenece exclusivamente a dynamic numeric arithmetic cross-family sin conversión solicitada.
 
 ## 9. Fixed → dynamic is not a language conversion instruction
 
@@ -230,13 +250,13 @@ Separación:
 
 ```text
 LiftDynamic
-    = internal bytecode lowering mechanism
+    = internal bytecode lowering mechanism (usa construcción/conversión universal de valores de evo-values)
 
 ConvertDynamic
-    = explicit Evo-Script `dynamic → fixed` conversion
+    = explicit Evo-Script `dynamic → fixed` conversion (delega en Use Cases por target de evo-values)
 ```
 
-No son operaciones inversas visibles del mismo API de lenguaje.
+No son operaciones inversas visibles del mismo API de lenguaje. `LiftDynamic` no representa una función o conversión explícita del lenguaje, sino un mecanismo interno del compilador de bytecode que utiliza la construcción universal de `evo-values` para inyectar un valor numérico fijo en una representación dinámica.
 
 ## 10. NumericToString
 
@@ -254,9 +274,13 @@ Stack effect:
 
 Produce la representación textual definida por la semántica `to_string` de Evo-Script.
 
+Responsabilidad:
+- `evo-values` posee la semántica neutral de `ToString` y el formatting canónico para valores numéricos del modelo universal.
+- `evo-script-engine` mantiene únicamente la disponibilidad de la operación en el lenguaje, el opcode de bytecode (`NumericToString`), la adaptación del resultado hacia `RuntimeValue` y la propiedad del buffer/string backing (gestión de memoria del string producido).
+
 No existe parsing inverso desde string hacia numeric en v0.1.
 
-El bytecode no conserva locale, culture, format string ni formatting provider; `to_string` es una operación determinista del lenguaje y no depende del Host.
+El bytecode no conserva locale, culture, format string ni formatting provider; `to_string` es una operación determinista del lenguaje delegada en la semántica neutral de `evo-values` y no depende del Host.
 
 ## 11. DynamicToString
 
@@ -278,7 +302,9 @@ Dynamic Float32
 Dynamic Float64
 ```
 
-No se realiza primero una conversión a un fixed numeric kind.
+Delega directamente en la semántica neutral de `ToString` provista por `evo-values` sobre el Dynamic Numeric Value activo. No se realiza primero una conversión intermedia a un fixed numeric kind.
+
+Al igual que en `NumericToString`, `evo-script-engine` conserva únicamente el opcode, la adaptación a `RuntimeValue` y la propiedad de la asignación del string resultante.
 
 ## 12. Conservative v0 `to_string` boundary
 
@@ -316,12 +342,12 @@ porque Evo-Script v0.1 excluye parsing inverso desde texto hacia números.
 Las conversion instructions pueden terminar la evaluación con:
 
 ```text
-ConversionError
+EvaluationFailure::Conversion (históricamente ConversionError)
 ```
 
-cuando la representación exacta es imposible.
+cuando `evo-values` retorna `ConversionFailure::NotExactlyRepresentable` (la representación exacta es imposible).
 
-`ConversionError`:
+`EvaluationFailure::Conversion`:
 
 ```text
 is not a Value
@@ -331,25 +357,25 @@ is not catchable inside Evo-Script v0.1
 propagates to the outer execution boundary
 ```
 
-La representación técnica exacta del error pertenece a Outcome / Diagnostic Data.
+La representación técnica exacta del error pertenece a Outcome / Diagnostic Data (`EvaluationFailure::Conversion`).
 
 ## 15. Closure
 
 ```text
 fixed numeric → fixed numeric representation ✅ CLOSED
-ConvertNumeric                              ✅ CLOSED
+ConvertNumeric                              ✅ CLOSED (delegates exactness to evo-values)
 guaranteed/fallible shared instruction      ✅ CLOSED
-integer exact conversion                    ✅ CLOSED
-floating exact conversion                   ✅ CLOSED
-dynamic → fixed numeric                     ✅ CLOSED
+integer exact conversion                    ✅ CLOSED (delegates to evo-values)
+floating exact conversion                   ✅ CLOSED (delegates to evo-values)
+dynamic → fixed numeric                     ✅ CLOSED (delegates to evo-values target UCs)
 ConvertDynamic                              ✅ CLOSED
-fixed numeric → string                      ✅ CLOSED
+fixed numeric → string                      ✅ CLOSED (evo-values ToString, engine owns buffer)
 NumericToString                             ✅ CLOSED
-dynamic → string                            ✅ CLOSED
+dynamic → string                            ✅ CLOSED (evo-values ToString, engine owns buffer)
 DynamicToString                             ✅ CLOSED
 fixed → dynamic                             ✅ CLOSED via LiftDynamic
 string → numeric parsing                    ❌ EXCLUDED v0
 implicit conversion                         ❌ EXCLUDED
 bool/struct/enum → string                    ❌ NOT INTRODUCED by current spec
-ConversionError boundary                    ✅ CLOSED
+EvaluationFailure::Conversion boundary      ✅ CLOSED
 ```

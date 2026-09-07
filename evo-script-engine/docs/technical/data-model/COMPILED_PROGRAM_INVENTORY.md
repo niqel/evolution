@@ -1,17 +1,11 @@
 # Evo-Script Engine — Exact Compiled Program Inventory
 
-Status: CLOSED — REVALIDATED AFTER COMPILED BOUNDARY SHAPE CORRECTION
+Status:
+- HISTORICAL DESIGN: CLOSED / PRESERVED (21 own identities)
+- CURRENT RECONCILED MODEL: CLOSED (18 own identities / Instruction: exactly 48 variants)
+- Authority: [`../EVO_VALUES_V0_1_RECONCILIATION.md`](../EVO_VALUES_V0_1_RECONCILIATION.md)
 
-Este documento consolida el inventario exacto de `Compiled Program / Bytecode Data` de `evo-script-engine` v0 después de cerrar también `COMPILED_BOUNDARY_VALUE_SHAPE.md`.
-
-La corrección agrega boundary executable contract metadata para validar:
-
-```text
-Consumer Invocation Values
-ExternalCapability success result
-```
-
-sin cambiar el Instruction Set ni reintroducir Semantic Program en runtime.
+Este documento consolida el inventario exacto de `Compiled Program / Bytecode Data` de `evo-script-engine` v0 reconciliado con `evo-values v0.1`.
 
 ## 1. Final Review Result
 
@@ -43,14 +37,28 @@ no general runtime name/type resolution          ✅
 no VM Execution Data leakage                     ✅
 no Outcome / Diagnostic Data representation      ✅
 
-Compiled Program / Bytecode Data                 ✅ CLOSED
+Compiled Program / Bytecode Data                 ✅ CLOSED (reconciled)
 ```
 
 ## 2. Exact Own Identity Count
 
-`Compiled Program / Bytecode Data` v0 contiene exactamente **21 identities técnicas propias**.
+`Compiled Program / Bytecode Data` vigente contiene exactamente **18 identities técnicas propias** (21 identidades históricas preservadas, de las cuales 3 quedan superseded por la reconciliación con `evo-values v0.1`).
 
-### Program identities — 3
+### Current Reconciled Categorization — 18 identities
+
+```text
+Program IDs / coordinates                 3
+Program / Function structures             2
+Physical storage / executable data        5
+Instruction mechanism                     3
+Composite physical identities             2
+Source mapping                            1
+Boundary executable contract              2
+                                          ──
+TOTAL                                     18
+```
+
+#### Program IDs / coordinates — 3
 
 ```text
 01 ConstantId
@@ -58,14 +66,14 @@ Compiled Program / Bytecode Data                 ✅ CLOSED
 03 CompiledValueShapeId
 ```
 
-### Program / Function structures — 2
+#### Program / Function structures — 2
 
 ```text
 04 CompiledProgram
 05 CompiledFunction
 ```
 
-### Physical storage / persistent executable data — 5
+#### Physical storage / persistent executable data — 5
 
 ```text
 06 ParameterSlot
@@ -75,7 +83,7 @@ Compiled Program / Bytecode Data                 ✅ CLOSED
 10 DynamicConstant
 ```
 
-### Instruction mechanism — 3
+#### Instruction mechanism — 3
 
 ```text
 11 NumericKind
@@ -83,61 +91,43 @@ Compiled Program / Bytecode Data                 ✅ CLOSED
 13 InstructionIndex
 ```
 
-### Composite physical identities — 2
+#### Composite physical identities — 2
 
 ```text
 14 FieldIndex
 15 VariantDiscriminant
 ```
 
-### Structural equality plan — 3
+#### Source mapping — 1
 
 ```text
-16 EqualityRule
-17 CompositeEqualityPlan
-18 EnumEqualityPayloadPlan
+16 SourceMap
 ```
 
-### Source mapping — 1
+#### Boundary executable contract — 2
 
 ```text
-19 SourceMap
+17 CompiledValueShape
+18 CompiledEnumValueShape
 ```
 
-### Boundary executable contract — 2
+### Historical Identities (SUPERSEDED BY evo-values v0.1 RECONCILIATION)
+
+En el diseño histórico v0 se definieron 3 identidades para los planes de igualdad estructural:
 
 ```text
-20 CompiledValueShape
-21 CompiledEnumValueShape
+EqualityRule
+CompositeEqualityPlan
+EnumEqualityPayloadPlan
 ```
 
-Equivalent chronological list preserving the original first 18 identities:
+Trazabilidad histórica de conteo:
 
 ```text
-01 ConstantId
-02 ExternalSymbolId
-03 CompiledProgram
-04 CompiledFunction
-05 ParameterSlot
-06 LocalSlot
-07 ExternalSymbol
-08 Constant
-09 DynamicConstant
-10 NumericKind
-11 Instruction
-12 InstructionIndex
-13 FieldIndex
-14 VariantDiscriminant
-15 EqualityRule
-16 CompositeEqualityPlan
-17 EnumEqualityPayloadPlan
-18 SourceMap
-19 CompiledValueShapeId
-20 CompiledValueShape
-21 CompiledEnumValueShape
+21 historical identities
+→ -3 superseded equality-plan identities
+→ 18 current reconciled identities
 ```
-
-The chronological list is the canonical numbering used when discussing the 18→21 correction.
 
 ## 3. Reused Identities Not Counted Again
 
@@ -374,8 +364,8 @@ enum Instruction {
     },
 
     // Structural equality — 2
-    EqualComposite(CompositeEqualityPlan),
-    NotEqualComposite(CompositeEqualityPlan),
+    EqualComposite,
+    NotEqualComposite,
 }
 ```
 
@@ -395,12 +385,17 @@ Structural equality     2
 TOTAL                   48
 ```
 
-## 9. Structural Equality Plan Inventory
+## 9. Structural Equality Plan Inventory (HISTORICAL / SUPERSEDED)
+
+> [!NOTE]
+> **SUPERSEDED BY evo-values v0.1 RECONCILIATION**: Los planes de igualdad técnica han sido eliminados del modelo de datos de Compiled Program. La igualdad estructural delega directamente en `evo_values::comparison::EQUAL` y `evo_values::comparison::NOT_EQUAL` sobre `Value`. No existen variantes de plan en el inventario actual.
+
+Inventario histórico preservado:
 
 ```text
-EqualityRule variants              4
-CompositeEqualityPlan variants     2
-EnumEqualityPayloadPlan variants   3
+EqualityRule variants              4 (historical / superseded)
+CompositeEqualityPlan variants     2 (historical / superseded)
+EnumEqualityPayloadPlan variants   3 (historical / superseded)
 ```
 
 No existe `EqualityRule::Dynamic`.
@@ -468,22 +463,27 @@ new Instruction variants
 ## 13. Final Counts
 
 ```text
-Compiled own identities             21
+Compiled own identities             18 (21 historical)
 Instruction variants                48
 NumericKind variants                12
 CompiledValueShape variants         17
 CompiledEnumValueShape variants      3
-EqualityRule variants                4
-CompositeEqualityPlan variants       2
-EnumEqualityPayloadPlan variants     3
 SemanticExpressionKind coverage     10 / 10
 SemanticStatement coverage           2 / 2
+```
+
+Historical superseded plan counts (not present in current inventory):
+
+```text
+EqualityRule variants                4 (historical / superseded)
+CompositeEqualityPlan variants       2 (historical / superseded)
+EnumEqualityPayloadPlan variants     3 (historical / superseded)
 ```
 
 ## Closure
 
 ```text
-Compiled Program exact inventory             ✅ CLOSED — 21 identities
+Compiled Program exact inventory             ✅ CLOSED — 18 identities (reconciled)
 Instruction exact inventory                  ✅ CLOSED — 48 variants
 Boundary executable contract inventory       ✅ CLOSED
 Semantic → Compiled coverage                  ✅ CLOSED

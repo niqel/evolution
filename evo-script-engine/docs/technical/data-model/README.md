@@ -35,12 +35,26 @@ Lexical Data                         ✅ CLOSED — 4 identities / TokenKind 50
 AST Data                             ✅ CLOSED — 31 identities
 Compilation Dependency Data          ✅ CLOSED — 8 identities / CatalogTypeRef 18
 Semantic Program Data                ✅ CLOSED — 33 identities
-Compiled Program / Bytecode Data     ✅ CLOSED — 21 identities / Instruction 48
+Compiled Program / Bytecode Data     ✅ CLOSED (reconciled) — 18 identities / Instruction 48 (21 historical identities preserved)
 VM Execution Data                    ✅ CLOSED — 19 identities
 Outcome / Diagnostic Data            ✅ CLOSED — 24 identities
 
-TECHNICAL DATA MODEL                  ✅ CLOSED
-TECHNICAL DATA DIAGRAM                ✅ CLOSED — 9 canonical D2 views
+TECHNICAL DATA MODEL                  ✅ CLOSED — 137 reconciled identities (140 historical)
+TECHNICAL DATA DIAGRAM                ✅ CLOSED (historical physical diagrams; D2 amendment PENDING TASK-ESE-RECON-004)
+```
+
+## Current Reconciled Data Model Inventory
+
+```text
+Lexical Data                  4
+AST Data                     31
+Compilation Dependency        8
+Semantic Program             33
+Compiled Program             18
+VM Execution                 19
+Outcome / Diagnostic         24
+                             ──
+TOTAL                       137
 ```
 
 ## Phase Map
@@ -62,7 +76,7 @@ Semantic Analyzer ◄────────────────┘
     ↓
 Semantic Program Data        33 identities
     ↓
-Compiled Program Data        21 identities
+Compiled Program Data        18 reconciled identities (21 historical)
 
 EXECUTION SIDE
 ────────────────────────────────────────────────────────────
@@ -266,11 +280,22 @@ TOTAL                              24
 
 ## Technical Data Diagram
 
-Status: CLOSED
+Status: HISTORICAL PHYSICAL DIAGRAMS CLOSED / PENDING RECONCILIATION AMENDMENT
 
 Authority: [`../data-diagram/README.md`](../data-diagram/README.md).
 
-Canonical suite:
+```text
+historical physical diagrams
+    → todavía reflejan el modelo anterior donde aplique
+
+reconciled Data Model authority
+    → 18 Compiled identities / 137 total
+
+physical D2 amendment
+    → PENDING TASK-ESE-RECON-004
+```
+
+Canonical suite (historical physical):
 
 ```text
 00-overview.d2                    ✅
@@ -278,7 +303,7 @@ Canonical suite:
 02-ast-data.d2                    ✅ 31 identities
 03-compilation-dependency-data.d2 ✅ 8 identities
 04-semantic-program-data.d2       ✅ 33 identities
-05-compiled-program-data.d2       ✅ 21 identities
+05-compiled-program-data.d2       ✅ 21 identities (historical physical; amendment pending)
 06-vm-execution-data.d2           ✅ 19 identities
 07-outcome-diagnostic-data.d2     ✅ 24 identities
 08-cross-phase-boundaries.d2      ✅

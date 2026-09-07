@@ -1,6 +1,9 @@
 # Evo-Script Engine — Compiled Program / Bytecode Data
 
-Status: COMPILED PROGRAM / BYTECODE DATA — CLOSED — REVALIDATED AFTER BOUNDARY SHAPE CORRECTION
+Status:
+- HISTORICAL DESIGN: CLOSED / PRESERVED (21 own identities)
+- CURRENT RECONCILED MODEL: CLOSED (18 own identities / Instruction: exactly 48 variants)
+- Authority: [`../EVO_VALUES_V0_1_RECONCILIATION.md`](../EVO_VALUES_V0_1_RECONCILIATION.md)
 
 Este documento es la autoridad raíz del producto persistente producido por Bytecode Compiler y consumido directamente por la Stack VM de `evo-script-engine` v0.
 
@@ -413,6 +416,29 @@ Exactamente 8 composite-mechanics instruction variants dentro del enum general.
 
 ## 15. Structural Equality
 
+### Current Reconciled Model (CLOSED)
+
+```rust
+Instruction::EqualComposite
+Instruction::NotEqualComposite
+```
+
+Las instrucciones de igualdad estructural son **payloadless**. La evaluación delega directamente en:
+- `evo_values::comparison::EQUAL`
+- `evo_values::comparison::NOT_EQUAL`
+
+sobre `Value` obtenido mediante `OBSERVE_RUNTIME_VALUE`.
+
+La comparación recursiva de Struct/Enum pertenece internamente al kernel de Comparison de `evo-values`.
+
+`EqualComposite` y `NotEqualComposite` continúan existiendo como variantes explícitas de `Instruction` (Instruction count = 48).
+
+`CompiledValueShape` conserva su responsabilidad exclusiva de boundary validation y **NO se reutiliza** para structural equality runtime. Dynamic continúa excluido de structural equality comparability.
+
+### Historical Design (CLOSED / PRESERVED — SUPERSEDED BY evo-values v0.1 RECONCILIATION)
+
+En el diseño histórico v0, el compiler generaba planes explícitos de igualdad recorridos por la VM:
+
 ```rust
 enum EqualityRule {
     Numeric(NumericKind),
@@ -433,7 +459,7 @@ enum EnumEqualityPayloadPlan {
 }
 ```
 
-Dynamic sigue excluido de structural equality comparability.
+Dichas 3 identidades (`EqualityRule`, `CompositeEqualityPlan`, `EnumEqualityPayloadPlan`) han sido eliminadas del modelo técnico vigente de Compiled Program. Dynamic sigue excluido de structural equality comparability.
 
 ## 16. SourceMap
 
@@ -452,22 +478,25 @@ Dense mapping:
 
 ## 17. Exact Final Inventory
 
-Cerrado en `COMPILED_PROGRAM_INVENTORY.md`.
-
-Resultado corregido:
+Cerrado en `COMPILED_PROGRAM_INVENTORY.md` y reconciliado bajo `../EVO_VALUES_V0_1_RECONCILIATION.md`.
 
 ```text
-exact compiled own identities         21
+CURRENT RECONCILED COMPILED PROGRAM
+18 own identities
+Instruction: exactly 48 variants
+```
+
+Resultado reconciliado:
+
+```text
+exact compiled own identities         18
 exact Instruction variants            48
 exact NumericKind variants            12
 exact CompiledValueShape variants     17
 exact CompiledEnumValueShape variants  3
-exact EqualityRule variants            4
-exact CompositeEqualityPlan variants   2
-exact EnumEqualityPayloadPlan variants 3
 ```
 
-Identities propias exactas:
+Identidades propias exactas vigentes:
 
 ```text
 01 ConstantId
@@ -484,13 +513,27 @@ Identities propias exactas:
 12 InstructionIndex
 13 FieldIndex
 14 VariantDiscriminant
-15 EqualityRule
-16 CompositeEqualityPlan
-17 EnumEqualityPayloadPlan
-18 SourceMap
-19 CompiledValueShapeId
-20 CompiledValueShape
-21 CompiledEnumValueShape
+15 SourceMap
+16 CompiledValueShapeId
+17 CompiledValueShape
+18 CompiledEnumValueShape
+```
+
+Identidades históricas (SUPERSEDED BY evo-values v0.1 RECONCILIATION):
+
+```text
+- EqualityRule
+- CompositeEqualityPlan
+- EnumEqualityPayloadPlan
+```
+
+Trazabilidad histórica:
+
+```text
+21 historical identities
+- 3 superseded equality-plan identities
+──
+18 current reconciled identities
 ```
 
 Reused y no recontadas:
@@ -604,10 +647,10 @@ Composite Layout                               ✅ CLOSED
 Composite Instructions                         ✅ CLOSED
 Structural Equality                            ✅ CLOSED
 SourceMap                                      ✅ CLOSED
-Exact own identities — 21                      ✅ CLOSED
+Exact own identities — 18 (21 historical)   ✅ CLOSED
 Exact Instruction variants — 48                ✅ CLOSED
 
-Compiled Program / Bytecode Data               ✅ CLOSED
+Compiled Program / Bytecode Data               ✅ CLOSED (reconciled)
 
 NEXT
     VM Execution exact inventory
