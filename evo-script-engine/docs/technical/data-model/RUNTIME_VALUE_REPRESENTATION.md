@@ -219,17 +219,36 @@ Lo mismo aplica a Struct y Enum backing.
 Las operaciones del lenguaje delegan directamente en la semántica universal de `evo-values` Comparison:
 
 ```text
-EqualNumeric / NotEqualNumeric / ordering
-EqualBoolean / NotEqualBoolean
-EqualString / NotEqualString
-EqualComposite / NotEqualComposite (payloadless)
+EqualNumeric
+    → evo_values::comparison::EQUAL
 
-    → semántica universal delegada a evo-values Comparison (EQUAL / NOT_EQUAL)
+NotEqualNumeric
+    → evo_values::comparison::NOT_EQUAL
+
+LessNumeric
+    → evo_values::comparison::LESS
+
+LessEqualNumeric
+    → evo_values::comparison::LESS_EQUAL
+
+GreaterNumeric
+    → evo_values::comparison::GREATER
+
+GreaterEqualNumeric
+    → evo_values::comparison::GREATER_EQUAL
+
+EqualBoolean / EqualString / EqualComposite
+    → evo_values::comparison::EQUAL
+
+NotEqualBoolean / NotEqualString / NotEqualComposite
+    → evo_values::comparison::NOT_EQUAL
 ```
 
-Las identidades históricas de planes (`EqualityRule`, `CompositeEqualityPlan`, `EnumEqualityPayloadPlan`) quedan eliminadas del mecanismo vigente. `EqualComposite` y `NotEqualComposite` son instrucciones de bytecode payloadless que evalúan structural equality delegando en `evo_values::comparison::EQUAL` y `evo_values::comparison::NOT_EQUAL` sobre `Value` observado mediante `OBSERVE_RUNTIME_VALUE`.
+En particular, numeric ordering delega en las operaciones de orden de `evo-values` (`LESS`, `LESS_EQUAL`, `GREATER`, `GREATER_EQUAL`), no en igualdad.
 
-Por tanto `PartialEq` / `Eq`, si una implementación futura los agrega por razones técnicas internas, no constituyen la semántica de `==` / `!=` del lenguaje.
+Para structural equality, `EqualComposite` y `NotEqualComposite` son instrucciones de bytecode payloadless que evalúan la igualdad estructural de Struct y Enum delegando directamente en `evo_values::comparison::EQUAL` y `evo_values::comparison::NOT_EQUAL` sobre el árbol de `Value` observado mediante `OBSERVE_RUNTIME_VALUE`. Las identidades históricas de planes (`EqualityRule`, `CompositeEqualityPlan`, `EnumEqualityPayloadPlan`) quedan eliminadas del mecanismo vigente.
+
+Por tanto `PartialEq` / `Eq`, si una implementación futura los agrega por razones técnicas internas, no constituyen la semántica de `==` / `!=` ni de orden del lenguaje.
 
 ## RV-019 — RuntimeValue is execution-context-relative
 
