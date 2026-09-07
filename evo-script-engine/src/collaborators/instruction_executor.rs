@@ -1,12 +1,8 @@
 use alloc::boxed::Box;
 use alloc::string::ToString;
-use alloc::vec;
 use alloc::vec::Vec;
 use num_bigint::{BigInt, Sign};
 
-use crate::data::compiled::equality::{
-    CompositeEqualityPlan, EnumEqualityPayloadPlan, EqualityRule,
-};
 use crate::data::compiled::identities::{
     ConstantId, FieldIndex, InstructionIndex, NumericKind, VariantDiscriminant,
 };
@@ -24,6 +20,7 @@ use crate::data::vm::values::{
     EnumBackingId, RuntimeValue, StringBackingId, StringBackingRef, StructBackingId,
 };
 use crate::tools::locate_source_span::LOCATE_SOURCE_SPAN;
+use crate::tools::observe_runtime_value::OBSERVE_RUNTIME_VALUE;
 use crate::tools::own_runtime_value::OWN_RUNTIME_VALUE;
 use evo_values::boolean::NOT;
 use evo_values::comparison::{EQUAL, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, NOT_EQUAL};
@@ -80,12 +77,12 @@ fn expect_comparison_result(result: Result<bool, ComparisonFailure>) -> bool {
         Ok(v) => v,
         Err(ComparisonFailure::DifferentFamily) => {
             panic!(
-                "internal invariant violation: ComparisonFailure::DifferentFamily in scalar comparison"
+                "internal invariant violation: ComparisonFailure::DifferentFamily in comparison instruction"
             )
         }
         Err(ComparisonFailure::NotComparable) => {
             panic!(
-                "internal invariant violation: ComparisonFailure::NotComparable in scalar comparison"
+                "internal invariant violation: ComparisonFailure::NotComparable in comparison instruction"
             )
         }
     }
@@ -563,163 +560,6 @@ fn convert_dynamic_numeric(
                 }
                 NumericKind::Float32 => convert_bigint_to_f32(&bigint),
                 NumericKind::Float64 => convert_bigint_to_f64(&bigint),
-            }
-        }
-    }
-}
-
-fn compare_numeric_equality(left: RuntimeValue, right: RuntimeValue, kind: &NumericKind) -> bool {
-    match (kind, left, right) {
-        (NumericKind::Int8, RuntimeValue::Int8(l), RuntimeValue::Int8(r)) => l == r,
-        (NumericKind::Int16, RuntimeValue::Int16(l), RuntimeValue::Int16(r)) => l == r,
-        (NumericKind::Int32, RuntimeValue::Int32(l), RuntimeValue::Int32(r)) => l == r,
-        (NumericKind::Int64, RuntimeValue::Int64(l), RuntimeValue::Int64(r)) => l == r,
-        (NumericKind::Int128, RuntimeValue::Int128(l), RuntimeValue::Int128(r)) => l == r,
-
-        (NumericKind::Uint8, RuntimeValue::Uint8(l), RuntimeValue::Uint8(r)) => l == r,
-        (NumericKind::Uint16, RuntimeValue::Uint16(l), RuntimeValue::Uint16(r)) => l == r,
-        (NumericKind::Uint32, RuntimeValue::Uint32(l), RuntimeValue::Uint32(r)) => l == r,
-        (NumericKind::Uint64, RuntimeValue::Uint64(l), RuntimeValue::Uint64(r)) => l == r,
-        (NumericKind::Uint128, RuntimeValue::Uint128(l), RuntimeValue::Uint128(r)) => l == r,
-
-        (NumericKind::Float32, RuntimeValue::Float32(l), RuntimeValue::Float32(r)) => l == r,
-        (NumericKind::Float64, RuntimeValue::Float64(l), RuntimeValue::Float64(r)) => l == r,
-
-        _ => panic!("compare_numeric_equality: operand family mismatch with NumericKind"),
-    }
-}
-
-fn evaluate_equality_rule(
-    left: RuntimeValue,
-    right: RuntimeValue,
-    rule: &EqualityRule,
-    compiled: &CompiledProgram,
-    backing: &ExecutionBackingStore,
-) -> bool {
-    match rule {
-        EqualityRule::Numeric(kind) => compare_numeric_equality(left, right, kind),
-        EqualityRule::Boolean => match (left, right) {
-            (RuntimeValue::Boolean(l), RuntimeValue::Boolean(r)) => l == r,
-            _ => panic!("EqualityRule::Boolean expected Boolean values"),
-        },
-        EqualityRule::String => match (left, right) {
-            (RuntimeValue::String(l_ref), RuntimeValue::String(r_ref)) => {
-                let l_str = resolve_string(l_ref, compiled, backing);
-                let r_str = resolve_string(r_ref, compiled, backing);
-                l_str == r_str
-            }
-            _ => panic!("EqualityRule::String expected String values"),
-        },
-        EqualityRule::Composite(comp_plan) => {
-            evaluate_composite_equality(left, right, comp_plan, compiled, backing)
-        }
-    }
-}
-
-fn evaluate_composite_equality(
-    left: RuntimeValue,
-    right: RuntimeValue,
-    plan: &CompositeEqualityPlan,
-    compiled: &CompiledProgram,
-    backing: &ExecutionBackingStore,
-) -> bool {
-    match plan {
-        CompositeEqualityPlan::Struct { fields } => {
-            let left_id = match left {
-                RuntimeValue::Struct(id) => id,
-                _ => panic!("Expected Struct runtime value"),
-            };
-            let right_id = match right {
-                RuntimeValue::Struct(id) => id,
-                _ => panic!("Expected Struct runtime value"),
-            };
-            let left_struct = &backing.structs[left_id.0];
-            let right_struct = &backing.structs[right_id.0];
-            assert_eq!(left_struct.fields.len(), fields.len());
-            assert_eq!(right_struct.fields.len(), fields.len());
-            for (idx, rule) in fields.iter().enumerate() {
-                if !evaluate_equality_rule(
-                    left_struct.fields[idx],
-                    right_struct.fields[idx],
-                    rule,
-                    compiled,
-                    backing,
-                ) {
-                    return false;
-                }
-            }
-            true
-        }
-        CompositeEqualityPlan::Enum { variants } => {
-            let left_id = match left {
-                RuntimeValue::Enum(id) => id,
-                _ => panic!("Expected Enum runtime value"),
-            };
-            let right_id = match right {
-                RuntimeValue::Enum(id) => id,
-                _ => panic!("Expected Enum runtime value"),
-            };
-            let left_enum = &backing.enums[left_id.0];
-            let right_enum = &backing.enums[right_id.0];
-
-            assert!(
-                left_enum.variant.0 < variants.len(),
-                "left enum variant discriminant {} out of bounds for variants len {}",
-                left_enum.variant.0,
-                variants.len()
-            );
-            assert!(
-                right_enum.variant.0 < variants.len(),
-                "right enum variant discriminant {} out of bounds for variants len {}",
-                right_enum.variant.0,
-                variants.len()
-            );
-
-            if left_enum.variant.0 != right_enum.variant.0 {
-                return false;
-            }
-
-            let variant_plan = &variants[left_enum.variant.0];
-            match (variant_plan, &left_enum.payload, &right_enum.payload) {
-                (
-                    EnumEqualityPayloadPlan::Simple,
-                    RuntimeEnumPayload::Simple,
-                    RuntimeEnumPayload::Simple,
-                ) => true,
-                (
-                    EnumEqualityPayloadPlan::Associated(rule),
-                    RuntimeEnumPayload::Associated(l_val),
-                    RuntimeEnumPayload::Associated(r_val),
-                ) => evaluate_equality_rule(*l_val, *r_val, rule, compiled, backing),
-                (
-                    EnumEqualityPayloadPlan::Structured { fields },
-                    RuntimeEnumPayload::Structured { fields: l_fields },
-                    RuntimeEnumPayload::Structured { fields: r_fields },
-                ) => {
-                    assert_eq!(
-                        l_fields.len(),
-                        fields.len(),
-                        "Structured payload cardinality mismatch with plan"
-                    );
-                    assert_eq!(
-                        r_fields.len(),
-                        fields.len(),
-                        "Structured payload cardinality mismatch with plan"
-                    );
-                    for (idx, rule) in fields.iter().enumerate() {
-                        if !evaluate_equality_rule(
-                            l_fields[idx],
-                            r_fields[idx],
-                            rule,
-                            compiled,
-                            backing,
-                        ) {
-                            return false;
-                        }
-                    }
-                    true
-                }
-                _ => panic!("Mismatch between EnumEqualityPayloadPlan and runtime payload"),
             }
         }
     }
@@ -2352,34 +2192,46 @@ pub fn execute_instruction<'compiled, 'bindings>(
         }
 
         // Structural equality — 2
-        Instruction::EqualComposite(plan) => {
+        Instruction::EqualComposite => {
             let right = pop_operand(execution);
             let left = pop_operand(execution);
-            let is_equal = evaluate_composite_equality(
-                left,
-                right,
-                plan,
-                execution.compiled_program,
-                &execution.backing_store,
-            );
+            let result = {
+                let left_value = OBSERVE_RUNTIME_VALUE(
+                    left,
+                    execution.compiled_program,
+                    &execution.backing_store,
+                );
+                let right_value = OBSERVE_RUNTIME_VALUE(
+                    right,
+                    execution.compiled_program,
+                    &execution.backing_store,
+                );
+                expect_comparison_result(EQUAL(&left_value, &right_value))
+            };
 
-            push_operand(execution, RuntimeValue::Boolean(is_equal));
+            push_operand(execution, RuntimeValue::Boolean(result));
             advance_ip(execution);
             Ok(None)
         }
 
-        Instruction::NotEqualComposite(plan) => {
+        Instruction::NotEqualComposite => {
             let right = pop_operand(execution);
             let left = pop_operand(execution);
-            let is_equal = evaluate_composite_equality(
-                left,
-                right,
-                plan,
-                execution.compiled_program,
-                &execution.backing_store,
-            );
+            let result = {
+                let left_value = OBSERVE_RUNTIME_VALUE(
+                    left,
+                    execution.compiled_program,
+                    &execution.backing_store,
+                );
+                let right_value = OBSERVE_RUNTIME_VALUE(
+                    right,
+                    execution.compiled_program,
+                    &execution.backing_store,
+                );
+                expect_comparison_result(NOT_EQUAL(&left_value, &right_value))
+            };
 
-            push_operand(execution, RuntimeValue::Boolean(!is_equal));
+            push_operand(execution, RuntimeValue::Boolean(result));
             advance_ip(execution);
             Ok(None)
         }
@@ -3229,48 +3081,6 @@ mod tests {
         let field_order = vec![FieldIndex(0), FieldIndex(0)];
         let operands = vec![RuntimeValue::Int32(1), RuntimeValue::Int32(2)];
         let _ = validate_and_reorder_fields(&field_order, operands);
-    }
-
-    #[test]
-    #[should_panic(expected = "left enum variant discriminant 5 out of bounds for variants len 1")]
-    fn regression_invalid_enum_equality_discriminant_panics() {
-        let backing = ExecutionBackingStore {
-            strings: Vec::new(),
-            dynamic_integers: Vec::new(),
-            structs: Vec::new(),
-            enums: vec![
-                EnumBacking {
-                    variant: VariantDiscriminant(5),
-                    payload: RuntimeEnumPayload::Simple,
-                },
-                EnumBacking {
-                    variant: VariantDiscriminant(0),
-                    payload: RuntimeEnumPayload::Simple,
-                },
-            ],
-        };
-        let program = CompiledProgram {
-            functions: Vec::new(),
-            entry_point: FunctionId(0),
-            entry_parameter_shapes: Vec::new(),
-            constants: Vec::new(),
-            external_symbols: Vec::new(),
-            value_shapes: Vec::new(),
-            source_map: SourceMap {
-                functions: Vec::new(),
-            },
-        };
-        let plan = CompositeEqualityPlan::Enum {
-            variants: vec![EnumEqualityPayloadPlan::Simple],
-        };
-
-        let _ = evaluate_composite_equality(
-            RuntimeValue::Enum(EnumBackingId(0)),
-            RuntimeValue::Enum(EnumBackingId(1)),
-            &plan,
-            &program,
-            &backing,
-        );
     }
 
     #[test]
@@ -4746,5 +4556,364 @@ mod tests {
             ],
             vec![Constant::Int32(1), Constant::String("test".to_string())],
         );
+    }
+
+    #[test]
+    fn composite_equality_struct_simple() {
+        // Equal
+        let res_eq = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::ConstructStruct {
+                    field_order: vec![FieldIndex(0), FieldIndex(1)],
+                },
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::ConstructStruct {
+                    field_order: vec![FieldIndex(0), FieldIndex(1)],
+                },
+                Instruction::EqualComposite,
+            ],
+            vec![Constant::Int32(10), Constant::String("evo".to_string())],
+        );
+        match res_eq {
+            Ok(RuntimeValue::Boolean(b)) => assert!(b),
+            _ => panic!("expected Boolean(true)"),
+        }
+
+        // Different int field
+        let res_diff_int = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::ConstructStruct {
+                    field_order: vec![FieldIndex(0), FieldIndex(1)],
+                },
+                Instruction::LoadConstant(ConstantId(2)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::ConstructStruct {
+                    field_order: vec![FieldIndex(0), FieldIndex(1)],
+                },
+                Instruction::EqualComposite,
+            ],
+            vec![
+                Constant::Int32(10),
+                Constant::String("evo".to_string()),
+                Constant::Int32(20),
+            ],
+        );
+        match res_diff_int {
+            Ok(RuntimeValue::Boolean(b)) => assert!(!b),
+            _ => panic!("expected Boolean(false)"),
+        }
+
+        // Different string field
+        let res_diff_str = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::ConstructStruct {
+                    field_order: vec![FieldIndex(0), FieldIndex(1)],
+                },
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(2)),
+                Instruction::ConstructStruct {
+                    field_order: vec![FieldIndex(0), FieldIndex(1)],
+                },
+                Instruction::EqualComposite,
+            ],
+            vec![
+                Constant::Int32(10),
+                Constant::String("evo".to_string()),
+                Constant::String("rust".to_string()),
+            ],
+        );
+        match res_diff_str {
+            Ok(RuntimeValue::Boolean(b)) => assert!(!b),
+            _ => panic!("expected Boolean(false)"),
+        }
+    }
+
+    #[test]
+    fn composite_equality_struct_nested() {
+        // Equal nested struct: { { 10, "evo" }, true }
+        let res_eq = test_execute_instructions(
+            vec![
+                // Left
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::ConstructStruct {
+                    field_order: vec![FieldIndex(0), FieldIndex(1)],
+                },
+                Instruction::LoadConstant(ConstantId(2)),
+                Instruction::ConstructStruct {
+                    field_order: vec![FieldIndex(0), FieldIndex(1)],
+                },
+                // Right
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::ConstructStruct {
+                    field_order: vec![FieldIndex(0), FieldIndex(1)],
+                },
+                Instruction::LoadConstant(ConstantId(2)),
+                Instruction::ConstructStruct {
+                    field_order: vec![FieldIndex(0), FieldIndex(1)],
+                },
+                Instruction::EqualComposite,
+            ],
+            vec![
+                Constant::Int32(10),
+                Constant::String("evo".to_string()),
+                Constant::Boolean(true),
+            ],
+        );
+        match res_eq {
+            Ok(RuntimeValue::Boolean(b)) => assert!(b),
+            _ => panic!("expected Boolean(true)"),
+        }
+
+        // Different nested leaf: { { 10, "evo" }, true } vs { { 20, "evo" }, true }
+        let res_diff = test_execute_instructions(
+            vec![
+                // Left
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::ConstructStruct {
+                    field_order: vec![FieldIndex(0), FieldIndex(1)],
+                },
+                Instruction::LoadConstant(ConstantId(2)),
+                Instruction::ConstructStruct {
+                    field_order: vec![FieldIndex(0), FieldIndex(1)],
+                },
+                // Right
+                Instruction::LoadConstant(ConstantId(3)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::ConstructStruct {
+                    field_order: vec![FieldIndex(0), FieldIndex(1)],
+                },
+                Instruction::LoadConstant(ConstantId(2)),
+                Instruction::ConstructStruct {
+                    field_order: vec![FieldIndex(0), FieldIndex(1)],
+                },
+                Instruction::EqualComposite,
+            ],
+            vec![
+                Constant::Int32(10),
+                Constant::String("evo".to_string()),
+                Constant::Boolean(true),
+                Constant::Int32(20),
+            ],
+        );
+        match res_diff {
+            Ok(RuntimeValue::Boolean(b)) => assert!(!b),
+            _ => panic!("expected Boolean(false)"),
+        }
+    }
+
+    #[test]
+    fn composite_equality_enum_simple() {
+        let res_eq = test_execute_instructions(
+            vec![
+                Instruction::ConstructEnumSimple(VariantDiscriminant(0)),
+                Instruction::ConstructEnumSimple(VariantDiscriminant(0)),
+                Instruction::EqualComposite,
+            ],
+            vec![],
+        );
+        match res_eq {
+            Ok(RuntimeValue::Boolean(b)) => assert!(b),
+            _ => panic!("expected Boolean(true)"),
+        }
+
+        let res_diff = test_execute_instructions(
+            vec![
+                Instruction::ConstructEnumSimple(VariantDiscriminant(0)),
+                Instruction::ConstructEnumSimple(VariantDiscriminant(1)),
+                Instruction::EqualComposite,
+            ],
+            vec![],
+        );
+        match res_diff {
+            Ok(RuntimeValue::Boolean(b)) => assert!(!b),
+            _ => panic!("expected Boolean(false)"),
+        }
+    }
+
+    #[test]
+    fn composite_equality_enum_associated() {
+        // Same variant, same value
+        let res_eq = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::ConstructEnumAssociated(VariantDiscriminant(0)),
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::ConstructEnumAssociated(VariantDiscriminant(0)),
+                Instruction::EqualComposite,
+            ],
+            vec![Constant::Int32(42)],
+        );
+        match res_eq {
+            Ok(RuntimeValue::Boolean(b)) => assert!(b),
+            _ => panic!("expected Boolean(true)"),
+        }
+
+        // Same variant, different value
+        let res_diff_val = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::ConstructEnumAssociated(VariantDiscriminant(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::ConstructEnumAssociated(VariantDiscriminant(0)),
+                Instruction::EqualComposite,
+            ],
+            vec![Constant::Int32(42), Constant::Int32(99)],
+        );
+        match res_diff_val {
+            Ok(RuntimeValue::Boolean(b)) => assert!(!b),
+            _ => panic!("expected Boolean(false)"),
+        }
+
+        // Different variant, same value
+        let res_diff_var = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::ConstructEnumAssociated(VariantDiscriminant(0)),
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::ConstructEnumAssociated(VariantDiscriminant(1)),
+                Instruction::EqualComposite,
+            ],
+            vec![Constant::Int32(42)],
+        );
+        match res_diff_var {
+            Ok(RuntimeValue::Boolean(b)) => assert!(!b),
+            _ => panic!("expected Boolean(false)"),
+        }
+    }
+
+    #[test]
+    fn composite_equality_enum_structured() {
+        // Same variant, same fields
+        let res_eq = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::ConstructEnumStructured {
+                    variant: VariantDiscriminant(0),
+                    field_order: vec![FieldIndex(0), FieldIndex(1)],
+                },
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::ConstructEnumStructured {
+                    variant: VariantDiscriminant(0),
+                    field_order: vec![FieldIndex(0), FieldIndex(1)],
+                },
+                Instruction::EqualComposite,
+            ],
+            vec![Constant::Int32(1), Constant::Boolean(true)],
+        );
+        match res_eq {
+            Ok(RuntimeValue::Boolean(b)) => assert!(b),
+            _ => panic!("expected Boolean(true)"),
+        }
+
+        // Same variant, different field
+        let res_diff = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::ConstructEnumStructured {
+                    variant: VariantDiscriminant(0),
+                    field_order: vec![FieldIndex(0), FieldIndex(1)],
+                },
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::LoadConstant(ConstantId(2)),
+                Instruction::ConstructEnumStructured {
+                    variant: VariantDiscriminant(0),
+                    field_order: vec![FieldIndex(0), FieldIndex(1)],
+                },
+                Instruction::EqualComposite,
+            ],
+            vec![
+                Constant::Int32(1),
+                Constant::Boolean(true),
+                Constant::Boolean(false),
+            ],
+        );
+        match res_diff {
+            Ok(RuntimeValue::Boolean(b)) => assert!(!b),
+            _ => panic!("expected Boolean(false)"),
+        }
+    }
+
+    #[test]
+    fn composite_not_equal_struct_and_enum() {
+        // Struct equal -> NotEqualComposite returns false
+        let res_struct_eq = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::ConstructStruct {
+                    field_order: vec![FieldIndex(0)],
+                },
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::ConstructStruct {
+                    field_order: vec![FieldIndex(0)],
+                },
+                Instruction::NotEqualComposite,
+            ],
+            vec![Constant::Int32(10)],
+        );
+        match res_struct_eq {
+            Ok(RuntimeValue::Boolean(b)) => assert!(!b),
+            _ => panic!("expected Boolean(false)"),
+        }
+
+        // Struct different -> NotEqualComposite returns true
+        let res_struct_diff = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::ConstructStruct {
+                    field_order: vec![FieldIndex(0)],
+                },
+                Instruction::LoadConstant(ConstantId(1)),
+                Instruction::ConstructStruct {
+                    field_order: vec![FieldIndex(0)],
+                },
+                Instruction::NotEqualComposite,
+            ],
+            vec![Constant::Int32(10), Constant::Int32(20)],
+        );
+        match res_struct_diff {
+            Ok(RuntimeValue::Boolean(b)) => assert!(b),
+            _ => panic!("expected Boolean(true)"),
+        }
+
+        // Enum equal -> NotEqualComposite returns false
+        let res_enum_eq = test_execute_instructions(
+            vec![
+                Instruction::ConstructEnumSimple(VariantDiscriminant(0)),
+                Instruction::ConstructEnumSimple(VariantDiscriminant(0)),
+                Instruction::NotEqualComposite,
+            ],
+            vec![],
+        );
+        match res_enum_eq {
+            Ok(RuntimeValue::Boolean(b)) => assert!(!b),
+            _ => panic!("expected Boolean(false)"),
+        }
+
+        // Enum different -> NotEqualComposite returns true
+        let res_enum_diff = test_execute_instructions(
+            vec![
+                Instruction::ConstructEnumSimple(VariantDiscriminant(0)),
+                Instruction::ConstructEnumSimple(VariantDiscriminant(1)),
+                Instruction::NotEqualComposite,
+            ],
+            vec![],
+        );
+        match res_enum_diff {
+            Ok(RuntimeValue::Boolean(b)) => assert!(b),
+            _ => panic!("expected Boolean(true)"),
+        }
     }
 }

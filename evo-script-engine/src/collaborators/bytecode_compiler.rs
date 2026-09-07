@@ -6,9 +6,6 @@ use std::collections::HashMap;
 
 use crate::data::ast::expressions::{BinaryOperator, UnaryOperator};
 use crate::data::compiled::boundary::{CompiledEnumValueShape, CompiledValueShape};
-use crate::data::compiled::equality::{
-    CompositeEqualityPlan, EnumEqualityPayloadPlan, EqualityRule,
-};
 use crate::data::compiled::identities::{
     CompiledValueShapeId, ConstantId, ExternalSymbolId, FieldIndex, InstructionIndex, LocalSlot,
     NumericKind, ParameterSlot, VariantDiscriminant,
@@ -32,7 +29,7 @@ use crate::data::semantic::structure::{
 pub type Lower = fn(&SemanticProgram) -> CompiledProgram;
 
 pub fn lower_program(semantic_program: &SemanticProgram) -> CompiledProgram {
-    let mut compiler = BytecodeCompiler::new(semantic_program);
+    let compiler = BytecodeCompiler::new(semantic_program);
     compiler.compile()
 }
 
@@ -196,69 +193,6 @@ impl<'a> BytecodeCompiler<'a> {
             });
             self.external_symbol_map.insert(key, esid_idx);
             esid_idx
-        }
-    }
-
-    fn build_equality_rule(&self, type_id: usize) -> EqualityRule {
-        match &self.semantic_program.types[type_id] {
-            SemanticType::Native(nt) => match nt {
-                NativeType::Bool => EqualityRule::Boolean,
-                NativeType::String => EqualityRule::String,
-                NativeType::Int | NativeType::Int32 => EqualityRule::Numeric(NumericKind::Int32),
-                NativeType::Int8 => EqualityRule::Numeric(NumericKind::Int8),
-                NativeType::Int16 => EqualityRule::Numeric(NumericKind::Int16),
-                NativeType::Int64 => EqualityRule::Numeric(NumericKind::Int64),
-                NativeType::Int128 => EqualityRule::Numeric(NumericKind::Int128),
-                NativeType::Uint8 => EqualityRule::Numeric(NumericKind::Uint8),
-                NativeType::Uint16 => EqualityRule::Numeric(NumericKind::Uint16),
-                NativeType::Uint32 => EqualityRule::Numeric(NumericKind::Uint32),
-                NativeType::Uint64 => EqualityRule::Numeric(NumericKind::Uint64),
-                NativeType::Uint128 => EqualityRule::Numeric(NumericKind::Uint128),
-                NativeType::Float | NativeType::Float64 => {
-                    EqualityRule::Numeric(NumericKind::Float64)
-                }
-                NativeType::Float32 => EqualityRule::Numeric(NumericKind::Float32),
-                NativeType::Dynamic => panic!("dynamic equality not supported"),
-            },
-            SemanticType::Struct { .. } | SemanticType::Enum { .. } => {
-                EqualityRule::Composite(self.build_composite_equality_plan(type_id))
-            }
-        }
-    }
-
-    fn build_composite_equality_plan(&self, type_id: usize) -> CompositeEqualityPlan {
-        match &self.semantic_program.types[type_id] {
-            SemanticType::Struct { fields } => {
-                let field_rules = fields
-                    .iter()
-                    .map(|f| self.build_equality_rule(f.type_id.0))
-                    .collect();
-                CompositeEqualityPlan::Struct {
-                    fields: field_rules,
-                }
-            }
-            SemanticType::Enum { variants } => {
-                let var_plans = variants
-                    .iter()
-                    .map(|v| match v {
-                        SemanticVariant::Simple => EnumEqualityPayloadPlan::Simple,
-                        SemanticVariant::Associated { type_id } => {
-                            EnumEqualityPayloadPlan::Associated(self.build_equality_rule(type_id.0))
-                        }
-                        SemanticVariant::Structured { fields } => {
-                            let f_rules = fields
-                                .iter()
-                                .map(|f| self.build_equality_rule(f.type_id.0))
-                                .collect();
-                            EnumEqualityPayloadPlan::Structured { fields: f_rules }
-                        }
-                    })
-                    .collect();
-                CompositeEqualityPlan::Enum {
-                    variants: var_plans,
-                }
-            }
-            _ => panic!("expected struct or enum type"),
         }
     }
 }
@@ -609,8 +543,7 @@ impl<'a, 'c> FunctionEmitter<'a, 'c> {
                 BinaryOperator::Equal | BinaryOperator::NotEqual => {
                     self.lower_expression(left);
                     self.lower_expression(right);
-                    let op_tid = left.type_id.0;
-                    let op_type = &self.compiler.semantic_program.types[op_tid];
+                    let op_type = &self.compiler.semantic_program.types[left.type_id.0];
 
                     match op_type {
                         SemanticType::Native(nt) => match nt {
@@ -642,18 +575,13 @@ impl<'a, 'c> FunctionEmitter<'a, 'c> {
                                 }
                             }
                         },
-                        SemanticType::Struct { .. } | SemanticType::Enum { .. } => {
-                            let plan = self.compiler.build_composite_equality_plan(op_tid);
-                            match operator {
-                                BinaryOperator::Equal => {
-                                    self.emit(Instruction::EqualComposite(plan), span)
-                                }
-                                BinaryOperator::NotEqual => {
-                                    self.emit(Instruction::NotEqualComposite(plan), span)
-                                }
-                                _ => unreachable!(),
+                        SemanticType::Struct { .. } | SemanticType::Enum { .. } => match operator {
+                            BinaryOperator::Equal => self.emit(Instruction::EqualComposite, span),
+                            BinaryOperator::NotEqual => {
+                                self.emit(Instruction::NotEqualComposite, span)
                             }
-                        }
+                            _ => unreachable!(),
+                        },
                     }
                 }
                 BinaryOperator::Less
@@ -1213,8 +1141,8 @@ fn compute_max_operand_depth(
             | Instruction::NotEqualBoolean
             | Instruction::EqualString
             | Instruction::NotEqualString
-            | Instruction::EqualComposite(_)
-            | Instruction::NotEqualComposite(_) => (2, 1),
+            | Instruction::EqualComposite
+            | Instruction::NotEqualComposite => (2, 1),
 
             Instruction::Jump(_) => (0, 0),
 
@@ -1700,7 +1628,7 @@ mod tests {
         let has_composite_eq = main_fn
             .instructions
             .iter()
-            .any(|i| matches!(i, Instruction::EqualComposite(_)));
+            .any(|i| matches!(i, Instruction::EqualComposite));
         assert!(has_composite_eq);
     }
 
@@ -1823,10 +1751,12 @@ mod tests {
         "#;
         let compiled = compile_src(src, &cat);
         let main_fn = &compiled.functions[0];
-        assert!(main_fn.instructions.iter().any(|i| matches!(
-            i,
-            Instruction::EqualComposite(CompositeEqualityPlan::Enum { .. })
-        )));
+        assert!(
+            main_fn
+                .instructions
+                .iter()
+                .any(|i| matches!(i, Instruction::EqualComposite))
+        );
     }
 
     #[test]
@@ -2114,7 +2044,34 @@ mod tests {
             main_fn
                 .instructions
                 .iter()
-                .any(|i| matches!(i, Instruction::NotEqualComposite(_)))
+                .any(|i| matches!(i, Instruction::NotEqualComposite))
+        );
+    }
+
+    #[test]
+    fn enum_not_equal_composite_lowering() {
+        let cat = CompilationCatalog {
+            types: HashMap::new(),
+            signatures: HashMap::new(),
+        };
+        let src = r#"
+            enum Status {
+                Active,
+                Inactive
+            }
+
+            public fn main(Status a, Status b) -> bool {
+                return a != b;
+            }
+        "#;
+        let compiled = compile_src(src, &cat);
+        let main_fn = &compiled.functions[0];
+
+        assert!(
+            main_fn
+                .instructions
+                .iter()
+                .any(|i| matches!(i, Instruction::NotEqualComposite))
         );
     }
 }

@@ -1,6 +1,5 @@
 use alloc::vec::Vec;
 
-use crate::data::compiled::equality::CompositeEqualityPlan;
 use crate::data::compiled::identities::{
     ConstantId, ExternalSymbolId, FieldIndex, InstructionIndex, LocalSlot, NumericKind,
     ParameterSlot, VariantDiscriminant,
@@ -89,9 +88,9 @@ pub(crate) enum Instruction {
     },
 
     // Structural equality — 2
-    EqualComposite(CompositeEqualityPlan),
+    EqualComposite,
 
-    NotEqualComposite(CompositeEqualityPlan),
+    NotEqualComposite,
 }
 
 #[cfg(test)]
@@ -157,12 +156,8 @@ mod tests {
             Instruction::ExtractEnumStructured {
                 fields: alloc::vec![FieldIndex(0), FieldIndex(1)],
             },
-            Instruction::EqualComposite(CompositeEqualityPlan::Struct {
-                fields: alloc::vec![],
-            }),
-            Instruction::NotEqualComposite(CompositeEqualityPlan::Struct {
-                fields: alloc::vec![],
-            }),
+            Instruction::EqualComposite,
+            Instruction::NotEqualComposite,
         ];
 
         assert_eq!(all_instructions.len(), 48);
@@ -233,18 +228,12 @@ mod tests {
         }
 
         match &all_instructions[46] {
-            Instruction::EqualComposite(plan) => match plan {
-                CompositeEqualityPlan::Struct { fields } => assert_eq!(fields.len(), 0),
-                _ => panic!("expected Struct plan"),
-            },
+            Instruction::EqualComposite => {}
             _ => panic!("expected EqualComposite"),
         }
 
         match &all_instructions[47] {
-            Instruction::NotEqualComposite(plan) => match plan {
-                CompositeEqualityPlan::Struct { fields } => assert_eq!(fields.len(), 0),
-                _ => panic!("expected Struct plan"),
-            },
+            Instruction::NotEqualComposite => {}
             _ => panic!("expected NotEqualComposite"),
         }
     }
