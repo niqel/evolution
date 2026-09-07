@@ -160,14 +160,26 @@ Representa la delegación de igualdad y ordenamiento escalar hacia `evo-values::
 
 ```text
 instruction_executor
-  ├── Numeric Equality: EQUAL (EqualNumeric, NotEqualNumeric)
+  ├── Numeric Equality:
+  │     EqualNumeric
+  │         → EQUAL
+  │     NotEqualNumeric
+  │         → NOT_EQUAL
   │     ↳ Pop de escalares numéricos directos
   ├── Relational Ordering: LESS, LESS_EQUAL, GREATER, GREATER_EQUAL
-  │     ↳ LessNumeric / GreaterNumeric delegan a sus funciones dedicadas de ordering
+  │     ↳ LessNumeric / LessEqualNumeric / GreaterNumeric / GreaterEqualNumeric delegan a sus funciones dedicadas de ordering
   │     ↳ Estrictamente no derivan de EQUAL
-  ├── Boolean Equality: EQUAL
-  │     ↳ Pop de Boolean y evaluación de igualdad canónica
-  └── String Equality: observe_runtime_value → EQUAL
+  ├── Boolean Equality:
+  │     EqualBoolean
+  │         → EQUAL
+  │     NotEqualBoolean
+  │         → NOT_EQUAL
+  │     ↳ Pop de Boolean y evaluación directa (sin negar !EQUAL)
+  └── String Equality: observe_runtime_value → EQUAL / NOT_EQUAL
+        EqualString
+            → EQUAL
+        NotEqualString
+            → NOT_EQUAL
         ↳ Zero-copy borrow de ambos Strings en la pila vía OBSERVE_RUNTIME_VALUE
         ↳ Value::String(&str) como vistas eficientes sin clonar buffers
 ```
@@ -179,15 +191,19 @@ ComparisonFailure tras análisis estático válido → INTERNAL INVARIANT VIOLAT
 
 ## 06 — Conversion Delegation
 
-Representa las cinco familias de conversión tipadas explícitas hacia `evo-values::conversion`:
+Representa las familias de conversión tipadas explícitas hacia `evo-values::conversion`:
 
 ```text
 instruction_executor
   ├── Fixed → Fixed: TO_INT32_FROM_I64
   ├── Dynamic → Fixed: TO_INT32_FROM_DYNAMIC (observe_runtime_value → borrow)
-  ├── Fixed → Dynamic: TO_DYNAMIC_INTEGER_FROM_I32
-  │     ↳ Crea DynamicIntegerBacking::Small (o Big) dentro de VmExecution
-  │     ↳ Move semantics hacia RuntimeValue::Dynamic(DynamicValue::Integer(id))
+  ├── Fixed → Dynamic (Integer): TO_DYNAMIC_INTEGER_FROM_I32
+  │     ↳ OwnedDynamicValue::Integer(OwnedDynamicInteger)
+  │     ↳ Move semantics hacia DynamicIntegerBacking { value: OwnedDynamicInteger }
+  │     ↳ DynamicIntegerBackingId → RuntimeValue::Dynamic(DynamicValue::Integer(id)) (sin BigInt)
+  ├── Fixed → Dynamic (Float): TO_DYNAMIC_FLOAT32_FROM_F32
+  │     ↳ OwnedDynamicValue::Float32
+  │     ↳ RuntimeValue::Dynamic(DynamicValue::Float32) directo, sin DynamicIntegerBacking
   ├── Numeric → String: TO_STRING_FROM_I32
   │     ↳ Produce String con allocation gestionada por el engine
   └── Dynamic → String: TO_STRING_FROM_DYNAMIC
@@ -205,10 +221,15 @@ Representa la delegación de aritmética dinámica sobre `RuntimeValue::Dynamic`
 
 ```text
 instruction_executor
-  ├── Observación zero-copy de operandos vía observe_runtime_value / as_borrowed()
-  ├── Dynamic Negate: DYNAMIC_NEGATE
-  ├── Dynamic Add / Subtract / Multiply: DYNAMIC_ADD, etc.
-  │     ↳ Resultados enteros: nuevo DynamicIntegerBacking en VmExecution (sin BigInt)
+  ├── Observación zero-copy de operandos vía observe_runtime_value:
+  │     ↳ OBSERVE_RUNTIME_VALUE(...) → Value::Dynamic(DynamicValue<'a>)
+  │     ↳ instruction_executor extrae/borra DynamicValue usando as_borrowed()
+  │     ↳ DynamicIntegerBacking.value = OwnedDynamicInteger (sin copia de magnitud ni conversión BigInt)
+  ├── 6 Universal Dynamic Numeric Operations:
+  │     ├── Binary: DYNAMIC_ADD, DYNAMIC_SUBTRACT, DYNAMIC_MULTIPLY, DYNAMIC_DIVIDE
+  │     ├── Unary: DYNAMIC_NEGATE
+  │     └── Remainder: DYNAMIC_REMAINDER
+  │     ↳ Resultados enteros: OwnedDynamicInteger movido a DynamicIntegerBacking
   │     ↳ Resultados flotantes: RuntimeValue::Dynamic(Float32/Float64) directos
   └── Dynamic Remainder con Language Guard:
         ├── Family == Integer: delega a DYNAMIC_REMAINDER

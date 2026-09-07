@@ -8,6 +8,8 @@ scalar_comparison_delegation: {
   numeric_equality: {
     instruction_executor -> evo_comparison: "EQUAL(&left_val, &right_val) · Value::Int32"
     evo_comparison -> instruction_executor: "Result<bool, ComparisonFailure>"
+    instruction_executor -> evo_comparison: "NOT_EQUAL(&left_val, &right_val) · Value::Int32"
+    evo_comparison -> instruction_executor: "Result<bool, ComparisonFailure>"
   }
 
   numeric_ordering: {
@@ -18,6 +20,8 @@ scalar_comparison_delegation: {
   boolean_equality: {
     instruction_executor -> evo_comparison: "EQUAL(&left_val, &right_val) · Value::Boolean"
     evo_comparison -> instruction_executor: "Result<bool, ComparisonFailure>"
+    instruction_executor -> evo_comparison: "NOT_EQUAL(&left_val, &right_val) · Value::Boolean"
+    evo_comparison -> instruction_executor: "Result<bool, ComparisonFailure>"
   }
 
   string_equality: {
@@ -27,8 +31,10 @@ scalar_comparison_delegation: {
     observe_runtime_value -> instruction_executor: "Value::String(&str) · borrowed view"
     instruction_executor -> evo_comparison: "EQUAL(&left_val, &right_val) · Value::String"
     evo_comparison -> instruction_executor: "Result<bool, ComparisonFailure>"
+    instruction_executor -> evo_comparison: "NOT_EQUAL(&left_val, &right_val) · Value::String"
+    evo_comparison -> instruction_executor: "Result<bool, ComparisonFailure>"
   }
 
-  instruction_executor."Ordering instructions (Less, LessEqual, Greater, GreaterEqual) delegate strictly to LESS, LESS_EQUAL, GREATER, GREATER_EQUAL; not EQUAL. Strings are borrowed zero-copy without allocating a new String."
+  instruction_executor."Instruction to UC mapping:\n- EqualNumeric -> EQUAL\n- NotEqualNumeric -> NOT_EQUAL\n- LessNumeric -> LESS\n- LessEqualNumeric -> LESS_EQUAL\n- GreaterNumeric -> GREATER\n- GreaterEqualNumeric -> GREATER_EQUAL\n- EqualBoolean / EqualString -> EQUAL\n- NotEqualBoolean / NotEqualString -> NOT_EQUAL\nNOT_EQUAL is delegated directly, never derived via !EQUAL. Strings are borrowed zero-copy without allocating a new String."
   evo_comparison."Static analysis already guarantees type compatibility and EqualityComparable; ComparisonFailure (DifferentFamily / NotComparable) constitutes an INTERNAL INVARIANT VIOLATION, not a new EvaluationFailure variant."
 }

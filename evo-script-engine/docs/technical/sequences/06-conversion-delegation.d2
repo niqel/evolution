@@ -20,6 +20,8 @@ conversion_delegation: {
   fixed_to_dynamic: {
     instruction_executor -> evo_conversion: "TO_DYNAMIC_INTEGER_FROM_I32(val_i32)"
     evo_conversion -> instruction_executor: "OwnedDynamicValue::Integer(OwnedDynamicInteger)"
+    instruction_executor -> evo_conversion: "TO_DYNAMIC_FLOAT32_FROM_F32(source_f32)"
+    evo_conversion -> instruction_executor: "OwnedDynamicValue::Float32(f32)"
   }
 
   numeric_to_string: {
@@ -34,6 +36,6 @@ conversion_delegation: {
     evo_conversion -> instruction_executor: "String"
   }
 
-  instruction_executor."LiftDynamic moves OwnedDynamicInteger into DynamicIntegerBacking; floats stay inline. Exactness failure ConversionFailure::NotExactlyRepresentable maps to EvaluationFailure::Conversion."
+  instruction_executor."LiftDynamic moves OwnedDynamicInteger into DynamicIntegerBacking { value: OwnedDynamicInteger } without BigInt; Float32/Float64 map directly to RuntimeValue::Dynamic(Float32/Float64) without DynamicIntegerBacking. Exactness failure ConversionFailure::NotExactlyRepresentable maps to EvaluationFailure::Conversion."
   evo_conversion."evo-values owns exact representability algorithms, target conversion UCs and textual string formatting; the engine only owns opcode availability, backing storage and failure translation."
 }

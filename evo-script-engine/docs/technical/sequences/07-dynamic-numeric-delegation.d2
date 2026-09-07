@@ -7,9 +7,10 @@ dynamic_numeric_delegation: {
 
   operand_observation: {
     instruction_executor -> observe_runtime_value: "OBSERVE_RUNTIME_VALUE(left_dyn, compiled_program, backing_store)"
-    observe_runtime_value -> instruction_executor: "&DynamicValue · borrowed view via as_borrowed()"
+    observe_runtime_value -> instruction_executor: "Value::Dynamic(DynamicValue<'a>)"
     instruction_executor -> observe_runtime_value: "OBSERVE_RUNTIME_VALUE(right_dyn, compiled_program, backing_store)"
-    observe_runtime_value -> instruction_executor: "&DynamicValue · borrowed view via as_borrowed()"
+    observe_runtime_value -> instruction_executor: "Value::Dynamic(DynamicValue<'a>)"
+    instruction_executor -> instruction_executor: "extracts/borrows DynamicValue"
   }
 
   binary_arithmetic: {
@@ -31,6 +32,6 @@ dynamic_numeric_delegation: {
     instruction_executor -> instruction_executor: "DYNAMIC_REMAINDER guard · Float family detected → EvaluationFailure::DynamicNumericType (NO CALL TO DYNAMIC_REMAINDER)"
   }
 
-  instruction_executor."Dynamic Integer operands are borrowed zero-copy (as_borrowed()). Owned integer results are moved into DynamicIntegerBacking without BigInt marshaling. Floats remain inline."
+  instruction_executor."Binary delegation pattern covers DYNAMIC_ADD, DYNAMIC_SUBTRACT, DYNAMIC_MULTIPLY, DYNAMIC_DIVIDE; with DYNAMIC_NEGATE and DYNAMIC_REMAINDER completing the 6 universal operations. DynamicIntegerBacking.value = OwnedDynamicInteger; OBSERVE_RUNTIME_VALUE uses as_borrowed() to construct borrowed view with no magnitude copy and no BigInt conversion. Owned integer results move into DynamicIntegerBacking; floats remain inline."
   evo_dynamic_numeric."Cross-family operations return DynamicNumericFailure::DifferentFamily (→ EvaluationFailure::DynamicNumericType). Integer division by zero returns DivisionByZero; Float division by ±0.0 produces IEEE 754 results."
 }
