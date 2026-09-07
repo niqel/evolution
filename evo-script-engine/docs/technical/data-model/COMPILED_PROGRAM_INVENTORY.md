@@ -490,6 +490,11 @@ Semantic → Compiled coverage                  ✅ CLOSED
 VM Execution leakage                         ❌ NONE
 Outcome/Diagnostic representation leakage    ❌ NONE
 
-NEXT
+HISTORICAL NEXT STAGE — HISTORICAL / PRESERVED
     VM Execution exact inventory
+    ✅ subsequently completed / preserved
+
+CURRENT RECONCILIATION NEXT
+    TASK-ESE-RECON-003
+    Reconciliar Runtime Data documental
 ```

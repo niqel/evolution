@@ -513,8 +513,10 @@ DynamicNumericTypeError boundary         ✅ CLOSED
 no dynamic comparisons                   ✅ CLOSED
 concrete contract boundary               ✅ CLOSED
 
-Control Flow / short-circuit             ← NEXT
-Conversion Instructions                  PENDING
-Composite Value Instructions             PENDING
-SourceMap                                PENDING
+HISTORICAL PROGRESSION — CLOSED / PRESERVED
+
+Control Flow / short-circuit      ✅ subsequently CLOSED
+Conversion Instructions           ✅ subsequently CLOSED
+Composite Value Instructions      ✅ subsequently CLOSED
+SourceMap                         ✅ subsequently CLOSED
 ```

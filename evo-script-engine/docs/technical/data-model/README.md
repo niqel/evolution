@@ -326,13 +326,33 @@ Construction of the nine views introduced **zero new Technical Data Model identi
 
 El entorno usado para construir estas vistas no dispone de ejecutable D2, por lo que no se declara una validación local de render/parser que no fue realizada. La autoridad cerrada es la estructura D2 auditada contra los documentos/inventarios canónicos.
 
-## Next Architectural Stage
+## Current Reconciliation Progression
 
 ```text
-Rust Signatures / Participant Design ← NEXT
+Technical Data Model
+    ✅ CLOSED / RECONCILED
+
+Runtime Data Amendment
+    ← NEXT — TASK-ESE-RECON-003
+
+Technical Data Diagram Amendment
+    PENDING — TASK-ESE-RECON-004
 ```
 
-La siguiente etapa corresponde al rol de Líder Técnico:
+## Historical Architectural Progression
+
+```text
+HISTORICAL / PRESERVED
+
+Technical Data Model
+    ↓
+Technical Data Diagram
+    ↓
+Rust Signatures / Participant Design
+    ✅ subsequently completed / preserved
+```
+
+Esta progresión histórica original ya fue completada en el diseño histórico de `evo-script-engine`:
 
 ```text
 User Stories
@@ -350,4 +370,4 @@ Rust function-pointer signatures
 └── Tools          para operaciones pequeñas/genéricas
 ```
 
-Los Sequence Diagrams se construyen después de contar con las signatures y data shapes suficientes. Una signature nueva que requiera una identity de datos inexistente no debe inventarla silenciosamente: debe demostrar la inconsistencia y reabrir únicamente el bloque dueño correspondiente.
+Los Sequence Diagrams se construyeron después de contar con las signatures y data shapes suficientes. En la reconciliación actual con `evo-values v0.1`, las siguientes etapas de Work Package continúan con `TASK-ESE-RECON-003` (Runtime Data) y `TASK-ESE-RECON-004` (Technical Data Diagram).
