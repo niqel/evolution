@@ -24,6 +24,7 @@ use crate::tools::observe_runtime_value::OBSERVE_RUNTIME_VALUE;
 use crate::tools::own_runtime_value::OWN_RUNTIME_VALUE;
 use evo_values::boolean::NOT;
 use evo_values::comparison::{EQUAL, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, NOT_EQUAL};
+use evo_values::conversion;
 use evo_values::numeric::{
     ADD_F32, ADD_F64, ADD_I8, ADD_I16, ADD_I32, ADD_I64, ADD_I128, ADD_U8, ADD_U16, ADD_U32,
     ADD_U64, ADD_U128, DIVIDE_F32, DIVIDE_F64, DIVIDE_I8, DIVIDE_I16, DIVIDE_I32, DIVIDE_I64,
@@ -36,7 +37,7 @@ use evo_values::numeric::{
     SUBTRACT_I32, SUBTRACT_I64, SUBTRACT_I128, SUBTRACT_U8, SUBTRACT_U16, SUBTRACT_U32,
     SUBTRACT_U64, SUBTRACT_U128,
 };
-use evo_values::{ComparisonFailure, NumericFailure, OwnedValue, Value};
+use evo_values::{ComparisonFailure, ConversionFailure, NumericFailure, OwnedValue, Value};
 
 pub type ExecuteInstruction =
     for<'compiled, 'bindings> fn(
@@ -69,6 +70,12 @@ fn map_numeric_failure(failure: NumericFailure) -> EvaluationFailure {
         NumericFailure::InvalidBounds => {
             panic!("internal invariant violation: unexpected InvalidBounds from arithmetic UC")
         }
+    }
+}
+
+fn map_conversion_failure(failure: ConversionFailure) -> EvaluationFailure {
+    match failure {
+        ConversionFailure::NotExactlyRepresentable => EvaluationFailure::Conversion,
     }
 }
 
@@ -458,24 +465,6 @@ fn convert_bigint_to_f64(bigint: &BigInt) -> Result<RuntimeValue, ()> {
     Ok(RuntimeValue::Float64(res))
 }
 
-fn is_same_numeric_kind(a: &NumericKind, b: &NumericKind) -> bool {
-    matches!(
-        (a, b),
-        (NumericKind::Int8, NumericKind::Int8)
-            | (NumericKind::Int16, NumericKind::Int16)
-            | (NumericKind::Int32, NumericKind::Int32)
-            | (NumericKind::Int64, NumericKind::Int64)
-            | (NumericKind::Int128, NumericKind::Int128)
-            | (NumericKind::Uint8, NumericKind::Uint8)
-            | (NumericKind::Uint16, NumericKind::Uint16)
-            | (NumericKind::Uint32, NumericKind::Uint32)
-            | (NumericKind::Uint64, NumericKind::Uint64)
-            | (NumericKind::Uint128, NumericKind::Uint128)
-            | (NumericKind::Float32, NumericKind::Float32)
-            | (NumericKind::Float64, NumericKind::Float64)
-    )
-}
-
 fn assert_runtime_value_matches_kind(val: &RuntimeValue, kind: &NumericKind) {
     let matches = match (kind, val) {
         (NumericKind::Int8, RuntimeValue::Int8(_)) => true,
@@ -501,33 +490,269 @@ fn assert_runtime_value_matches_kind(val: &RuntimeValue, kind: &NumericKind) {
     );
 }
 
+macro_rules! dispatch_to_target {
+    ($target_enum:ident, $source:expr, $val:expr,
+     $to_i8:ident, $to_i16:ident, $to_i32:ident, $to_i64:ident, $to_i128:ident,
+     $to_u8:ident, $to_u16:ident, $to_u32:ident, $to_u64:ident, $to_u128:ident,
+     $to_f32:ident, $to_f64:ident) => {
+        match ($source, $val) {
+            (NumericKind::Int8, RuntimeValue::Int8(v)) => {
+                conversion::$to_i8(v).map(RuntimeValue::$target_enum)
+            }
+            (NumericKind::Int16, RuntimeValue::Int16(v)) => {
+                conversion::$to_i16(v).map(RuntimeValue::$target_enum)
+            }
+            (NumericKind::Int32, RuntimeValue::Int32(v)) => {
+                conversion::$to_i32(v).map(RuntimeValue::$target_enum)
+            }
+            (NumericKind::Int64, RuntimeValue::Int64(v)) => {
+                conversion::$to_i64(v).map(RuntimeValue::$target_enum)
+            }
+            (NumericKind::Int128, RuntimeValue::Int128(v)) => {
+                conversion::$to_i128(v).map(RuntimeValue::$target_enum)
+            }
+            (NumericKind::Uint8, RuntimeValue::Uint8(v)) => {
+                conversion::$to_u8(v).map(RuntimeValue::$target_enum)
+            }
+            (NumericKind::Uint16, RuntimeValue::Uint16(v)) => {
+                conversion::$to_u16(v).map(RuntimeValue::$target_enum)
+            }
+            (NumericKind::Uint32, RuntimeValue::Uint32(v)) => {
+                conversion::$to_u32(v).map(RuntimeValue::$target_enum)
+            }
+            (NumericKind::Uint64, RuntimeValue::Uint64(v)) => {
+                conversion::$to_u64(v).map(RuntimeValue::$target_enum)
+            }
+            (NumericKind::Uint128, RuntimeValue::Uint128(v)) => {
+                conversion::$to_u128(v).map(RuntimeValue::$target_enum)
+            }
+            (NumericKind::Float32, RuntimeValue::Float32(v)) => {
+                conversion::$to_f32(v).map(RuntimeValue::$target_enum)
+            }
+            (NumericKind::Float64, RuntimeValue::Float64(v)) => {
+                conversion::$to_f64(v).map(RuntimeValue::$target_enum)
+            }
+            _ => panic!(
+                "convert_fixed_numeric: runtime value family mismatch with source NumericKind"
+            ),
+        }
+    };
+}
+
 fn convert_fixed_numeric(
     val: RuntimeValue,
     source: &NumericKind,
     target: &NumericKind,
-) -> Result<RuntimeValue, ()> {
+) -> Result<RuntimeValue, EvaluationFailure> {
     assert_runtime_value_matches_kind(&val, source);
-    if is_same_numeric_kind(source, target) {
-        return Ok(val);
-    }
-    match (source, val) {
-        (NumericKind::Int8, RuntimeValue::Int8(v)) => convert_i128_to_target(v as i128, target),
-        (NumericKind::Int16, RuntimeValue::Int16(v)) => convert_i128_to_target(v as i128, target),
-        (NumericKind::Int32, RuntimeValue::Int32(v)) => convert_i128_to_target(v as i128, target),
-        (NumericKind::Int64, RuntimeValue::Int64(v)) => convert_i128_to_target(v as i128, target),
-        (NumericKind::Int128, RuntimeValue::Int128(v)) => convert_i128_to_target(v, target),
 
-        (NumericKind::Uint8, RuntimeValue::Uint8(v)) => convert_u128_to_target(v as u128, target),
-        (NumericKind::Uint16, RuntimeValue::Uint16(v)) => convert_u128_to_target(v as u128, target),
-        (NumericKind::Uint32, RuntimeValue::Uint32(v)) => convert_u128_to_target(v as u128, target),
-        (NumericKind::Uint64, RuntimeValue::Uint64(v)) => convert_u128_to_target(v as u128, target),
-        (NumericKind::Uint128, RuntimeValue::Uint128(v)) => convert_u128_to_target(v, target),
-
-        (NumericKind::Float32, RuntimeValue::Float32(v)) => convert_f64_to_target(v as f64, target),
-        (NumericKind::Float64, RuntimeValue::Float64(v)) => convert_f64_to_target(v, target),
-
-        _ => panic!("convert_fixed_numeric: runtime value family mismatch with source NumericKind"),
-    }
+    let res = match target {
+        NumericKind::Int8 => dispatch_to_target!(
+            Int8,
+            source,
+            val,
+            TO_INT8_FROM_I8,
+            TO_INT8_FROM_I16,
+            TO_INT8_FROM_I32,
+            TO_INT8_FROM_I64,
+            TO_INT8_FROM_I128,
+            TO_INT8_FROM_U8,
+            TO_INT8_FROM_U16,
+            TO_INT8_FROM_U32,
+            TO_INT8_FROM_U64,
+            TO_INT8_FROM_U128,
+            TO_INT8_FROM_F32,
+            TO_INT8_FROM_F64
+        ),
+        NumericKind::Int16 => dispatch_to_target!(
+            Int16,
+            source,
+            val,
+            TO_INT16_FROM_I8,
+            TO_INT16_FROM_I16,
+            TO_INT16_FROM_I32,
+            TO_INT16_FROM_I64,
+            TO_INT16_FROM_I128,
+            TO_INT16_FROM_U8,
+            TO_INT16_FROM_U16,
+            TO_INT16_FROM_U32,
+            TO_INT16_FROM_U64,
+            TO_INT16_FROM_U128,
+            TO_INT16_FROM_F32,
+            TO_INT16_FROM_F64
+        ),
+        NumericKind::Int32 => dispatch_to_target!(
+            Int32,
+            source,
+            val,
+            TO_INT32_FROM_I8,
+            TO_INT32_FROM_I16,
+            TO_INT32_FROM_I32,
+            TO_INT32_FROM_I64,
+            TO_INT32_FROM_I128,
+            TO_INT32_FROM_U8,
+            TO_INT32_FROM_U16,
+            TO_INT32_FROM_U32,
+            TO_INT32_FROM_U64,
+            TO_INT32_FROM_U128,
+            TO_INT32_FROM_F32,
+            TO_INT32_FROM_F64
+        ),
+        NumericKind::Int64 => dispatch_to_target!(
+            Int64,
+            source,
+            val,
+            TO_INT64_FROM_I8,
+            TO_INT64_FROM_I16,
+            TO_INT64_FROM_I32,
+            TO_INT64_FROM_I64,
+            TO_INT64_FROM_I128,
+            TO_INT64_FROM_U8,
+            TO_INT64_FROM_U16,
+            TO_INT64_FROM_U32,
+            TO_INT64_FROM_U64,
+            TO_INT64_FROM_U128,
+            TO_INT64_FROM_F32,
+            TO_INT64_FROM_F64
+        ),
+        NumericKind::Int128 => dispatch_to_target!(
+            Int128,
+            source,
+            val,
+            TO_INT128_FROM_I8,
+            TO_INT128_FROM_I16,
+            TO_INT128_FROM_I32,
+            TO_INT128_FROM_I64,
+            TO_INT128_FROM_I128,
+            TO_INT128_FROM_U8,
+            TO_INT128_FROM_U16,
+            TO_INT128_FROM_U32,
+            TO_INT128_FROM_U64,
+            TO_INT128_FROM_U128,
+            TO_INT128_FROM_F32,
+            TO_INT128_FROM_F64
+        ),
+        NumericKind::Uint8 => dispatch_to_target!(
+            Uint8,
+            source,
+            val,
+            TO_UINT8_FROM_I8,
+            TO_UINT8_FROM_I16,
+            TO_UINT8_FROM_I32,
+            TO_UINT8_FROM_I64,
+            TO_UINT8_FROM_I128,
+            TO_UINT8_FROM_U8,
+            TO_UINT8_FROM_U16,
+            TO_UINT8_FROM_U32,
+            TO_UINT8_FROM_U64,
+            TO_UINT8_FROM_U128,
+            TO_UINT8_FROM_F32,
+            TO_UINT8_FROM_F64
+        ),
+        NumericKind::Uint16 => dispatch_to_target!(
+            Uint16,
+            source,
+            val,
+            TO_UINT16_FROM_I8,
+            TO_UINT16_FROM_I16,
+            TO_UINT16_FROM_I32,
+            TO_UINT16_FROM_I64,
+            TO_UINT16_FROM_I128,
+            TO_UINT16_FROM_U8,
+            TO_UINT16_FROM_U16,
+            TO_UINT16_FROM_U32,
+            TO_UINT16_FROM_U64,
+            TO_UINT16_FROM_U128,
+            TO_UINT16_FROM_F32,
+            TO_UINT16_FROM_F64
+        ),
+        NumericKind::Uint32 => dispatch_to_target!(
+            Uint32,
+            source,
+            val,
+            TO_UINT32_FROM_I8,
+            TO_UINT32_FROM_I16,
+            TO_UINT32_FROM_I32,
+            TO_UINT32_FROM_I64,
+            TO_UINT32_FROM_I128,
+            TO_UINT32_FROM_U8,
+            TO_UINT32_FROM_U16,
+            TO_UINT32_FROM_U32,
+            TO_UINT32_FROM_U64,
+            TO_UINT32_FROM_U128,
+            TO_UINT32_FROM_F32,
+            TO_UINT32_FROM_F64
+        ),
+        NumericKind::Uint64 => dispatch_to_target!(
+            Uint64,
+            source,
+            val,
+            TO_UINT64_FROM_I8,
+            TO_UINT64_FROM_I16,
+            TO_UINT64_FROM_I32,
+            TO_UINT64_FROM_I64,
+            TO_UINT64_FROM_I128,
+            TO_UINT64_FROM_U8,
+            TO_UINT64_FROM_U16,
+            TO_UINT64_FROM_U32,
+            TO_UINT64_FROM_U64,
+            TO_UINT64_FROM_U128,
+            TO_UINT64_FROM_F32,
+            TO_UINT64_FROM_F64
+        ),
+        NumericKind::Uint128 => dispatch_to_target!(
+            Uint128,
+            source,
+            val,
+            TO_UINT128_FROM_I8,
+            TO_UINT128_FROM_I16,
+            TO_UINT128_FROM_I32,
+            TO_UINT128_FROM_I64,
+            TO_UINT128_FROM_I128,
+            TO_UINT128_FROM_U8,
+            TO_UINT128_FROM_U16,
+            TO_UINT128_FROM_U32,
+            TO_UINT128_FROM_U64,
+            TO_UINT128_FROM_U128,
+            TO_UINT128_FROM_F32,
+            TO_UINT128_FROM_F64
+        ),
+        NumericKind::Float32 => dispatch_to_target!(
+            Float32,
+            source,
+            val,
+            TO_FLOAT32_FROM_I8,
+            TO_FLOAT32_FROM_I16,
+            TO_FLOAT32_FROM_I32,
+            TO_FLOAT32_FROM_I64,
+            TO_FLOAT32_FROM_I128,
+            TO_FLOAT32_FROM_U8,
+            TO_FLOAT32_FROM_U16,
+            TO_FLOAT32_FROM_U32,
+            TO_FLOAT32_FROM_U64,
+            TO_FLOAT32_FROM_U128,
+            TO_FLOAT32_FROM_F32,
+            TO_FLOAT32_FROM_F64
+        ),
+        NumericKind::Float64 => dispatch_to_target!(
+            Float64,
+            source,
+            val,
+            TO_FLOAT64_FROM_I8,
+            TO_FLOAT64_FROM_I16,
+            TO_FLOAT64_FROM_I32,
+            TO_FLOAT64_FROM_I64,
+            TO_FLOAT64_FROM_I128,
+            TO_FLOAT64_FROM_U8,
+            TO_FLOAT64_FROM_U16,
+            TO_FLOAT64_FROM_U32,
+            TO_FLOAT64_FROM_U64,
+            TO_FLOAT64_FROM_U128,
+            TO_FLOAT64_FROM_F32,
+            TO_FLOAT64_FROM_F64
+        ),
+    };
+    res.map_err(map_conversion_failure)
 }
 
 fn convert_dynamic_numeric(
@@ -1878,10 +2103,7 @@ pub fn execute_instruction<'compiled, 'bindings>(
                     advance_ip(execution);
                     Ok(None)
                 }
-                Err(()) => Err(make_evaluation_failure(
-                    execution,
-                    EvaluationFailure::Conversion,
-                )),
+                Err(failure) => Err(make_evaluation_failure(execution, failure)),
             }
         }
 
@@ -1913,20 +2135,28 @@ pub fn execute_instruction<'compiled, 'bindings>(
         Instruction::NumericToString(kind) => {
             let operand = pop_operand(execution);
             let str_val = match (kind, operand) {
-                (NumericKind::Int8, RuntimeValue::Int8(v)) => v.to_string(),
-                (NumericKind::Int16, RuntimeValue::Int16(v)) => v.to_string(),
-                (NumericKind::Int32, RuntimeValue::Int32(v)) => v.to_string(),
-                (NumericKind::Int64, RuntimeValue::Int64(v)) => v.to_string(),
-                (NumericKind::Int128, RuntimeValue::Int128(v)) => v.to_string(),
+                (NumericKind::Int8, RuntimeValue::Int8(v)) => conversion::TO_STRING_FROM_I8(v),
+                (NumericKind::Int16, RuntimeValue::Int16(v)) => conversion::TO_STRING_FROM_I16(v),
+                (NumericKind::Int32, RuntimeValue::Int32(v)) => conversion::TO_STRING_FROM_I32(v),
+                (NumericKind::Int64, RuntimeValue::Int64(v)) => conversion::TO_STRING_FROM_I64(v),
+                (NumericKind::Int128, RuntimeValue::Int128(v)) => {
+                    conversion::TO_STRING_FROM_I128(v)
+                }
 
-                (NumericKind::Uint8, RuntimeValue::Uint8(v)) => v.to_string(),
-                (NumericKind::Uint16, RuntimeValue::Uint16(v)) => v.to_string(),
-                (NumericKind::Uint32, RuntimeValue::Uint32(v)) => v.to_string(),
-                (NumericKind::Uint64, RuntimeValue::Uint64(v)) => v.to_string(),
-                (NumericKind::Uint128, RuntimeValue::Uint128(v)) => v.to_string(),
+                (NumericKind::Uint8, RuntimeValue::Uint8(v)) => conversion::TO_STRING_FROM_U8(v),
+                (NumericKind::Uint16, RuntimeValue::Uint16(v)) => conversion::TO_STRING_FROM_U16(v),
+                (NumericKind::Uint32, RuntimeValue::Uint32(v)) => conversion::TO_STRING_FROM_U32(v),
+                (NumericKind::Uint64, RuntimeValue::Uint64(v)) => conversion::TO_STRING_FROM_U64(v),
+                (NumericKind::Uint128, RuntimeValue::Uint128(v)) => {
+                    conversion::TO_STRING_FROM_U128(v)
+                }
 
-                (NumericKind::Float32, RuntimeValue::Float32(v)) => v.to_string(),
-                (NumericKind::Float64, RuntimeValue::Float64(v)) => v.to_string(),
+                (NumericKind::Float32, RuntimeValue::Float32(v)) => {
+                    conversion::TO_STRING_FROM_F32(v)
+                }
+                (NumericKind::Float64, RuntimeValue::Float64(v)) => {
+                    conversion::TO_STRING_FROM_F64(v)
+                }
 
                 _ => panic!("NumericToString: operand family mismatch with NumericKind"),
             };
@@ -4915,5 +5145,657 @@ mod tests {
             Ok(RuntimeValue::Boolean(b)) => assert!(b),
             _ => panic!("expected Boolean(true)"),
         }
+    }
+
+    fn assert_fixed_ok(res: Result<RuntimeValue, EvaluationFailure>, expected: RuntimeValue) {
+        match (res, expected) {
+            (Ok(RuntimeValue::Int8(a)), RuntimeValue::Int8(b)) => assert_eq!(a, b),
+            (Ok(RuntimeValue::Int16(a)), RuntimeValue::Int16(b)) => assert_eq!(a, b),
+            (Ok(RuntimeValue::Int32(a)), RuntimeValue::Int32(b)) => assert_eq!(a, b),
+            (Ok(RuntimeValue::Int64(a)), RuntimeValue::Int64(b)) => assert_eq!(a, b),
+            (Ok(RuntimeValue::Int128(a)), RuntimeValue::Int128(b)) => assert_eq!(a, b),
+            (Ok(RuntimeValue::Uint8(a)), RuntimeValue::Uint8(b)) => assert_eq!(a, b),
+            (Ok(RuntimeValue::Uint16(a)), RuntimeValue::Uint16(b)) => assert_eq!(a, b),
+            (Ok(RuntimeValue::Uint32(a)), RuntimeValue::Uint32(b)) => assert_eq!(a, b),
+            (Ok(RuntimeValue::Uint64(a)), RuntimeValue::Uint64(b)) => assert_eq!(a, b),
+            (Ok(RuntimeValue::Uint128(a)), RuntimeValue::Uint128(b)) => assert_eq!(a, b),
+            (Ok(RuntimeValue::Float32(a)), RuntimeValue::Float32(b)) => {
+                assert_eq!(a.to_bits(), b.to_bits())
+            }
+            (Ok(RuntimeValue::Float64(a)), RuntimeValue::Float64(b)) => {
+                assert_eq!(a.to_bits(), b.to_bits())
+            }
+            _ => panic!("assert_fixed_ok: value mismatch or unexpected Err"),
+        }
+    }
+
+    fn assert_fixed_conversion_err(res: Result<RuntimeValue, EvaluationFailure>) {
+        match res {
+            Err(EvaluationFailure::Conversion) => {}
+            _ => panic!("expected Err(EvaluationFailure::Conversion)"),
+        }
+    }
+
+    #[test]
+    fn test_convert_numeric_integer_to_integer() {
+        // Widening
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Int8(42),
+                &NumericKind::Int8,
+                &NumericKind::Int32,
+            ),
+            RuntimeValue::Int32(42),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Uint8(200),
+                &NumericKind::Uint8,
+                &NumericKind::Uint64,
+            ),
+            RuntimeValue::Uint64(200),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Int16(-10),
+                &NumericKind::Int16,
+                &NumericKind::Int128,
+            ),
+            RuntimeValue::Int128(-10),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Uint32(1000),
+                &NumericKind::Uint32,
+                &NumericKind::Uint128,
+            ),
+            RuntimeValue::Uint128(1000),
+        );
+
+        // Narrowing exact
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Int32(42),
+                &NumericKind::Int32,
+                &NumericKind::Int8,
+            ),
+            RuntimeValue::Int8(42),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Uint64(255),
+                &NumericKind::Uint64,
+                &NumericKind::Uint8,
+            ),
+            RuntimeValue::Uint8(255),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Int128(-128),
+                &NumericKind::Int128,
+                &NumericKind::Int8,
+            ),
+            RuntimeValue::Int8(-128),
+        );
+
+        // Narrowing failure
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Int32(300),
+            &NumericKind::Int32,
+            &NumericKind::Int8,
+        ));
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Uint16(256),
+            &NumericKind::Uint16,
+            &NumericKind::Uint8,
+        ));
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Int64(i64::MAX),
+            &NumericKind::Int64,
+            &NumericKind::Int32,
+        ));
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Uint128(u128::MAX),
+            &NumericKind::Uint128,
+            &NumericKind::Uint64,
+        ));
+
+        // Signed <-> Unsigned failure
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Int8(-1),
+            &NumericKind::Int8,
+            &NumericKind::Uint8,
+        ));
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Int32(-100),
+            &NumericKind::Int32,
+            &NumericKind::Uint32,
+        ));
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Uint8(200),
+            &NumericKind::Uint8,
+            &NumericKind::Int8,
+        ));
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Uint64(u64::MAX),
+            &NumericKind::Uint64,
+            &NumericKind::Int64,
+        ));
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Int64(-1),
+            &NumericKind::Int64,
+            &NumericKind::Uint64,
+        ));
+
+        // Signed <-> Unsigned exact success
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Uint8(100),
+                &NumericKind::Uint8,
+                &NumericKind::Int8,
+            ),
+            RuntimeValue::Int8(100),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Int8(100),
+                &NumericKind::Int8,
+                &NumericKind::Uint8,
+            ),
+            RuntimeValue::Uint8(100),
+        );
+
+        // Identity for all fixed integer kinds
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Int8(7),
+                &NumericKind::Int8,
+                &NumericKind::Int8,
+            ),
+            RuntimeValue::Int8(7),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Int16(7),
+                &NumericKind::Int16,
+                &NumericKind::Int16,
+            ),
+            RuntimeValue::Int16(7),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Int32(7),
+                &NumericKind::Int32,
+                &NumericKind::Int32,
+            ),
+            RuntimeValue::Int32(7),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Int64(7),
+                &NumericKind::Int64,
+                &NumericKind::Int64,
+            ),
+            RuntimeValue::Int64(7),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Int128(7),
+                &NumericKind::Int128,
+                &NumericKind::Int128,
+            ),
+            RuntimeValue::Int128(7),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Uint8(7),
+                &NumericKind::Uint8,
+                &NumericKind::Uint8,
+            ),
+            RuntimeValue::Uint8(7),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Uint16(7),
+                &NumericKind::Uint16,
+                &NumericKind::Uint16,
+            ),
+            RuntimeValue::Uint16(7),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Uint32(7),
+                &NumericKind::Uint32,
+                &NumericKind::Uint32,
+            ),
+            RuntimeValue::Uint32(7),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Uint64(7),
+                &NumericKind::Uint64,
+                &NumericKind::Uint64,
+            ),
+            RuntimeValue::Uint64(7),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Uint128(7),
+                &NumericKind::Uint128,
+                &NumericKind::Uint128,
+            ),
+            RuntimeValue::Uint128(7),
+        );
+    }
+
+    #[test]
+    fn test_convert_numeric_integer_to_float() {
+        // 2^24 = 16_777_216 is exact in f32
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Int32(16_777_216),
+                &NumericKind::Int32,
+                &NumericKind::Float32,
+            ),
+            RuntimeValue::Float32(16_777_216.0),
+        );
+        // 2^24 + 1 = 16_777_217 is not exact in f32
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Int32(16_777_217),
+            &NumericKind::Int32,
+            &NumericKind::Float32,
+        ));
+
+        // Uint32 to Float32
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Uint32(16_777_216),
+                &NumericKind::Uint32,
+                &NumericKind::Float32,
+            ),
+            RuntimeValue::Float32(16_777_216.0),
+        );
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Uint32(16_777_217),
+            &NumericKind::Uint32,
+            &NumericKind::Float32,
+        ));
+
+        // 2^53 = 9_007_199_254_740_992 is exact in f64
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Int64(9_007_199_254_740_992),
+                &NumericKind::Int64,
+                &NumericKind::Float64,
+            ),
+            RuntimeValue::Float64(9_007_199_254_740_992.0),
+        );
+        // 2^53 + 1 = 9_007_199_254_740_993 is not exact in f64
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Int64(9_007_199_254_740_993),
+            &NumericKind::Int64,
+            &NumericKind::Float64,
+        ));
+
+        // Small integers are exact in floats
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Int8(-10),
+                &NumericKind::Int8,
+                &NumericKind::Float32,
+            ),
+            RuntimeValue::Float32(-10.0),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Int8(-10),
+                &NumericKind::Int8,
+                &NumericKind::Float64,
+            ),
+            RuntimeValue::Float64(-10.0),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Uint8(255),
+                &NumericKind::Uint8,
+                &NumericKind::Float32,
+            ),
+            RuntimeValue::Float32(255.0),
+        );
+    }
+
+    #[test]
+    fn test_convert_numeric_float_to_integer() {
+        // Exact integer floats
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Float64(42.0),
+                &NumericKind::Float64,
+                &NumericKind::Int32,
+            ),
+            RuntimeValue::Int32(42),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Float32(42.0),
+                &NumericKind::Float32,
+                &NumericKind::Int32,
+            ),
+            RuntimeValue::Int32(42),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Float64(-0.0),
+                &NumericKind::Float64,
+                &NumericKind::Int32,
+            ),
+            RuntimeValue::Int32(0),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Float32(-0.0),
+                &NumericKind::Float32,
+                &NumericKind::Int32,
+            ),
+            RuntimeValue::Int32(0),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Float64(100.0),
+                &NumericKind::Float64,
+                &NumericKind::Uint32,
+            ),
+            RuntimeValue::Uint32(100),
+        );
+
+        // Non-integer floats fail
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Float64(42.5),
+            &NumericKind::Float64,
+            &NumericKind::Int32,
+        ));
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Float32(42.5),
+            &NumericKind::Float32,
+            &NumericKind::Int32,
+        ));
+
+        // Non-finite floats fail
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Float64(f64::NAN),
+            &NumericKind::Float64,
+            &NumericKind::Int32,
+        ));
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Float64(f64::INFINITY),
+            &NumericKind::Float64,
+            &NumericKind::Int32,
+        ));
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Float64(f64::NEG_INFINITY),
+            &NumericKind::Float64,
+            &NumericKind::Int32,
+        ));
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Float32(f32::NAN),
+            &NumericKind::Float32,
+            &NumericKind::Int32,
+        ));
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Float32(f32::INFINITY),
+            &NumericKind::Float32,
+            &NumericKind::Int32,
+        ));
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Float32(f32::NEG_INFINITY),
+            &NumericKind::Float32,
+            &NumericKind::Int32,
+        ));
+
+        // Negative float to unsigned fails
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Float64(-1.0),
+            &NumericKind::Float64,
+            &NumericKind::Uint32,
+        ));
+    }
+
+    #[test]
+    fn test_convert_numeric_float_to_float() {
+        // Float32 -> Float64
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Float32(1.5),
+                &NumericKind::Float32,
+                &NumericKind::Float64,
+            ),
+            RuntimeValue::Float64(1.5),
+        );
+        // Float64 -> Float32
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Float64(1.5),
+                &NumericKind::Float64,
+                &NumericKind::Float32,
+            ),
+            RuntimeValue::Float32(1.5),
+        );
+        // Float64 -> Float32 non-representable fails
+        assert_fixed_conversion_err(convert_fixed_numeric(
+            RuntimeValue::Float64(1e300),
+            &NumericKind::Float64,
+            &NumericKind::Float32,
+        ));
+
+        // Identity
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Float32(2.5),
+                &NumericKind::Float32,
+                &NumericKind::Float32,
+            ),
+            RuntimeValue::Float32(2.5),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Float64(2.5),
+                &NumericKind::Float64,
+                &NumericKind::Float64,
+            ),
+            RuntimeValue::Float64(2.5),
+        );
+
+        // Infinities
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Float64(f64::INFINITY),
+                &NumericKind::Float64,
+                &NumericKind::Float32,
+            ),
+            RuntimeValue::Float32(f32::INFINITY),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Float64(f64::NEG_INFINITY),
+                &NumericKind::Float64,
+                &NumericKind::Float32,
+            ),
+            RuntimeValue::Float32(f32::NEG_INFINITY),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Float32(f32::INFINITY),
+                &NumericKind::Float32,
+                &NumericKind::Float64,
+            ),
+            RuntimeValue::Float64(f64::INFINITY),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Float32(f32::NEG_INFINITY),
+                &NumericKind::Float32,
+                &NumericKind::Float64,
+            ),
+            RuntimeValue::Float64(f64::NEG_INFINITY),
+        );
+
+        // NaNs
+        let res_nan_to_f32 = convert_fixed_numeric(
+            RuntimeValue::Float64(f64::NAN),
+            &NumericKind::Float64,
+            &NumericKind::Float32,
+        );
+        match res_nan_to_f32 {
+            Ok(RuntimeValue::Float32(f)) => assert!(f.is_nan()),
+            _ => panic!("expected Float32(NaN)"),
+        }
+        let res_nan_to_f64 = convert_fixed_numeric(
+            RuntimeValue::Float32(f32::NAN),
+            &NumericKind::Float32,
+            &NumericKind::Float64,
+        );
+        match res_nan_to_f64 {
+            Ok(RuntimeValue::Float64(f)) => assert!(f.is_nan()),
+            _ => panic!("expected Float64(NaN)"),
+        }
+
+        // Signed zero preservation
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Float64(-0.0),
+                &NumericKind::Float64,
+                &NumericKind::Float32,
+            ),
+            RuntimeValue::Float32(-0.0),
+        );
+        assert_fixed_ok(
+            convert_fixed_numeric(
+                RuntimeValue::Float32(-0.0),
+                &NumericKind::Float32,
+                &NumericKind::Float64,
+            ),
+            RuntimeValue::Float64(-0.0),
+        );
+    }
+
+    #[test]
+    fn test_convert_numeric_vm_execution() {
+        // Success execution
+        let res_ok = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::ConvertNumeric {
+                    source: NumericKind::Int32,
+                    target: NumericKind::Int64,
+                },
+            ],
+            vec![Constant::Int32(42)],
+        );
+        match res_ok {
+            Ok(RuntimeValue::Int64(v)) => assert_eq!(v, 42),
+            _ => panic!("expected Int64(42)"),
+        }
+
+        // Failure execution
+        let res_err = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::ConvertNumeric {
+                    source: NumericKind::Int32,
+                    target: NumericKind::Int8,
+                },
+            ],
+            vec![Constant::Int32(300)],
+        );
+        match res_err {
+            Err(e) => match e.kind {
+                ExecutionFailureKind::Evaluation(EvaluationFailure::Conversion) => {}
+                _ => panic!("expected EvaluationFailure::Conversion"),
+            },
+            Ok(_) => panic!("expected execution failure"),
+        }
+    }
+
+    #[test]
+    fn test_numeric_to_string_vm_execution() {
+        let test_cases = vec![
+            (Constant::Int8(-42), NumericKind::Int8, "-42"),
+            (Constant::Int16(-1000), NumericKind::Int16, "-1000"),
+            (Constant::Int32(-12345), NumericKind::Int32, "-12345"),
+            (Constant::Int64(-999999), NumericKind::Int64, "-999999"),
+            (
+                Constant::Int128(-1234567890123456789),
+                NumericKind::Int128,
+                "-1234567890123456789",
+            ),
+            (Constant::Uint8(255), NumericKind::Uint8, "255"),
+            (Constant::Uint16(65535), NumericKind::Uint16, "65535"),
+            (Constant::Uint32(123456), NumericKind::Uint32, "123456"),
+            (
+                Constant::Uint64(123456789),
+                NumericKind::Uint64,
+                "123456789",
+            ),
+            (
+                Constant::Uint128(1234567890123456789),
+                NumericKind::Uint128,
+                "1234567890123456789",
+            ),
+            (Constant::Float32(3.25), NumericKind::Float32, "3.25"),
+            (Constant::Float32(f32::NAN), NumericKind::Float32, "NaN"),
+            (
+                Constant::Float32(f32::INFINITY),
+                NumericKind::Float32,
+                "inf",
+            ),
+            (
+                Constant::Float32(f32::NEG_INFINITY),
+                NumericKind::Float32,
+                "-inf",
+            ),
+            (Constant::Float32(-0.0), NumericKind::Float32, "-0"),
+            (Constant::Float64(f64::NAN), NumericKind::Float64, "NaN"),
+            (
+                Constant::Float64(f64::INFINITY),
+                NumericKind::Float64,
+                "inf",
+            ),
+            (
+                Constant::Float64(f64::NEG_INFINITY),
+                NumericKind::Float64,
+                "-inf",
+            ),
+            (Constant::Float64(-0.0), NumericKind::Float64, "-0"),
+        ];
+
+        for (constant, kind, expected_str) in test_cases {
+            let res = test_execute_instructions(
+                vec![
+                    Instruction::LoadConstant(ConstantId(0)),
+                    Instruction::NumericToString(kind),
+                    Instruction::LoadConstant(ConstantId(1)),
+                    Instruction::EqualString,
+                ],
+                vec![constant, Constant::String(expected_str.to_string())],
+            );
+            match res {
+                Ok(RuntimeValue::Boolean(b)) => {
+                    assert!(b, "expected string match for {}", expected_str);
+                }
+                _ => panic!("expected EqualString to return Boolean"),
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "NumericToString: operand family mismatch with NumericKind")]
+    fn test_numeric_to_string_operand_mismatch_panics() {
+        let _ = test_execute_instructions(
+            vec![
+                Instruction::LoadConstant(ConstantId(0)),
+                Instruction::NumericToString(NumericKind::Int32),
+            ],
+            vec![Constant::Boolean(true)],
+        );
     }
 }
