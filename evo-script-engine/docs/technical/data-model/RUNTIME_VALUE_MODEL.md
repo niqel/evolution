@@ -1,8 +1,11 @@
 # Evo-Script Engine — Runtime Value Model
 
-Status: RUNTIME VALUE MODEL — IN ANALYSIS
+Status:
+- HISTORICAL RUNTIME VALUE DESIGN: CLOSED / PRESERVED
+- CURRENT RECONCILED RUNTIME VALUE MODEL: CLOSED
+- Authority: [`../EVO_VALUES_V0_1_RECONCILIATION.md`](../EVO_VALUES_V0_1_RECONCILIATION.md)
 
-Este documento registra las decisiones cerradas del Runtime Value Model de `evo-script-engine` v0.
+Este documento registra las decisiones cerradas del Runtime Value Model de `evo-script-engine` v0 reconciliado con `evo-values v0.1`.
 
 La autoridad deriva de:
 
@@ -10,7 +13,8 @@ La autoridad deriva de:
 - `COMPILED_PROGRAM_DATA.md`;
 - `COMPILED_PROGRAM_INVENTORY.md`;
 - `VM_EXECUTION_DATA.md`;
-- el modelo actual de `evo-values::Value<'a>` como evidencia de una borrowed/interchange view, no como autoridad automática sobre el storage interno de la VM.
+- `../EVO_VALUES_V0_1_RECONCILIATION.md`;
+- el modelo de `evo-values::Value<'a>` como borrowed/interchange view, no como storage interno de la VM.
 
 ## RV-001 — RuntimeValue != evo_values::Value<'a>
 
@@ -24,7 +28,8 @@ Regla canónica:
 
 `evo_values::Value<'a>` representa una view/interchange value cuyo lifetime puede depender de un materializer externo o de backing data ya owned.
 
-La forma histórica actual de `evo-values` no cubre todavía el lenguaje completo de Evo-Script v0 y no debe forzar la representación interna de VM Execution Data.
+> [!NOTE]
+> **HISTORICAL / SUPERSEDED**: La observación histórica de que *"la forma de evo-values no cubre todavía el lenguaje completo de Evo-Script v0"* ha quedado superada por la reconciliación de `evo-values v0.1`, que provee el modelo canónico universal de valores, operaciones dinámicas y comparaciones. La separación de responsabilidades entre `RuntimeValue` (descriptor interno de ejecución) y `Value<'a>` (interchange view) permanece estrictamente vigente.
 
 ## RV-002 — RuntimeValue is an internal immutable VM descriptor
 
@@ -272,13 +277,39 @@ Esto permite que `LoadParameter` y `LoadLocal` materialicen el mismo Value lógi
 
 ## RV-018 — Rust PartialEq/Eq is not language equality mechanism
 
-Status: CLOSED
+Status: CLOSED (reconciled with evo-values v0.1)
 
 La igualdad semántica de Evo-Script no se define mediante identity equality de `RuntimeValue` ni de sus backing handles.
 
 Dos backings distintos pueden representar Values semánticamente iguales.
 
-Las operaciones del lenguaje permanecen gobernadas por las instructions de igualdad y por `EqualityRule` / `CompositeEqualityPlan`.
+```text
+Rust PartialEq/Eq
+    !=
+Evo-Script semantic equality
+```
+
+La autoridad de igualdad semántica está dividida conforme a la reconciliación cerrada:
+
+```text
+scalar/composite semantic comparison
+    → evo-values Comparison
+    → EQUAL / NOT_EQUAL y demás UCs aplicables
+
+Evo-Script
+    → conserva availability + static compatibility
+```
+
+Para structural equality:
+
+```text
+RuntimeValue
+    → OBSERVE_RUNTIME_VALUE
+    → Value
+    → EQUAL / NOT_EQUAL (evo-values Comparison)
+```
+
+No se introduce `PartialEq` semántico en `RuntimeValue`, `Value` ni en los tipos backing. Las identidades históricas de planes (`EqualityRule`, `CompositeEqualityPlan`) quedan superadas por la delegación directa en el kernel de Comparison de `evo-values`.
 
 ## RV-019 — RuntimeValue is execution-context-relative
 
@@ -300,24 +331,30 @@ La transformación hacia un Outcome Value capaz de sobrevivir a `VmExecution` pe
 
 ## RV-020 — Backing Data Representation
 
-Status: CLOSED
+Status: CLOSED (reconciled with evo-values v0.1)
 
 Cerrado en `BACKING_DATA_REPRESENTATION.md` mediante BD-001..BD-009.
 
 `VmExecution` posee exactamente un:
 
 ```rust
+use evo_values::OwnedDynamicInteger;
+
 struct ExecutionBackingStore {
     strings: Vec<Box<str>>,
     dynamic_integers: Vec<DynamicIntegerBacking>,
     structs: Vec<StructBacking>,
     enums: Vec<EnumBacking>,
 }
+
+struct DynamicIntegerBacking {
+    value: OwnedDynamicInteger,
+}
 ```
 
-Los stores son tipados, append-only y resuelven sus typed IDs posicionalmente.
+Los stores son tipados, append-only y resuelven sus typed IDs posicionalmente. `OwnedDynamicInteger` es una identity reutilizada desde `evo-values` y no incrementa el inventario de identities propias de VM Execution Data.
 
-Las representaciones cerradas son:
+Las representaciones cerradas para composites son:
 
 ```rust
 struct StructBacking {
@@ -340,7 +377,17 @@ enum RuntimeEnumPayload {
 
 Execution String backing utiliza `Box<str>` inmutable.
 
-`DynamicIntegerBacking` encapsula un entero signed owned de precisión arbitraria; la crate/implementación concreta no forma parte de la arquitectura.
+`DynamicIntegerBacking` encapsula un `OwnedDynamicInteger` de `evo-values`. La crate/implementación concreta subyacente (`num-bigint`) permanece como detalle privado de `evo-values` y no forma parte de la arquitectura del engine.
+
+Adaptación para observación:
+
+```text
+Execution Dynamic Integer
+    → backing.value.as_borrowed()
+    → borrowed DynamicIntegerValue
+```
+
+Esto permite observar y delegar operaciones dinámicas hacia `evo-values` sin convertir a BigInt ni copiar magnitudes.
 
 Todos los execution backings son inmutables después de insertarse. El graph de Struct/Enum backing es finito, inmutable y acíclico; sharing por typed IDs está permitido.
 
@@ -392,18 +439,20 @@ Backing Identity Strategy                                ✅ CLOSED
 RuntimeValue exact representation                        ✅ CLOSED — 17 variants
 DynamicValue exact representation                        ✅ CLOSED — 3 variants
 descriptor family Clone + Copy                           ✅ CLOSED
-Rust handle equality != language equality                ✅ CLOSED
+Rust handle equality != language equality                ✅ CLOSED (reconciled with evo-values Comparison)
 RuntimeValue execution-context-relative                  ✅ CLOSED
-Backing Data Representation                              ✅ CLOSED
+Backing Data Representation                              ✅ CLOSED (reconciled with OwnedDynamicInteger)
 ExecutionBackingStore                                    ✅ CLOSED
 String execution backing                                 ✅ CLOSED
-Dynamic Integer execution backing                        ✅ CLOSED
+Dynamic Integer execution backing                        ✅ CLOSED (reconciled)
 Struct / Enum backing                                    ✅ CLOSED
 immutable finite composite backing DAG                    ✅ CLOSED
 
-Shared Value Storage exact representation                ← NEXT
-CallFrame                                                 PENDING
-InstructionPointer                                        PENDING
-ApplicationBindings exact model                           PENDING
-call / return mechanics                                   PENDING
+HISTORICAL PROGRESSION — CLOSED / PRESERVED
+
+Shared Value Storage exact representation    ✅ subsequently CLOSED
+CallFrame                                    ✅ subsequently CLOSED
+InstructionPointer                           ✅ subsequently CLOSED
+ApplicationBindings exact model              ✅ subsequently CLOSED
+call / return mechanics                      ✅ subsequently CLOSED
 ```

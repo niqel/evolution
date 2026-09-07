@@ -1,8 +1,9 @@
 # Evo-Script Engine — Backing Data Representation
 
-Status: CLOSED
+Status: CLOSED (reconciled with evo-values v0.1)
+Authority: [`../EVO_VALUES_V0_1_RECONCILIATION.md`](../EVO_VALUES_V0_1_RECONCILIATION.md)
 
-Este documento cierra la representación v0 del backing data owned por una `VmExecution` para los `RuntimeValue` variables y composites.
+Este documento cierra la representación v0 del backing data owned por una `VmExecution` para los `RuntimeValue` variables y composites reconciliada con `evo-values v0.1`.
 
 La autoridad deriva de:
 
@@ -11,7 +12,8 @@ La autoridad deriva de:
 - `COMPILED_COMPOSITE_INSTRUCTIONS.md`;
 - `RUNTIME_VALUE_MODEL.md`;
 - `BACKING_IDENTITY_STRATEGY.md`;
-- `RUNTIME_VALUE_REPRESENTATION.md`.
+- `RUNTIME_VALUE_REPRESENTATION.md`;
+- `../EVO_VALUES_V0_1_RECONCILIATION.md`.
 
 Este bloque define qué dato representa cada backing y cómo se relaciona con sus typed IDs. No redefine `RuntimeValue`, no introduce runtime reflection y no decide todavía la representación del Shared Value Storage.
 
@@ -131,30 +133,45 @@ sin copia obligatoria hacia `ExecutionBackingStore`.
 
 ## BD-005 — DynamicIntegerBacking owns arbitrary-precision signed integer data
 
-Status: CLOSED
+Status: CLOSED (reconciled with evo-values v0.1)
 
-`DynamicIntegerBacking` representa y posee exactamente un entero signed de precisión arbitraria para runtime arithmetic.
+`DynamicIntegerBacking` es la identity técnica owned por `evo-script-engine` que encapsula exactamente un `OwnedDynamicInteger` provisto por `evo-values` para runtime arithmetic.
+
+### Current Reconciled Model (CLOSED)
 
 ```rust
+use evo_values::OwnedDynamicInteger;
+
 struct DynamicIntegerBacking {
-    // owned arbitrary-precision signed integer representation
+    value: OwnedDynamicInteger,
 }
 ```
 
-Regla contractual:
+Reglas arquitectónicas:
 
 ```text
 DynamicIntegerBacking
-    = owned arbitrary-precision signed integer
-    = exact mathematical integer value
-    = no fixed-width overflow caused by representation size
+    → pertenece a evo-script-engine (VM Execution identity 13)
+    → encapsula exactamente 1 OwnedDynamicInteger
+
+OwnedDynamicInteger
+    → pertenece a evo-values (reused cross-component identity, no recontada en VM)
+
+ExecutionBackingStore
+    owns DynamicIntegerBacking
+
+DynamicIntegerBacking
+    owns/mantiene OwnedDynamicInteger payload
+
+RuntimeValue::Dynamic(Integer(ref))
+    references DynamicIntegerBacking
 ```
 
-La implementación concreta del entero arbitrario queda encapsulada detrás de `DynamicIntegerBacking`.
+La representación universal del entero de precisión arbitraria está formalmente cerrada como `OwnedDynamicInteger` de `evo-values`. Los detalles internos de dicha representación (como `num-bigint`) pertenecen de forma estrictamente privada al kernel de `evo-values` y no forman parte de la arquitectura de `evo-script-engine`. No se documenta `BigInt` como payload del engine.
 
-No se hace parte de la arquitectura una crate específica de BigInt.
+Persistent Constant encoding:
 
-Tampoco se obliga a reutilizar como arithmetic representation el encoding persistente de:
+Se preserva sin modificaciones la representación persistente en el Compiled Program:
 
 ```rust
 DynamicConstant::Integer {
@@ -163,7 +180,19 @@ DynamicConstant::Integer {
 }
 ```
 
-El Constant encoding y el runtime arithmetic backing tienen responsabilidades diferentes.
+`DynamicConstant` conserva la representación sign + magnitude y no se convierte a `OwnedDynamicInteger` dentro del Compiled Program. Constant encoding y runtime arithmetic backing tienen responsabilidades diferentes.
+
+### Historical Design (CLOSED / PRESERVED — SUPERSEDED)
+
+En el diseño histórico v0, el payload se describía abstractamente sin fijar el tipo cross-component:
+
+```rust
+struct DynamicIntegerBacking {
+    // owned arbitrary-precision signed integer representation
+}
+```
+
+Dicha indeterminación queda formalmente superada al cerrarse la integración con `evo-values::OwnedDynamicInteger`.
 
 ## BD-006 — StructBacking contains canonical ordered RuntimeValue fields
 
@@ -323,6 +352,8 @@ runtime cycle detection as normal execution mechanism
 ## Closed Physical Family
 
 ```rust
+use evo_values::OwnedDynamicInteger;
+
 struct ExecutionBackingStore {
     strings: Vec<Box<str>>,
     dynamic_integers: Vec<DynamicIntegerBacking>,
@@ -331,7 +362,7 @@ struct ExecutionBackingStore {
 }
 
 struct DynamicIntegerBacking {
-    // owned arbitrary-precision signed integer representation
+    value: OwnedDynamicInteger,
 }
 
 struct StructBacking {
@@ -352,7 +383,7 @@ enum RuntimeEnumPayload {
 }
 ```
 
-`DynamicIntegerBacking` encapsula el engine-owned arbitrary-precision integer representation; seleccionar una crate concreta no forma parte de este Technical Data Model.
+`DynamicIntegerBacking` encapsula el `OwnedDynamicInteger` provisto por `evo-values` (reused cross-component identity, no recontada en VM). La crate interna de enteros arbitrarios (`num-bigint`) permanece como detalle privado de implementación de `evo-values` y no forma parte del Technical Data Model de `evo-script-engine`.
 
 ## Execution examples
 
@@ -417,17 +448,19 @@ BD-001 one ExecutionBackingStore per VmExecution         ✅ CLOSED
 BD-002 four typed append-only stores                     ✅ CLOSED
 BD-003 typed ID positional resolution                    ✅ CLOSED
 BD-004 execution String = immutable Box<str>             ✅ CLOSED
-BD-005 DynamicIntegerBacking owns arbitrary integer      ✅ CLOSED
+BD-005 DynamicIntegerBacking owns arbitrary integer      ✅ CLOSED (reconciled with OwnedDynamicInteger)
 BD-006 StructBacking canonical RuntimeValue fields       ✅ CLOSED
 BD-007 EnumBacking + RuntimeEnumPayload                  ✅ CLOSED
 BD-008 backing immutable after insertion                 ✅ CLOSED
 BD-009 composite backing = finite immutable DAG          ✅ CLOSED
 
-Backing Data Representation                              ✅ CLOSED
+Backing Data Representation                              ✅ CLOSED (reconciled)
 
-Shared Value Storage exact representation                ← NEXT
-CallFrame                                                 PENDING
-InstructionPointer                                        PENDING
-ApplicationBindings exact model                           PENDING
-call / return mechanics                                   PENDING
+HISTORICAL PROGRESSION — CLOSED / PRESERVED
+
+Shared Value Storage exact representation    ✅ subsequently CLOSED
+CallFrame                                    ✅ subsequently CLOSED
+InstructionPointer                           ✅ subsequently CLOSED
+ApplicationBindings exact model              ✅ subsequently CLOSED
+call / return mechanics                      ✅ subsequently CLOSED
 ```

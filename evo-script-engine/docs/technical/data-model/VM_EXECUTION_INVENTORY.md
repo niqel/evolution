@@ -1,8 +1,9 @@
 # Evo-Script Engine — Exact VM Execution Inventory
 
-Status: CLOSED / REVALIDATED AFTER OUTCOME CLOSURE
+Status: CLOSED (reconciled with evo-values v0.1)
+Authority: [`../EVO_VALUES_V0_1_RECONCILIATION.md`](../EVO_VALUES_V0_1_RECONCILIATION.md)
 
-Este documento cierra el inventario exacto de identities técnicas propias de `VM Execution Data` para `evo-script-engine` v0.
+Este documento cierra el inventario exacto de identities técnicas propias de `VM Execution Data` para `evo-script-engine` v0 reconciliado con `evo-values v0.1`.
 
 ## VMI-001 — Exactly 19 own VM identities
 
@@ -104,6 +105,7 @@ CompiledValueShape
 CompiledEnumValueShape
 Value<'a>
 OwnedValue
+OwnedDynamicInteger       (evo-values universal representation, reused not recounted)
 ExternalCapabilityFailure
 ```
 
@@ -176,7 +178,7 @@ ExecutionBackingStore typed stores     4
 Reference counts from other phases remain separate:
 
 ```text
-Compiled Program identities            21
+Compiled Program identities            18 reconciled (21 historical)
 Instruction variants                   48
 CompiledValueShape variants            17
 CompiledEnumValueShape variants         3
@@ -217,7 +219,7 @@ Esto no agrega una identity VM, no cambia `VmExecution`, no cambia `ApplicationB
 10 StringBackingRef
 11 DynamicIntegerBackingRef
 12 ExecutionBackingStore
-13 DynamicIntegerBacking
+13 DynamicIntegerBacking (contains/reuses evo_values::OwnedDynamicInteger)
 14 StructBacking
 15 EnumBacking
 16 RuntimeEnumPayload
@@ -239,10 +241,15 @@ VMI-007 exact internal variant/field counts                 ✅ CLOSED
 VMI-008 Outcome failure reference does not alter VM         ✅ CLOSED / REVALIDATED
 
 VM Execution exact inventory                               ✅ CLOSED — 19 identities
-VM Execution Data                                          ✅ CLOSED
+VM Execution Data                                          ✅ CLOSED (reconciled)
 Outcome / Diagnostic Data                                  ✅ CLOSED — 24 identities
-Technical Data Model                                       ✅ CLOSED
+Technical Data Model                                       ✅ CLOSED — 137 reconciled identities (140 historical)
 
-NEXT
+HISTORICAL NEXT STAGE
     Technical Data Diagram
+    ✅ subsequently completed / preserved
+
+CURRENT RECONCILIATION NEXT
+    TASK-ESE-RECON-004
+    Technical Data Diagram amendment
 ```

@@ -1,15 +1,17 @@
 # Evo-Script Engine — RuntimeValue Exact Representation
 
-Status: CLOSED
+Status: CLOSED (reconciled with evo-values v0.1)
+Authority: [`../EVO_VALUES_V0_1_RECONCILIATION.md`](../EVO_VALUES_V0_1_RECONCILIATION.md)
 
-Este documento cierra la representación exacta v0 de `RuntimeValue` y `DynamicValue` dentro de `evo-script-engine`.
+Este documento cierra la representación exacta v0 de `RuntimeValue` y `DynamicValue` dentro de `evo-script-engine` reconciliada con `evo-values v0.1`.
 
 La autoridad deriva de:
 
 - `RUNTIME_VALUE_MODEL.md`;
 - `BACKING_IDENTITY_STRATEGY.md`;
 - `COMPILED_PROGRAM_INVENTORY.md`;
-- `DYNAMIC_NUMERIC_ARITHMETIC_v0.1.md`.
+- `DYNAMIC_NUMERIC_ARITHMETIC_v0.1.md`;
+- `../EVO_VALUES_V0_1_RECONCILIATION.md`.
 
 ## RV-012 — RuntimeValue exact variant inventory
 
@@ -137,7 +139,7 @@ No existe `DynamicKind`, `RuntimeTypeId` ni otro type tag separado; el discrimin
 
 ## RV-016 — Dynamic Integer uses backing; Dynamic floats stay inline
 
-Status: CLOSED
+Status: CLOSED (reconciled with evo-values v0.1)
 
 ```text
 Dynamic Integer
@@ -150,7 +152,17 @@ Dynamic Float64
     → inline f64
 ```
 
-Dynamic Integer necesita backing porque conserva precisión arbitraria.
+Cadena de indirección exacta para Dynamic Integer:
+
+```text
+DynamicValue::Integer(DynamicIntegerBackingRef)
+    ↓
+DynamicIntegerBacking (engine-owned VM identity 13)
+    ↓
+OwnedDynamicInteger (evo-values universal representation)
+```
+
+Dynamic Integer necesita backing porque conserva precisión arbitraria. `OwnedDynamicInteger` no vive inline dentro de `RuntimeValue`, por lo que no altera la naturaleza `Clone + Copy` del descriptor.
 
 Dynamic Float32 y Dynamic Float64 poseen tamaño fijo y permanecen inline dentro del descriptor.
 
@@ -191,7 +203,7 @@ Esto permite que `LoadParameter` y `LoadLocal` materialicen un Value en Operand 
 
 ## RV-018 — Rust PartialEq/Eq is not language equality mechanism
 
-Status: CLOSED
+Status: CLOSED (reconciled with evo-values v0.1)
 
 La igualdad semántica de Evo-Script no se define mediante identity equality de `RuntimeValue` ni de sus backing handles.
 
@@ -204,16 +216,18 @@ pero contenido textual A == contenido textual B
 
 Lo mismo aplica a Struct y Enum backing.
 
-Las operaciones del lenguaje permanecen gobernadas por:
+Las operaciones del lenguaje delegan directamente en la semántica universal de `evo-values` Comparison:
 
 ```text
-EqualNumeric / NotEqualNumeric
+EqualNumeric / NotEqualNumeric / ordering
 EqualBoolean / NotEqualBoolean
 EqualString / NotEqualString
-EqualComposite / NotEqualComposite
-EqualityRule
-CompositeEqualityPlan
+EqualComposite / NotEqualComposite (payloadless)
+
+    → semántica universal delegada a evo-values Comparison (EQUAL / NOT_EQUAL)
 ```
+
+Las identidades históricas de planes (`EqualityRule`, `CompositeEqualityPlan`, `EnumEqualityPayloadPlan`) quedan eliminadas del mecanismo vigente. `EqualComposite` y `NotEqualComposite` son instrucciones de bytecode payloadless que evalúan structural equality delegando en `evo_values::comparison::EQUAL` y `evo_values::comparison::NOT_EQUAL` sobre `Value` observado mediante `OBSERVE_RUNTIME_VALUE`.
 
 Por tanto `PartialEq` / `Eq`, si una implementación futura los agrega por razones técnicas internas, no constituyen la semántica de `==` / `!=` del lenguaje.
 
@@ -238,9 +252,9 @@ StructBackingId / EnumBackingId
 
 Regla canónica:
 
-> Un `RuntimeValue` que contenga handles runtime no puede escapar de `VmExecution` como resultado autónomo sin materialización o transferencia de ownership apropiada.
+> `RuntimeValue` permanece execution-context-relative y no se convierte en interchange Value. Las representaciones `Value<'a>` y `OwnedValue` continúan siendo las estructuras de intercambio de `evo-values`.
 
-La transformación hacia un Outcome Value capaz de sobrevivir a `VmExecution` pertenece a `Outcome / Diagnostic Data`.
+Un `RuntimeValue` que contenga handles runtime no puede escapar de `VmExecution` como resultado autónomo sin materialización o transferencia de ownership apropiada. La transformación hacia un Outcome Value capaz de sobrevivir a `VmExecution` pertenece a `Outcome / Diagnostic Data`.
 
 ## Exact Closed Family
 
@@ -300,18 +314,20 @@ RV-012 RuntimeValue exact 17 variants                  ✅ CLOSED
 RV-013 no NumericValue intermediate                    ✅ CLOSED
 RV-014 RuntimeValue::Dynamic(DynamicValue)             ✅ CLOSED
 RV-015 DynamicValue exact 3 variants                   ✅ CLOSED
-RV-016 Dynamic Integer backing / floats inline         ✅ CLOSED
+RV-016 Dynamic Integer backing / floats inline         ✅ CLOSED (reconciled with OwnedDynamicInteger)
 RV-017 descriptor family Clone + Copy                  ✅ CLOSED
-RV-018 Rust equality != Evo language equality          ✅ CLOSED
+RV-018 Rust equality != Evo language equality          ✅ CLOSED (reconciled with evo-values Comparison)
 RV-019 RuntimeValue execution-context-relative         ✅ CLOSED
 
-RuntimeValue exact representation                      ✅ CLOSED
-Dynamic Value exact representation                     ✅ CLOSED
+RuntimeValue exact representation                      ✅ CLOSED (reconciled)
+Dynamic Value exact representation                     ✅ CLOSED (reconciled)
 
-Backing Data Representation                            ← NEXT
-Shared Value Storage exact representation              PENDING
-CallFrame                                               PENDING
-InstructionPointer                                      PENDING
-ApplicationBindings exact model                         PENDING
-call / return mechanics                                 PENDING
+HISTORICAL PROGRESSION — CLOSED / PRESERVED
+
+Backing Data Representation                  ✅ subsequently CLOSED
+Shared Value Storage exact representation    ✅ subsequently CLOSED
+CallFrame                                    ✅ subsequently CLOSED
+InstructionPointer                           ✅ subsequently CLOSED
+ApplicationBindings exact model              ✅ subsequently CLOSED
+call / return mechanics                      ✅ subsequently CLOSED
 ```
