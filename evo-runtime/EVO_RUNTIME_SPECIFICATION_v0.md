@@ -52,7 +52,7 @@ Evo Runtime no transporta ningún dato en el retorno.
 
 - **Categoría**: Use Case (Proporcionado por `evo-runtime`)
 - **Definición**: `definitions/use_cases/start.rs`
-- **Tipo Técnico**: Technical signature: PENDING TECHNICAL REVALIDATION
+- **Tipo Técnico**: `pub type Start = fn(run_request::Request);`
 - **Semántica**:
   1. Recibe la acción `Run` proporcionada por la Evo Application desde el Host.
   2. Invoca `Run`.
@@ -67,7 +67,7 @@ Evo Runtime no transporta ningún dato en el retorno.
 
 - **Categoría**: Requester (Consumido por `evo-runtime` desde la Evo Application)
 - **Definición**: `definitions/requesters/run_request.rs`
-- **Tipo Técnico**: Technical signature: PENDING TECHNICAL REVALIDATION
+- **Tipo Técnico**: `pub type Request = fn();`
 - **Semántica**:
   1. Representa la acción de punto de entrada que la aplicación proporciona al
      Runtime.
@@ -164,8 +164,9 @@ Esta capacidad futura:
 
 | Concepto | Rol Arquitectónico | Archivo de Definición Técnica | Tipo Técnico |
 | --- | --- | --- | --- |
-| **Start** | Use Case | `definitions/use_cases/start.rs` | Technical signature: PENDING TECHNICAL REVALIDATION |
-| **Run** | Requester | `definitions/requesters/run_request.rs` | Technical signature: PENDING TECHNICAL REVALIDATION |
+| **Start** | Use Case | `definitions/use_cases/start.rs` | `pub type Start = fn(run_request::Request);` |
+| **Run** | Requester | `definitions/requesters/run_request.rs` | `pub type Request = fn();` |
+| **Starter** | Agent | `agents/starter.rs` | `pub const START: start::Start = start;` |
 
 ---
 

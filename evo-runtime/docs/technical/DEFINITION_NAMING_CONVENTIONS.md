@@ -72,17 +72,34 @@ Evo Runtime Model A formaliza exactamente un Use Case y un Requester:
 
 ```rust
 // definitions/requesters/run_request.rs
-pub type Request = fn() -> Result;
+pub type Request = fn();
 
 // definitions/use_cases/start.rs
-pub type Start = fn(run_request::Request) -> Result;
+use crate::definitions::requesters::run_request;
+
+pub type Start = fn(run_request::Request);
 ```
 
-El agente correspondiente se organizará bajo:
+El agente correspondiente se organiza como:
 ```text
 agents/
-└── starter/
-    └── start.rs   // pub fn start(run: run_request::Request) -> Result
+└── starter.rs
+```
+
+Implementación canónica:
+```rust
+// agents/starter.rs
+
+use crate::definitions::{
+    requesters::run_request,
+    use_cases::start,
+};
+
+pub fn start(run: run_request::Request) {
+    run();
+}
+
+pub const START: start::Start = start;
 ```
 
 ---

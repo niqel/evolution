@@ -1,0 +1,15 @@
+shape: sequence_diagram
+
+title: "Evo Runtime Model A — Start Application Sequence"
+
+host: Host
+starter: Starter (Agent)
+run_req: Run Requester
+app: Evo Application
+
+host -> starter: START(run)
+starter -> run_req: run()
+run_req -> app: implementación del function pointer
+app -> run_req: return ()
+run_req -> starter: return ()
+starter -> host: return ()

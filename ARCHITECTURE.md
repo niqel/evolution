@@ -81,8 +81,8 @@ Principios:
 
 Bajo **Evo Runtime Model A**, `evo-runtime` tiene una frontera estrictamente mínima:
 
-- proporciona exactamente un Use Case: `Start` (`definitions/use_cases/start.rs`, firma técnica: `PENDING TECHNICAL REVALIDATION`);
-- consume exactamente un Requester: `Run` (`definitions/requesters/run_request.rs`, firma técnica: `PENDING TECHNICAL REVALIDATION`);
+- proporciona exactamente un Use Case: `Start` (`definitions/use_cases/start.rs`, `pub type Start = fn(run_request::Request);`);
+- consume exactamente un Requester: `Run` (`definitions/requesters/run_request.rs`, `pub type Request = fn();`);
 - recibe la acción `Run` desde el Host/Caller;
 - invoca `Run`;
 - permanece activo en el call stack durante la ejecución de `Run`;

@@ -1,6 +1,6 @@
 direction: right
 
-title: "Evo Runtime Model A — Boundary Map"
+title: "Evo Runtime Model A — Boundary & Module Map"
 
 host: "Host\n(Caller externo)" {
   style.fill: "#f8fafc"
@@ -13,34 +13,42 @@ runtime: "Evo Runtime [crate: evo-runtime]" {
   style.stroke: "#4338ca"
   style.stroke-width: 2
 
-  start_uc: "Start\n[USE CASE]\n[function pointer: fn(Request) -> Result]" {
+  start_uc: "definitions/use_cases/start\n<<Use Case>>\nStart\nfn(run_request::Request)" {
     style.fill: "#c7d2fe"
     style.stroke: "#3730a3"
     style.stroke-width: 2
   }
 
-  run_req: "Run\n[REQUESTER]\n[function pointer: fn() -> Result]" {
+  starter_agent: "agents/starter\n<<Agent>>\nstart(run_request::Request)\nSTART: Start = start" {
+    style.fill: "#e0e7ff"
+    style.stroke: "#4338ca"
+    style.stroke-width: 2
+  }
+
+  run_req: "definitions/requesters/run_request\n<<Requester>>\nRequest\nfn()" {
     style.fill: "#fed7aa"
     style.stroke: "#c2410c"
     style.stroke-width: 2
   }
+
+  start_uc -> starter_agent: "implemented by" {
+    style.stroke-dash: 4
+  }
+
+  starter_agent -> run_req: "invokes"
 }
 
-app: "Evo Application\n(Ejecución activa)" {
+app: "Evo Application\n<<External Implementer>>\nimplementa Request" {
   style.fill: "#f0fdf4"
   style.stroke: "#15803d"
   style.stroke-width: 2
 }
 
-result_out: "Result\n[crate: evo-values]" {
-  style.fill: "#fef9c3"
-  style.stroke: "#854d0e"
-  style.stroke-width: 2
-}
-
 # Interactions
-host -> runtime.start_uc: "1. llama Start(run)"
-runtime.start_uc -> runtime.run_req: "2. invoca"
-runtime.run_req -> app: "3. ejecuta"
-app -> result_out: "4. produce"
-result_out -> host: "5. retornado por Start"
+host -> runtime.starter_agent: "START(run)"
+app -> runtime.run_req: "implements" {
+  style.stroke-dash: 4
+}
+runtime.starter_agent -> host: "return ()" {
+  style.stroke-dash: 4
+}
