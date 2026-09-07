@@ -75,12 +75,12 @@ pub fn observe_runtime_value<'value>(
                         Constant::Dynamic(DynamicConstant::Integer {
                             negative,
                             magnitude,
-                        }) => {
-                            Value::Dynamic(InterchangeDynamicValue::Integer(DynamicIntegerValue {
-                                negative: *negative,
-                                magnitude: Cow::Borrowed(magnitude.as_slice()),
-                            }))
-                        }
+                        }) => Value::Dynamic(InterchangeDynamicValue::Integer(
+                            DynamicIntegerValue::from_parts(
+                                *negative,
+                                Cow::Borrowed(magnitude.as_slice()),
+                            ),
+                        )),
                         _ => panic!("Expected Constant::Dynamic(Integer) at constant id"),
                     }
                 }
@@ -95,10 +95,9 @@ pub fn observe_runtime_value<'value>(
                         Sign::Plus => (false, magnitude),
                         Sign::NoSign => (false, Vec::new()),
                     };
-                    Value::Dynamic(InterchangeDynamicValue::Integer(DynamicIntegerValue {
-                        negative,
-                        magnitude: Cow::Owned(magnitude),
-                    }))
+                    Value::Dynamic(InterchangeDynamicValue::Integer(
+                        DynamicIntegerValue::from_parts(negative, Cow::Owned(magnitude)),
+                    ))
                 }
             },
         },
@@ -205,58 +204,58 @@ mod tests {
         let program = empty_program();
         let store = empty_store();
 
-        assert_eq!(
-            observe_runtime_value(RuntimeValue::Boolean(true), &program, &store),
-            Value::Boolean(true)
-        );
-        assert_eq!(
-            observe_runtime_value(RuntimeValue::Int8(-8), &program, &store),
-            Value::Int8(-8)
-        );
-        assert_eq!(
-            observe_runtime_value(RuntimeValue::Int16(-16), &program, &store),
-            Value::Int16(-16)
-        );
-        assert_eq!(
-            observe_runtime_value(RuntimeValue::Int32(-32), &program, &store),
-            Value::Int32(-32)
-        );
-        assert_eq!(
-            observe_runtime_value(RuntimeValue::Int64(-64), &program, &store),
-            Value::Int64(-64)
-        );
-        assert_eq!(
-            observe_runtime_value(RuntimeValue::Int128(-128), &program, &store),
-            Value::Int128(-128)
-        );
-        assert_eq!(
-            observe_runtime_value(RuntimeValue::Uint8(8), &program, &store),
-            Value::Uint8(8)
-        );
-        assert_eq!(
-            observe_runtime_value(RuntimeValue::Uint16(16), &program, &store),
-            Value::Uint16(16)
-        );
-        assert_eq!(
-            observe_runtime_value(RuntimeValue::Uint32(32), &program, &store),
-            Value::Uint32(32)
-        );
-        assert_eq!(
-            observe_runtime_value(RuntimeValue::Uint64(64), &program, &store),
-            Value::Uint64(64)
-        );
-        assert_eq!(
-            observe_runtime_value(RuntimeValue::Uint128(128), &program, &store),
-            Value::Uint128(128)
-        );
-        assert_eq!(
-            observe_runtime_value(RuntimeValue::Float32(1.5), &program, &store),
-            Value::Float32(1.5)
-        );
-        assert_eq!(
-            observe_runtime_value(RuntimeValue::Float64(2.5), &program, &store),
-            Value::Float64(2.5)
-        );
+        match observe_runtime_value(RuntimeValue::Boolean(true), &program, &store) {
+            Value::Boolean(b) => assert!(b),
+            _ => panic!("expected Boolean"),
+        }
+        match observe_runtime_value(RuntimeValue::Int8(-8), &program, &store) {
+            Value::Int8(v) => assert_eq!(v, -8),
+            _ => panic!("expected Int8"),
+        }
+        match observe_runtime_value(RuntimeValue::Int16(-16), &program, &store) {
+            Value::Int16(v) => assert_eq!(v, -16),
+            _ => panic!("expected Int16"),
+        }
+        match observe_runtime_value(RuntimeValue::Int32(-32), &program, &store) {
+            Value::Int32(v) => assert_eq!(v, -32),
+            _ => panic!("expected Int32"),
+        }
+        match observe_runtime_value(RuntimeValue::Int64(-64), &program, &store) {
+            Value::Int64(v) => assert_eq!(v, -64),
+            _ => panic!("expected Int64"),
+        }
+        match observe_runtime_value(RuntimeValue::Int128(-128), &program, &store) {
+            Value::Int128(v) => assert_eq!(v, -128),
+            _ => panic!("expected Int128"),
+        }
+        match observe_runtime_value(RuntimeValue::Uint8(8), &program, &store) {
+            Value::Uint8(v) => assert_eq!(v, 8),
+            _ => panic!("expected Uint8"),
+        }
+        match observe_runtime_value(RuntimeValue::Uint16(16), &program, &store) {
+            Value::Uint16(v) => assert_eq!(v, 16),
+            _ => panic!("expected Uint16"),
+        }
+        match observe_runtime_value(RuntimeValue::Uint32(32), &program, &store) {
+            Value::Uint32(v) => assert_eq!(v, 32),
+            _ => panic!("expected Uint32"),
+        }
+        match observe_runtime_value(RuntimeValue::Uint64(64), &program, &store) {
+            Value::Uint64(v) => assert_eq!(v, 64),
+            _ => panic!("expected Uint64"),
+        }
+        match observe_runtime_value(RuntimeValue::Uint128(128), &program, &store) {
+            Value::Uint128(v) => assert_eq!(v, 128),
+            _ => panic!("expected Uint128"),
+        }
+        match observe_runtime_value(RuntimeValue::Float32(1.5), &program, &store) {
+            Value::Float32(v) => assert_eq!(v, 1.5),
+            _ => panic!("expected Float32"),
+        }
+        match observe_runtime_value(RuntimeValue::Float64(2.5), &program, &store) {
+            Value::Float64(v) => assert_eq!(v, 2.5),
+            _ => panic!("expected Float64"),
+        }
     }
 
     #[test]
@@ -337,9 +336,8 @@ mod tests {
         let obs_zero = observe_runtime_value(val_zero, &program, &store);
         match obs_zero {
             Value::Dynamic(InterchangeDynamicValue::Integer(dyn_int)) => {
-                assert!(!dyn_int.negative);
-                assert!(matches!(dyn_int.magnitude, Cow::Borrowed(_)));
-                assert_eq!(&*dyn_int.magnitude, &[] as &[u8]);
+                assert!(!dyn_int.negative());
+                assert_eq!(dyn_int.magnitude(), &[] as &[u8]);
             }
             _ => panic!("expected dynamic integer"),
         }
@@ -351,9 +349,8 @@ mod tests {
         let obs_pos = observe_runtime_value(val_pos, &program, &store);
         match obs_pos {
             Value::Dynamic(InterchangeDynamicValue::Integer(dyn_int)) => {
-                assert!(!dyn_int.negative);
-                assert!(matches!(dyn_int.magnitude, Cow::Borrowed(_)));
-                assert_eq!(&*dyn_int.magnitude, &[42]);
+                assert!(!dyn_int.negative());
+                assert_eq!(dyn_int.magnitude(), &[42]);
             }
             _ => panic!("expected dynamic integer"),
         }
@@ -365,9 +362,8 @@ mod tests {
         let obs_neg = observe_runtime_value(val_neg, &program, &store);
         match obs_neg {
             Value::Dynamic(InterchangeDynamicValue::Integer(dyn_int)) => {
-                assert!(dyn_int.negative);
-                assert!(matches!(dyn_int.magnitude, Cow::Borrowed(_)));
-                assert_eq!(&*dyn_int.magnitude, &[42]);
+                assert!(dyn_int.negative());
+                assert_eq!(dyn_int.magnitude(), &[42]);
             }
             _ => panic!("expected dynamic integer"),
         }
@@ -403,9 +399,8 @@ mod tests {
         let obs_zero = observe_runtime_value(val_zero, &program, &store);
         match obs_zero {
             Value::Dynamic(InterchangeDynamicValue::Integer(dyn_int)) => {
-                assert!(!dyn_int.negative);
-                assert!(matches!(dyn_int.magnitude, Cow::Owned(_)));
-                assert_eq!(&*dyn_int.magnitude, &[] as &[u8]);
+                assert!(!dyn_int.negative());
+                assert_eq!(dyn_int.magnitude(), &[] as &[u8]);
             }
             _ => panic!("expected dynamic integer"),
         }
@@ -417,9 +412,8 @@ mod tests {
         let obs_pos = observe_runtime_value(val_pos, &program, &store);
         match obs_pos {
             Value::Dynamic(InterchangeDynamicValue::Integer(dyn_int)) => {
-                assert!(!dyn_int.negative);
-                assert!(matches!(dyn_int.magnitude, Cow::Owned(_)));
-                assert_eq!(&*dyn_int.magnitude, &[42]);
+                assert!(!dyn_int.negative());
+                assert_eq!(dyn_int.magnitude(), &[42]);
             }
             _ => panic!("expected dynamic integer"),
         }
@@ -431,9 +425,8 @@ mod tests {
         let obs_neg = observe_runtime_value(val_neg, &program, &store);
         match obs_neg {
             Value::Dynamic(InterchangeDynamicValue::Integer(dyn_int)) => {
-                assert!(dyn_int.negative);
-                assert!(matches!(dyn_int.magnitude, Cow::Owned(_)));
-                assert_eq!(&*dyn_int.magnitude, &[42]);
+                assert!(dyn_int.negative());
+                assert_eq!(dyn_int.magnitude(), &[42]);
             }
             _ => panic!("expected dynamic integer"),
         }
@@ -445,11 +438,10 @@ mod tests {
         let obs_large = observe_runtime_value(val_large, &program, &store);
         match obs_large {
             Value::Dynamic(InterchangeDynamicValue::Integer(dyn_int)) => {
-                assert!(!dyn_int.negative);
-                assert!(matches!(dyn_int.magnitude, Cow::Owned(_)));
+                assert!(!dyn_int.negative());
                 let mut expected_mag = vec![0u8; 17];
                 expected_mag[0] = 1;
-                assert_eq!(&*dyn_int.magnitude, expected_mag.as_slice());
+                assert_eq!(dyn_int.magnitude(), expected_mag.as_slice());
             }
             _ => panic!("expected dynamic integer"),
         }
@@ -461,16 +453,16 @@ mod tests {
         let store = empty_store();
 
         let val_f32 = RuntimeValue::Dynamic(RuntimeDynamicValue::Float32(1.25));
-        assert_eq!(
-            observe_runtime_value(val_f32, &program, &store),
-            Value::Dynamic(InterchangeDynamicValue::Float32(1.25))
-        );
+        match observe_runtime_value(val_f32, &program, &store) {
+            Value::Dynamic(InterchangeDynamicValue::Float32(v)) => assert_eq!(v, 1.25),
+            _ => panic!("expected Float32"),
+        }
 
         let val_f64 = RuntimeValue::Dynamic(RuntimeDynamicValue::Float64(9.875));
-        assert_eq!(
-            observe_runtime_value(val_f64, &program, &store),
-            Value::Dynamic(InterchangeDynamicValue::Float64(9.875))
-        );
+        match observe_runtime_value(val_f64, &program, &store) {
+            Value::Dynamic(InterchangeDynamicValue::Float64(v)) => assert_eq!(v, 9.875),
+            _ => panic!("expected Float64"),
+        }
     }
 
     #[test]
@@ -502,7 +494,10 @@ mod tests {
         match observed {
             Value::Struct(fields) => {
                 assert_eq!(fields.len(), 3);
-                assert_eq!(fields[0], Value::Int32(100));
+                match fields[0] {
+                    Value::Int32(v) => assert_eq!(v, 100),
+                    _ => panic!("expected Value::Int32"),
+                }
 
                 match fields[1] {
                     Value::String(s) => {
@@ -515,9 +510,8 @@ mod tests {
 
                 match &fields[2] {
                     Value::Dynamic(InterchangeDynamicValue::Integer(dyn_int)) => {
-                        assert!(!dyn_int.negative);
-                        assert!(matches!(dyn_int.magnitude, Cow::Borrowed(_)));
-                        assert_eq!(&*dyn_int.magnitude, &[99]);
+                        assert!(!dyn_int.negative());
+                        assert_eq!(dyn_int.magnitude(), &[99]);
                     }
                     _ => panic!("expected dynamic integer"),
                 }
@@ -554,7 +548,10 @@ mod tests {
         match observed {
             Value::Struct(fields) => {
                 assert_eq!(fields.len(), 2);
-                assert_eq!(fields[0], Value::Int32(42));
+                match fields[0] {
+                    Value::Int32(v) => assert_eq!(v, 42),
+                    _ => panic!("expected Value::Int32"),
+                }
                 match &fields[1] {
                     Value::Struct(inner_fields) => {
                         assert_eq!(inner_fields.len(), 1);
@@ -585,13 +582,16 @@ mod tests {
 
         let val = RuntimeValue::Enum(EnumBackingId(0));
         let observed = observe_runtime_value(val, &program, &store);
-        assert_eq!(
-            observed,
-            Value::Enum {
-                variant: 5,
-                payload: EnumPayload::Simple,
+        match observed {
+            Value::Enum { variant, payload } => {
+                assert_eq!(variant, 5);
+                match payload {
+                    EnumPayload::Simple => {}
+                    _ => panic!("expected EnumPayload::Simple"),
+                }
             }
-        );
+            _ => panic!("expected Value::Enum"),
+        }
     }
 
     #[test]
@@ -661,7 +661,10 @@ mod tests {
                 match payload {
                     EnumPayload::Structured { fields } => {
                         assert_eq!(fields.len(), 2);
-                        assert_eq!(fields[0], Value::Int32(1));
+                        match fields[0] {
+                            Value::Int32(v) => assert_eq!(v, 1),
+                            _ => panic!("expected Value::Int32"),
+                        }
                         match fields[1] {
                             Value::String(s) => {
                                 assert_eq!(s, "payload");
@@ -678,15 +681,18 @@ mod tests {
         }
 
         let val_empty = RuntimeValue::Enum(EnumBackingId(1));
-        assert_eq!(
-            observe_runtime_value(val_empty, &program, &store),
-            Value::Enum {
-                variant: 3,
-                payload: EnumPayload::Structured {
-                    fields: vec![].into_boxed_slice(),
-                },
+        match observe_runtime_value(val_empty, &program, &store) {
+            Value::Enum { variant, payload } => {
+                assert_eq!(variant, 3);
+                match payload {
+                    EnumPayload::Structured { fields } => {
+                        assert_eq!(fields.len(), 0);
+                    }
+                    _ => panic!("expected EnumPayload::Structured"),
+                }
             }
-        );
+            _ => panic!("expected Value::Enum"),
+        }
     }
 
     #[test]
@@ -752,22 +758,20 @@ mod tests {
                             _ => panic!("expected Value::Struct"),
                         }
 
-                        // Compiled Dynamic Integer: Cow::Borrowed
+                        // Compiled Dynamic Integer
                         match &fields[1] {
                             Value::Dynamic(InterchangeDynamicValue::Integer(dyn_int)) => {
-                                assert!(!dyn_int.negative);
-                                assert!(matches!(dyn_int.magnitude, Cow::Borrowed(_)));
-                                assert_eq!(&*dyn_int.magnitude, &[12]);
+                                assert!(!dyn_int.negative());
+                                assert_eq!(dyn_int.magnitude(), &[12]);
                             }
                             _ => panic!("expected compiled dynamic integer"),
                         }
 
-                        // Execution Dynamic Integer: Cow::Owned
+                        // Execution Dynamic Integer
                         match &fields[2] {
                             Value::Dynamic(InterchangeDynamicValue::Integer(dyn_int)) => {
-                                assert!(dyn_int.negative);
-                                assert!(matches!(dyn_int.magnitude, Cow::Owned(_)));
-                                assert_eq!(&*dyn_int.magnitude, &[99]);
+                                assert!(dyn_int.negative());
+                                assert_eq!(dyn_int.magnitude(), &[99]);
                             }
                             _ => panic!("expected execution dynamic integer"),
                         }

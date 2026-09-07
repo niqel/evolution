@@ -257,10 +257,10 @@ mod tests {
         let shapes = sample_shapes();
 
         assert!(matches_owned_value_shape(
-            &OwnedValue::Dynamic(OwnedDynamicValue::Integer(OwnedDynamicInteger {
-                negative: false,
-                magnitude: vec![1, 2, 3].into_boxed_slice(),
-            })),
+            &OwnedValue::Dynamic(OwnedDynamicValue::Integer(OwnedDynamicInteger::from_parts(
+                false,
+                vec![1, 2, 3].into_boxed_slice(),
+            ))),
             CompiledValueShapeId(14),
             &shapes
         ));

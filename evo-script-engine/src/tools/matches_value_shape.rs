@@ -204,10 +204,10 @@ mod tests {
             CompiledValueShape::Float64,
         ];
 
-        let dyn_int = Value::Dynamic(DynamicValue::Integer(DynamicIntegerValue {
-            negative: false,
-            magnitude: Cow::Borrowed(&[10]),
-        }));
+        let dyn_int = Value::Dynamic(DynamicValue::Integer(DynamicIntegerValue::from_parts(
+            false,
+            Cow::Borrowed(&[10]),
+        )));
         let dyn_f32 = Value::Dynamic(DynamicValue::Float32(1.5));
         let dyn_f64 = Value::Dynamic(DynamicValue::Float64(2.5));
 

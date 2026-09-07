@@ -46,12 +46,12 @@ pub fn materialize_value<'value>(
 
         Value::Dynamic(dyn_val) => match dyn_val {
             InterchangeDynamicValue::Integer(dyn_int) => {
-                let sign = if dyn_int.negative {
+                let sign = if dyn_int.negative() {
                     Sign::Minus
                 } else {
                     Sign::Plus
                 };
-                let big_int = BigInt::from_bytes_be(sign, &dyn_int.magnitude);
+                let big_int = BigInt::from_bytes_be(sign, dyn_int.magnitude());
                 let id = DynamicIntegerBackingId(backing_store.dynamic_integers.len());
                 backing_store
                     .dynamic_integers
@@ -217,10 +217,9 @@ mod tests {
     #[test]
     fn dynamic_integer_zero() {
         let mut store = empty_store();
-        let val = Value::Dynamic(InterchangeDynamicValue::Integer(DynamicIntegerValue {
-            negative: false,
-            magnitude: Cow::Borrowed(&[]),
-        }));
+        let val = Value::Dynamic(InterchangeDynamicValue::Integer(
+            DynamicIntegerValue::from_parts(false, Cow::Borrowed(&[])),
+        ));
         let rt = materialize_value(&val, &mut store);
         match rt {
             RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
@@ -238,10 +237,9 @@ mod tests {
         let mut store = empty_store();
 
         // Positive 42 (0x2A)
-        let pos_val = Value::Dynamic(InterchangeDynamicValue::Integer(DynamicIntegerValue {
-            negative: false,
-            magnitude: Cow::Borrowed(&[0x2A]),
-        }));
+        let pos_val = Value::Dynamic(InterchangeDynamicValue::Integer(
+            DynamicIntegerValue::from_parts(false, Cow::Borrowed(&[0x2A])),
+        ));
         let rt_pos = materialize_value(&pos_val, &mut store);
         match rt_pos {
             RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
@@ -254,10 +252,9 @@ mod tests {
         }
 
         // Negative 42
-        let neg_val = Value::Dynamic(InterchangeDynamicValue::Integer(DynamicIntegerValue {
-            negative: true,
-            magnitude: Cow::Borrowed(&[0x2A]),
-        }));
+        let neg_val = Value::Dynamic(InterchangeDynamicValue::Integer(
+            DynamicIntegerValue::from_parts(true, Cow::Borrowed(&[0x2A])),
+        ));
         let rt_neg = materialize_value(&neg_val, &mut store);
         match rt_neg {
             RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
@@ -277,10 +274,9 @@ mod tests {
         let mut mag = vec![0u8; 17];
         mag[0] = 1;
 
-        let val = Value::Dynamic(InterchangeDynamicValue::Integer(DynamicIntegerValue {
-            negative: false,
-            magnitude: Cow::Owned(mag),
-        }));
+        let val = Value::Dynamic(InterchangeDynamicValue::Integer(
+            DynamicIntegerValue::from_parts(false, Cow::Owned(mag)),
+        ));
         let rt = materialize_value(&val, &mut store);
         match rt {
             RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
@@ -322,10 +318,9 @@ mod tests {
         let val = Value::Struct(Box::new([
             Value::Int32(100),
             Value::String("field two"),
-            Value::Dynamic(InterchangeDynamicValue::Integer(DynamicIntegerValue {
-                negative: false,
-                magnitude: Cow::Borrowed(&[7]),
-            })),
+            Value::Dynamic(InterchangeDynamicValue::Integer(
+                DynamicIntegerValue::from_parts(false, Cow::Borrowed(&[7])),
+            )),
         ]));
 
         let rt = materialize_value(&val, &mut store);
@@ -476,10 +471,9 @@ mod tests {
             payload: EnumPayload::Structured {
                 fields: Box::new([
                     Value::Struct(Box::new([Value::String("deep text")])),
-                    Value::Dynamic(InterchangeDynamicValue::Integer(DynamicIntegerValue {
-                        negative: true,
-                        magnitude: Cow::Borrowed(&[99]),
-                    })),
+                    Value::Dynamic(InterchangeDynamicValue::Integer(
+                        DynamicIntegerValue::from_parts(true, Cow::Borrowed(&[99])),
+                    )),
                 ]),
             },
         };

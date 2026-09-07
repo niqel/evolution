@@ -44,12 +44,12 @@ pub fn materialize_owned_value(
 
         OwnedValue::Dynamic(dyn_val) => match dyn_val {
             OwnedDynamicValue::Integer(dyn_int) => {
-                let sign = if dyn_int.negative {
+                let sign = if dyn_int.negative() {
                     Sign::Minus
                 } else {
                     Sign::Plus
                 };
-                let big_int = BigInt::from_bytes_be(sign, &dyn_int.magnitude);
+                let big_int = BigInt::from_bytes_be(sign, dyn_int.magnitude());
                 let id = DynamicIntegerBackingId(backing_store.dynamic_integers.len());
                 backing_store
                     .dynamic_integers
@@ -259,10 +259,10 @@ mod tests {
     #[test]
     fn dynamic_integer_positive() {
         let mut store = empty_store();
-        let val = OwnedValue::Dynamic(OwnedDynamicValue::Integer(OwnedDynamicInteger {
-            negative: false,
-            magnitude: vec![42].into_boxed_slice(),
-        }));
+        let val = OwnedValue::Dynamic(OwnedDynamicValue::Integer(OwnedDynamicInteger::from_parts(
+            false,
+            vec![42].into_boxed_slice(),
+        )));
 
         let runtime_val = materialize_owned_value(val, &mut store);
         match runtime_val {
@@ -280,10 +280,10 @@ mod tests {
     #[test]
     fn dynamic_integer_negative() {
         let mut store = empty_store();
-        let val = OwnedValue::Dynamic(OwnedDynamicValue::Integer(OwnedDynamicInteger {
-            negative: true,
-            magnitude: vec![42].into_boxed_slice(),
-        }));
+        let val = OwnedValue::Dynamic(OwnedDynamicValue::Integer(OwnedDynamicInteger::from_parts(
+            true,
+            vec![42].into_boxed_slice(),
+        )));
 
         let runtime_val = materialize_owned_value(val, &mut store);
         match runtime_val {
@@ -303,10 +303,9 @@ mod tests {
         let mut store = empty_store();
 
         // 1. negative = false, magnitude = []
-        let val1 = OwnedValue::Dynamic(OwnedDynamicValue::Integer(OwnedDynamicInteger {
-            negative: false,
-            magnitude: vec![].into_boxed_slice(),
-        }));
+        let val1 = OwnedValue::Dynamic(OwnedDynamicValue::Integer(
+            OwnedDynamicInteger::from_parts(false, vec![].into_boxed_slice()),
+        ));
         let rt1 = materialize_owned_value(val1, &mut store);
         match rt1 {
             RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
@@ -319,10 +318,9 @@ mod tests {
         assert_eq!(store.dynamic_integers[0].value, BigInt::from(0));
 
         // 2. negative = true, magnitude = []
-        let val2 = OwnedValue::Dynamic(OwnedDynamicValue::Integer(OwnedDynamicInteger {
-            negative: true,
-            magnitude: vec![].into_boxed_slice(),
-        }));
+        let val2 = OwnedValue::Dynamic(OwnedDynamicValue::Integer(
+            OwnedDynamicInteger::from_parts(true, vec![].into_boxed_slice()),
+        ));
         let rt2 = materialize_owned_value(val2, &mut store);
         match rt2 {
             RuntimeValue::Dynamic(RuntimeDynamicValue::Integer(
@@ -341,10 +339,10 @@ mod tests {
         // 2^128 = 340282366920938463463374607431768211456
         let mut mag = vec![0u8; 17];
         mag[0] = 1;
-        let val = OwnedValue::Dynamic(OwnedDynamicValue::Integer(OwnedDynamicInteger {
-            negative: false,
-            magnitude: mag.into_boxed_slice(),
-        }));
+        let val = OwnedValue::Dynamic(OwnedDynamicValue::Integer(OwnedDynamicInteger::from_parts(
+            false,
+            mag.into_boxed_slice(),
+        )));
 
         let runtime_val = materialize_owned_value(val, &mut store);
         match runtime_val {
@@ -367,10 +365,10 @@ mod tests {
             value: BigInt::from(100),
         });
 
-        let val = OwnedValue::Dynamic(OwnedDynamicValue::Integer(OwnedDynamicInteger {
-            negative: false,
-            magnitude: vec![200].into_boxed_slice(),
-        }));
+        let val = OwnedValue::Dynamic(OwnedDynamicValue::Integer(OwnedDynamicInteger::from_parts(
+            false,
+            vec![200].into_boxed_slice(),
+        )));
 
         let rt = materialize_owned_value(val, &mut store);
         match rt {
@@ -393,10 +391,10 @@ mod tests {
             vec![
                 OwnedValue::Int32(100),
                 OwnedValue::String("field str".to_string().into_boxed_str()),
-                OwnedValue::Dynamic(OwnedDynamicValue::Integer(OwnedDynamicInteger {
-                    negative: false,
-                    magnitude: vec![50].into_boxed_slice(),
-                })),
+                OwnedValue::Dynamic(OwnedDynamicValue::Integer(OwnedDynamicInteger::from_parts(
+                    false,
+                    vec![50].into_boxed_slice(),
+                ))),
             ]
             .into_boxed_slice(),
         );
@@ -657,10 +655,9 @@ mod tests {
                     OwnedValue::Struct(
                         vec![
                             OwnedValue::String("composite leaf".to_string().into_boxed_str()),
-                            OwnedValue::Dynamic(OwnedDynamicValue::Integer(OwnedDynamicInteger {
-                                negative: false,
-                                magnitude: vec![77].into_boxed_slice(),
-                            })),
+                            OwnedValue::Dynamic(OwnedDynamicValue::Integer(
+                                OwnedDynamicInteger::from_parts(false, vec![77].into_boxed_slice()),
+                            )),
                         ]
                         .into_boxed_slice(),
                     ),
