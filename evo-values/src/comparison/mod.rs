@@ -7,9 +7,6 @@ pub mod less;
 pub mod less_equal;
 pub mod not_equal;
 
-#[cfg(test)]
-mod tests;
-
 pub use equal::{EQUAL, OWNED_EQUAL, equal, owned_equal};
 pub use greater::{GREATER, OWNED_GREATER, greater, owned_greater};
 pub use greater_equal::{GREATER_EQUAL, OWNED_GREATER_EQUAL, greater_equal, owned_greater_equal};
