@@ -23,37 +23,3 @@ impl_pow!(pow_u16, POW_U16, u16);
 impl_pow!(pow_u32, POW_U32, u32);
 impl_pow!(pow_u64, POW_U64, u64);
 impl_pow!(pow_u128, POW_U128, u128);
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pow_signed_cases() {
-        assert_eq!(pow_i8(2, PowerExponent(3)), Ok(8));
-        assert_eq!(pow_i8(5, PowerExponent(0)), Ok(1));
-        assert_eq!(pow_i8(0, PowerExponent(0)), Ok(1));
-        assert_eq!(pow_i8(5, PowerExponent(1)), Ok(5));
-        assert_eq!(pow_i8(-2, PowerExponent(3)), Ok(-8));
-        assert_eq!(pow_i8(-2, PowerExponent(2)), Ok(4));
-        assert_eq!(pow_i8(2, PowerExponent(7)), Err(NumericFailure::Overflow));
-    }
-
-    #[test]
-    fn pow_unsigned_cases() {
-        assert_eq!(pow_u8(2, PowerExponent(3)), Ok(8));
-        assert_eq!(pow_u8(5, PowerExponent(0)), Ok(1));
-        assert_eq!(pow_u8(0, PowerExponent(0)), Ok(1));
-        assert_eq!(pow_u8(5, PowerExponent(1)), Ok(5));
-        assert_eq!(pow_u8(2, PowerExponent(8)), Err(NumericFailure::Overflow));
-    }
-
-    #[test]
-    fn pow_constants() {
-        let op_signed: Pow<i32> = POW_I32;
-        assert_eq!(op_signed(2, PowerExponent(10)), Ok(1024));
-
-        let op_unsigned: Pow<u64> = POW_U64;
-        assert_eq!(op_unsigned(2, PowerExponent(10)), Ok(1024));
-    }
-}

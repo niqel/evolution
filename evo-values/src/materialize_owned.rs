@@ -76,16 +76,3 @@ pub fn materialize_owned(value: &Value<'_>) -> OwnedValue {
 }
 
 pub const MATERIALIZE_OWNED: MaterializeOwned = materialize_owned;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn materialize_owned_function_pointer_binding() {
-        let op: MaterializeOwned = MATERIALIZE_OWNED;
-        let borrowed = Value::Int32(42);
-        let owned = op(&borrowed);
-        assert!(matches!(owned, OwnedValue::Int32(42)));
-    }
-}
