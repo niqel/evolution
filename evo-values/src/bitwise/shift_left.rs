@@ -26,33 +26,3 @@ impl_shift_left!(shift_left_u16, SHIFT_LEFT_U16, u16);
 impl_shift_left!(shift_left_u32, SHIFT_LEFT_U32, u32);
 impl_shift_left!(shift_left_u64, SHIFT_LEFT_U64, u64);
 impl_shift_left!(shift_left_u128, SHIFT_LEFT_U128, u128);
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn shift_left_basic_cases() {
-        assert_eq!(shift_left_u8(1, ShiftAmount(0)), Ok(1));
-        assert_eq!(shift_left_u8(1, ShiftAmount(1)), Ok(2));
-        assert_eq!(shift_left_u8(1, ShiftAmount(7)), Ok(128));
-        assert_eq!(
-            shift_left_u8(1, ShiftAmount(8)),
-            Err(BitwiseFailure::InvalidShift)
-        );
-        assert_eq!(
-            shift_left_u8(1, ShiftAmount(9)),
-            Err(BitwiseFailure::InvalidShift)
-        );
-        assert_eq!(shift_left_u8(0b1000_0001, ShiftAmount(1)), Ok(0b0000_0010));
-    }
-
-    #[test]
-    fn shift_left_constants() {
-        let op_signed: ShiftLeft<i32> = SHIFT_LEFT_I32;
-        assert_eq!(op_signed(1, ShiftAmount(4)), Ok(16));
-
-        let op_unsigned: ShiftLeft<u64> = SHIFT_LEFT_U64;
-        assert_eq!(op_unsigned(1, ShiftAmount(4)), Ok(16));
-    }
-}

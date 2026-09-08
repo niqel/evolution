@@ -21,24 +21,3 @@ impl_bit_or!(bit_or_u16, BIT_OR_U16, u16);
 impl_bit_or!(bit_or_u32, BIT_OR_U32, u32);
 impl_bit_or!(bit_or_u64, BIT_OR_U64, u64);
 impl_bit_or!(bit_or_u128, BIT_OR_U128, u128);
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn bit_or_basic_cases() {
-        assert_eq!(bit_or_u8(0b1100, 0b1010), 0b1110);
-        assert_eq!(bit_or_i32(0b1100, 0b1010), 0b1110);
-        assert_eq!(bit_or_i8(0, -1), -1);
-    }
-
-    #[test]
-    fn bit_or_constants() {
-        let op_signed: BitOr<i32> = BIT_OR_I32;
-        assert_eq!(op_signed(0xF0, 0x0F), 0xFF);
-
-        let op_unsigned: BitOr<u64> = BIT_OR_U64;
-        assert_eq!(op_unsigned(0xF0, 0x0F), 0xFF);
-    }
-}

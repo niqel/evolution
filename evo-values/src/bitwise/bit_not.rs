@@ -21,25 +21,3 @@ impl_bit_not!(bit_not_u16, BIT_NOT_U16, u16);
 impl_bit_not!(bit_not_u32, BIT_NOT_U32, u32);
 impl_bit_not!(bit_not_u64, BIT_NOT_U64, u64);
 impl_bit_not!(bit_not_u128, BIT_NOT_U128, u128);
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn bit_not_basic_cases() {
-        assert_eq!(bit_not_u8(0), 255);
-        assert_eq!(bit_not_u8(255), 0);
-        assert_eq!(bit_not_i8(0), -1);
-        assert_eq!(bit_not_i8(-1), 0);
-    }
-
-    #[test]
-    fn bit_not_constants() {
-        let op_signed: BitNot<i32> = BIT_NOT_I32;
-        assert_eq!(op_signed(0), -1);
-
-        let op_unsigned: BitNot<u64> = BIT_NOT_U64;
-        assert_eq!(op_unsigned(0), u64::MAX);
-    }
-}

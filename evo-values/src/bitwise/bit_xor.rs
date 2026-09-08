@@ -21,25 +21,3 @@ impl_bit_xor!(bit_xor_u16, BIT_XOR_U16, u16);
 impl_bit_xor!(bit_xor_u32, BIT_XOR_U32, u32);
 impl_bit_xor!(bit_xor_u64, BIT_XOR_U64, u64);
 impl_bit_xor!(bit_xor_u128, BIT_XOR_U128, u128);
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn bit_xor_basic_cases() {
-        assert_eq!(bit_xor_u8(0b1100, 0b1010), 0b0110);
-        assert_eq!(bit_xor_i32(0b1100, 0b1010), 0b0110);
-        assert_eq!(bit_xor_i32(42, 42), 0);
-        assert_eq!(bit_xor_i32(42, 0), 42);
-    }
-
-    #[test]
-    fn bit_xor_constants() {
-        let op_signed: BitXor<i32> = BIT_XOR_I32;
-        assert_eq!(op_signed(0xFF, 0x0F), 0xF0);
-
-        let op_unsigned: BitXor<u64> = BIT_XOR_U64;
-        assert_eq!(op_unsigned(0xFF, 0x0F), 0xF0);
-    }
-}

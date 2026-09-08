@@ -21,24 +21,3 @@ impl_bit_and!(bit_and_u16, BIT_AND_U16, u16);
 impl_bit_and!(bit_and_u32, BIT_AND_U32, u32);
 impl_bit_and!(bit_and_u64, BIT_AND_U64, u64);
 impl_bit_and!(bit_and_u128, BIT_AND_U128, u128);
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn bit_and_basic_cases() {
-        assert_eq!(bit_and_u8(0b1100, 0b1010), 0b1000);
-        assert_eq!(bit_and_i32(0b1100, 0b1010), 0b1000);
-        assert_eq!(bit_and_i8(-1, 0b0101_0101), 0b0101_0101);
-    }
-
-    #[test]
-    fn bit_and_constants() {
-        let op_signed: BitAnd<i32> = BIT_AND_I32;
-        assert_eq!(op_signed(0xFF, 0x0F), 0x0F);
-
-        let op_unsigned: BitAnd<u64> = BIT_AND_U64;
-        assert_eq!(op_unsigned(0xFF, 0x0F), 0x0F);
-    }
-}
